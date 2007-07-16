@@ -1,0 +1,6 @@
+AutoTypeInfo.cpp
+CryCommon.cpp
+CryStructPack.cpp
+ParticleParamsTypeInfo.cpp
+TypeInfo.cpp
+WinBase.cpp
