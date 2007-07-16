@@ -1,0 +1,741 @@
+PROJECT_HOME ?= $(shell echo '$(CURDIR)' |sed -e 's,/code/.*,,i' -e 's,/\([a-z]\)/,\1:/,')
+TARGET ?= PS3
+
+USE_LD_R ?= 1
+LINK ?= static
+MAKEFILE_DEPEND ?= Makefile.depend
+DEDICATED_SERVER ?= 0ix vram
+
+export DEDICATED_SERVER
+
+ifeq "$(TARGET)" "PS3"
+OUTPUT_DIR = $(PROJECT_HOME)/BinPS3/
+JOBMAN_PATH_INC = -I$(PROJECT_HOME)/Code/Tools/PS3JobManager/SPU -I$(PROJECT_HOME)/Code/Tools/PS3JobManager/PPU
+endif
+CRY_COMMON_PATH = $(PROJECT_HOME)/Code/CryEngine/CryCommon
+ifeq "$(TARGET)" "Linux"
+OUTPUT_DIR = $(PROJECT_HOME)/BinLinux/
+MAKEFILE_DEPEND := $(MAKEFILE_DEPEND).Linux
+endif
+
+C_WARNING_FLAGS = -Wformat -Wmissing-braces -Wreturn-type -Wno-multichar -Wsequence-point
+CXX_WARNING_FLAGS = $(C_WARNING_FLAGS) -Wno-invalid-offsetof
+FFUNCTION_SECTIONS = -ffunction-sections -fdata-sections
+#FFUNCTION_SECTIONS = 
+CFLAGS_COMMON = -DENABLE_TYPE_INFO \
+	$(INCLUDE_FLAGS_COMMON) $(INCLUDE_FLAGS) \
+	$(FFUNCTION_SECTIONS) $(CFLAGS_ADD)
+LINKFLAGS = -Wl,--gc-sections
+#LINKFLAGS = 
+ifeq "$(TARGET)" "PS3"
+CFLAGS_COMMON += -DCELL_ARCH_$(CELL_ARCH) -D_LIB
+endif # PS3
+CXXFLAGS_COMMON = $(CFLAGS_COMMON) -fno-rtti -fpermissive -fno-exceptions
+CFLAGS_ADD_CUSTOM = -fsigned-char -fms-extensions -D__COUNTER__=__LINE__
+
+ifeq "$(TARGET)" "PS3"
+#COMP = SN
+COMP = GCC
+WORK_DIR = $(PROJECT_HOME)/../Work/
+PROJECT_OUTPUT_PATH ?= $(OUTPUT)
+SPU_REPOSITORY = $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/SPURepository.bin
+JOB_GEN = $(OUTPUT_DIR)JobGen.exe
+CELL_SDK_VERSION := 0_8_x
+DEFAULT_CELL_SDK = $(PROJECT_HOME)/Code/SDKs/PS3/$(CELL_SDK_VERSION)
+USE_INSTALLED_CELL_SDK ?= 0
+ifeq "$(USE_INSTALLED_CELL_SDK)" "0"
+CELL_SDK = $(DEFAULT_CELL_SDK)
+else
+CELL_SDK ?= $(DEFAULT_CELL_SDK)
+CELL_TARGET_PATH ?= $(CELL_SDK)/target
+endif
+HOST_SYSTEM ?= win32
+NM_PPU = $(CELL_SDK)/host-$(HOST_SYSTEM)/ppu/bin/ppu-lv2-nm -td
+
+#use stlport
+#STL = STLPORT
+STL = 
+
+TARGET_DIR = target
+TOCFLAGS = 
+endif # TARGET == PS3
+
+BUILD = $(SHELL) $(OUTPUT_DIR)/build '$(OUTPUT_DIR)'
+ERRORFILE = build_error
+
+PROJECT ?= $(OUTPUT)
+FILELIST_CPP = $(PROJECT).files_cpp
+FILELIST_C = $(PROJECT).files_c
+DIRLIST = $(PROJECT).dirs
+FILES := $(shell cat $(FILELIST_CPP) $(FILELIST_C)) $(FILES_ADD)
+VPATH := $(shell cat $(DIRLIST)) $(VPATH_ADD)
+
+ifeq "$(HOST_SYSTEM)" "linux"
+MFLAGS =
+MAKEDEPEND = makedepend
+else
+MFLAGS = -k -s --no-print-directory
+MAKEDEPEND = $(OUTPUT_DIR)makedepend.exe
+endif
+
+# Default target.
+target:
+	echo SHELL=$(SHELL)
+	echo VPATH=$(VPATH)
+	echo PATH="$$PATH"
+	echo PROJECT_HOME=$(PROJECT_HOME)
+	echo CURDIR=$(CURDIR)
+	echo SOURCES_NODIR=$(SOURCES_NODIR)
+	echo SOURCES_C_NODIR=$(SOURCES_C_NODIR)
+	echo SOURCES_S_NODIR=$(SOURCES_S_NODIR)	
+	echo OBJECTS_NODIR=$(OBJECTS_NODIR)
+	echo DEBUG_OBJECTS_NODIR_ALL=$(DEBUG_OBJECTS_NODIR_ALL)
+
+include $(PROJECT_HOME)/Code/CryEngine/CryCommon/Makefile_spu.mk
+#compile all files: also _spu.cpp, but do not link them normally (they will be embedded via ppu-lv2-objcopy)
+
+ifeq "$(TARGET)" "PS3"
+ifeq "$(COMP)" "SN"
+C_WARNING_FLAGS = 
+CXX_WARNING_FLAGS = 
+CXX = "C:/Program Files/SN Systems/PS3/bin/ps3ppusnc" $(PPU_SPU_COM_FLAGS)
+CXX_PCH = $(CXX)
+CC = "C:/Program Files/SN Systems/PS3/bin/ps3ppusnc" $(PPU_SPU_COM_FLAGS)
+CC_ASM = $(CELL_SDK)/host-$(HOST_SYSTEM)/ppu/bin/ppu-lv2-gcc $(PPU_SPU_COM_FLAGS)
+LD  = "C:/Program Files/SN Systems/PS3/bin/ps3ppuld"
+CXXFLAGS_OPT_LEVEL = -O5
+CXXFLAGS_COMMON = $(CFLAGS_COMMON)
+CFLAGS_ADD_CUSTOM = -Xchar=signed -Xc+=gnu_ext -Xc+=c99 -Xc+=msvc_ext
+else
+CC  = $(CELL_SDK)/host-$(HOST_SYSTEM)/ppu/bin/ppu-lv2-gcc $(PPU_SPU_COM_FLAGS)
+CXX = $(CELL_SDK)/host-$(HOST_SYSTEM)/ppu/bin/ppu-lv2-g++ $(PPU_SPU_COM_FLAGS)
+CXX_PCH = $(CXX)
+CC_ASM = $(CELL_SDK)/host-$(HOST_SYSTEM)/ppu/bin/ppu-lv2-gcc $(PPU_SPU_COM_FLAGS)
+LD  = $(CELL_SDK)/host-$(HOST_SYSTEM)/ppu/bin/ppu-lv2-ld
+CXXFLAGS_OPT_LEVEL ?= -Os -ffast-math -fstrict-aliasing -fschedule-insns2
+TOCFLAGS = -mminimal-toc
+endif
+AR  = $(CELL_SDK)/host-$(HOST_SYSTEM)/ppu/bin/ppu-lv2-ar rcs
+STRIP = $(CELL_SDK)/host-$(HOST_SYSTEM)/ppu/bin/ppu-lv2-strip --only-keep-debug
+OBJCOPY = $(CELL_SDK)/host-$(HOST_SYSTEM)/ppu/bin/ppu-lv2-objcopy
+endif
+
+CFLAGS_COMMON += $(CFLAGS_ADD_CUSTOM)
+CXXFLAGS_COMMON += $(CFLAGS_ADD_CUSTOM)
+
+ifeq "$(TARGET)" "Linux"
+CXX = g++ -m32
+CXX_PCH = $(CXX)
+CC = gcc -m32
+CC_ASM = $(CC)
+AR = ar
+LD = ld -melf_i386
+STRIP = strip
+OBJCOPY = objcopy
+CXXFLAGS_OPT_LEVEL ?= -O3 -ffast-math -fstrict-aliasing -fschedule-insns2
+endif
+
+#job includes, automatically include all _ppu_include.h - files for non SPU compilation
+PPU_JOB_INCLUDES_DEBUG		= -I$(INCLUDE_DIR_SPU) $(addprefix -include ,$(wildcard DebugPS3/SPU/*_ppu_include.h))
+PPU_JOB_INCLUDES_RELEASE	= -I$(INCLUDE_DIR_SPU) $(addprefix -include ,$(wildcard ProfilePS3/SPU/*_ppu_include.h))
+
+STRIPPED_FILES_NODIR = $(notdir $(FILES))
+STRIPPED_FILES = $(FILES)
+
+SOURCES_NODIR_SPU					= $(filter %_spu.cpp, $(STRIPPED_FILES_NODIR))
+STRIPPED_FILES_NO_SPU			= $(filter-out %_spu.cpp,$(STRIPPED_FILES))
+STRIPPED_FILES_ONLY_SPU		= $(filter %_spu.cpp,$(STRIPPED_FILES))
+
+SOURCES_NODIR		= $(filter %.cpp, $(filter-out %_spu.cpp,$(STRIPPED_FILES_NODIR))) 
+SOURCES_C_NODIR = $(filter %.c, $(STRIPPED_FILES_NODIR))
+SOURCES_S_NODIR = $(filter %.S, $(STRIPPED_FILES_NODIR))
+
+# extract all .h files from FILES 
+HEADERS = $(filter %.h, $(STRIPPED_FILES))
+
+# convert source filenames to .o filenames
+OBJECTS_H	= $(HEADERS:.h=.h.gch)
+OBJECTS_NODIR	= $(SOURCES_NODIR:.cpp=.o) $(SOURCES_C_NODIR:.c=.o) $(SOURCES_S_NODIR:.S=.o)
+RELEASE_OBJECTS_NODIR = $(addprefix Profile$(TARGET)/, $(OBJECTS_NODIR))
+DEBUG_OBJECTS_NODIR = $(addprefix Debug$(TARGET)/, $(OBJECTS_NODIR))
+
+ifeq "$(TARGET)" "PS3"
+RELEASE_OBJECTS_NODIR_ALL = \
+	$(addprefix Profile$(TARGET)/SPU/, $(SOURCES_NODIR_SPU:.cpp=.o))
+DEBUG_OBJECTS_NODIR_ALL = \
+	$(addprefix Debug$(TARGET)/SPU/, $(SOURCES_NODIR_SPU:.cpp=.o))
+RELEASE_OBJECTS_NODIR_ALL_NO_LIBS = \
+	$(addprefix Profile$(TARGET)/SPU/, $(SOURCES_NODIR_SPU:.cpp=.o))
+DEBUG_OBJECTS_NODIR_ALL_NO_LIBS = \
+	$(addprefix Debug$(TARGET)/SPU/, $(SOURCES_NODIR_SPU:.cpp=.o))
+else	
+RELEASE_OBJECTS_NODIR_ALL =
+DEBUG_OBJECTS_NODIR_ALL =
+RELEASE_OBJECTS_NODIR_ALL_NO_LIBS =
+DEBUG_OBJECTS_NODIR_ALL_NO_LIBS =
+endif
+
+RELEASE_OBJECTS_NODIR_ALL += \
+	$(addprefix Profile$(TARGET)/, $(OBJECTS_NODIR)) \
+	$(addsuffix .a, $(DEP_LIBS))
+DEBUG_OBJECTS_NODIR_ALL += \
+	$(addprefix Debug$(TARGET)/, $(OBJECTS_NODIR)) \
+	$(addsuffix _debug.a, $(DEP_LIBS))
+ifeq "$(LINK)" "shared"
+RELEASE_OBJECTS_NODIR_ALL += \
+	$(addsuffix .so, $(DEP_OBJS))
+DEBUG_OBJECTS_NODIR_ALL += \
+	$(addsuffix _debug.so, $(DEP_OBJS))
+else
+RELEASE_OBJECTS_NODIR_ALL += \
+	$(addsuffix .o, $(DEP_OBJS))
+DEBUG_OBJECTS_NODIR_ALL += \
+	$(addsuffix _debug.o, $(DEP_OBJS))
+endif
+RELEASE_OBJECTS_NODIR_ALL_NO_LIBS += \
+	$(addprefix Profile$(TARGET)/, $(OBJECTS_NODIR))
+DEBUG_OBJECTS_NODIR_ALL_NO_LIBS += \
+	$(addprefix Debug$(TARGET)/, $(OBJECTS_NODIR))
+
+ifeq "$(TARGET)" "Linux"
+CXX_WARNING_FLAGS += -Wno-strict-null-sentinel -Wno-conversion
+endif
+
+STL_PORT_DIR = $(PROJECT_HOME)/Code/SDKs/STLPORT/stlport
+
+COMMON_LIB_PATH = -L$(OUTPUT_DIR)
+COMMON_LIBS =
+
+INCLUDE_FLAGS_COMMON_REL = -I. -I../ -I../../ 
+INCLUDE_FLAGS_COMMON = $(INCLUDE_FLAGS_COMMON_REL) -I$(CRY_COMMON_PATH) 
+#-I$(PROJECT_HOME)/Code/SDKs
+
+ifeq "$(TARGET)" "PS3"
+COMMON_LIB_PATH += -L$(CELL_SDK)/$(TARGET_DIR)/ppu/lib/
+COMMON_LIBS += -lm 
+ifeq "$(COMP)" "SN"
+	COMMON_LIBS += -L$(SN_PS3_PATH)/ppu/lib -L$(SN_PS3_PATH)/ppu/lib/sn/ -lsn
+	CXXFLAGS_RELEASE	+= -DSUPP_SN
+	CXXFLAGS_DEBUG	+= -DSUPP_SN	
+	INCLUDE_FLAGS_COMMON += -I$(SN_PS3_PATH)/ppu/include/
+	ifeq "$(STL)" "STLPORT"	
+		CXXFLAGS_RELEASE	+= -NOSTL
+		CXXFLAGS_DEBUG	+= -NOSTL
+	endif
+endif
+CXXFLAGS_RELEASE	+= -mno-gen-microcode -mno-update -mnomultiple 
+CFLAGS_RELEASE		+= -mno-gen-microcode -mno-update -mnomultiple
+endif
+ifeq "$(TARGET)" "Linux"
+COMMON_LIB_PATH += -L/usr/lib -L/usr/X11R6/lib
+COMMON_LIBS += -lpthread -lGL -lCg -lCgGL -lSDL -lX11
+endif
+
+RELEASE_LIBS = $(COMMON_LIB_PATH) $(COMMON_LIBS) $(LIBS) $(addsuffix .a, $(DEP_LIBS)) $(LIBS_NO_SUFFIX)
+DEBUG_LIBS = $(COMMON_LIB_PATH) $(COMMON_LIBS) $(addsuffix _debug, $(LIBS)) $(addsuffix _debug.a, $(DEP_LIBS)) $(LIBS_NO_SUFFIX)
+
+EXCLUDE_DIR_COMMON = 
+
+ifeq "$(TARGET)" "PS3"
+ifeq "$(STL)" "STLPORT"
+	INCLUDE_FLAGS_COMMON += -I$(STL_PORT_DIR)
+endif
+INCLUDE_FLAGS_COMMON += -I$(CELL_SDK)/$(TARGET_DIR)/ppu/include -I$(CELL_SDK)/$(TARGET_DIR)/ppu/include/vectormath/cpp
+INCLUDE_FLAGS_COMMON += -I$(SN_PS3_PATH)/ppu/include/sn $(JOBMAN_PATH_INC)
+endif # PS3
+
+CXXFLAGS_COMMON += $(CXX_WARNING_FLAGS)
+CFLAGS_COMMON	+= $(C_WARNING_FLAGS)
+
+ifeq "$(TARGET)" "PS3"
+ifdef NO_MEM_MAN
+	RELEASE_DEFINES = -DNDEBUG -DPS3 -DNOT_USE_CRY_MEMORY_MANAGER
+	DEBUG_DEFINES   = -D_DEBUG -DPS3 -DNOT_USE_CRY_MEMORY_MANAGER
+else
+	RELEASE_DEFINES = -DUSING_CRY_MEMORY_MANAGER -DNDEBUG -DPS3
+	DEBUG_DEFINES   = -DUSING_CRY_MEMORY_MANAGER -D_DEBUG -DPS3
+endif
+endif
+
+ifeq "$(TARGET)" "Linux"
+	RELEASE_DEFINES = -DNDEBUG -DOPENGL -DLINUX -DLINUX32
+	DEBUG_DEFINES = -D_DEBUG -DOPENGL -DLINUX -DLINUX32
+ifeq "$(DEDICATED_SERVER)" "1"
+	RELEASE_DEFINES += -DDEDICATED_SERVER
+	DEBUG_DEFINES += -DDEDICATED_SERVER
+endif
+endif
+
+ifeq "$(TARGET)" "Linux"
+ifneq "$(OUTPUT_TYPE_LINUX)" ""
+  OUTPUT_TYPE := $(OUTPUT_TYPE_LINUX)
+endif
+endif
+
+ifeq "$(PROFILE_GPROF)" "1"
+CXX += -g -pg
+CC += -g -pg
+RELEASE_DEFINES += -DGPROF
+DEBUG_DEFINES += -DGPROF
+endif
+
+ifeq ($(OUTPUT_TYPE), static_lib)
+	RELEASE_OUTPUT = $(OUTPUT_DIR)lib$(OUTPUT).a
+	DEBUG_OUTPUT = $(OUTPUT_DIR)lib$(OUTPUT)_debug.a
+ifeq "$(TARGET)" "PS3"
+	CFLAGS_RELEASE = $(PPU_JOB_INCLUDES_RELEASE)
+	CFLAGS_DEBUG = $(PPU_JOB_INCLUDES_DEBUG)
+	CXXFLAGS_RELEASE = $(PPU_JOB_INCLUDES_RELEASE)
+	CXXFLAGS_DEBUG = $(PPU_JOB_INCLUDES_DEBUG)
+else
+	CFLAGS_RELEASE =
+	CFLAGS_DEBUG =
+	CXXFLAGS_RELEASE =
+	CXXFLAGS_DEBUG =
+endif
+	CFLAGS_RELEASE += \
+	  $(CFLAGS_COMMON) -g $(CXXFLAGS_OPT_LEVEL) $(RELEASE_DEFINES)
+	CFLAGS_DEBUG += \
+	  $(CFLAGS_COMMON) -O0 -g $(DEBUG_DEFINES)
+	CXXFLAGS_RELEASE += \
+	  $(CXXFLAGS_COMMON) -g $(CXXFLAGS_OPT_LEVEL) $(RELEASE_DEFINES)
+	CXXFLAGS_DEBUG += \
+	  $(CXXFLAGS_COMMON) -O0 -g $(DEBUG_DEFINES)
+	MAKE_IT_SO_RELEASE = \
+	  $(BUILD) \
+	  $(AR) $(ADD_OBJECTS) $(RELEASE_OUTPUT) \
+	  $(RELEASE_OBJECTS_NODIR_ALL)
+	MAKE_IT_SO_DEBUG = \
+	  $(BUILD) \
+	  $(AR) $(ADD_OBJECTS_DEBUG) $(DEBUG_OUTPUT) \
+	  $(DEBUG_OBJECTS_NODIR_ALL)
+endif
+
+ifeq ($(OUTPUT_TYPE), dynamic_lib)
+	RELEASE_OUTPUT = $(OUTPUT_DIR)$(OUTPUT).so
+	DEBUG_OUTPUT = $(OUTPUT_DIR)$(OUTPUT)_debug.so
+ifeq "$(TARGET)" "PS3"
+	CFLAGS_RELEASE = $(PPU_JOB_INCLUDES_RELEASE)
+	CFLAGS_DEBUG = $(PPU_JOB_INCLUDES_DEBUG)
+	CXXFLAGS_RELEASE = $(PPU_JOB_INCLUDES_RELEASE)
+	CXXFLAGS_DEBUG = $(PPU_JOB_INCLUDES_DEBUG)
+else
+	CFLAGS_RELEASE =
+	CFLAGS_DEBUG =
+	CXXFLAGS_RELEASE =
+	CXXFLAGS_DEBUG =
+endif
+	CFLAGS_RELEASE += \
+	  $(CFLAGS_COMMON) $(CXXFLAGS_OPT_LEVEL) -fPIC -g $(RELEASE_DEFINES)
+	CFLAGS_DEBUG += \
+	  $(CFLAGS_COMMON) -O0 -fPIC -g $(DEBUG_DEFINES)
+	CXXFLAGS_RELEASE += \
+	  $(CXXFLAGS_COMMON) $(CXXFLAGS_OPT_LEVEL) -fPIC -g $(RELEASE_DEFINES)
+	CXXFLAGS_DEBUG += \
+	  $(CXXFLAGS_COMMON) -O0 -fPIC -g $(DEBUG_DEFINES)
+	MAKE_IT_SO_RELEASE = \
+	  $(BUILD) $(CXX) -shared $(LIB_DIRS) $(ADD_OBJECTS) \
+	  $(RELEASE_OBJECTS_NODIR_ALL) \
+	  -o $(RELEASE_OUTPUT) $(RELEASE_LIBS) $(SYSTEM_LIBS)
+	MAKE_IT_SO_DEBUG = \
+	  $(BUILD) $(CXX) -shared $(LIB_DIRS) $(ADD_OBJECTS_DEBUG) \
+	  $(DEBUG_OBJECTS_NODIR_ALL) \
+	  -o $(DEBUG_OUTPUT) $(DEBUG_LIBS) $(SYSTEM_LIBS)
+	STRIP_EXEC = 	
+endif
+
+ifeq ($(OUTPUT_TYPE), incr_obj)
+	RELEASE_OUTPUT = $(OUTPUT_DIR)$(OUTPUT).o
+	DEBUG_OUTPUT = $(OUTPUT_DIR)$(OUTPUT)_debug.o
+ifeq "$(TARGET)" "PS3"
+	CFLAGS_RELEASE = $(PPU_JOB_INCLUDES_RELEASE)
+	CFLAGS_DEBUG = $(PPU_JOB_INCLUDES_DEBUG)
+	CXXFLAGS_RELEASE = $(PPU_JOB_INCLUDES_RELEASE)
+	CXXFLAGS_DEBUG = $(PPU_JOB_INCLUDES_DEBUG)
+else
+	CFLAGS_RELEASE =
+	CFLAGS_DEBUG =
+	CXXFLAGS_RELEASE =
+	CXXFLAGS_DEBUG =
+endif
+	CFLAGS_RELEASE += \
+	  $(CFLAGS_COMMON) -g $(CXXFLAGS_OPT_LEVEL) $(RELEASE_DEFINES)
+	CFLAGS_DEBUG += \
+	  $(CFLAGS_COMMON) -O0 -g $(DEBUG_DEFINES)
+	CXXFLAGS_RELEASE += \
+	  $(CXXFLAGS_COMMON) -g $(CXXFLAGS_OPT_LEVEL) $(RELEASE_DEFINES)
+	CXXFLAGS_DEBUG += \
+	  $(CXXFLAGS_COMMON) -O0 -g $(DEBUG_DEFINES)
+	MAKE_IT_SO_RELEASE = $(BUILD) $(LD) -r -o $(RELEASE_OUTPUT) \
+		$(ADD_OBJECTS) $(RELEASE_OBJECTS_NODIR_ALL) && \
+		echo $(addprefix $(CURDIR)/, \
+		  $(ADD_OBJECTS) $(RELEASE_OBJECTS_NODIR_ALL)) \
+		>$(RELEASE_OUTPUT).link
+	MAKE_IT_SO_DEBUG = $(BUILD) $(LD) -r -o $(DEBUG_OUTPUT) \
+		$(ADD_OBJECTS_DEBUG) $(DEBUG_OBJECTS_NODIR_ALL) && \
+		echo $(addprefix $(CURDIR)/, \
+		  $(ADD_OBJECTS) $(DEBUG_OBJECTS_NODIR_ALL)) \
+		>$(DEBUG_OUTPUT).link
+	STRIP_EXEC = 
+endif
+
+ifeq ($(OUTPUT_TYPE), program)
+	RELEASE_OUTPUT = $(OUTPUT_DIR)$(OUTPUT).elf
+	DEBUG_OUTPUT = $(OUTPUT_DIR)$(OUTPUT)_debug.elf
+ifeq "$(TARGET)" "PS3"
+	CFLAGS_RELEASE = $(PPU_JOB_INCLUDES_RELEASE)
+	CFLAGS_DEBUG = $(PPU_JOB_INCLUDES_DEBUG)
+	CXXFLAGS_RELEASE = $(PPU_JOB_INCLUDES_RELEASE)
+	CXXFLAGS_DEBUG = $(PPU_JOB_INCLUDES_DEBUG)
+else
+	CFLAGS_RELEASE =
+	CFLAGS_DEBUG =
+	CXXFLAGS_RELEASE =
+	CXXFLAGS_DEBUG =
+endif
+	CFLAGS_RELEASE += \
+	  $(CFLAGS_COMMON) -g $(CXXFLAGS_OPT_LEVEL) $(RELEASE_DEFINES)
+	CFLAGS_DEBUG += \
+	  $(CFLAGS_COMMON) -O0 -g $(DEBUG_DEFINES)
+	CXXFLAGS_RELEASE += \
+	  $(CXXFLAGS_COMMON) -g $(CXXFLAGS_OPT_LEVEL) $(RELEASE_DEFINES)
+	CXXFLAGS_DEBUG += \
+	  $(CXXFLAGS_COMMON) -O0 -g $(DEBUG_DEFINES)
+ifeq "$(USE_LD_R)" "1"
+	MAKE_IT_SO_RELEASE = $(BUILD) $(CXX) -o $(RELEASE_OUTPUT) \
+		$(LINKFLAGS) \
+		$(LIB_DIRS) $(ADD_OBJECTS) \
+		$(RELEASE_OBJECTS_NODIR_ALL) \
+		$(COMMON_LIB_PATH) $(LIBS) $(LIBS_NO_SUFFIX) $(COMMON_LIBS) \
+		$(SYSTEM_LIBS)
+
+	MAKE_IT_SO_DEBUG = $(BUILD) $(CXX) -o $(DEBUG_OUTPUT) \
+		$(LINKFLAGS) \
+		$(LIB_DIRS) $(ADD_OBJECTS_DEBUG) \
+		$(DEBUG_OBJECTS_NODIR_ALL) \
+		$(COMMON_LIB_PATH) $(addsuffix _debug, $(LIBS)) $(LIBS_NO_SUFFIX) $(COMMON_LIBS) \
+		$(SYSTEM_LIBS)
+
+else
+ 	# Use the .link files for linking.
+	MAKE_IT_SO_RELEASE = $(BUILD) $(CXX) -o $(RELEASE_OUTPUT) \
+		$(LINKFLAGS) \
+		$(LIB_DIRS) $(ADD_OBJECTS) \
+		$(addsuffix .link, $(addprefix @, $(RELEASE_OBJECTS_NODIR_ALL))) \
+		$(LIBS) $(LIBS_NO_SUFFIX) \
+		$(COMMON_LIB_PATH) $(COMMON_LIBS) \
+		$(SYSTEM_LIBS)
+	MAKE_IT_SO_DEBUG = $(BUILD) $(CXX) -o $(DEBUG_OUTPUT) \
+		$(LINKFLAGS) \
+		$(LIB_DIRS) $(ADD_OBJECTS_DEBUG) \
+		$(addsuffix .link, $(addprefix @, $(DEBUG_OBJECTS_NODIR_ALL))) \
+		$(addsuffix _debug, $(LIBS)) $(LIBS_NO_SUFFIX) \
+		$(COMMON_LIB_PATH) $(COMMON_LIBS) \
+		$(SYSTEM_LIBS)
+endif
+	STRIP_EXEC = $(STRIP) $(DEBUG_OUTPUT)
+endif
+
+STDAFX_CPPFILES = $(wildcard StdAfx.cpp)
+ifeq "$(ADD_STDAFX_CPPFILES)" ""
+	STDAFX_DEPS_DEBUG = $(patsubst %.cpp, Debug$(TARGET)/%.o, $(STDAFX_CPPFILES))
+	STDAFX_DEPS_PROFILE = $(patsubst %.cpp, Profile$(TARGET)/%.o, $(STDAFX_CPPFILES))
+else
+	STDAFX_DEPS_DEBUG = $(patsubst %.cpp, Debug$(TARGET)/%.o, $(STDAFX_CPPFILES)) Debug$(TARGET)/$(ADD_STDAFX_CPPFILES).o
+	STDAFX_DEPS_PROFILE = $(patsubst %.cpp, Profile$(TARGET)/%.o, $(STDAFX_CPPFILES)) Profile$(TARGET)/$(ADD_STDAFX_CPPFILES).o
+endif
+
+#STDAFX_HFILES = $(wildcard StdAfx.h) $(wildcard RenderPCH.h)
+#STDAFX_DEPS = $(addsuffix .gch, $(STDAFX_HFILES))
+#STDAFX_DEPS_DEBUG = $(STDAFX_DEPS)
+#STDAFX_DEPS_PROFILE = $(STDAFX_DEPS)
+
+%.a: 
+
+Debug$(TARGET)/%.o: %.S
+	@echo $(notdir $<)
+	@$(CC_ASM) $< -c -o Debug$(TARGET)/$(notdir $@)
+
+Debug$(TARGET)/%.o: %.c
+	@$(BUILD) --echo $(notdir $<) \
+	  $(CC) $(CFLAGS_DEBUG) $(TOCFLAGS) $< -c -o Debug$(TARGET)/$(notdir $@)
+
+Debug$(TARGET)/StdAfx.o: StdAfx.cpp 
+	@rm -f StdAfx.h.gch
+	@echo StdAfx.cpp
+	@$(BUILD) \
+	  $(CXX_PCH) $(CXXFLAGS_DEBUG) -w StdAfx.h -c -o StdAfx.h.gch
+	@$(BUILD) \
+	  $(CXX_PCH) $(CXXFLAGS_DEBUG) $(TOCFLAGS) \
+	  StdAfx.cpp -c -o Debug$(TARGET)/StdAfx.o
+
+Debug$(TARGET)/RenderPCH.o: ../RenderPCH.cpp 
+	@rm -f ../RenderPCH.h.gch
+	@echo RenderPCH.cpp
+	@$(BUILD) \
+	  $(CXX_PCH) $(CXXFLAGS_DEBUG) -w ../RenderPCH.h -c -o ../RenderPCH.h.gch
+	@$(BUILD) \
+	  $(CXX_PCH) $(CXXFLAGS_DEBUG) $(TOCFLAGS) \
+	  ../RenderPCH.cpp -c -o Debug$(TARGET)/RenderPCH.o
+
+Debug$(TARGET)/%.o: %.cpp $(STDAFX_DEPS_DEBUG)
+	@$(BUILD) --echo $(notdir $<) \
+	  $(CXX) $(CXXFLAGS_DEBUG) $(TOCFLAGS) $< -c -o Debug$(TARGET)/$(notdir $@)
+
+# Add the following line to the build commands above if the compiler fails:
+#	  || $(CXX) $(CXXFLAGS_DEBUG) $< -c -o Debug$(TARGET)/$(notdir $@)
+
+Profile$(TARGET)/StdAfx.o: StdAfx.cpp
+	@rm -f StdAfx.h.gch	
+	@echo StdAfx.cpp
+	@$(BUILD) \
+	  $(CXX_PCH) $(CXXFLAGS_RELEASE) -w StdAfx.h -c -o StdAfx.h.gch
+	@$(BUILD) \
+	  $(CXX_PCH) $(CXXFLAGS_RELEASE) $(TOCFLAGS) \
+	  StdAfx.cpp -c -o Profile$(TARGET)/StdAfx.o
+
+Profile$(TARGET)/RenderPCH.o: ../RenderPCH.cpp 
+	@rm -f ../RenderPCH.h.gch	
+	@echo RenderPCH.cpp
+	@$(BUILD) \
+	  $(CXX_PCH) $(CXXFLAGS_RELEASE) -w ../RenderPCH.h -c -o ../RenderPCH.h.gch
+	@$(BUILD) \
+	  $(CXX_PCH) $(CXXFLAGS_RELEASE) $(TOCFLAGS) \
+	  ../RenderPCH.cpp -c -o Profile$(TARGET)/RenderPCH.o
+
+Profile$(TARGET)/%.o: %.S
+	@echo $(notdir $<)
+	@$(CC_ASM) $< -c -o Profile$(TARGET)/$(notdir $@)
+
+Profile$(TARGET)/%.o: %.c
+	@$(BUILD) --echo $(notdir $<) \
+	  $(CC) $(CFLAGS_RELEASE) $(TOCFLAGS) $< -c -o Profile$(TARGET)/$(notdir $@)
+
+Profile$(TARGET)/%.o: %.cpp $(STDAFX_DEPS_PROFILE)
+	@$(BUILD) --echo $(notdir $<) \
+	  $(CXX) $(CXXFLAGS_RELEASE) $(TOCFLAGS) $< -c -o Profile$(TARGET)/$(notdir $@)
+
+$(RELEASE_OUTPUT): $(HEADERS) $(RELEASE_OBJECTS_NODIR_ALL) $(EXTRA_RELEASE_DEPS)
+	@echo Linking...
+	@test '$(HOST_SYSTEM)' = linux -o ! -f '$(ERRORFILE)'
+	@$(MAKE_IT_SO_RELEASE)
+	@echo
+
+$(DEBUG_OUTPUT): $(HEADERS) $(DEBUG_OBJECTS_NODIR_ALL) $(EXTRA_DEBUG_DEPS)
+	@echo Linking...
+	@test '$(HOST_SYSTEM)' = linux -o ! -f '$(ERRORFILE)'
+	@$(MAKE_IT_SO_DEBUG)
+#	@$(STRIP_EXEC)
+	@echo
+
+release: $(OBJECTS_H) $(RELEASE_OUTPUT_NODIR_ALL) $(RELEASE_OUTPUT)
+
+debug: $(OBJECTS_H) $(DEBUG_OBJECTS_NODIR_ALL) $(DEBUG_OUTPUT)
+
+alldebug:
+		mkdir -p ./Debug$(TARGET)
+		@echo Compiling...
+		@touch $(MAKEFILE_DEPEND)
+		${MAKE} $(MFLAGS) -f $(MAKEFILE_DEPEND) -f Makefile \
+		  debug PROFILE=debug TARGET=$(TARGET)
+		-@rm -f $(SPU_REPOSITORY)				  
+ifeq "$(EXEC_MODE_BUBBLES)" "-DUSE_BUBBLES"
+ifeq "$(OUTPUT_TYPE)" "program"	
+		@echo Linking $(SPU_REPOSITORY)
+		$(NM_PPU) --demangle $(DEBUG_OUTPUT) | grep " [brdBRD] " | grep -v " keyed to " > $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug/EXEC_NM_RES_demangled.txt
+		$(JOB_GEN) $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug `cat $(OUTPUT_DIR)/CPMHAddr.txt` $(SPU_REPOSITORY) `cat $(OUTPUT_DIR)/CPRHAddr.txt`
+else
+		touch $(SPU_REPOSITORY)
+endif
+else
+		touch $(SPU_REPOSITORY)
+endif
+ifeq "$(OUTPUT_TYPE)" "program"	
+	$(CELL_SDK)/host-$(HOST_SYSTEM)/bin/make_fself $(OUTPUT_DIR)$(OUTPUT)_debug.elf $(WORK_DIR)$(OUTPUT)_debug.self
+endif
+		$(POST_ACTION)
+
+allrelease:
+		mkdir -p ./Profile$(TARGET)
+		@echo Compiling...
+		@touch $(MAKEFILE_DEPEND)		
+		${MAKE} $(MFLAGS) -f $(MAKEFILE_DEPEND) -f Makefile \
+		  release PROFILE=release TARGET=$(TARGET)
+		-@rm -f $(SPU_REPOSITORY)		
+ifeq "$(EXEC_MODE_BUBBLES)" "-DUSE_BUBBLES"
+ifeq "$(OUTPUT_TYPE)" "program"	
+		@echo Linking $(SPU_REPOSITORY)
+		$(NM_PPU) --demangle $(RELEASE_OUTPUT) | grep " [brdBRD] " | grep -v " keyed to " > $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release/EXEC_NM_RES_demangled.txt
+#		@echo $(JOB_GEN) $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release `cat $(OUTPUT_DIR)/CPMHAddr.txt` $(SPU_REPOSITORY) `cat $(OUTPUT_DIR)/CPRHAddr.txt`
+		$(JOB_GEN) $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release `cat $(OUTPUT_DIR)/CPMHAddr.txt` $(SPU_REPOSITORY) `cat $(OUTPUT_DIR)/CPRHAddr.txt`
+else
+		touch $(SPU_REPOSITORY)
+endif
+else
+		touch $(SPU_REPOSITORY)
+endif
+ifeq "$(OUTPUT_TYPE)" "program"	
+	$(CELL_SDK)/host-$(HOST_SYSTEM)/bin/make_fself $(OUTPUT_DIR)$(OUTPUT).elf $(WORK_DIR)$(OUTPUT).self
+endif
+	$(POST_ACTION)
+
+cleandebug:
+		-@echo Deleting intermediate files and output files...
+ifeq "$(TARGET)" "PS3"		
+		-@mkdir -p $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug/Bubbles
+		-@mkdir -p $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug/Jobs
+		-@rm -f $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug/Jobs/*
+		-@rm -f $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug/Bubbles/*
+		-@rm -f $(SPU_REPOSITORY)
+endif		
+		-@for object in ${DEBUG_OBJECTS_NODIR_ALL_NO_LIBS}; do \
+   		(rm -f $$object); \
+  		done
+		-@rm -f ./DebugPS3/SPU/* >/dev/null 		  		
+		-@rm -f ./StdAfx.h.gch ./RenderPCH.h.gch
+		-@rm -f $(DEBUG_OUTPUT)
+
+allcleandebug:
+ifeq "$(TARGET)" "PS3"
+		-@mkdir -p $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug/Bubbles
+		-@mkdir -p $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug/Jobs
+		-@rm -f $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug/Jobs/*
+		-@rm -f $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Debug/Bubbles/*
+		-@rm -f $(SPU_REPOSITORY)		
+endif		
+		-@mkdir -p ./Debug$(TARGET)
+		-@echo Deleting intermediate files and output files...		
+		-@for object in ${DEBUG_OBJECTS_NODIR_ALL_NO_LIBS}; do \
+   		(rm -f $$object); \
+  		done
+		-@rm -f ./DebugPS3/SPU/* >/dev/null
+		-@rm -f ./StdAfx.h.gch ./RenderPCH.h.gch
+		-@rm -f $(DEBUG_OUTPUT)
+		-@echo Building dependencies... 
+		-@rm -f $(MAKEFILE_DEPEND)
+		-@touch $(MAKEFILE_DEPEND)
+		-($(OUTPUT_DIR)makedepend.exe -f $(MAKEFILE_DEPEND) \
+		  -pDebug$(TARGET)/ -o.o -s "#Generated Debug Dependencies" \
+		  $(DEBUG_DEFINES) -a $(EXCLUDE_DIR_COMMON) \
+		  $(INCLUDE_FLAGS_COMMON_REL) $(INCLUDE_FLAGS) \
+		  $(STRIPPED_FILES_NO_SPU) >& logdepend.txt)
+		-($(OUTPUT_DIR)makedepend.exe -f $(MAKEFILE_DEPEND) \
+		  -pProfile$(TARGET)/ -o.o \
+		  -s "#Generated Profile Dependencies" $(RELEASE_DEFINES) \
+		  -a $(EXCLUDE_DIR_COMMON) $(INCLUDE_FLAGS_COMMON_REL) \
+		  $(INCLUDE_FLAGS) $(STRIPPED_FILES_NO_SPU) >& logdepend.txt)
+ifeq "$(TARGET)" "PS3"
+		-($(OUTPUT_DIR)makedepend.exe -f $(MAKEFILE_DEPEND) \
+		  -pDebugPS3/SPU/ -o.o $(DEBUG_DEFINES_SPU) \
+		  -a $(EXCLUDE_DIR_COMMON) $(INCLUDE_FLAGS_COMMON_REL) \
+		  $(INCLUDE_FLAGS_COMMON) $(INCLUDE_FLAGS) \
+		  $(STRIPPED_FILES_ONLY_SPU) >& logdepend.txt)
+		-($(OUTPUT_DIR)makedepend.exe -f $(MAKEFILE_DEPEND) \
+		  -pProfilePS3/SPU/ -o.o $(RELEASE_DEFINES_SPU) \
+		  -a $(EXCLUDE_DIR_COMMON) $(INCLUDE_FLAGS_COMMON_REL) \
+		  $(INCLUDE_FLAGS) $(STRIPPED_FILES_ONLY_SPU) >& logdepend.txt)
+endif
+		-@rm -f logdepend.txt
+		-@rm -f $(MAKEFILE_DEPEND).bak
+		${MAKE} $(MFLAGS) -f $(MAKEFILE_DEPEND) -f Makefile \
+		  alldebug PROFILE=debug TARGET=$(TARGET)
+		
+cleanrelease:
+		-@echo Deleting intermediate files and output files...		
+ifeq "$(TARGET)" "PS3"
+		-@mkdir -p $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release/Bubbles
+		-@mkdir -p $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release/Jobs
+		-@rm -f $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release/Jobs/*
+		-@rm -f $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release/Bubbles/*
+endif		
+		-@for object in ${RELEASE_OBJECTS_NODIR_ALL_NO_LIBS}; do \
+   		(rm -f $$object); \
+  		done
+		-@rm -f ./ProfilePS3/SPU/* >/dev/null
+		-@rm -f ./StdAfx.h.gch RenderPCH.h.gch
+		-@rm -f $(RELEASE_OUTPUT)
+
+allcleanrelease:
+ifeq "$(TARGET)" "PS3"
+		-@mkdir -p $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release/Bubbles
+		-@mkdir -p $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release/Jobs
+		-@rm -f $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release/Jobs/*
+		-@rm -f $(OUTPUT_DIR)$(PROJECT_OUTPUT_PATH)/Release/Bubbles/*
+endif
+		-mkdir -p ./Profile$(TARGET)
+		-@echo Deleting intermediate files and output files...		
+		-@for object in ${RELEASE_OBJECTS_NODIR_ALL_NO_LIBS}; do \
+   		(rm -f $$object); \
+  		done
+		-@rm -f ./ProfilePS3/SPU/* >/dev/null
+		-@rm -f ./StdAfx.h.gch RenderPCH.h.gch
+		-@rm -f $(RELEASE_OUTPUT)
+		-@echo Building dependencies... 
+		-@rm -f $(MAKEFILE_DEPEND)
+		-@touch $(MAKEFILE_DEPEND)
+		-($(OUTPUT_DIR)makedepend.exe -f $(MAKEFILE_DEPEND) \
+		  -pDebug$(TARGET)/ -o.o -s "#Generated Debug Dependencies" \
+		  $(DEBUG_DEFINES) -a $(EXCLUDE_DIR_COMMON) \
+		  $(INCLUDE_FLAGS_COMMON_REL) $(INCLUDE_FLAGS) \
+		  $(STRIPPED_FILES_NO_SPU) >& logdepend.txt)
+		-($(OUTPUT_DIR)makedepend.exe -f $(MAKEFILE_DEPEND) \
+		  -pProfile$(TARGET)/ -o.o \
+		  -s "#Generated Profile Dependencies" $(RELEASE_DEFINES) \
+		  -a $(EXCLUDE_DIR_COMMON) $(INCLUDE_FLAGS_COMMON_REL) \
+		  $(INCLUDE_FLAGS) $(STRIPPED_FILES_NO_SPU) >& logdepend.txt)
+ifeq "$(TARGET)" "PS3"
+		-($(OUTPUT_DIR)makedepend.exe -f $(MAKEFILE_DEPEND) \
+		  -pDebugPS3/SPU/ -o.o $(DEBUG_DEFINES_SPU) \
+		  -a $(EXCLUDE_DIR_COMMON) $(INCLUDE_FLAGS_COMMON_REL) \
+		  $(INCLUDE_FLAGS) $(STRIPPED_FILES_ONLY_SPU) \
+		  >& logdepend.txt)
+		-($(OUTPUT_DIR)makedepend.exe -f $(MAKEFILE_DEPEND) \
+		  -pProfilePS3/SPU/ -o.o $(RELEASE_DEFINES_SPU) \
+		  -a $(EXCLUDE_DIR_COMMON) $(INCLUDE_FLAGS_COMMON_REL) \
+		  $(INCLUDE_FLAGS) $(STRIPPED_FILES_ONLY_SPU) \
+		  >& logdepend.txt)
+endif
+		-@rm -f logdepend.txt
+		-@rm -f $(MAKEFILE_DEPEND).bak
+		${MAKE} $(MFLAGS) -f $(MAKEFILE_DEPEND) -f Makefile \
+			allrelease PROFILE=release TARGET=$(TARGET)
+
+_depend:
+		rm -f ./StdAfx.h.gch ./RenderPCH.h.gch
+		@echo Building dependencies... 
+		@rm -f $(MAKEFILE_DEPEND)
+		@touch $(MAKEFILE_DEPEND)
+		$(MAKEDEPEND) -f $(MAKEFILE_DEPEND) -pDebug$(TARGET)/ -o.o \
+			-s "# Dependencies" \
+			$(DEBUG_DEFINES) \
+			-a $(EXCLUDE_DIR_COMMON) \
+			$(INCLUDE_FLAGS_COMMON_REL) \
+			$(INCLUDE_FLAGS) \
+			$(STRIPPED_FILES_NO_SPU) >logdepend.txt 2>&1
+		$(MAKEDEPEND) -f $(MAKEFILE_DEPEND) -pProfile$(TARGET)/ -o.o \
+			-s "# Dependencies" \
+			$(RELEASE_DEFINES) \
+			-a $(EXCLUDE_DIR_COMMON) \
+			$(INCLUDE_FLAGS_COMMON_REL) \
+			$(INCLUDE_FLAGS) \
+			$(STRIPPED_FILES_NO_SPU) >>logdepend.txt 2>&1
+ifeq "$(TARGET)" "PS3"
+		$(MAKEDEPEND) -f $(MAKEFILE_DEPEND) -pDebugPS3/SPU/ -o.o \
+			$(DEBUG_DEFINES_SPU) \
+			-a $(EXCLUDE_DIR_COMMON) \
+			$(INCLUDE_FLAGS_COMMON_REL) \
+			$(INCLUDE_FLAGS_COMMON) \
+			$(INCLUDE_FLAGS) \
+			$(PPU_SPU_COM_FLAGS) \
+			$(STRIPPED_FILES_ONLY_SPU) >>logdepend.txt 2>&1
+		$(MAKEDEPEND) -f $(MAKEFILE_DEPEND) -pProfilePS3/SPU/ -o.o \
+			$(RELEASE_DEFINES_SPU) \
+			-a $(EXCLUDE_DIR_COMMON) \
+			$(INCLUDE_FLAGS_COMMON_REL) \
+			$(INCLUDE_FLAGS) \
+			$(PPU_SPU_COM_FLAGS)\
+			$(STRIPPED_FILES_ONLY_SPU) >> logdepend.txt 2>&1
+endif
+		rm -f logdepend.txt
+		rm -f $(MAKEFILE_DEPEND).bak
+
