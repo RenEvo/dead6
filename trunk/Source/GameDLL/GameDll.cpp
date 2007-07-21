@@ -9,6 +9,7 @@
 	-------------------------------------------------------------------------
 	History:
 	- 2:8:2004   10:38 : Created by Márcio Martins
+	- 7/21/07 : Edited for D6 core - KAK
 
 *************************************************************************/
 #include "StdAfx.h"
@@ -16,6 +17,14 @@
 
 #include <CryLibrary.h>
 #include <platform_impl.h>
+
+// [D6] Include our platform too
+#include <d6platform_impl.h>
+#include "CD6Game.h"
+
+// [D6] Set up extern
+CD6CoreGlobalEnvironment CD6CoreGlobalEnvironment::m_Instance;
+CD6CoreGlobalEnvironment* D6Core = &CD6CoreGlobalEnvironment::GetInstance();
 
 #define GAME_FRAMEWORK_FILENAME	"cryaction.dll"
 
@@ -25,10 +34,14 @@ extern "C"
 	{
 		ModuleInitISystem(pGameFramework->GetISystem());
 
-		static char pGameBuffer[sizeof(IGame)];
-		return new ((void*)pGameBuffer) CGame();
+		// [D6] Init our platform
+		D6Core->D6CoreModuleInitISystem(pGameFramework->GetISystem());
 
-		return new CGame();
+		static char pGameBuffer[sizeof(IGame)];
+
+		// [D6] Run our game, not theirs!
+		return new ((void*)pGameBuffer) CD6Game();
+		return new CD6Game();
 	}
 }
 

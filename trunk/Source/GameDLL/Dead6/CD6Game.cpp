@@ -1,0 +1,50 @@
+////////////////////////////////////////////////////
+// C&C: The Dead 6 - Core File
+// Copyright (C), RenEvo Studios, 2007
+//
+// CD6Game.cpp
+//
+// Purpose: Dead6 Core Game class
+//
+// File History:
+//	- 7/21/07 : File created - KAK
+////////////////////////////////////////////////////
+
+#include "stdafx.h"
+#include "CD6Game.h"
+
+////////////////////////////////////////////////////
+CD6Game::CD6Game(void)
+{
+
+}
+
+////////////////////////////////////////////////////
+CD6Game::~CD6Game(void)
+{
+
+}
+
+////////////////////////////////////////////////////
+bool CD6Game::Init(IGameFramework *pFramework)
+{
+	return CGame::Init(pFramework);
+}
+
+////////////////////////////////////////////////////
+bool CD6Game::CompleteInit()
+{
+	return CGame::CompleteInit();
+}
+
+////////////////////////////////////////////////////
+void CD6Game::Shutdown()
+{
+	CGame::Shutdown();
+}
+
+////////////////////////////////////////////////////
+int CD6Game::Update(bool haveFocus, unsigned int updateFlags)
+{
+	return CGame::Update(haveFocus, updateFlags);
+}
