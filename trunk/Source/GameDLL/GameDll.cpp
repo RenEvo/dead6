@@ -24,7 +24,7 @@
 
 // [D6] Set up extern
 CD6CoreGlobalEnvironment CD6CoreGlobalEnvironment::m_Instance;
-CD6CoreGlobalEnvironment* D6Core = &CD6CoreGlobalEnvironment::GetInstance();
+CD6CoreGlobalEnvironment* g_D6Core = &CD6CoreGlobalEnvironment::GetInstance();
 
 #define GAME_FRAMEWORK_FILENAME	"cryaction.dll"
 
@@ -35,7 +35,7 @@ extern "C"
 		ModuleInitISystem(pGameFramework->GetISystem());
 
 		// [D6] Init our platform
-		D6Core->D6CoreModuleInitISystem(pGameFramework->GetISystem());
+		g_D6Core->D6CoreModuleInitISystem(pGameFramework->GetISystem());
 
 		static char pGameBuffer[sizeof(IGame)];
 

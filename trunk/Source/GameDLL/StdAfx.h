@@ -46,6 +46,9 @@
 #include <ILog.h>
 #include <IGameplayRecorder.h>
 
+// [D6] Our platform
+#include <d6platform_impl.h>
+
 #ifndef GAMEDLL_EXPORTS
 #define GAMEDLL_EXPORTS
 #endif

@@ -28,18 +28,40 @@ CD6Game::~CD6Game(void)
 ////////////////////////////////////////////////////
 bool CD6Game::Init(IGameFramework *pFramework)
 {
-	return CGame::Init(pFramework);
+	CryLogAlways("CD6Game::Init()");
+	// Base init
+	bool bBaseInit = CGame::Init(pFramework);
+
+	// D6 Core Init
+	if (true == bBaseInit)
+	{
+		// Init base manager
+		g_D6Core->GetBaseManager()->Initialize();
+
+		// Init team manager
+		g_D6Core->GetTeamManager()->Initialize();
+	}
+
+	return bBaseInit;
 }
 
 ////////////////////////////////////////////////////
 bool CD6Game::CompleteInit()
 {
+	CryLogAlways("CD6Game::CompleteInit()");
 	return CGame::CompleteInit();
 }
 
 ////////////////////////////////////////////////////
 void CD6Game::Shutdown()
 {
+	// Shutdown D6 Core
+	if (NULL != g_D6Core->GetBaseManager())
+		g_D6Core->GetBaseManager()->Shutdown();
+	if (NULL != g_D6Core->GetTeamManager())
+		g_D6Core->GetTeamManager()->Shutdown();
+
+	// Base shutdown
 	CGame::Shutdown();
 }
 

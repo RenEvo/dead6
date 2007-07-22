@@ -27,6 +27,18 @@ CBaseManager::~CBaseManager(void)
 }
 
 ////////////////////////////////////////////////////
+void CBaseManager::Initialize(void)
+{
+	CryLogAlways("Initializing Dead6 Core: CBaseManager...");
+}
+
+////////////////////////////////////////////////////
+void CBaseManager::Shutdown(void)
+{
+
+}
+
+////////////////////////////////////////////////////
 void CBaseManager::SetTeamManager(ITeamManager const* pTM)
 {
 

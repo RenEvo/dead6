@@ -27,6 +27,18 @@ CTeamManager::~CTeamManager(void)
 }
 
 ////////////////////////////////////////////////////
+void CTeamManager::Initialize(void)
+{
+	CryLogAlways("Initializing Dead6 Core: CTeamManager...");
+}
+
+////////////////////////////////////////////////////
+void CTeamManager::Shutdown(void)
+{
+
+}
+
+////////////////////////////////////////////////////
 TeamID CTeamManager::CreateTeam(char const* szName, char const* szScript)
 {
 	return TEAMID_INVALID;
