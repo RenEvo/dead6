@@ -6,6 +6,8 @@
 //
 // Purpose: Platform implementation for core setup
 //
+// Note: I'm including in the precompiled header!
+//
 // File History:
 //	- 7/21/07 : File created - KAK
 ////////////////////////////////////////////////////
@@ -13,28 +15,24 @@
 #ifndef _D6C_d6platform_impl_H_ 
 #define _D6C_d6platform_impl_H_
 
-#include "CBaseManager.h"
-#include "CTeamManager.h"
+#include "ISystem.h"
+
+#include "IBaseManager.h"
+#include "ITeamManager.h"
 
 ////////////////////////////////////////////////////
 // D6 Core global environment
 class CD6CoreGlobalEnvironment
 {
-	struct ISystem						*pSystem;
-	struct SSystemGlobalEnvironment		*pSystemGE;
-	struct IBaseManager					*pBaseManager;
-	struct ITeamManager					*pTeamManager;
+	ISystem	*pSystem;
+	SSystemGlobalEnvironment *pSystemGE;
+	IBaseManager *pBaseManager;
+	ITeamManager *pTeamManager;
 
 	////////////////////////////////////////////////////
 	// Constructor
 	////////////////////////////////////////////////////
-	CD6CoreGlobalEnvironment(void)
-	{
-		pSystem = NULL;
-		pSystemGE = NULL;
-		pBaseManager = NULL;
-		pTeamManager = NULL;
-	}
+	CD6CoreGlobalEnvironment(void);
 	CD6CoreGlobalEnvironment(CD6CoreGlobalEnvironment const&) {}
 	CD6CoreGlobalEnvironment& operator =(CD6CoreGlobalEnvironment const&) {return *this;}
 
@@ -42,11 +40,7 @@ public:
 	////////////////////////////////////////////////////
 	// Destructor
 	////////////////////////////////////////////////////
-	virtual ~CD6CoreGlobalEnvironment(void)
-	{
-		SAFE_DELETE(pBaseManager);
-		SAFE_DELETE(pTeamManager);
-	}
+	virtual ~CD6CoreGlobalEnvironment(void);
 
 	////////////////////////////////////////////////////
 	// GetInstance
@@ -66,24 +60,17 @@ public:
 	//
 	// In:	pSystem - System object
 	////////////////////////////////////////////////////
-	void D6CoreModuleInitISystem(ISystem *pSystem)
-	{
-		// Set it up
-		pSystem = pSystem;
-		pSystemGE = pSystem->GetGlobalEnvironment();
-		pBaseManager = new CBaseManager;
-		pTeamManager = new CTeamManager;
-	};
+	void D6CoreModuleInitISystem(ISystem *pSystem);
 
 public:
 	////////////////////////////////////////////////////
 	// Accessors
 	////////////////////////////////////////////////////
-	struct ISystem *GetSystem(void) const { return pSystem; }
-	struct SSystemGlobalEnvironment *GetGlobalEnvironment(void) const { return pSystemGE; }
-	struct IBaseManager *GetBaseManager(void) const { return pBaseManager; }
-	struct ITeamManager *GetTeamManager(void) const { return pTeamManager; }
+	ISystem *GetSystem(void) const { return pSystem; }
+	SSystemGlobalEnvironment *GetGlobalEnvironment(void) const { return pSystemGE; }
+	IBaseManager *GetBaseManager(void) const { return pBaseManager; }
+	ITeamManager *GetTeamManager(void) const { return pTeamManager; }
 };
-extern CD6CoreGlobalEnvironment* D6Core;
+extern CD6CoreGlobalEnvironment* g_D6Core;
 
 #endif //_D6C_d6platform_impl_H_

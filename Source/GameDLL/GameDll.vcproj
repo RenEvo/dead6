@@ -75,7 +75,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="$(OutDir)/Base.dll"
+				OutputFile="$(OutDir)/Dead6_D.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories=".\..\SDKs\STLPORT\lib"
@@ -256,7 +256,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="$(OutDir)/Base.dll"
+				OutputFile="$(OutDir)/Dead6.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories=".\..\SDKs\STLPORT\lib"
@@ -449,7 +449,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="$(OutDir)/Base.dll"
+				OutputFile="$(OutDir)/Dead6_P.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories=".\..\SDKs\STLPORT\lib"
@@ -1200,6 +1200,10 @@
 			<Filter
 				Name="Core Startup Files"
 				>
+				<File
+					RelativePath=".\Dead6\d6platform_impl.cpp"
+					>
+				</File>
 				<File
 					RelativePath=".\Dead6\d6platform_impl.h"
 					>
