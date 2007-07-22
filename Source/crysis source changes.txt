@@ -1,0 +1,3 @@
+GameFactory.cpp
+	07/22/07 : Dan - Changed player factory from CPlayer to CD6Player on line 113
+	07/22/07 : Dan - Changed include header from "Player.h" to "D6Player.h" on line 22

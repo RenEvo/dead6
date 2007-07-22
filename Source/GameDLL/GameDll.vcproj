@@ -1221,6 +1221,18 @@
 					>
 				</File>
 			</Filter>
+			<Filter
+				Name="Player"
+				>
+				<File
+					RelativePath=".\D6Player.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\D6Player.h"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Crysis"
