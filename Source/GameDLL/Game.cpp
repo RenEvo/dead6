@@ -42,7 +42,8 @@
 #include "MusicLogic/MusicLogic.h"
 #include "HUD/ScriptBind_HUD.h"
 
-#include "GameFactory.h"
+// [D6] Use our game factory
+#include "CD6GameFactory.h"
 
 #include "ItemSharedParams.h"
 
@@ -144,7 +145,8 @@ bool CGame::Init(IGameFramework *pFramework)
 	InitGameTokens();
 
   // Register all the games factory classes e.g. maps "Player" to CPlayer
-  InitGameFactory(m_pFramework);
+	// [D6] Use our game factory!
+  InitD6GameFactory(m_pFramework);
 
 	//FIXME: horrible, remove this ASAP
 	gEnv->pPhysicalWorld->AddEventClient( EventPhysImpulse::id,OnImpulse,0 );  

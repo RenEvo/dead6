@@ -2,15 +2,17 @@
 // C&C: The Dead 6 - Core File
 // Copyright (C), RenEvo Studios, 2007
 //
-// CD6Game.cpp
+// CD6Game.h
 //
 // Purpose: Dead6 Core Player declarations
 //
 // File History:
 //	- 7/22/07 : File created - Dan
 ////////////////////////////////////////////////////
+
 #ifndef _D6C_D6PLAYER_H_
 #define _D6C_D6PLAYER_H_
+
 #include "Player.h"
 
 class CD6Player : public CPlayer
@@ -32,4 +34,4 @@ public:
 	virtual void TakeCredits(int32 credits) { m_Credits -= credits; }
 };
 
-#endif // ifndef _D6C_D6PLAYER_H_
+#endif //_D6C_D6PLAYER_H_

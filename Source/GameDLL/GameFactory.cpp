@@ -19,7 +19,7 @@
 
 #include "StdAfx.h"
 #include "Game.h"
-#include "D6Player.h"	//[D6] Use our player class instead
+#include "Player.h"
 
 //
 #include "Item.h"
@@ -110,7 +110,7 @@ void InitGameFactory(IGameFramework *pFramework)
 {
   assert(pFramework);
 
-  REGISTER_FACTORY(pFramework, "Player", CD6Player, false); //[D6] Use our player instead
+  REGISTER_FACTORY(pFramework, "Player", CPlayer, false);
   REGISTER_FACTORY(pFramework, "Grunt", CPlayer, true);
   REGISTER_FACTORY(pFramework, "Civilian", CPlayer, true);
 
