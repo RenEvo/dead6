@@ -1196,6 +1196,14 @@
 					RelativePath=".\Dead6\CBaseManager.h"
 					>
 				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_BaseManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_BaseManager.h"
+					>
+				</File>
 			</Filter>
 			<Filter
 				Name="Core Startup Files"
@@ -1220,16 +1228,44 @@
 					RelativePath=".\Dead6\CTeamManager.h"
 					>
 				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_TeamManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_TeamManager.h"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="GameRules"
+				>
+				<File
+					RelativePath=".\Dead6\CD6GameFactory.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CD6GameFactory.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CD6GameRules.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CD6GameRules.h"
+					>
+				</File>
 			</Filter>
 			<Filter
 				Name="Player"
 				>
 				<File
-					RelativePath=".\D6Player.cpp"
+					RelativePath=".\Dead6\CD6Player.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\D6Player.h"
+					RelativePath=".\Dead6\CD6Player.h"
 					>
 				</File>
 			</Filter>
@@ -1427,10 +1463,26 @@
 				<File
 					RelativePath=".\GameFactory.cpp"
 					>
+					<FileConfiguration
+						Name="Release|Win32"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\GameFactory.h"
 					>
+					<FileConfiguration
+						Name="Release|Win32"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\MPTutorial.cpp"
