@@ -1,0 +1,23 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CNCRules>
+  <Teams>
+    <Team Name="&quot;GDI&quot;" Script="&quot;Scripts/Teams/GDI.lua&quot;">
+      <Purchases>
+        <Purchase Name="&quot;Minigunner&quot;" Image="&quot;Textures/GUI/PurchaseMenu/Minigunner.dds&quot;" Cost="100" type="&quot;Character&quot;">
+          <Prerequisites SoldierFactory="0" PowerPlant="200" />
+        </Purchase>
+      </Purchases>
+    </Team>
+  </Teams>
+  <Buildings>
+    <Building Name="&quot;SoldierFactory&quot;" Script="&quot;Scripts/Buildings/SoldierFactory.lua&quot;">
+      <Properties InitialHealth="1000" MaxHealth="1000" CanBeRepaired="1" CanBeCaptured="1" />
+      <Spawners>
+        <Spawner Tag="&quot;GDISpawner_1_Name_In_Editor&quot;" Disable="1"></Spawner>
+      </Spawners>
+    </Building>
+  </Buildings>
+  <General>
+    <TimeOfDay Hour="9" Minute="45" EnableLoop="" />
+  </General>
+</CNCRules>
