@@ -1,23 +1,77 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <CNCRules>
+  <!--Team entries-->
   <Teams>
-    <Team Name="&quot;GDI&quot;" Script="&quot;Scripts/Teams/GDI.lua&quot;">
+    <!--Each team gets its own Team entry-->
+    <!--Name = The literal name of the team. Also must be name of table in script-->
+    <!--Script = Team script that is executed for this team-->
+    <Team Name="GDI" Script="Scripts/Teams/GDI.lua">
+      <!--Purchase entries for this team that are put in the purchase menu-->
       <Purchases>
-        <Purchase Name="&quot;Minigunner&quot;" Image="&quot;Textures/GUI/PurchaseMenu/Minigunner.dds&quot;" Cost="100" type="&quot;Character&quot;">
-          <Prerequisites SoldierFactory="0" PowerPlant="200" />
+        <!--All purchases get their own Purchase entry-->
+        <!--Name = The literal name of the purchase item-->
+        <!--Image = 2D texture displayed in menu to advertise item-->
+        <!--Cost = Credit amount to buy this item-->
+        <!--Type = The type of purchase item. Can be: Character, Vehicle, Weapon, Refill-->
+        <Purchase Name="Minigunner" Image="Textures/GUI/PurchaseMenu/Minigunner.dds" Cost="100" Type="Character">
+          <!--Items = List of items awarded when bought. Dependant on type.
+		Character, Vehicle => Preset (Script or XML entry of what you bought)
+		Weapon => Preset (Weapon entity), Ammo (Initial ammo amount) containing Amount
+		Refill => <Name_Of_Ammo>, Health, Armor (What to refill) containing Amount
+          -->
+          <Items>
+            <Preset>Characters/Minigunner.xml</Preset>
+          </Items>
+          <!--Prerequisites = Buildings team must have alive to be able to buy this item. Put each building in its own "Entry" tag-->
+          <Prerequisites>
+            <Entry>SoldierFactory</Entry>
+          </Prerequisites>
+          <!--Actions = List of scriptable actions to be performed on purchase item when a specified building is destroyed-->
+          <Actions>
+            <!--Building declaration. When this building is destroyed, the included actions will be performed.-->
+            <!--Valid actions:
+		MULTCOST <amount> - Multiples the cost of the item by the given amount
+		SETCOST <amount> - Sets the cost of the item to the given amount
+		SETIMAGE <texture> - Sets the 2D texture used to advertise the item
+		SETNAME <name> - Sets the name of the item
+		ADJUSTITEM <name> <value> - Adjusts a property of the item with the given value
+            -->
+            <PowerPlant>
+              <ACTION>MULTCOST 2</ACTION>
+              <ACTION>SETIMAGE "Textures/GUI/PurchaseMenu/Minigunner_NoPower.dds"</ACTION>
+            </PowerPlant>
+          </Actions>
         </Purchase>
       </Purchases>
     </Team>
   </Teams>
+  <!--Building Class entries-->
   <Buildings>
-    <Building Name="&quot;SoldierFactory&quot;" Script="&quot;Scripts/Buildings/SoldierFactory.lua&quot;">
+    <!--All building classes get their own Building entry-->
+    <!--Name = The literal name of the building. Also must be name of table in script-->
+    <!--Script = Building script that is executed for this team-->
+    <Building Name="SoldierFactory" Script="Scripts/Buildings/SoldierFactory.lua">
+      <!--Properties = Initial properties set on building-->
+      <!--InitialHealth = Initial health amount-->
+      <!--MaxHealth = Maximum amount of health building can hold/be repaired to-->
+      <!--CanBeRepaired = '1' if building can be repaired, '0' if not-->
+      <!--CanBeCaptured = '1' if building can be captured, '0' if not-->
       <Properties InitialHealth="1000" MaxHealth="1000" CanBeRepaired="1" CanBeCaptured="1" />
+      <!--Spawners = List of spawners building owns. If player spawns at this building, one of the spawners listed below will be used by that player-->
+      <!--Each spawner entry gets its own Spawner tag-->
+      <!--Tag = The tag name given to the spawner in the Editor-->
+      <!--Disable = '1' if spawner should be disabled if the building is dead, '0' to let them keep spawning at this building. Note if all spawners are disabled, the player will not be able to spawn at this building!-->
       <Spawners>
-        <Spawner Tag="&quot;GDISpawner_1_Name_In_Editor&quot;" Disable="1"></Spawner>
+        <Spawner Tag="GDISpawner_1_Name_In_Editor" Disable="1"></Spawner>
       </Spawners>
     </Building>
   </Buildings>
+  <!--General CNC settings-->
   <General>
-    <TimeOfDay Hour="9" Minute="45" EnableLoop="" />
+    <!--TimeOfDay = Time of Day settings-->
+    <!--Hour = Hour setting-->
+    <!--Minute = Minute setting-->
+    <!--EnableLoop = '1' if day/night loop is permissable, '0' if time should stand still-->
+    <TimeOfDay Hour="9" Minute="45" EnableLoop="0" />
   </General>
 </CNCRules>
