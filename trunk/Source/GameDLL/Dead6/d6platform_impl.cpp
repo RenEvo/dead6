@@ -22,6 +22,9 @@ CD6CoreGlobalEnvironment::CD6CoreGlobalEnvironment(void)
 {
 	pBaseManager = NULL;
 	pTeamManager = NULL;
+	pSystem = NULL;
+	pD6Game = NULL;
+	pD6GameRules = NULL;
 }
 
 ////////////////////////////////////////////////////
@@ -35,6 +38,7 @@ CD6CoreGlobalEnvironment::~CD6CoreGlobalEnvironment(void)
 void CD6CoreGlobalEnvironment::D6CoreModuleInitISystem(ISystem *pSystem)
 {
 	// Set it up
+	this->pSystem = pSystem;
 	pBaseManager = new CBaseManager;
 	pTeamManager = new CTeamManager;
 };

@@ -32,6 +32,15 @@ public:
 	// Destructor
 	////////////////////////////////////////////////////
 	virtual ~CD6GameRules(void);
+
+	////////////////////////////////////////////////////
+	// ClearAllTeams
+	//
+	// Purpose: Clears all teams that are currently
+	//	loaded in the gamerules and removes all
+	//	actor/player team definitions that may be loaded
+	////////////////////////////////////////////////////
+	virtual void ClearAllTeams(void);
 };
 
 #endif //_D6C_CD6GAMERULES_H_

@@ -92,7 +92,7 @@ struct IBaseManager
 	//
 	// Returns Building CLass ID or BC_INVALID on error
 	////////////////////////////////////////////////////
-	virtual BuildingClassID CreateTeam(char const* szName, char const* szScript) = 0;
+	virtual BuildingClassID DefineBuildingClass(char const* szName, char const* szScript) = 0;
 
 	////////////////////////////////////////////////////
 	// Reset

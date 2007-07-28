@@ -16,17 +16,15 @@
 #define _D6C_d6platform_impl_H_
 
 #include "ISystem.h"
-
 #include "IBaseManager.h"
 #include "ITeamManager.h"
+#include "CD6Game.h"
+#include "CD6GameRules.h"
 
 ////////////////////////////////////////////////////
 // D6 Core global environment
 class CD6CoreGlobalEnvironment
 {
-	IBaseManager *pBaseManager;
-	ITeamManager *pTeamManager;
-
 	////////////////////////////////////////////////////
 	// Constructor
 	////////////////////////////////////////////////////
@@ -61,11 +59,14 @@ public:
 	void D6CoreModuleInitISystem(ISystem *pSystem);
 
 public:
-	////////////////////////////////////////////////////
-	// Accessors
-	////////////////////////////////////////////////////
-	IBaseManager *GetBaseManager(void) const { return pBaseManager; }
-	ITeamManager *GetTeamManager(void) const { return pTeamManager; }
+	// Created modules
+	IBaseManager *pBaseManager;
+	ITeamManager *pTeamManager;
+
+	// Referenced modules
+	ISystem *pSystem;
+	CD6Game *pD6Game;
+	CD6GameRules *pD6GameRules;
 };
 extern CD6CoreGlobalEnvironment* g_D6Core;
 

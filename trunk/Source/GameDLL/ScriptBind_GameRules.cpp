@@ -133,8 +133,9 @@ void CScriptBind_GameRules::RegisterMethods()
 	SCRIPT_REG_TEMPLFUNC(ServerExplosion, "shooterId, weaponId, dmg, pos, dir, radius, angle, press, holesize, [effect], [effectScale]");
 	SCRIPT_REG_TEMPLFUNC(ServerHit, "targetId, shooterId, weaponId, dmg, radius, materialId, partId, typeId, [pos], [dir], [normal]");
 
-	SCRIPT_REG_TEMPLFUNC(CreateTeam, "name");
-	SCRIPT_REG_TEMPLFUNC(RemoveTeam, "teamId");
+	// [D6] You have to go through the Team Manager for this!
+	//SCRIPT_REG_TEMPLFUNC(CreateTeam, "name");
+	//SCRIPT_REG_TEMPLFUNC(RemoveTeam, "teamId");
 	SCRIPT_REG_TEMPLFUNC(GetTeamName, "teamId");
 	SCRIPT_REG_TEMPLFUNC(GetTeamId, "teamName");
 	SCRIPT_REG_TEMPLFUNC(GetTeamCount, "");
@@ -1037,29 +1038,30 @@ int CScriptBind_GameRules::ServerHit(IFunctionHandler *pH, ScriptHandle targetId
 	return pH->EndFunction();
 }
 
+// [D6] You have to go through the Team Manager to do this!
 //------------------------------------------------------------------------
-int CScriptBind_GameRules::CreateTeam(IFunctionHandler *pH, const char *name)
-{
-	CGameRules *pGameRules=GetGameRules(pH);
-
-	if (!pGameRules)
-		return pH->EndFunction();
-
-	return pH->EndFunction(pGameRules->CreateTeam(name));
-}
-
-//------------------------------------------------------------------------
-int CScriptBind_GameRules::RemoveTeam(IFunctionHandler *pH, int teamId)
-{
-	CGameRules *pGameRules=GetGameRules(pH);
-
-	if (!pGameRules)
-		return pH->EndFunction();
-
-	pGameRules->RemoveTeam(teamId);
-
-	return pH->EndFunction();
-}
+//int CScriptBind_GameRules::CreateTeam(IFunctionHandler *pH, const char *name)
+//{
+//	CGameRules *pGameRules=GetGameRules(pH);
+//
+//	if (!pGameRules)
+//		return pH->EndFunction();
+//
+//	return pH->EndFunction(pGameRules->CreateTeam(name));
+//}
+//
+////------------------------------------------------------------------------
+//int CScriptBind_GameRules::RemoveTeam(IFunctionHandler *pH, int teamId)
+//{
+//	CGameRules *pGameRules=GetGameRules(pH);
+//
+//	if (!pGameRules)
+//		return pH->EndFunction();
+//
+//	pGameRules->RemoveTeam(teamId);
+//
+//	return pH->EndFunction();
+//}
 
 //------------------------------------------------------------------------
 int CScriptBind_GameRules::GetTeamName(IFunctionHandler *pH, int teamId)

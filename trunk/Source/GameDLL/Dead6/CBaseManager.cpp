@@ -51,7 +51,7 @@ ITeamManager const* CBaseManager::GetTeamManager(void) const
 }
 
 ////////////////////////////////////////////////////
-BuildingClassID CBaseManager::CreateTeam(char const* szName, char const* szScript)
+BuildingClassID CBaseManager::DefineBuildingClass(char const* szName, char const* szScript)
 {
 	return BC_INVALID;
 }

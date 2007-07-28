@@ -35,7 +35,7 @@ struct STeamDef
 	// Script file
 	string szScript;
 };
-
+typedef std::map<TeamID, STeamDef> TeamMap;
 
 ////////////////////////////////////////////////////
 struct ITeamManager
@@ -49,8 +49,10 @@ struct ITeamManager
 	// Initialize
 	//
 	// Purpose: One-time initialization at the start
+	//
+	// In:	pGame - Game class
 	////////////////////////////////////////////////////
-	virtual void Initialize(void) = 0;
+	virtual void Initialize(class CD6Game *pGame) = 0;
 
 	////////////////////////////////////////////////////
 	// Shutdown
@@ -58,6 +60,17 @@ struct ITeamManager
 	// Purpose: One-time clean up at the end
 	////////////////////////////////////////////////////
 	virtual void Shutdown(void) = 0;
+
+	////////////////////////////////////////////////////
+	// Reset
+	//
+	// Purpose: Clears all loaded teams and prepares
+	//	for new team definitions
+	//
+	// Note: Should be called at the start of a level
+	//	load
+	////////////////////////////////////////////////////
+	virtual void Reset(void) = 0;
 
 	////////////////////////////////////////////////////
 	// CreateTeam
@@ -72,13 +85,15 @@ struct ITeamManager
 	virtual TeamID CreateTeam(char const* szName, char const* szScript) = 0;
 
 	////////////////////////////////////////////////////
-	// Reset
+	// RemoveTeam
 	//
-	// Purpose: Remove all team definitions
+	// Purpose: Remove a team entry
 	//
-	// Note: Should be called when a level is loading
+	// In:	szName - Team name
+	//		nID - Team ID
 	////////////////////////////////////////////////////
-	virtual void Reset(void) = 0;
+	virtual void RemoveTeam(char const* szName) = 0;
+	virtual void RemoveTeam(TeamID const& nID) = 0;
 
 	////////////////////////////////////////////////////
 	// GetTeamByName
