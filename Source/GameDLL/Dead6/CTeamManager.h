@@ -16,8 +16,15 @@
 
 #include "ITeamManager.h"
 
+class CD6Game;
 class CTeamManager : public ITeamManager
 {
+	// Game class
+	CD6Game *m_pGame;
+
+	// Team map
+	TeamMap m_TeamMap;
+
 public:
 	////////////////////////////////////////////////////
 	// Constructor
@@ -38,8 +45,10 @@ public:
 	// Initialize
 	//
 	// Purpose: One-time initialization at the start
+	//
+	// In:	pGame - Game class
 	////////////////////////////////////////////////////
-	virtual void Initialize(void);
+	virtual void Initialize(CD6Game *pGame);
 
 	////////////////////////////////////////////////////
 	// Shutdown
@@ -47,6 +56,17 @@ public:
 	// Purpose: One-time clean up at the end
 	////////////////////////////////////////////////////
 	virtual void Shutdown(void);
+
+	////////////////////////////////////////////////////
+	// Reset
+	//
+	// Purpose: Clears all loaded teams and prepares
+	//	for new team definitions
+	//
+	// Note: Should be called at the start of a level
+	//	load
+	////////////////////////////////////////////////////
+	virtual void Reset(void);
 
 	////////////////////////////////////////////////////
 	// CreateTeam
@@ -61,13 +81,15 @@ public:
 	virtual TeamID CreateTeam(char const* szName, char const* szScript);
 
 	////////////////////////////////////////////////////
-	// Reset
+	// RemoveTeam
 	//
-	// Purpose: Remove all team definitions
+	// Purpose: Remove a team entry
 	//
-	// Note: Should be called when a level is loading
+	// In:	szName - Team name
+	//		nID - Team ID
 	////////////////////////////////////////////////////
-	virtual void Reset(void);
+	virtual void RemoveTeam(char const* szName);
+	virtual void RemoveTeam(TeamID const& nID);
 
 	////////////////////////////////////////////////////
 	// GetTeamByName

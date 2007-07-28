@@ -175,6 +175,7 @@ void InitD6GameFactory(IGameFramework *pFramework)
 
 	// Load our gamerules in here
 	REGISTER_FACTORY(pFramework, "D6CGameRules", CD6GameRules, false);
+	g_D6Core->pD6GameRules = (CD6GameRules*)(g_D6Core->pD6Game->GetIGameFramework()->GetIGameRulesSystem());
 
 	// TODO Replace with only our gamerules
 	pFramework->GetIGameRulesSystem()->RegisterGameRules("SinglePlayer", "D6CGameRules");

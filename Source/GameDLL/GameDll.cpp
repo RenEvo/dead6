@@ -37,11 +37,12 @@ extern "C"
 		// [D6] Init our platform
 		g_D6Core->D6CoreModuleInitISystem(pGameFramework->GetISystem());
 
-		static char pGameBuffer[sizeof(IGame)];
+		static char pGameBuffer[sizeof(CD6Game)];
 
 		// [D6] Run our game, not theirs!
-		return new ((void*)pGameBuffer) CD6Game();
-		return new CD6Game();
+		CD6Game *pGame = new ((void*)pGameBuffer) CD6Game();
+		g_D6Core->pD6Game = pGame;
+		return pGame;
 	}
 }
 
