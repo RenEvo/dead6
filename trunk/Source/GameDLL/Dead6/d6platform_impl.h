@@ -24,8 +24,6 @@
 // D6 Core global environment
 class CD6CoreGlobalEnvironment
 {
-	ISystem	*pSystem;
-	SSystemGlobalEnvironment *pSystemGE;
 	IBaseManager *pBaseManager;
 	ITeamManager *pTeamManager;
 
@@ -66,8 +64,6 @@ public:
 	////////////////////////////////////////////////////
 	// Accessors
 	////////////////////////////////////////////////////
-	ISystem *GetSystem(void) const { return pSystem; }
-	SSystemGlobalEnvironment *GetGlobalEnvironment(void) const { return pSystemGE; }
 	IBaseManager *GetBaseManager(void) const { return pBaseManager; }
 	ITeamManager *GetTeamManager(void) const { return pTeamManager; }
 };

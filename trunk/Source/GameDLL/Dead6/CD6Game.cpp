@@ -18,46 +18,9 @@
 #include "ScriptBind_TeamManager.h"
 
 ////////////////////////////////////////////////////
-CD6GameLevelListener::CD6GameLevelListener(IGame *pD6Game)
-{
-	m_pGame = NULL;
-}
-
-////////////////////////////////////////////////////
-void CD6GameLevelListener::OnLevelNotFound(const char *levelName)
-{
-	CryLogAlways("CD6GameLevelListener::OnLevelNotFound(%s)", levelName);
-}
-
-////////////////////////////////////////////////////
-void CD6GameLevelListener::OnLoadingStart(ILevelInfo *pLevel)
-{
-	CryLogAlways("CD6GameLevelListener::OnLoadingStart(%s)", pLevel->GetName());
-}
-
-////////////////////////////////////////////////////
-void CD6GameLevelListener::OnLoadingComplete(ILevel *pLevel)
-{
-	CryLogAlways("CD6GameLevelListener::OnLoadingComplete(%s)", pLevel->GetLevelInfo()->GetName());
-}
-
-////////////////////////////////////////////////////
-void CD6GameLevelListener::OnLoadingError(ILevelInfo *pLevel, const char *error)
-{
-	CryLogAlways("CD6GameLevelListener::OnLoadingError(%s, %s)", pLevel->GetName(), error);
-}
-
-////////////////////////////////////////////////////
-void CD6GameLevelListener::OnLoadingProgress(ILevelInfo *pLevel, int progressAmount)
-{
-
-}
-
-////////////////////////////////////////////////////
 CD6Game::CD6Game(void)
 {
 	g_pGame = this;
-	m_pLevelListener = NULL;
 	m_pScriptBindBaseManager = NULL;
 	m_pScriptBindTeamManager = NULL;
 }
@@ -79,9 +42,8 @@ bool CD6Game::Init(IGameFramework *pFramework)
 	// D6 Core Init
 	if (true == bBaseInit)
 	{
-		// Create level listener
-		m_pLevelListener = new CD6GameLevelListener(this);
-		GetIGameFramework()->GetILevelSystem()->AddListener(m_pLevelListener);
+		// Add to level listener
+		pFramework->GetILevelSystem()->AddListener(this);
 
 		// Init base manager
 		g_D6Core->GetBaseManager()->Initialize();
@@ -107,9 +69,10 @@ bool CD6Game::CompleteInit()
 ////////////////////////////////////////////////////
 void CD6Game::Shutdown()
 {
-	// Destroy level listener
-	GetIGameFramework()->GetILevelSystem()->RemoveListener(m_pLevelListener);
-	SAFE_DELETE(m_pLevelListener);
+	CryLogAlways("CD6Game::Shutdown()");
+
+	// Remove as listener
+	m_pFramework->GetILevelSystem()->RemoveListener(this);
 
 	// Shutdown base manager
 	if (NULL != g_D6Core->GetBaseManager())
@@ -127,7 +90,9 @@ void CD6Game::Shutdown()
 int CD6Game::Update(bool haveFocus, unsigned int updateFlags)
 {
 	// Base update
-	return CGame::Update(haveFocus, updateFlags);
+	int nUpdate = CGame::Update(haveFocus, updateFlags);
+
+	return nUpdate;
 }
 
 ////////////////////////////////////////////////////
@@ -160,4 +125,63 @@ void CD6Game::ReleaseScriptBinds()
 
 	// Base script bind release
 	CGame::ReleaseScriptBinds();
+}
+
+////////////////////////////////////////////////////
+void CD6Game::OnLoadingStart(ILevelInfo *pLevel)
+{
+	// TODO Hope and pray pLevel becomes valid!
+	// We want to parse the XML file from this location, so any entities that get created
+	// during the level load have the required info to initialize themselves
+}
+
+////////////////////////////////////////////////////
+void CD6Game::OnLoadingComplete(ILevel *pLevel)
+{
+	// TODO Migrate this to OnLoadingStart
+	
+	// Get CNC rules file path and open to root
+	char const* szCNCRules = m_pFramework->GetISystem()->GetI3DEngine()->GetLevelFilePath("CNCRules.xml");
+	XmlNodeRef pRootNode = m_pFramework->GetISystem()->LoadXmlFile(szCNCRules);
+	if (NULL == pRootNode)
+	{
+		m_pFramework->GetISystem()->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
+			VALIDATOR_FLAG_FILE, szCNCRules, "Missing/Corrupted CNCRules file for level");
+	}
+	else
+	{
+		// Parse general settings
+		XmlNodeRef pGeneralSettingsNode = pRootNode->findChild("General");
+		ParseCNCRules_General(pGeneralSettingsNode);
+	}
+}
+
+////////////////////////////////////////////////////
+void CD6Game::ParseCNCRules_General(XmlNodeRef &pNode)
+{
+	if (NULL == pNode) return;
+
+	// Parse time of day
+	XmlNodeRef pTODNode = pNode->findChild("TimeOfDay");
+	if (NULL != pTODNode)
+	{
+		// Get info
+		float fHour, fMin;
+		bool bLoop = false;
+		if (false == pTODNode->getAttr("Hour", fHour)) fHour = 0.0f;
+		if (true == pTODNode->getAttr("Minute", fMin))
+		{
+			fMin = CLAMP(fMin, 0.0f, 60.0f);
+			fHour += (fMin * (1.0f/60.0f));
+		}
+		fHour = CLAMP(fHour, 0.0f, 23.99f);
+		pTODNode->getAttr("EnableLoop", bLoop);
+
+		// Set it
+		CryLog("[CNCRules] Setting time of day to \'%.2f\' %s looping", fHour, bLoop?"with":"without");
+		ITimeOfDay *pTOD = m_pFramework->GetISystem()->GetI3DEngine()->GetTimeOfDay();
+		assert(pTOD);
+		pTOD->SetTime(fHour, true);
+		pTOD->SetPaused(bLoop);
+	}
 }
