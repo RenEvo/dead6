@@ -12,8 +12,9 @@
         <!--Name = The literal name of the purchase item-->
         <!--Image = 2D texture displayed in menu to advertise item-->
         <!--Cost = Credit amount to buy this item-->
+        <!--BuildTime = How long (in seconds) it takes to build this item-->
         <!--Type = The type of purchase item. Can be: Character, Vehicle, Weapon, Refill-->
-        <Purchase Name="Minigunner" Image="Textures/GUI/PurchaseMenu/Minigunner.dds" Cost="100" Type="Character">
+        <Purchase Name="Minigunner" Image="Textures/GUI/PurchaseMenu/Minigunner.dds" Cost="100" BuildTime="3" Type="Character">
           <!--Items = List of items awarded when bought. Dependant on type.
 		Character, Vehicle => Preset (Script or XML entry of what you bought)
 		Weapon => Preset (Weapon entity), Ammo (Initial ammo amount) containing Amount
@@ -30,11 +31,15 @@
           <Actions>
             <!--Building declaration. When this building is destroyed, the included actions will be performed.-->
             <!--Valid actions:
-		MULTCOST <amount> - Multiples the cost of the item by the given amount
+		MULTCOST <amount> - Multiplies the cost of the item by the given amount
+		ADDCOST <amount> - Add on the given amount to the cost
 		SETCOST <amount> - Sets the cost of the item to the given amount
+		MULTBUILDTIME <amount> - Multiplies how long the item takes to build by the given amount
+		ADDBUILDTIME <amount> - Add on the given amount to the build time
+		SETBUILDTIME <amount> - Set how long it takes to build this item
 		SETIMAGE <texture> - Sets the 2D texture used to advertise the item
 		SETNAME <name> - Sets the name of the item
-		ADJUSTITEM <name> <value> - Adjusts a property of the item with the given value
+		ADJUSTITEM <name> <value> [method] - Adjusts a property of the item with the given value using the given method. Method can be set, add, or mult. Defualt is set.
             -->
             <PowerPlant>
               <ACTION>MULTCOST 2</ACTION>
