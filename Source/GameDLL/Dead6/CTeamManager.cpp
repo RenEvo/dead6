@@ -50,8 +50,8 @@ void CTeamManager::Reset(void)
 	m_TeamMap.clear();
 
 	// Clear all teams from gamerules
-	assert(m_pGame);
-	m_pGame->GetD6GameRules()->ClearAllTeams();
+	//assert(m_pGame);
+	//m_pGame->GetD6GameRules()->ClearAllTeams();
 }
 
 ////////////////////////////////////////////////////
