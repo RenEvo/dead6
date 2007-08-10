@@ -21,11 +21,12 @@
 		Refill => <Name_Of_Ammo>, Health, Armor (What to refill) containing Amount
           -->
           <Items>
-            <Preset>Characters/Minigunner.xml</Preset>
+            <Preset Path="Characters/Minigunner.xml" Type="character"/>
           </Items>
+
           <!--Prerequisites = Buildings team must have alive to be able to buy this item. Put each building in its own "Entry" tag-->
           <Prerequisites>
-            <Entry>SoldierFactory</Entry>
+            <Entry Name="SoldierFactory"/>
           </Prerequisites>
           <!--Actions = List of scriptable actions to be performed on purchase item when a specified building is destroyed-->
           <Actions>
@@ -39,12 +40,12 @@
 		SETBUILDTIME <amount> - Set how long it takes to build this item
 		SETIMAGE <texture> - Sets the 2D texture used to advertise the item
 		SETNAME <name> - Sets the name of the item
-		ADJUSTITEM <name> <value> [method] - Adjusts a property of the item with the given value using the given method. Method can be set, add, or mult. Defualt is set.
+		ADJUSTITEM <name> <value> [method] - Adjusts a property of the item with the given value using the given method. Method can be set, add, or mult. Default is set.
             -->
-            <PowerPlant>
-              <ACTION>MULTCOST 2</ACTION>
-              <ACTION>SETIMAGE "Textures/GUI/PurchaseMenu/Minigunner_NoPower.dds"</ACTION>
-            </PowerPlant>
+			<Building Name="PowerPlant" State="destroyed">
+				<Action Type="MULTCOST" Value="2"/>
+				<Action Type="SETIMAGE" Value="Textures/GUI/PurchaseMenu/Minigunner_NoPower.dds"/> 
+			</Building>
           </Actions>
         </Purchase>
       </Purchases>
