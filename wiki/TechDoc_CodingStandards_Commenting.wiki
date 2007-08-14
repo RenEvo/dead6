@@ -1,0 +1,5 @@
+#summary Dead 6 Core Technology - Coding Standards - Commenting Standards
+
+TODO
+
+[TechDoc_CodingStandards Back]
