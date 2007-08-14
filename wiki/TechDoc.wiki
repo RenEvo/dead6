@@ -8,8 +8,8 @@ Described in the following pages are the general coding standards RenEvo Softwar
 = Sections =
 
 Select a topic:
-  * [TechDoc_CodingStandards Coding Standards]
-
+ * [TechDoc_CodingStandards Coding Standards]
+ * [TechDoc_Architecture Core Architecture]
 
 
 
