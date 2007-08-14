@@ -6,7 +6,7 @@ Naming standards are used throughout all source and script files created by RenE
 
 To review the the variable prefix conventions, please visit [TechDoc_CodingStandards_PrefixConvention here]
 
-= File Names =
+== File Names ==
 
 Source files created for including with the Dead 6 Core must be named according to their contents:
  * If the source file contains an interface declaration, it must begin with an 'I'. For example: "ID6TeamManager."
@@ -16,7 +16,7 @@ It is important to note that each letter that begins a new word in the filename 
 
 Lua script files have no file naming convention. However, the names for the scripts must adhere to the general rules laid out by the Engine and must hint at what is defined inside. For example, if a Lua script defines the GDI Barracks, it should be named something similar to "GDIBarracks.lua" and placed next to other scripts defining other buildings.
 
-= File Locations =
+== File Locations ==
 
 When organizing source files into the project's structure tree, the physical location on the harddrive must match according to its contents:
  * If the source file contains an interface declaration, it must be placed within the "Dead6/Interfaces" folder.
