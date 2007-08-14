@@ -9,13 +9,11 @@ Below you will find outlines that encompass all areas of naming standards includ
 = Sections =
  * [TechDoc_CodingStandards_NamingStandards Naming Standards]
  * [TechDoc_CodingStandards_PrefixConvention Prefix Convention]
- * [TechDoc_CodingStandards_Structures Structures]
- * [TechDoc_CodingStandards_Classes Classes]
+ * [TechDoc_CodingStandards_StructClass Structures and Classes]
  * [TechDoc_CodingStandards_RelFuncName Relevant Function Names]
  * [TechDoc_CodingStandards_MacrosConstants Macros and Constants]
  * [TechDoc_CodingStandards_Commenting Commenting Standards]
  * [TechDoc_CodingStandards_CodingGeneral General Coding Standards]
 
 [TechDoc Return to Front Page]
-
 
