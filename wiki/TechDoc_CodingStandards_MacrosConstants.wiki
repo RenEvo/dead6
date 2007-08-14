@@ -1,0 +1,5 @@
+#summary Dead 6 Core Technology - Coding Standards - Macros and Constants
+
+TODO
+
+[TechDoc_CodingStandards Back]
