@@ -1,0 +1,5 @@
+#summary Dead 6 Core Technology - Coding Standards - General Coding Standards
+
+TODO
+
+[TechDoc_CodingStandards Back]
