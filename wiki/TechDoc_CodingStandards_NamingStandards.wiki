@@ -1,3 +1,5 @@
 #summary Dead 6 Core Technology - Coding Standards - Naming Standards
 
 TODO
+
+[TechDoc_CodingStandards Back]
