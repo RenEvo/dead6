@@ -1,0 +1,5 @@
+#summary Dead 6 Core Technology - Coding Standards - Relevant Function Names
+
+TODO
+
+[TechDoc_CodingStandards Back]
