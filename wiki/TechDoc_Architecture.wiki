@@ -1,0 +1,10 @@
+#summary System Architecture for the Dead 6 Core Technology
+
+= Introduction =
+
+TODO
+
+= Sections =
+ * TODO
+
+[TechDoc Return to Front Page]
