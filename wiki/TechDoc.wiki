@@ -5,11 +5,10 @@
 Described in the following pages are the general coding standards RenEvo Software & Designs have laid out for developing the Dead 6 Core technology. Also included are the designs for the core architecture and various modules that make up the Dead 6 Core technology.
 
 
-= Details =
+= Sections =
 
-Add your content here.  Format your content with:
+Select a topic:
   * [TechDoc_CodingStandards Coding Standards]
-
 
 
 
