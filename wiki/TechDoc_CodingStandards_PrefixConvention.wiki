@@ -1,6 +1,6 @@
 #summary Dead 6 Core Technology - Coding Standards - Variable Name/Prefix Convention
 
-= Naming Convention =
+== Naming Convention ==
 
 All variable names will abide to the Hungarian notation standards. The following formula should be applied when naming all classes/structures/variables:
 
@@ -9,7 +9,7 @@ Variable name = a_bC where
  * b = Type.  See chart below.
  * C = Name of the variable.  This should be specific enough to know what the variable does or is used for.  Capital letters are used to break up words i.e. _ThisIsMyVariable_.
 
-= Prefix Convention =
+== Prefix Convention ==
 
 Variables should be named by the type of data they store and not their location. For example:
 {{{
@@ -42,7 +42,6 @@ The table below describes the prefix characters used for the given data types/sc
 
 
 [TechDoc_CodingStandards Back]
-
 
 
 
