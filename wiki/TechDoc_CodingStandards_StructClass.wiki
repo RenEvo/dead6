@@ -26,7 +26,7 @@ struct tMyStruct
 
 Classes use the 'C' prefix when named. Similarly, an interface object should use the prefix 'I'. Classes may inherit from other classes/structures at any permission.
 
-If the class retains dynamic memory which it is responsible for allocating and freeing, both the Copy Constructor and Assignment Operator must be defined to handle this virtual memory correctly when handling instance copying. The virtual memory should either be duplicated with an additional alloc, or the Copy Constructor and Assignment Operator should be declared with private/protected permission.
+If the class retains dynamic memory which it is responsible for allocating and freeing, both the Copy Constructor and Assignment Operator must be defined to handle this virtual memory correctly during instance copying. The virtual memory should either be duplicated with an additional alloc, or the Copy Constructor and Assignment Operator should be declared with private/protected permission.
 
 The Destructor should always be declared as virtual if the class is inherited or makes use of inheritance.
 
@@ -60,7 +60,6 @@ public:
 }}}
 
 [TechDoc_CodingStandards Back]
-
 
 
 
