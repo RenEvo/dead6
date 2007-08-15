@@ -34,6 +34,7 @@ The table below describes the prefix characters used for the given data types/sc
 	
 *Object Types*
  || Class Name || C... || 
+ || Interface Name || I... ||
  || Struct Name || t... || 
  || Member Variable || m_... || 
  || Global Variable || g_... || 
@@ -41,7 +42,6 @@ The table below describes the prefix characters used for the given data types/sc
 
 
 [TechDoc_CodingStandards Back]
-
 
 
 
