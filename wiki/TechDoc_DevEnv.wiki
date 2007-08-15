@@ -1,0 +1,16 @@
+#summary Development Environment used by RenEvo Software & Designs
+
+== Compiler ==
+The compiler of choice for RenEvo Software & Designs is Microsoft® Visual Studio .NET 2005. All source code is written to be compiled by this software.
+
+== 3D Modeling Tools ==
+_TODO List Additional_
+
+== Image Tools ==
+_TODO List Additional_
+
+== 3rd Party Libraries ==
+The Dead 6 Core is naturally developed on top of the [http://www.crymod.com/ CryENGINE2] SDK.
+
+_TODO List Additional_
+
