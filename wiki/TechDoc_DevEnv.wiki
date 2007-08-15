@@ -14,3 +14,4 @@ The Dead 6 Core is naturally developed on top of the [http://www.crymod.com/ Cry
 
 _TODO List Additional_
 
+[TechDoc Return to Front Page]
