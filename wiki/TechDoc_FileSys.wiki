@@ -1,0 +1,5 @@
+#summary File System Hierarchy for the Dead 6 Core Technology
+
+The Dead 6 Core Technology utilizes the same FSH specified the CryENGINE2 documentation for all assets and scripts. Please refer to it for details on this.
+
+[TechDoc Return to Front Page]
