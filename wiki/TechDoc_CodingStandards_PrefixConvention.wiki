@@ -29,18 +29,19 @@ The table below describes the prefix characters used for the given data types/sc
  || unsigned int || ui || 
  || float || f || 
  || double || d || 
- || pointer || p || 
- || long || l || 
+ || pointer || p... || 
+ || long || l... || 
 	
 *Object Types*
- || Class Name || C || 
- || Struct Name || t || 
- || Member Variable || m_ || 
- || Global Variable || g_ || 
+ || Class Name || C... || 
+ || Struct Name || t... || 
+ || Member Variable || m_... || 
+ || Global Variable || g_... || 
 
 
 
 [TechDoc_CodingStandards Back]
+
 
 
 
