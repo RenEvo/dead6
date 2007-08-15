@@ -1,6 +1,6 @@
 ////////////////////////////////////////////////////
 // C&C: The Dead 6 - Core File
-// Copyright (C), RenEvo Studios, 2007
+// Copyright (C), RenEvo Software & Designs, 2007
 //
 // CD6Game.cpp
 //
