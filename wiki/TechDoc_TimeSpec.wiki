@@ -1,4 +1,4 @@
-#summary Timing Specifications for the Dead 6 Core
+#summary Timing Specifications for the Dead 6 Core Technology
 
 TODO
 
