@@ -1,4 +1,5 @@
 #summary Dead 6 Core Technical Documentation
+#labels Featured
 
 = Introduction =
 
@@ -15,4 +16,3 @@ Select a topic:
  * [TechDoc_FileSys File System Hierarchy]
  * [TechDoc_MemoryMap Memory Map]
  * [TechDoc_Architecture Core Architecture]
-
