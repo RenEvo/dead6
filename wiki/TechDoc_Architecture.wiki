@@ -2,9 +2,26 @@
 
 = Introduction =
 
-TODO
+The Dead 6 Core Technology is a collection of code and guidelines that add on to the existing content present in the CryENGINE2 public SDK.  The Core brings in multiple system and game features that create the rich gameplay experiences present in Command & Conquer Mode, the first-person perspective of the C&C battlefield.
+
+The Dead 6 Core exists for two reasons:
+ # To satisfy the technological needs of Command & Crysis: The Dead 6 .
+ # To offer a stable platform for other development teams to create their own C&C Mode-based mods on the CryENGINE2 public SDK.
+
+The Dead 6 Core achieves these tasks by utilizing multiple systems which manage such logic ranging from team and base management to building controls and functionality. It executes all the necessary components needed to make a successful C&C Mode-based mod in a speedy and secure manner while promising robustness and maintaining a strict "modtastic" code. The Core's architecture is designed in such a way to promise development teams *complete and total customization controls without the need of re-engineering*. This is achieved by exposing the functionality and interfacing of all the modules to external scripting patterns and XML-based feeds. This is not to say one cannot develop their own in-house technology on top of the Dead 6 Core. Mod teams will find it unnecessary to do so given the amount of control that is already accessible.
 
 = Sections =
- * TODO
+
+The following sections will outline the system and game features present in the Dead 6 Core. To illustrate the differences between these two sections:
+ * A *system feature* is a functionality that exists internally and aid the system by managing and controlling items that enable the game to function correctly. Examples include: Team and Base Management, Building Controllers, and the Purchase System.
+ * A *game feature* is a functionality that exists externally and adds on to the gameplay experience demonstrated by the system. Examples include: CNC Mode rules, player spawning, buildings and vehicles.
+
+== System Features ==
+
+TODO
+
+== Game Features ==
+
+TODO
 
 [TechDoc Return to Front Page]
