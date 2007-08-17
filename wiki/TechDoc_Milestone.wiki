@@ -1,5 +1,8 @@
 #summary Milestone Descriptions for the Dead 6 Core Technology
 
-TODO
+== Release Candidate 1 ==
+Date: Unannounced
+
+TODO This section will be filled out once RC1 is agreed upon.
 
 [TechDoc Return to Front Page]
