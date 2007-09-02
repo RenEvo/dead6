@@ -89,8 +89,8 @@ Purchase Items have the following attributes assigned to them:
  * Cost = Base value (in credits) for the purchase item.
  * Type = Purchase Item type, i.e. Soldier, Vehicle, Weapon, Refill.
  * Item = Data bought. Dependant on its type.
- * ImageEnabled = 2D texture image used to represent the item in the Purchase Menu when the item is enabled.
- * ImageDisabled = 2D texture image used to represent the item in the Purchase Menu when the item is disabled.
+ * !ImageEnabled = 2D texture image used to represent the item in the Purchase Menu when the item is enabled.
+ * !ImageDisabled = 2D texture image used to represent the item in the Purchase Menu when the item is disabled.
  * Prerequisites = List of buildings that can directly affect the attributes of the item based on the current status of each. 
 
 == Purchase Sections ==
@@ -128,9 +128,9 @@ Defined with each Section tag are *Entry* tags, each of which describe a Purchas
 
 Each *Prerequisite* tag houses attributes that describe the prerequisite:
  * Building = The Building Class that is this prerequisite.
- * DisableOnDeath = Set to '1' to disable the purchase entry when this building is destroyed.
- * DisableOnPower = Set to '1' to disable the purchase entry when this building is powered down.
- * CostDeduction = Amount of money taken off the cost when this building is functioning with power. If it is destroyed or powered down, and the entry is not disabled, the amount will be added back on to the cost. Given our example, the Minigunner will cost 100 credits as long as the Soldier Factory remains powered. If it loses power, it will go back to 200 credits, the initial cost. If it is destroyed, the Minigunner will no longer be purchasable.
+ * !DisableOnDeath = Set to '1' to disable the purchase entry when this building is destroyed.
+ * !DisableOnPower = Set to '1' to disable the purchase entry when this building is powered down.
+ * !CostDeduction = Amount of money taken off the cost when this building is functioning with power. If it is destroyed or powered down, and the entry is not disabled, the amount will be added back on to the cost. Given our example, the Minigunner will cost 100 credits as long as the Soldier Factory remains powered. If it loses power, it will go back to 200 credits, the initial cost. If it is destroyed, the Minigunner will no longer be purchasable.
 
 [TechDoc_Architecture Back]
 
