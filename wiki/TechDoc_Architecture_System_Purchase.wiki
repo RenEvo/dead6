@@ -20,7 +20,7 @@ void
 
 === !LoadConfigForTeam ===
 Purpose:
-Loads in the purchase sections and items for the specified team from the passed-in XML section.
+Loads in the Purchase Sections and Items for the specified team from the passed-in XML section.
 
 Arguments:
  * nTeam - Team ID that owns these purchase items
@@ -28,6 +28,54 @@ Arguments:
 
 Returns: 
 TRUE if the config was loaded correctly, FALSE otherwise.
+
+=== !DefineManualItem ===
+Purpose:
+Adds a manual Purchase Item to the given Section for the given team.
+ * nTeam - Team ID that owns the Purchase Section.
+ * szSection - Name of the Purchase Section that should house the Item.
+ * tItem - Purchase Item to add. (See tPurchaseItem sub module)
+
+= Sub Modules =
+
+=== !tPurchaseSection ===
+Description: Structure used to describe a Purchase Section.
+
+Member Variables:
+ * m_nTeam - Team ID that owns it
+ * m_szName - Section name
+ * m_pItemRoot - Root of Purchase Item list.
+
+=== !tPurchaseItem ===
+Description: Structure used to describe a Purchase Item.
+
+Member Variables:
+ * m_pNext - Next Purchase Item in the list.
+ * m_szName - Name of the Purchase Item.
+ * m_szDesc - Description of the Purchase Item.
+ * m_nCost - Cost of the item.
+ * m_ucFlags - Purchase Item flags. (See PURCHASE_FLAG)
+ * m_Item = Item purchased (based on type)
+ * m_szImageEnabled - 2D texture used when enabled
+ * m_szImageDisabled - 2D texture used when disabled
+ * m_Prerequisite - Map of prerequisites (See tPrerequisite)
+
+Flags: PURCHASE_FLAG section:
+ * PURCHASE_FLAG_ENABLED - Bit used to mark if purchase item is enabled
+ * PURCHASE_FLAG_HIDDEN - Bit used to mark if purchase item is hidden.
+ * PURCHASE_FLAG_TYPE_SOLDIER - Bit combination used to mark if purchase item is of type Soldier.
+ * PURCHASE_FLAG_TYPE_VEHICLE - Bit combination used to mark if purchase item is of type Vehicle.
+ * PURCHASE_FLAG_TYPE_WEAPON - Bit combination used to mark if purchase item is of type Weapon.
+ * PURCHASE_FLAG_TYPE_REFILL - Bit combination used to mark if purchase item is of type Refill.
+
+=== tPrerequisite ===
+Description: Structure used to describe a prerequisite for a Purchase Item.
+
+Member Variables:
+ * m_szClass - Building class name
+ * m_bDisableOnDeath - TRUE if the item should be disabled on building death.
+ * m_bDisableOnPowerDown - TRUE if the item should be disabled on power down.
+ * m_nCostDeduction - Amount of money taken off Item cost if building is functioning.
 
 = Terminology =
 == Purchase Items ==
@@ -39,6 +87,8 @@ Purchase Items have the following attributes assigned to them:
  * Enabled = Boolean flag used to mark if it is enabled (can be purchased) or disabled (cannot be purchased).
  * Hidden = Boolean flag used to mark if it is hidden in the purchase menu.
  * Cost = Base value (in credits) for the purchase item.
+ * Type = Purchase Item type, i.e. Soldier, Vehicle, Weapon, Refill.
+ * Item = Data bought. Dependant on its type.
  * ImageEnabled = 2D texture image used to represent the item in the Purchase Menu when the item is enabled.
  * ImageDisabled = 2D texture image used to represent the item in the Purchase Menu when the item is disabled.
  * Prerequisites = List of buildings that can directly affect the attributes of the item based on the current status of each. 
@@ -54,8 +104,36 @@ The Purchase Menu is the UI the player interfaces with to make purchases through
 
 = XML Definition =
 The following is a template exert from a team script which defines the purchase sections and items that team can make.
+{{{
+<Purchases>
+  <Section Name="Classes">
+    <Entry Name="Minigunner" Description="A basic Minigunner with a machine gun."
+Cost="200" Hidden="0" Enabled="1" Type="Soldier" Item="SOLDIER_MINIGUNNER"
+ImageEnabled="Textures/PM/Item/MiniGunner.tga"
+ImageDisabled="Textures/PM/Item/Minigunner_Disabled.tga">
+      <Prerequisites>
+        <Prerequisite Building="SoldierFactory" DisableOnDeath="1" DisableOnPower="0"
+CostDeduction="100" />
+      </Prerequisites>
+    </Entry>
+  </Section>
+</Purchases>
+}}}
+
+The *Purchases* tag wraps around all defined Purchase Sections. This tag is the node that is passed in to the !LoadConfigForTeam function.
+
+Defined within are *Section* tags, each of which describes a Purchase Section. The _Name_ attribute is the name given to the Purchase Section and is used to determine which section is used by a Purchase Terminal.
+
+Defined with each Section tag are *Entry* tags, each of which describe a Purchase Item. The attributes defined are used to describe the item. The *Prerequisites* tag is used to define the prerequisites for the Purchase Item.
+
+Each *Prerequisite* tag houses attributes that describe the prerequisite:
+ * Building = The Building Class that is this prerequisite.
+ * DisableOnDeath = Set to '1' to disable the purchase entry when this building is destroyed.
+ * DisableOnPower = Set to '1' to disable the purchase entry when this building is powered down.
+ * CostDeduction = Amount of money taken off the cost when this building is functioning with power. If it is destroyed or powered down, and the entry is not disabled, the amount will be added back on to the cost. Given our example, the Minigunner will cost 100 credits as long as the Soldier Factory remains powered. If it loses power, it will go back to 200 credits, the initial cost. If it is destroyed, the Minigunner will no longer be purchasable.
 
 [TechDoc_Architecture Back]
+
 
 
 
