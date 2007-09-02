@@ -8,18 +8,56 @@ Purchasing holds vital importance in Command & Conquer Mode. It allows a player 
 = Functionality =
 Below are the methods to be defined in the IPurchaseSystem interface.
 
-=== !Reset ===
-Purpose: Resets the system by cleaning out any purchase entries held by any teams.
-Arguments: void
-Returns: void
+=== Reset ===
+Purpose:
+Resets the system by cleaning out any purchase entries held by any teams.
+
+Arguments:
+void
+
+Returns:
+void
 
 === !LoadConfigForTeam ===
-Purpose: 
-Arguments: 
-Returns: 
+Purpose:
+Loads in the purchase sections and items for the specified team from the passed-in XML section.
 
+Arguments:
+ * nTeam - Team ID that owns these purchase items
+ * pXMLNode - XML Node that represents the root <Purchases> where sections and items are defined in.
+
+Returns: 
+TRUE if the config was loaded correctly, FALSE otherwise.
+
+= Terminology =
+== Purchase Items ==
+Purchasable items are the physical objects a player can purchase from the Purchase Menu. These items have specific attributes tied to them. Purchasable items can be loaded in by one of two ways: 1. Through the !LoadConfigForTeam which pulls them out of an XML file, or 2. Through the !DefineManualItem which adds a single entry into the given section for the given team. Each Purchase Item belongs to a Purchase Section. Each Purchase Section belongs to a team. Only the team that owns the Purchase Section can view its contents and request purchases from it.
+
+Purchase Items have the following attributes assigned to them:
+ * Name = Literal name representation of the item.
+ * Description = Literal description of the item.
+ * Enabled = Boolean flag used to mark if it is enabled (can be purchased) or disabled (cannot be purchased).
+ * Hidden = Boolean flag used to mark if it is hidden in the purchase menu.
+ * Cost = Base value (in credits) for the purchase item.
+ * ImageEnabled = 2D texture image used to represent the item in the Purchase Menu when the item is enabled.
+ * ImageDisabled = 2D texture image used to represent the item in the Purchase Menu when the item is disabled.
+ * Prerequisites = List of buildings that can directly affect the attributes of the item based on the current status of each. 
+
+== Purchase Sections ==
+Sections contain multiple items. Purchase Terminals are assigned a section. Spawn points and EVA devices can also be assigned Purchase Sections, enabling a player to make a purchase when they are spawning and at any point in the game through their EVA device.
+
+== Purchase Terminal ==
+The terminal is a physical item which players can access and use to view the contents of the Purchase Section bound to it, and request purchases from it. Terminals can be destroyed (repaired by an Engineer) or shut down through building events such as loss of power or destruction.
+
+== Purchase Menu ==
+The Purchase Menu is the UI the player interfaces with to make purchases through the system. The Menu displays all visible items in the opened section. Players can click on each item or use hotkeys to request purchases for each item or view the description. Player can also make bundles to quickly purchase more than one item at a time.
+
+= XML Definition =
+The following is a template exert from a team script which defines the purchase sections and items that team can make.
 
 [TechDoc_Architecture Back]
+
+
 
 
 
