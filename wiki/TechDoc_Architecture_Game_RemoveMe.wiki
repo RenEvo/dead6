@@ -51,7 +51,7 @@ TRUE
 *Note*:
 Testing a note.
 
-=== *!_FuncThatIsBroke_* ===
+=== *_FuncThatIsBroke_* ===
 *Purpose*:
 Undefined.
 
@@ -79,4 +79,5 @@ TRUE
 Testing a note.
 
 
+ 
  
