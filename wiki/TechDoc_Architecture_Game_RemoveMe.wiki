@@ -1,0 +1,66 @@
+= Functionality =
+
+== Test ==
+Below are the methods defined in the Test module.
+
+=== Func1 ===
+Purpose:
+This is a void function
+
+Arguments:
+void
+
+Returns:
+void
+
+=== Func2 ===
+Purpose:
+This just has arguments
+
+Arguments:
+ * nArg1 - First argument
+ * pArg2 - Second argument
+
+Returns:
+void
+
+=== Func3 ===
+Purpose:
+This just returns a value
+
+Arguments:
+void
+
+Returns:
+5+5
+
+=== Func4 ===
+Purpose:
+Everything included!
+
+Arguments:
+ * pArg1 - First argument
+
+Returns:
+TRUE
+
+=== Func5 ===
+Arguments:
+void
+
+Returns:
+void
+
+== TestStruct ==
+Below are the methods defined in the TestStruct interface.
+
+=== Func4 ===
+Purpose:
+Everything included!
+
+Arguments:
+ * pArg1 - First argument
+
+Returns:
+TRUE
+ 
