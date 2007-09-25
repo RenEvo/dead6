@@ -3,6 +3,8 @@
 == Test ==
 Below are the methods defined in the Test module.
 
+[Func1 Func1]
+
 === *_ Func1 _* ===
 *Purpose*:
 This is a void function
@@ -77,3 +79,7 @@ TRUE
 
 *Note*:
 Testing a note.
+ 
+ 
+ 
+ 
