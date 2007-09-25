@@ -22,7 +22,8 @@ The following sections will outline the system and game features present in the 
 
 == Game Features ==
 
-TODO
+ * [TechDoc_Architecture_Game_RemoveMe Remove Me!]
 
 [TechDoc Return to Front Page]
 
+ 
