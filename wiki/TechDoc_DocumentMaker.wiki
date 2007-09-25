@@ -7,7 +7,7 @@ To ease the documentation process of our modules during the development stages, 
 
 = How To Use =
 
-DocumentMaker.exe is ran through the command-line. The syntax is as followed:
+!DocumentMaker.exe is ran through the command-line. The syntax is as followed:
 {{{
 Syntax: DocumentMaker.exe <filein> [fileout]
 Arguments:
@@ -190,5 +190,6 @@ TRUE
 
 *Note*:
 Testing a note.
+ 
  
  
