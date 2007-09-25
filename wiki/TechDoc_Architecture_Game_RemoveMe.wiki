@@ -1,3 +1,89 @@
+This is a sample page outputted by the DocumentMaker tool. The following header file was parsed:
+
+{{{
+///////////////////////////////////////////////////
+// Test.h
+///////////////////////////////////////////////////
+
+#ifndef _TEST_H_
+#define _TEST_H_
+
+class CTest
+{
+	///////////////////////////////////////////////////
+	// Func1
+	//
+	// Purpose: This is a void function
+	///////////////////////////////////////////////////
+	void Func1(void);
+
+	///////////////////////////////////////////////////
+	// 
+	// Func2
+	//
+	// Purpose: This just has arguments
+	//
+	// In:  nArg1 - First argument
+	//			separated by a line
+	//		pArg2 - Second argument
+	///////////////////////////////////////////////////
+	void Func2(int nArg1, char *pArg2);
+
+	///////////////////////////////////////////////////
+	//
+	// Func3
+	//
+	// Purpose: This just returns a value
+	//
+	//  Out: nRet - Out
+	//value
+	//
+	//	 Returns: 5+5
+	///////////////////////////////////////////////////
+	int Func3(int &nRet);
+
+	///////////////////////////////////////////////////
+	// Func4
+	//
+	// Purpose: Everything included!
+	//
+	// In:	pArgLongName1 - First argument
+	//
+	// Out:	pRet2 - Out argument
+	//						on another line
+	//
+	// Returns TRUE
+	//
+	// Note: Testing a note.
+	///////////////////////////////////////////////////
+	bool Func4(void const* pArgLongName1, void *pRet2);
+
+	///////////////////////////////////////////////////
+	// FuncThatIsBroke
+	//
+	// All broke
+	///////////////////////////////////////////////////
+	void Func5(void);
+};
+
+struct ITestStruct {
+	///////////////////////////////////////////////////
+	// Func4
+	//
+	// Purpose: Everything included!
+	//
+	// In:	pArg1 - First argument
+	//
+	// Returns TRUE
+	//
+	// Note: Testing a note.
+	///////////////////////////////////////////////////
+	bool Func4(void *pArg1);
+};
+
+#endif //_TEST_H_
+}}}
+
 = Functionality =
 
 == Test ==
@@ -77,6 +163,8 @@ TRUE
 
 *Note*:
 Testing a note.
+ 
+ 
  
  
  
