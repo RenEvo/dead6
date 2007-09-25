@@ -3,66 +3,77 @@
 == Test ==
 Below are the methods defined in the Test module.
 
-=== Func1 ===
-Purpose:
+=== *_Func1_* ===
+*Purpose*:
 This is a void function
 
-Arguments:
+*Arguments*:
 void
 
-Returns:
+*Returns*:
 void
 
-=== Func2 ===
-Purpose:
+
+=== *_Func2_* ===
+*Purpose*:
 This just has arguments
 
-Arguments:
- * nArg1 - First argument
- * pArg2 - Second argument
+*Arguments*:
+ * _nArg1_ - `[In]` First argument separated by a line
+ * _pArg2_ - `[In]` Second argument
 
-Returns:
+*Returns*:
 void
 
-=== Func3 ===
-Purpose:
+
+=== *_Func3_* ===
+*Purpose*:
 This just returns a value
 
-Arguments:
-void
+*Arguments*:
+ * _nRet_ - `[Out]` Out value
 
-Returns:
+*Returns*:
 5+5
 
-=== Func4 ===
-Purpose:
+
+=== *_Func4_* ===
+*Purpose*:
 Everything included!
 
-Arguments:
- * pArg1 - First argument
+*Arguments*:
+ * _pArg1_ - `[In]` First argument
+ * _pRet2_ - `[Out]` Out argument on another line
 
-Returns:
+*Returns*:
 TRUE
 
-=== Func5 ===
-Arguments:
+*Note*:
+Testing a note.
+
+=== *_Func5_* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
 void
 
-Returns:
+*Returns*:
 void
+
 
 == TestStruct ==
 Below are the methods defined in the TestStruct interface.
 
-=== Func4 ===
-Purpose:
+=== *_Func4_* ===
+*Purpose*:
 Everything included!
 
-Arguments:
- * pArg1 - First argument
+*Arguments*:
+ * _pArg1_ - `[In]` First argument
 
-Returns:
+*Returns*:
 TRUE
- 
- 
- 
+
+*Note*:
+Testing a note.
