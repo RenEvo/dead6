@@ -42,7 +42,7 @@ This just returns a value
 Everything included!
 
 *Arguments*:
- * _pArg1_ - `[In]` First argument
+ * _pArgLongName1_ - `[In]` First argument
  * _pRet2_ - `[Out]` Out argument on another line
 
 *Returns*:
@@ -51,7 +51,7 @@ TRUE
 *Note*:
 Testing a note.
 
-=== *_Func5_* ===
+=== *!_FuncThatIsBroke_* ===
 *Purpose*:
 Undefined.
 
@@ -62,8 +62,8 @@ void
 void
 
 
-== TestStruct ==
-Below are the methods defined in the TestStruct interface.
+== !TestStruct ==
+Below are the methods defined in the !TestStruct interface.
 
 === *_Func4_* ===
 *Purpose*:
@@ -77,3 +77,6 @@ TRUE
 
 *Note*:
 Testing a note.
+
+
+ 
