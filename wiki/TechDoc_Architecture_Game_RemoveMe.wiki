@@ -3,7 +3,7 @@
 == Test ==
 Below are the methods defined in the Test module.
 
-=== *_Func1_* ===
+=== *_ Func1 _* ===
 *Purpose*:
 This is a void function
 
@@ -14,7 +14,7 @@ void
 void
 
 
-=== *_Func2_* ===
+=== *_ Func2 _* ===
 *Purpose*:
 This just has arguments
 
@@ -26,7 +26,7 @@ This just has arguments
 void
 
 
-=== *_Func3_* ===
+=== *_ Func3 _* ===
 *Purpose*:
 This just returns a value
 
@@ -37,7 +37,7 @@ This just returns a value
 5+5
 
 
-=== *_Func4_* ===
+=== *_ Func4 _* ===
 *Purpose*:
 Everything included!
 
@@ -51,7 +51,7 @@ TRUE
 *Note*:
 Testing a note.
 
-=== *_!FuncThatIsBroke_* ===
+=== *_ !FuncThatIsBroke _* ===
 *Purpose*:
 Undefined.
 
@@ -65,7 +65,7 @@ void
 == !TestStruct ==
 Below are the methods defined in the !TestStruct interface.
 
-=== *_Func4_* ===
+=== *_ Func4 _* ===
 *Purpose*:
 Everything included!
 
@@ -77,9 +77,3 @@ TRUE
 
 *Note*:
 Testing a note.
-
-
- 
- 
- 
- 
