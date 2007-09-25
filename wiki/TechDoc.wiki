@@ -16,3 +16,10 @@ Select a topic:
  * [TechDoc_Milestone Milestone Descriptions]
  * [TechDoc_FileSys File System Hierarchy]
  * [TechDoc_MemoryMap Memory Map]
+ 
+
+= Document Maker =
+
+To ease the documentation process of our modules during the development stages, a tool *DocumentMaker* has been developed to automatically parse our header files to generate Wiki-friendly pages.
+
+[TechDoc_DocumentMaker]
