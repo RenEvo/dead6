@@ -18,6 +18,7 @@ The following sections will outline the system and game features present in the 
 
 == System Features ==
 
+ * [TechDoc_Architecture_System_TeamManager Team Manager]
  * [TechDoc_Architecture_System_Purchase Purchase System]
 
 == Game Features ==
