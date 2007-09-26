@@ -10,8 +10,8 @@ Below, seperated by files, are the explinations for all changes made. Developmen
 
 = Changes =
 
-== ScriptBind_Gamerules.cpp ==
+== !ScriptBind_Gamerules.cpp ==
 
-Line 1041: The CreateTeam and RemoveTeam calls are routed through the Team Manager module.
+Line 1041: The !CreateTeam and !RemoveTeam calls are routed through the Team Manager module.
 
 [TechDoc_Architecture Back]
