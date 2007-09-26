@@ -1,0 +1,17 @@
+#summary System Feature - Team Manager
+
+= Overview =
+TODO
+
+= Functionality =
+TODO
+
+= Sub Modules =
+
+TODO
+
+= Terminology =
+
+TODO
+
+[TechDoc_Architecture Back]
