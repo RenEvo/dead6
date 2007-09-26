@@ -1,0 +1,17 @@
+#summary Crysis Codebase Changes
+
+All changes to the Crysis SDK codebase are logged at this location. All changes made in the source files are commented using the following special syntax:
+
+{{{
+// [D6] <Reason for change>
+}}}
+
+Below, seperated by files, are the explinations for all changes made. Development team: please keep this file up-to-date with all changes made including a detailed description and the line number.
+
+= Changes =
+
+== ScriptBind_Gamerules.cpp ==
+
+Line 1041: The CreateTeam and RemoveTeam calls are routed through the Team Manager module.
+
+[TechDoc_Architecture Back]
