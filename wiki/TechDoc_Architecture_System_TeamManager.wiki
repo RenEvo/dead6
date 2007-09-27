@@ -1,17 +1,299 @@
 #summary System Feature - Team Manager
 
 = Overview =
-TODO
+The Team Manager module is responsible for managing the defined teams. Teams are defined per level, with a Lua script and XML file that define the team's attributes and behavior. Each team is given a unique identifier ID that is used in conjunction with the Base Management code, as well as the game logic including damage rules and purchase rules.
+
+The current team management code present in the Crysis codebase is stripped out and migrated into the Team Manager module. As such, some functionality present in the module is there for backwards compatibility.
 
 = Functionality =
-TODO
+
+== !STeamDef ==
+Below are the methods defined in the !STeamDef object.
+
+== !TeamManager ==
+Below are the methods defined in the !TeamManager interface.
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Initialize _* ===
+*Purpose*:
+One-time initialization at the start
+
+*Arguments*:
+ * _pGame_ - `[In]` Game class
+
+*Returns*:
+void
+
+
+=== *_ Shutdown _* ===
+*Purpose*:
+One-time clean up at the end
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Reset _* ===
+*Purpose*:
+for new team definitions
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+*Note*:
+load
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+=== *_ !PostInitClient _* ===
+*Purpose*:
+loading for net synch issues
+
+*Arguments*:
+ * _nChannelID_ - `[In]` Network channel ID
+
+*Returns*:
+void
+
+
+=== *_ !CmdDebugTeams _* ===
+*Purpose*:
+Console command used to debug teams
+
+*Arguments*:
+ * _pArgs_ - `[In]` Console command arguments
+
+*Returns*:
+void
+
+*Note*:
+Delegated from GameRules
+
+=== *_ !CmdDebugObjectives _* ===
+*Purpose*:
+objectives
+
+*Arguments*:
+ * _pArgs_ - `[In]` Console command arguments
+ * _status_ - `[In]` HUD Objectives status
+
+*Returns*:
+void
+
+*Note*:
+Delegated from GameRules
+
+=== *_ !CreateTeam _* ===
+*Purpose*:
+Create a team definition
+
+*Arguments*:
+ * _szName_ - `[In]` Name of the team
+
+*Returns*:
+ID of the team created
+
+*Note*:
+the currently-loaded CNCRules file via the name.
+
+=== *_ !RemoveTeam _* ===
+*Purpose*:
+team onto another.
+
+*Arguments*:
+ * _nTeamID_ - `[In]` ID of the team to destroy
+
+*Returns*:
+void
+
+
+=== *_ !GetTeamName _* ===
+*Purpose*:
+Returns the name of the given team
+
+*Arguments*:
+ * _nTeamID_ - `[In]` ID of the team
+
+*Returns*:
+void
+
+
+=== *_ !GetTeamId _* ===
+*Purpose*:
+given ID
+
+*Arguments*:
+ * _szName_ - `[In]` Name to search for
+
+*Returns*:
+void
+
+
+=== *_ !GetTeamCount _* ===
+*Purpose*:
+Returns how many teams are defined
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetTeamPlayerCount _* ===
+*Purpose*:
+given team
+
+*Arguments*:
+ * _bInGame_ - `[In]` TRUE to count only players who are currently in the game
+ * _nTeamID_ - `[In]` ID of the team
+
+*Returns*:
+void
+
+
+=== *_ !GetTeamPlayer _* ===
+*Purpose*:
+the specified team.
+
+*Arguments*:
+ * _nTeamID_ - `[In]` ID of the team
+ * _nidx_ - `[In]` Index into the player list
+
+*Returns*:
+the ID of the entity in the slot
+
+
+=== *_ !GetTeamPlayers _* ===
+*Purpose*:
+team
+
+*Arguments*:
+ * _nTeamID_ - `[In]` ID of the team
+ * _players_ - `[Out]` List of players
+
+*Returns*:
+void
+
+
+=== *_ !SetTeam _* ===
+*Purpose*:
+Put a player on the given team
+
+*Arguments*:
+ * _nEntityID_ - `[In]` ID of the entity to put on the team
+ * _nTeamID_ - `[In]` ID of the team to use
+
+*Returns*:
+void
+
+
+=== *_ !GetTeam _* ===
+*Purpose*:
+Get the team an entity belongs to
+
+*Arguments*:
+ * _nEntityID_ - `[In]` ID of the entity
+
+*Returns*:
+the ID of the team the entity belongs to
+
+
+=== *_ !ChangeTeam _* ===
+*Purpose*:
+Change an entity's team
+
+*Arguments*:
+ * _nEntityID_ - `[In]` ID of entity to change
+ * _nTeamID_ - `[In]` ID of team to now use
+
+*Returns*:
+TRUE if the team was changed
+
+
+=== *_ !SetTeamDefaultSpawnGroup _* ===
+*Purpose*:
+Sets the team's default spawn group
+
+*Arguments*:
+ * _nSpawnGroupId_ - `[In]` ID of spawn group to use
+ * _nTeamID_ - `[In]` ID of team
+
+*Returns*:
+void
+
+
+=== *_ !GetTeamDefaultSpawnGroup _* ===
+*Purpose*:
+the given team
+
+*Arguments*:
+ * _nTeamID_ - `[In]` ID of team to get
+
+*Returns*:
+ID of the spawn group
+
+
+=== *_ !RemoveTeamDefaultSpawnGroup _* ===
+*Purpose*:
+the given ID
+
+*Arguments*:
+ * _nTeamID_ - `[In]` ID of team
+
+*Returns*:
+void
+
+
+=== *_ !RemoveDefaultSpawnGroupFromTeams _* ===
+*Purpose*:
+that is using it
+
+*Arguments*:
+ * _nSpawnGroupId_ - `[In]` ID of spawn group to remove
+
+*Returns*:
+void
+
 
 = Sub Modules =
 
-TODO
+== !STeamDef ==
+Description: This structure is used to represent a defined team. It contains information including the team's unique ID, the team's name, attribute and script properties.
+
+Member Variables:
+ * nID - Team's unique ID
+ * nSpawnGroupID - Default spawn group ID used by team
+ * szName - Name of the team
+ * szScript - Lua script used by the team
+ * !PlayerList - List of player IDs who are on the team
 
 = Terminology =
-
-TODO
+N/A
 
 [TechDoc_Architecture Back]
