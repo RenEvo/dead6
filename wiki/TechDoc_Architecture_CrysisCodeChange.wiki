@@ -14,7 +14,7 @@ Below, seperated by files, are the explinations for all changes made. Developmen
 
 - Included "d6platform_impl.h"
 
-== GameDll.cpp ==
+== !GameDll.cpp ==
 
 - Included "d6platform_impl.h" and "CD6Game.h"
 
