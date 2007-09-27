@@ -101,6 +101,17 @@ int CD6Game::Update(bool haveFocus, unsigned int updateFlags)
 
 	return nUpdate;
 }
+	
+////////////////////////////////////////////////////
+void CD6Game::GetMemoryStatistics(ICrySizer *s)
+{
+	// Base first
+	CGame::GetMemoryStatistics(s);
+
+	// Core items
+	if (NULL != g_D6Core->pTeamManager)
+		g_D6Core->pTeamManager->GetMemoryStatistics(s);
+}
 
 ////////////////////////////////////////////////////
 const char *CD6Game::GetLongName()
@@ -222,7 +233,7 @@ void CD6Game::ParseCNCRules_Teams(XmlNodeRef &pNode)
 		// Add entry for this team
 		pTeamNode->getAttr("Name", szName);
 		pTeamNode->getAttr("Script", szScript);
-		g_D6Core->pTeamManager->CreateTeam(szName, szScript);
+		//g_D6Core->pTeamManager->CreateTeam(szName, szScript);
 
 		// TODO Purchase setting extraction should go here!
 	}
