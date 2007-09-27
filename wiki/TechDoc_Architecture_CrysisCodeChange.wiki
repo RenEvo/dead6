@@ -10,6 +10,42 @@ Below, seperated by files, are the explinations for all changes made. Developmen
 
 = Changes =
 
+== !GameDll.cpp ==
+
+Lines 21 - 24:
+{{{
+// [D6] Include our platform too
+#include <d6platform_impl.h>
+#include "CD6Game.h"
+// [/D6]
+}}}
+
+Lines 26 - 29:
+{{{
+// [D6] Set up extern
+CD6CoreGlobalEnvironment CD6CoreGlobalEnvironment::m_Instance;
+CD6CoreGlobalEnvironment* g_D6Core = &CD6CoreGlobalEnvironment::GetInstance();
+// [/D6]
+}}}
+
+Lines 39 - 41:
+{{{
+		// [D6] Init our platform
+		g_D6Core->D6CoreModuleInitISystem(pGameFramework->GetISystem());
+		// [/D6]
+}}}
+
+Lines 45 - 49:
+{{{
+		// [D6] Run our game, not theirs!
+		CD6Game *pGame = new ((void*)pGameBuffer) CD6Game();
+		g_D6Core->pD6Game = pGame;
+		return pGame;
+		// [/D6]
+}}}
+
+= OLD CHANGES REMOVE =
+
 == !StdAfx.h ==
 
 - Included "d6platform_impl.h"
