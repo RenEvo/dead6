@@ -26,7 +26,7 @@ Line 38: Initialized the D6 Core Global Environment instance.
 
 - Included "CD6GameFactory.h"
 
-Line 148: Initialized the D6GameFactory by calling _ !InitD6GameFactory _.
+Line 148: Initialized the !D6GameFactory by calling _ !InitD6GameFactory _.
 
 == !ScriptBind_Gamerules.h ==
 
