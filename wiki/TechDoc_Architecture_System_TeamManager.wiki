@@ -7,7 +7,7 @@ The current team management code present in the Crysis codebase is stripped out 
 
 = Functionality =
 
-== STeamDef ==
+== !STeamDef ==
 Below are the methods defined in the !STeamDef object.
 
 == !TeamManager ==
@@ -210,7 +210,7 @@ Put a player on the given team
  * _nTeamID_ - `[In]` ID of the team to use
 
 *Returns*:
-void
+TRUE if the team was changed
 
 
 === *_ !GetTeam _* ===
@@ -222,18 +222,6 @@ Get the team an entity belongs to
 
 *Returns*:
 the ID of the team the entity belongs to
-
-
-=== *_ !ChangeTeam _* ===
-*Purpose*:
-Change an entity's team
-
-*Arguments*:
- * _nEntityID_ - `[In]` ID of entity to change
- * _nTeamID_ - `[In]` ID of team to now use
-
-*Returns*:
-TRUE if the team was changed
 
 
 === *_ !SetTeamDefaultSpawnGroup _* ===
