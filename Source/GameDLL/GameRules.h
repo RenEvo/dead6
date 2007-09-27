@@ -133,6 +133,7 @@ class CMPTutorial;
 		} \
 	} \
 } \
+// [/D6]
 
 
 class CGameRules : public CGameObjectExtensionHelper<CGameRules, IGameRules, 64>, public IActionListener
@@ -1040,11 +1041,12 @@ protected:
 	std::vector<EntityId>m_frozen;
 	
 	// [D6] Following items are no longer part of the GameRules class, migrated to Team Manager
-	//TTeamIdMap					m_teams;
+	//TTeamIdMap			m_teams;
 	//TEntityTeamIdMap		m_entityteams;
 	//TTeamIdEntityIdMap	m_teamdefaultspawns;
 	//TPlayerTeamIdMap		m_playerteams;
-	//int									m_teamIdGen;
+	//int					m_teamIdGen;
+	// [/D6]
 
 	THitMaterialMap			m_hitMaterials;
 	int									m_hitMaterialIdGen;

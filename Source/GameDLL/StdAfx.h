@@ -48,6 +48,7 @@
 
 // [D6] Our platform
 #include <d6platform_impl.h>
+// [/D6]
 
 #ifndef GAMEDLL_EXPORTS
 #define GAMEDLL_EXPORTS

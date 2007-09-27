@@ -21,10 +21,12 @@
 // [D6] Include our platform too
 #include <d6platform_impl.h>
 #include "CD6Game.h"
+// [/D6]
 
 // [D6] Set up extern
 CD6CoreGlobalEnvironment CD6CoreGlobalEnvironment::m_Instance;
 CD6CoreGlobalEnvironment* g_D6Core = &CD6CoreGlobalEnvironment::GetInstance();
+// [/D6]
 
 #define GAME_FRAMEWORK_FILENAME	"cryaction.dll"
 
@@ -36,6 +38,7 @@ extern "C"
 
 		// [D6] Init our platform
 		g_D6Core->D6CoreModuleInitISystem(pGameFramework->GetISystem());
+		// [/D6]
 
 		static char pGameBuffer[sizeof(CD6Game)];
 
@@ -43,6 +46,7 @@ extern "C"
 		CD6Game *pGame = new ((void*)pGameBuffer) CD6Game();
 		g_D6Core->pD6Game = pGame;
 		return pGame;
+		// [/D6]
 	}
 }
 

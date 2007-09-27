@@ -494,7 +494,7 @@ IMPLEMENT_RMI(CGameRules, ClSetTeam)
 
 	// [D6] Code is handled in team manager now
 	assert(g_D6Core->pTeamManager);
-	bool bResult = g_D6Core->pTeamManager->ChangeTeam(params.entityId, params.teamId);
+	bool bResult = g_D6Core->pTeamManager->SetTeam(params.teamId, params.entityId);
 	/*int oldTeam = GetTeam(params.entityId);
 	if (oldTeam==params.teamId)
 		return true;
@@ -521,6 +521,7 @@ IMPLEMENT_RMI(CGameRules, ClSetTeam)
 			pit->second.push_back(params.entityId);
 		}
 	}*/
+	// [/D6]
 
 	int oldTeam = GetTeam(params.entityId);
 	bool isplayer=m_pActorSystem->GetActor(params.entityId)!=0;
