@@ -209,8 +209,10 @@ public:
 	// In:	nTeamID - ID of the team to use
 	//		nEntityID - ID of the entity to put on the
 	//			team
+	//
+	// Returns TRUE if the team was changed
 	////////////////////////////////////////////////////
-	virtual void SetTeam(TeamID nTeamID, EntityId nEntityID);
+	virtual bool SetTeam(TeamID nTeamID, EntityId nEntityID);
 
 	////////////////////////////////////////////////////
 	// GetTeam
@@ -222,18 +224,6 @@ public:
 	// Returns the ID of the team the entity belongs to
 	////////////////////////////////////////////////////
 	virtual TeamID GetTeam(EntityId nEntityID) const;
-
-	////////////////////////////////////////////////////
-	// ChangeTeam
-	//
-	// Purpose: Change an entity's team
-	//
-	// In:	nEntityID - ID of entity to change
-	//		nTeamID - ID of team to now use
-	//
-	// Returns TRUE if the team was changed
-	////////////////////////////////////////////////////
-	virtual bool ChangeTeam(EntityId nEntityID, TeamID nTeamID);
 
 	////////////////////////////////////////////////////
 	// SetTeamDefaultSpawnGroup

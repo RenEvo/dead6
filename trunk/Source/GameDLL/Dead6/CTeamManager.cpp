@@ -245,36 +245,7 @@ void CTeamManager::GetTeamPlayers(TeamID nTeamID, TeamPlayerList &players)
 }
 
 ////////////////////////////////////////////////////
-void CTeamManager::SetTeam(TeamID nTeamID, EntityId nEntityID)
-{
-	// Find team entry
-	TeamMap::iterator itEntry = m_TeamMap.find(nTeamID);
-	if (itEntry == m_TeamMap.end()) return;
-
-	// TODO Add entity to player map
-}
-
-////////////////////////////////////////////////////
-TeamID CTeamManager::GetTeam(EntityId nEntityID) const
-{
-	// Look through all teams
-	for (TeamMap::const_iterator itEntry = m_TeamMap.begin(); itEntry != m_TeamMap.end();
-		itEntry++)
-	{
-		for (TeamPlayerList::const_iterator itPlayer = itEntry->second.PlayerList.begin();
-			itPlayer != itEntry->second.PlayerList.end(); itPlayer++)
-		{
-			if (*itPlayer == nEntityID)
-				return itEntry->first;
-		}
-	}
-
-	// Not found
-	return 0;
-}
-
-////////////////////////////////////////////////////
-bool CTeamManager::ChangeTeam(EntityId nEntityID, TeamID nTeamID)
+bool CTeamManager::SetTeam(TeamID nTeamID, EntityId nEntityID)
 {
 	// Get the old team this entity belongs on
 	int nOldTeam = GetTeam(nEntityID);
@@ -303,6 +274,25 @@ bool CTeamManager::ChangeTeam(EntityId nEntityID, TeamID nTeamID)
 		}
 	}
 	return true;
+}
+
+////////////////////////////////////////////////////
+TeamID CTeamManager::GetTeam(EntityId nEntityID) const
+{
+	// Look through all teams
+	for (TeamMap::const_iterator itEntry = m_TeamMap.begin(); itEntry != m_TeamMap.end();
+		itEntry++)
+	{
+		for (TeamPlayerList::const_iterator itPlayer = itEntry->second.PlayerList.begin();
+			itPlayer != itEntry->second.PlayerList.end(); itPlayer++)
+		{
+			if (*itPlayer == nEntityID)
+				return itEntry->first;
+		}
+	}
+
+	// Not found
+	return 0;
 }
 
 ////////////////////////////////////////////////////

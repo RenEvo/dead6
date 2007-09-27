@@ -44,6 +44,7 @@
 
 // [D6] Use our game factory
 #include "CD6GameFactory.h"
+// [/D6]
 
 #include "ItemSharedParams.h"
 
@@ -144,9 +145,10 @@ bool CGame::Init(IGameFramework *pFramework)
 	InitScriptBinds();
 	InitGameTokens();
 
-  // Register all the games factory classes e.g. maps "Player" to CPlayer
+	// Register all the games factory classes e.g. maps "Player" to CPlayer
 	// [D6] Use our game factory!
-  InitD6GameFactory(m_pFramework);
+	InitD6GameFactory(m_pFramework);
+	// [/D6]
 
 	//FIXME: horrible, remove this ASAP
 	gEnv->pPhysicalWorld->AddEventClient( EventPhysImpulse::id,OnImpulse,0 );  
