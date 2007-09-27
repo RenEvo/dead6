@@ -97,9 +97,8 @@ public:
 		Vec3 pos, Vec3 dir, float radius, float angle, float pressure, float holesize);
 	int ServerHit(IFunctionHandler *pH, ScriptHandle targetId, ScriptHandle shooterId, ScriptHandle weaponId, float dmg, float radius, int materialId, int partId, int typeId);
 
-	// [D6] You have to go through the Team Manager to do this!
-	//int CreateTeam(IFunctionHandler *pH, const char *name);
-	//int RemoveTeam(IFunctionHandler *pH, int teamId);
+	int CreateTeam(IFunctionHandler *pH, const char *name);
+	int RemoveTeam(IFunctionHandler *pH, int teamId);
 	int GetTeamName(IFunctionHandler *pH, int teamId);
 	int GetTeamId(IFunctionHandler *pH, const char *teamName);
 	int GetTeamCount(IFunctionHandler *pH);

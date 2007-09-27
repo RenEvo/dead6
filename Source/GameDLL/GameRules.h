@@ -35,41 +35,87 @@ struct IActorSystem;
 class CRadio;
 class CMPTutorial;
 
+// [D6] Altered to work with Team Manager
+//#define GAMERULES_INVOKE_ON_TEAM(team, rmi, params)	\
+//{ \
+//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
+//	if (_team!=m_playerteams.end()) \
+//	{ \
+//	const TPlayers &_players=_team->second; \
+//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
+//	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
+//	} \
+//} \
+//
+//#define GAMERULES_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
+//{ \
+//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
+//	if (_team!=m_playerteams.end()) \
+//	{ \
+//	const TPlayers &_players=_team->second; \
+//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
+//	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
+//	} \
+//} \
+//
+//
+//#define ACTOR_INVOKE_ON_TEAM(team, rmi, params)	\
+//{ \
+//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
+//	if (_team!=playerteams.end()) \
+//	{ \
+//	const TPlayers &_players=_team.second; \
+//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
+//		{ \
+//		CActor *pActor=GetActorByEntityId(*_player); \
+//		if (pActor) \
+//		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
+//		} \
+//	} \
+//} \
+//
+//
+//#define ACTOR_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
+//{ \
+//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
+//	if (_team!=playerteams.end()) \
+//	{ \
+//	const TPlayers &_players=_team.second; \
+//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
+//		{ \
+//		CActor *pActor=GetActorByEntityId(*_player); \
+//		if (pActor) \
+//		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
+//		} \
+//	} \
+//} \
 
 #define GAMERULES_INVOKE_ON_TEAM(team, rmi, params)	\
 { \
-	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-	if (_team!=m_playerteams.end()) \
-	{ \
-	const TPlayers &_players=_team->second; \
-	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
-	} \
-} \
+	CGameRules::TPlayers _players; \
+	GetTeamPlayers(team, _players); \
+	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
+		GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
+}
 
 #define GAMERULES_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
 { \
-	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-	if (_team!=m_playerteams.end()) \
-	{ \
-	const TPlayers &_players=_team->second; \
-	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
-	} \
+	CGameRules::TPlayers _players; \
+	GetTeamPlayers(team, _players); \
+	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
+		GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
 } \
 
 
 #define ACTOR_INVOKE_ON_TEAM(team, rmi, params)	\
 { \
-	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-	if (_team!=playerteams.end()) \
+	CGameRules::TPlayers _players; \
+	GetTeamPlayers(team, _players); \
+	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
 	{ \
-	const TPlayers &_players=_team.second; \
-	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-		{ \
 		CActor *pActor=GetActorByEntityId(*_player); \
 		if (pActor) \
-		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
+			pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
 		} \
 	} \
 } \
@@ -77,15 +123,13 @@ class CMPTutorial;
 
 #define ACTOR_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
 { \
-	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-	if (_team!=playerteams.end()) \
+	CGameRules::TPlayers _players; \
+	GetTeamPlayers(team, _players); \
+	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
 	{ \
-	const TPlayers &_players=_team.second; \
-	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-		{ \
 		CActor *pActor=GetActorByEntityId(*_player); \
 		if (pActor) \
-		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
+			pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
 		} \
 	} \
 } \
@@ -995,11 +1039,12 @@ protected:
 	std::vector<int>		m_channelIds;
 	std::vector<EntityId>m_frozen;
 	
-	TTeamIdMap					m_teams;
-	TEntityTeamIdMap		m_entityteams;
-	TTeamIdEntityIdMap	m_teamdefaultspawns;
-	TPlayerTeamIdMap		m_playerteams;
-	int									m_teamIdGen;
+	// [D6] Following items are no longer part of the GameRules class, migrated to Team Manager
+	//TTeamIdMap					m_teams;
+	//TEntityTeamIdMap		m_entityteams;
+	//TTeamIdEntityIdMap	m_teamdefaultspawns;
+	//TPlayerTeamIdMap		m_playerteams;
+	//int									m_teamIdGen;
 
 	THitMaterialMap			m_hitMaterials;
 	int									m_hitMaterialIdGen;

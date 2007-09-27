@@ -492,7 +492,10 @@ IMPLEMENT_RMI(CGameRules, ClSetTeam)
 	if (!params.entityId) // ignore these for now
 		return true;
 
-	int oldTeam = GetTeam(params.entityId);
+	// [D6] Code is handled in team manager now
+	assert(g_D6Core->pTeamManager);
+	bool bResult = g_D6Core->pTeamManager->ChangeTeam(params.entityId, params.teamId);
+	/*int oldTeam = GetTeam(params.entityId);
 	if (oldTeam==params.teamId)
 		return true;
 
@@ -517,8 +520,10 @@ IMPLEMENT_RMI(CGameRules, ClSetTeam)
 			assert(pit!=m_playerteams.end());
 			pit->second.push_back(params.entityId);
 		}
-	}
+	}*/
 
+	int oldTeam = GetTeam(params.entityId);
+	bool isplayer=m_pActorSystem->GetActor(params.entityId)!=0;
 	if(isplayer)
 		ReconfigureVoiceGroups(params.entityId,oldTeam,params.teamId);
 
@@ -527,7 +532,7 @@ IMPLEMENT_RMI(CGameRules, ClSetTeam)
 	ScriptHandle handle(params.entityId);
 	CallScript(m_clientStateScript, "OnSetTeam", handle, params.teamId);
 
-	return true;
+	return bResult;
 }
 
 //------------------------------------------------------------------------

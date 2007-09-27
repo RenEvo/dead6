@@ -68,6 +68,7 @@ public:
 
 	////////////////////////////////////////////////////
 	// CGame overloads
+	virtual void GetMemoryStatistics(ICrySizer *s);
 	virtual bool Init(IGameFramework *pFramework);
 	virtual bool CompleteInit();
 	virtual void Shutdown();

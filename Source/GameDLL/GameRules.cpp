@@ -50,7 +50,7 @@ CGameRules::CGameRules()
 	m_pScriptSystem(0),
 	m_pMaterialManager(0),
 	m_pClientNetChannel(0),
-	m_teamIdGen(0),
+	//m_teamIdGen(0),
 	m_hitMaterialIdGen(0),
 	m_hitTypeIdGen(0),
 	m_currentStateId(0),
@@ -170,8 +170,11 @@ void CGameRules::PostInitClient(int channelId)
 	GetGameObject()->InvokeRMI(ClSetPreRoundTime(), SetGameTimeParams(m_preRoundEndTime), eRMI_ToClientChannel, channelId);
 
 	// update team status on the client
-	for (TEntityTeamIdMap::const_iterator tit=m_entityteams.begin(); tit!=m_entityteams.end(); ++tit)
-		GetGameObject()->InvokeRMIWithDependentObject(ClSetTeam(), SetTeamParams(tit->first, tit->second), eRMI_ToClientChannel, tit->first, channelId);
+	// [D6] This is handled by the team manager now
+	assert(g_D6Core->pTeamManager);
+	g_D6Core->pTeamManager->PostInitClient(channelId);
+	/*for (TEntityTeamIdMap::const_iterator tit=m_entityteams.begin(); tit!=m_entityteams.end(); ++tit)
+		GetGameObject()->InvokeRMIWithDependentObject(ClSetTeam(), SetTeamParams(tit->first, tit->second), eRMI_ToClientChannel, tit->first, channelId);*/
 
 	// init spawn groups
 	for (TSpawnGroupMap::const_iterator sgit=m_spawnGroups.begin(); sgit!=m_spawnGroups.end(); ++sgit)
@@ -590,7 +593,8 @@ void CGameRules::AddTaggedEntity(EntityId shooter, EntityId targetId, bool tempo
 	EntityParams params(targetId);
 	if(GetTeamCount() > 1)
 	{
-		EntityId teamId = GetTeam(shooter);
+		// [D6] Use team manager to get this info
+		/*EntityId teamId = GetTeam(shooter);
 		TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
 		if (tit!=m_playerteams.end())
 		{
@@ -601,6 +605,16 @@ void CGameRules::AddTaggedEntity(EntityId shooter, EntityId targetId, bool tempo
 				else
 					GetGameObject()->InvokeRMI(ClTaggedEntity(), params, eRMI_ToClientChannel, GetChannelId(*it));
 			}
+		}*/
+		TeamID nTeamID = GetTeam(shooter);
+		TPlayers players;
+		GetTeamPlayers(nTeamID, players);
+		for (TPlayers::iterator itPlayer = players.begin(); itPlayer != players.end(); itPlayer++)
+		{
+			if(temporary)
+				GetGameObject()->InvokeRMI(ClTempRadarEntity(), params, eRMI_ToClientChannel, GetChannelId(*itPlayer));
+			else
+				GetGameObject()->InvokeRMI(ClTaggedEntity(), params, eRMI_ToClientChannel, GetChannelId(*itPlayer));
 		}
 	}
 	else
@@ -1067,42 +1081,47 @@ void CGameRules::EndVoting(bool success)
 //------------------------------------------------------------------------
 int CGameRules::CreateTeam(const char *name)
 {
-	TTeamIdMap::iterator it = m_teams.find(CONST_TEMP_STRING(name));
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*TTeamIdMap::iterator it = m_teams.find(CONST_TEMP_STRING(name));
 	if (it != m_teams.end())
 		return it->second;
 
 	m_teams.insert(TTeamIdMap::value_type(name, ++m_teamIdGen));
 	m_playerteams.insert(TPlayerTeamIdMap::value_type(m_teamIdGen, TPlayers()));
 
-	return m_teamIdGen;
+	return m_teamIdGen;*/
+
+	return 0;
 }
 
 //------------------------------------------------------------------------
 void CGameRules::RemoveTeam(int teamId)
 {
-	TTeamIdMap::iterator it = m_teams.find(CONST_TEMP_STRING(GetTeamName(teamId)));
-	if (it == m_teams.end())
-		return;
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	//TTeamIdMap::iterator it = m_teams.find(CONST_TEMP_STRING(GetTeamName(teamId)));
+	//if (it == m_teams.end())
+	//	return;
 
-	m_teams.erase(it);
+	//m_teams.erase(it);
 
-	for (TEntityTeamIdMap::iterator eit=m_entityteams.begin(); eit != m_entityteams.end(); ++eit)
-	{
-		if (eit->second == teamId)
-			eit->second = 0; // 0 is no team
-	}
+	//for (TEntityTeamIdMap::iterator eit=m_entityteams.begin(); eit != m_entityteams.end(); ++eit)
+	//{
+	//	if (eit->second == teamId)
+	//		eit->second = 0; // 0 is no team
+	//}
 
-	m_playerteams.erase(m_playerteams.find(teamId));
+	//m_playerteams.erase(m_playerteams.find(teamId));
 }
 
 //------------------------------------------------------------------------
 const char *CGameRules::GetTeamName(int teamId) const
 {
-	for (TTeamIdMap::const_iterator it = m_teams.begin(); it!=m_teams.end(); ++it)
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*for (TTeamIdMap::const_iterator it = m_teams.begin(); it!=m_teams.end(); ++it)
 	{
 		if (teamId == it->second)
 			return it->first;
-	}
+	}*/
 
 	return 0;
 }
@@ -1110,9 +1129,10 @@ const char *CGameRules::GetTeamName(int teamId) const
 //------------------------------------------------------------------------
 int CGameRules::GetTeamId(const char *name) const
 {
-	TTeamIdMap::const_iterator it=m_teams.find(CONST_TEMP_STRING(name));
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*TTeamIdMap::const_iterator it=m_teams.find(CONST_TEMP_STRING(name));
 	if (it!=m_teams.end())
-		return it->second;
+		return it->second;*/
 
 	return 0;
 }
@@ -1120,13 +1140,17 @@ int CGameRules::GetTeamId(const char *name) const
 //------------------------------------------------------------------------
 int CGameRules::GetTeamCount() const
 {
-	return (int)m_teams.size();
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	//return (int)m_teams.size();
+
+	return 0;
 }
 
 //------------------------------------------------------------------------
 int CGameRules::GetTeamPlayerCount(int teamId, bool inGame) const
 {
-	if (!inGame)
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*if (!inGame)
 	{
 		TPlayerTeamIdMap::const_iterator it=m_playerteams.find(teamId);
 		if (it!=m_playerteams.end())
@@ -1148,18 +1172,21 @@ int CGameRules::GetTeamPlayerCount(int teamId, bool inGame) const
 			return count;
 		}
 		return 0;
-	}
+	}*/
+
+	return 0;
 }
 
 //------------------------------------------------------------------------
 EntityId CGameRules::GetTeamPlayer(int teamId, int idx)
 {
-	TPlayerTeamIdMap::const_iterator it=m_playerteams.find(teamId);
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*TPlayerTeamIdMap::const_iterator it=m_playerteams.find(teamId);
 	if (it!=m_playerteams.end())
 	{
 		if (idx>=0 && idx<it->second.size())
 			return it->second[idx];
-	}
+	}*/
 
 	return 0;
 }
@@ -1167,81 +1194,84 @@ EntityId CGameRules::GetTeamPlayer(int teamId, int idx)
 //------------------------------------------------------------------------
 void CGameRules::GetTeamPlayers(int teamId, TPlayers &players)
 {
-	players.resize(0);
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*players.resize(0);
 	TPlayerTeamIdMap::const_iterator it=m_playerteams.find(teamId);
 	if (it!=m_playerteams.end())
-		players=it->second;
+		players=it->second;*/
 }
 
 //------------------------------------------------------------------------
 void CGameRules::SetTeam(int teamId, EntityId id)
 {
-	if (!gEnv->bServer )
-	{
-		assert(0);
-		return;
-	}
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	//if (!gEnv->bServer )
+	//{
+	//	assert(0);
+	//	return;
+	//}
 
-	int oldTeam = GetTeam(id);
-	if (oldTeam==teamId)
-		return;
+	//int oldTeam = GetTeam(id);
+	//if (oldTeam==teamId)
+	//	return;
 
-	TEntityTeamIdMap::iterator it=m_entityteams.find(id);
-	if (it!=m_entityteams.end())
-		m_entityteams.erase(it);
+	//TEntityTeamIdMap::iterator it=m_entityteams.find(id);
+	//if (it!=m_entityteams.end())
+	//	m_entityteams.erase(it);
 
-	bool isplayer=m_pActorSystem->GetActor(id)!=0;
-	if (isplayer && oldTeam)
-	{
-		TPlayerTeamIdMap::iterator pit=m_playerteams.find(oldTeam);
-		assert(pit!=m_playerteams.end());
-		stl::find_and_erase(pit->second, id);
-	}
-	if (teamId)
-	{
-		m_entityteams.insert(TEntityTeamIdMap::value_type(id, teamId));
+	//bool isplayer=m_pActorSystem->GetActor(id)!=0;
+	//if (isplayer && oldTeam)
+	//{
+	//	TPlayerTeamIdMap::iterator pit=m_playerteams.find(oldTeam);
+	//	assert(pit!=m_playerteams.end());
+	//	stl::find_and_erase(pit->second, id);
+	//}
+	//if (teamId)
+	//{
+	//	m_entityteams.insert(TEntityTeamIdMap::value_type(id, teamId));
 
-		if (isplayer)
-		{
-			TPlayerTeamIdMap::iterator pit=m_playerteams.find(teamId);
-			assert(pit!=m_playerteams.end());
-			pit->second.push_back(id);
+	//	if (isplayer)
+	//	{
+	//		TPlayerTeamIdMap::iterator pit=m_playerteams.find(teamId);
+	//		assert(pit!=m_playerteams.end());
+	//		pit->second.push_back(id);
 
-			UpdateObjectivesForPlayer(GetChannelId(id), teamId);
-		}
-	}
+	//		UpdateObjectivesForPlayer(GetChannelId(id), teamId);
+	//	}
+	//}
 
-	if(isplayer)
-		ReconfigureVoiceGroups(id,oldTeam,teamId);
+	//if(isplayer)
+	//	ReconfigureVoiceGroups(id,oldTeam,teamId);
 
-	if (gEnv->bClient)
-		m_pRadio->SetTeam(GetTeamName(teamId));
+	//if (gEnv->bClient)
+	//	m_pRadio->SetTeam(GetTeamName(teamId));
 
-	ScriptHandle handle(id);
-	CallScript(m_serverStateScript, "OnSetTeam", handle, teamId);
+	//ScriptHandle handle(id);
+	//CallScript(m_serverStateScript, "OnSetTeam", handle, teamId);
 
-	if (gEnv->bClient)
-	{
-		ScriptHandle handle(id);
-		CallScript(m_clientStateScript, "OnSetTeam", handle, teamId);
-	}
-	
-	// if this is a spawn group, update it's validity
-	if (m_spawnGroups.find(id)!=m_spawnGroups.end())
-		CheckSpawnGroupValidity(id);
+	//if (gEnv->bClient)
+	//{
+	//	ScriptHandle handle(id);
+	//	CallScript(m_clientStateScript, "OnSetTeam", handle, teamId);
+	//}
+	//
+	//// if this is a spawn group, update it's validity
+	//if (m_spawnGroups.find(id)!=m_spawnGroups.end())
+	//	CheckSpawnGroupValidity(id);
 
-	GetGameObject()->InvokeRMIWithDependentObject(ClSetTeam(), SetTeamParams(id, teamId), eRMI_ToRemoteClients, id);
+	//GetGameObject()->InvokeRMIWithDependentObject(ClSetTeam(), SetTeamParams(id, teamId), eRMI_ToRemoteClients, id);
 
-	if (IEntity *pEntity=m_pEntitySystem->GetEntity(id))
-		m_pGameplayRecorder->Event(pEntity, GameplayEvent(eGE_ChangedTeam, 0, (float)teamId));
+	//if (IEntity *pEntity=m_pEntitySystem->GetEntity(id))
+	//	m_pGameplayRecorder->Event(pEntity, GameplayEvent(eGE_ChangedTeam, 0, (float)teamId));
 }
 
 //------------------------------------------------------------------------
 int CGameRules::GetTeam(EntityId entityId) const
 {
-	TEntityTeamIdMap::const_iterator it = m_entityteams.find(entityId);
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*TEntityTeamIdMap::const_iterator it = m_entityteams.find(entityId);
 	if (it != m_entityteams.end())
-		return it->second;
+		return it->second;*/
 
 	return 0;
 }
@@ -1906,14 +1936,17 @@ void CGameRules::RemoveSpawnGroup(EntityId groupId)
 	{
 		GetGameObject()->InvokeRMI(ClRemoveSpawnGroup(), SpawnGroupParams(groupId), eRMI_ToAllClients|eRMI_NoLocalCalls, groupId);
 
-		TTeamIdEntityIdMap::iterator next;
+		// [D6] Let team manager handle this
+		/*TTeamIdEntityIdMap::iterator next;
 		for (TTeamIdEntityIdMap::iterator dit=m_teamdefaultspawns.begin(); dit!=m_teamdefaultspawns.end(); dit=next)
 		{
 			next=dit;
 			++next;
 			if (dit->second==groupId)
 				m_teamdefaultspawns.erase(dit);
-		}
+		}*/
+		assert(g_D6Core->pTeamManager);
+		g_D6Core->pTeamManager->RemoveDefaultSpawnGroupFromTeams(groupId);
 	}
 
 	CheckSpawnGroupValidity(groupId);
@@ -1990,20 +2023,23 @@ EntityId CGameRules::GetPlayerSpawnGroup(CActor *pActor)
 //------------------------------------------------------------------------
 void CGameRules::SetTeamDefaultSpawnGroup(int teamId, EntityId spawnGroupId)
 {
-	TTeamIdEntityIdMap::iterator it=m_teamdefaultspawns.find(teamId);
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*TTeamIdEntityIdMap::iterator it=m_teamdefaultspawns.find(teamId);
 	
 	if (it!=m_teamdefaultspawns.end())
 		it->second=spawnGroupId;
 	else
-		m_teamdefaultspawns.insert(TTeamIdEntityIdMap::value_type(teamId, spawnGroupId));
+		m_teamdefaultspawns.insert(TTeamIdEntityIdMap::value_type(teamId, spawnGroupId));*/
 }
 
 //------------------------------------------------------------------------
 EntityId CGameRules::GetTeamDefaultSpawnGroup(int teamId)
 {
-	TTeamIdEntityIdMap::iterator it=m_teamdefaultspawns.find(teamId);
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*TTeamIdEntityIdMap::iterator it=m_teamdefaultspawns.find(teamId);
 	if (it!=m_teamdefaultspawns.end())
-		return it->second;
+		return it->second;*/
+
 	return 0;
 }
 
@@ -2290,11 +2326,18 @@ void CGameRules::SendChatMessage(EChatMessageType type, EntityId sourceId, Entit
 				int teamId = GetTeam(sourceId);
 				if (teamId)
 				{
-					TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
+					// [D6] Use team manager
+					/*TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
 					if (tit!=m_playerteams.end())
 					{
 						for (TPlayers::const_iterator it=tit->second.begin(); it!=tit->second.end(); ++it)
 							GetGameObject()->InvokeRMIWithDependentObject(ClChatMessage(), params, eRMI_ToClientChannel, *it, GetChannelId(*it));
+					}*/
+					TPlayers players;
+					GetTeamPlayers(teamId, players);
+					for (TPlayers::const_iterator itPlayer = players.begin(); itPlayer != players.end(); itPlayer++)
+					{
+						GetGameObject()->InvokeRMIWithDependentObject(ClChatMessage(), params, eRMI_ToClientChannel, *itPlayer, GetChannelId(*itPlayer));
 					}
 				}
 			}
@@ -2461,7 +2504,8 @@ void CGameRules::CmdDebugMinimap(IConsoleCmdArgs *pArgs)
 //------------------------------------------------------------------------
 void CGameRules::CmdDebugTeams(IConsoleCmdArgs *pArgs)
 {
-	CGameRules *pGameRules=g_pGame->GetGameRules();
+	// [D6] Use team manager
+	/*CGameRules *pGameRules=g_pGame->GetGameRules();
 	if (!pGameRules->m_entityteams.empty())
 	{
 		CryLogAlways("// Teams //");
@@ -2477,12 +2521,16 @@ void CGameRules::CmdDebugTeams(IConsoleCmdArgs *pArgs)
 				}
 			}
 		}
-	}
+	}*/
+
+	assert(g_D6Core->pTeamManager);
+	g_D6Core->pTeamManager->CmdDebugTeams(pArgs);
 }
 
 //------------------------------------------------------------------------
 void CGameRules::CmdDebugObjectives(IConsoleCmdArgs *pArgs)
 {
+	// [D6] Let team manager handle this
 	const char *status[CHUDMissionObjective::LAST+1];
 	status[0]="$5invalid$o";
 	status[CHUDMissionObjective::LAST]="$5invalid$o";
@@ -2492,7 +2540,7 @@ void CGameRules::CmdDebugObjectives(IConsoleCmdArgs *pArgs)
 	status[CHUDMissionObjective::COMPLETED]="$2complete$o";
 	status[CHUDMissionObjective::FAILED]="$4failed$o";
 
-	CGameRules *pGameRules=g_pGame->GetGameRules();
+	/*CGameRules *pGameRules=g_pGame->GetGameRules();
 	if (!pGameRules->m_objectives.empty())
 	{
 		CryLogAlways("// Teams //");
@@ -2505,7 +2553,10 @@ void CGameRules::CmdDebugObjectives(IConsoleCmdArgs *pArgs)
 						status[CLAMP(it->second.status, 0, CHUDMissionObjective::LAST)], it->second.entityId, it->second.entityId);
 			}
 		}
-	}
+	}*/
+
+	assert(g_D6Core->pTeamManager);
+	g_D6Core->pTeamManager->CmdDebugObjectives(pArgs, status);
 }
 //------------------------------------------------------------------------
 void CGameRules::CreateScriptHitInfo(SmartScriptTable &scriptHitInfo, const HitInfo &hitInfo)
@@ -2963,11 +3014,19 @@ void CGameRules::SendRadioMessage(const EntityId sourceId,const int msg)
 			int teamId = GetTeam(sourceId);
 			if (teamId)
 			{
-				TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
+				// [D6] Use team's player map
+				/*TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
 				if (tit!=m_playerteams.end())
 				{
 					for (TPlayers::const_iterator it=tit->second.begin(); it!=tit->second.end(); ++it)
 						GetGameObject()->InvokeRMIWithDependentObject(ClRadioMessage(), params, eRMI_ToClientChannel, *it, GetChannelId(*it));
+				}*/
+				TPlayers players;
+				GetTeamPlayers(teamId, players);
+				for (TPlayers::iterator itPlayer = players.begin(); itPlayer != players.end();
+					itPlayer++)
+				{
+					GetGameObject()->InvokeRMIWithDependentObject(ClRadioMessage(), params, eRMI_ToClientChannel, *itPlayer, GetChannelId(*itPlayer));
 				}
 			}
 		}
@@ -3044,10 +3103,11 @@ void CGameRules::GetMemoryStatistics(ICrySizer * s)
 {
 	s->Add(*this);
 	s->AddContainer(m_channelIds);
-	s->AddContainer(m_teams);
-	s->AddContainer(m_entityteams);
-	s->AddContainer(m_teamdefaultspawns);
-	s->AddContainer(m_playerteams);
+	// [D6] Following containers are no longer part of the GameRules class, migrated to Team Manager
+	//s->AddContainer(m_teams);
+	//s->AddContainer(m_entityteams);
+	//s->AddContainer(m_teamdefaultspawns);
+	//s->AddContainer(m_playerteams);
 	s->AddContainer(m_hitMaterials);
 	s->AddContainer(m_hitTypes);
 	s->AddContainer(m_respawndata);
@@ -3061,10 +3121,11 @@ void CGameRules::GetMemoryStatistics(ICrySizer * s)
 	s->AddContainer(m_teamVoiceGroups);
 	s->AddContainer(m_rulesListeners);
 
-	for (TTeamIdMap::iterator iter = m_teams.begin(); iter != m_teams.end(); ++iter)
-		s->Add(iter->first);
-	for (TPlayerTeamIdMap::iterator iter = m_playerteams.begin(); iter != m_playerteams.end(); ++iter)
-		s->AddContainer(iter->second);
+	// [D6] Migrated to Team Manager
+	/*for (TTeamIdMap::iterator iter = m_teams.begin(); iter != m_teams.end(); ++iter)
+		s->Add(iter->first);*/
+	/*for (TPlayerTeamIdMap::iterator iter = m_playerteams.begin(); iter != m_playerteams.end(); ++iter)
+		s->AddContainer(iter->second);*/
 	for (THitTypeMap::iterator iter = m_hitTypes.begin(); iter != m_hitTypes.end(); ++iter)
 		s->Add(iter->second);
 	for (TTeamObjectiveMap::iterator iter = m_objectives.begin(); iter != m_objectives.end(); ++iter)
