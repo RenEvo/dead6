@@ -10,8 +10,33 @@ Below, seperated by files, are the explinations for all changes made. Developmen
 
 = Changes =
 
+== !StdAfx.h ==
+
+- Included "d6platform_impl.h"
+
+== GameDll.cpp ==
+
+- Included "d6platform_impl.h" and "CD6Game.h"
+
+- Created the instance of the D6 Core Global Environment object.
+
+Line 38: Initialized the D6 Core Global Environment instance.
+
+== Game.cpp ==
+
+- Included "CD6GameFactory.h"
+
+Line 148: Initialized the D6GameFactory by calling _ !InitD6GameFactory _.
+
+== !ScriptBind_Gamerules.h ==
+
+Line 100: The !CreateTeam and !RemoveTeam calls are routed through the Team Manager module.
+
 == !ScriptBind_Gamerules.cpp ==
 
-Line 1041: The !CreateTeam and !RemoveTeam calls are routed through the Team Manager module.
+Line 136, 1041: The !CreateTeam and !RemoveTeam calls are routed through the Team Manager module.
+
+== !GameRulesClientServer.cpp ==
+Line 495: The code block is handled by the Team Manager.
 
 [TechDoc_Architecture Back]
