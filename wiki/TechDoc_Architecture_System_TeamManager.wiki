@@ -7,7 +7,7 @@ The current team management code present in the Crysis codebase is stripped out 
 
 = Functionality =
 
-== !STeamDef ==
+== STeamDef ==
 Below are the methods defined in the !STeamDef object.
 
 == !TeamManager ==
