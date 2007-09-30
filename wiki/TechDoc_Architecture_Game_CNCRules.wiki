@@ -39,7 +39,7 @@ The General section defines general items for the map, such as environment setti
  * !TimeOfDay - Specifies the starting time of day to be played out for this level. The *Hour* and *Minute* attributes may be defined to specify the hour and minute of the day. Furthermore, *!EnableLoop* may be defined as "1" to turn day/night looping on.
 
 = CNC Rules Script =
-The CNC GameRules script handles CNC-Mode game logic. It adheres to the standards laid out for a GameRules script by Crysis's implementation for its many game types.
+The CNC !GameRules script handles CNC-Mode game logic. It adheres to the standards laid out for a !GameRules script by Crysis's implementation for its many game types.
 
 == Script Functionality ==
 All callbacks have a separate server and client path that are called on the server and local client's ends, respectively.
