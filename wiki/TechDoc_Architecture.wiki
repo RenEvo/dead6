@@ -24,6 +24,7 @@ The following sections will outline the system and game features present in the 
 == Game Features ==
 
  * [TechDoc_Architecture_Game_CNCRules CNC Game Rules]
+ * [TechDoc_Architecture_Game_CNCTeams CNC Teams]
 
 = Appendix =
 
