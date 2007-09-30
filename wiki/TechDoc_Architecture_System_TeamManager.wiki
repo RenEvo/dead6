@@ -282,47 +282,4 @@ Member Variables:
  * !PlayerList - List of player IDs who are on the team
 
 
-= Team XML File =
-The Team XML file is the blueprint for a team. It defines the team's attributes and is the lookup book used by the Dead 6 Core to create the team at the beginning. Loaded from the map's [TechDoc_Architecture_Game_CNCRules CNCRules.xml] file, the team's XML file is located in the Teams\XML folder. (Game\Scripts\Teams\XML)
-
-== Sample XML File ==
-This is an example of a typical team XML file:
-{{{
-<?xml version="1.0" encoding="utf-8"?>
-<Team Name="GDI" LongName="Global Defense Initiative" Script="CNCTeam.lua"></Team>
-}}}
-
-The Team tag's attributes are as such:
- * Name - The short-hand name of the team.
- * !LongName - The long-hand name of the team.
- * Script - The Lua script inherited and used by this team for team behavior controlling.
-
-
-= Team LUA File =
-Each team has the ability to run a Lua script along side it to handle team behaviors. Special callbacks are made to it to control when players join/leave the team, when team members speak in public chat, when team-controlled buildings, vehicles and soldiers are damaged and killed, etc.
-
-== Script Functionality ==
-All callbacks have a separate server and client path that are called on the server and local client's ends, respectively.
-
-=== *_ !OnInit _* ===
-*Purpose*:
-Called when the team is first created
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-=== *_ !OnShutdown _* ===
-*Purpose*:
-Called when the team is destroyed
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-
 [TechDoc_Architecture Back]
