@@ -1,0 +1,41 @@
+#summary Game Feature - CNC Game Rules
+
+= Overview =
+The Command & Conquer Mode Game Rules are divided up into two separate entities: the GameRules script which defines the behaviors and game logic of CNC Mode, and the CNC Rules XML feed which defines the contents of the game including the teams and building classes.
+
+= CNC Rules XML =
+The CNC Rules XML file (!CNCRules.xml) is a *per-map defined* file. It defines the content to be created for the current CNC match. This content includes:
+
+ * Team definitions
+ * Building class definitions
+ * Environment settings
+
+The default rules file loaded when not defined by a map is located in the GameRules/XML folder. (Game\Scripts\GameRules\XML) This file contains the generic CNC rule's contents inherited by all maps that do not define their own.
+
+A CNC-mode map is free to create their own CNCRules.xml file for use when that map is played. The file must be placed in the level's root folder. An entry must be added to the map's filelist.xml to ensure it is not tampered with on the client's end via the md5 checksum.
+
+== Sample XML ==
+
+This is an example of a typical !CNCRules.xml file:
+{{{
+<?xml version="1.0" encoding="utf-8"?>
+<CNCRules>
+  <Teams>
+    <Team>GDI</Team>
+    <Team>Nod</Team>
+  </Teams>
+  <General>
+    <TimeOfDay Hour="9" Minute="45" EnableLoop="0" />
+  </General>
+</CNCRules>
+}}}
+
+=== Teams ===
+The Teams section specifies what teams are present on this map. Each team is contained within its own _Team_ tag. The name specified must match the filename of the team's XML file, located in the Teams/XML folder. (Game\Scripts\Teams\XML). The team-specific definition file is located in this XML file; here, you are simply telling the Dead 6 Core what files to load and parse for team management.
+
+=== General ===
+The General section defines general items for the map, such as environment settings. The following items can be defined here to give you more control over your map:
+
+* TimeOfDay - Specifies the starting time of day to be played out for this level. The *Hour* and *Minute* attributes may be defined to specify the hour and minute of the day. Furthermore, *EnableLoop* may be defined as "1" to turn day/night looping on.
+
+[TechDoc_Architecture Back]
