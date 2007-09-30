@@ -36,6 +36,6 @@ The Teams section specifies what teams are present on this map. Each team is con
 === General ===
 The General section defines general items for the map, such as environment settings. The following items can be defined here to give you more control over your map:
 
-* TimeOfDay - Specifies the starting time of day to be played out for this level. The *Hour* and *Minute* attributes may be defined to specify the hour and minute of the day. Furthermore, *EnableLoop* may be defined as "1" to turn day/night looping on.
+ * !TimeOfDay - Specifies the starting time of day to be played out for this level. The *Hour* and *Minute* attributes may be defined to specify the hour and minute of the day. Furthermore, *!EnableLoop* may be defined as "1" to turn day/night looping on.
 
 [TechDoc_Architecture Back]
