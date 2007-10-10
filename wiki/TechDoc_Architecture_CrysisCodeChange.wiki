@@ -116,7 +116,7 @@ Lines 1086 - 1095:
 	// [/D6]
 }}}
 
-Lines 1103 - 1128:
+Lines 1103 - 1117:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	//TTeamIdMap::iterator it = m_teams.find(CONST_TEMP_STRING(GetTeamName(teamId)));
@@ -132,11 +132,11 @@ Lines 1103 - 1128:
 	//}
 
 	//m_playerteams.erase(m_playerteams.find(teamId));
-}
+	// [/D6]
+}}}
 
-//------------------------------------------------------------------------
-const char *CGameRules::GetTeamName(int teamId) const
-{
+Lines 1123 - 1129:
+{{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*for (TTeamIdMap::const_iterator it = m_teams.begin(); it!=m_teams.end(); ++it)
 	{
@@ -146,7 +146,7 @@ const char *CGameRules::GetTeamName(int teamId) const
 	// [/D6]
 }}}
 
-Lines 1136 - 1140:
+Lines 1137 - 1141:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TTeamIdMap::const_iterator it=m_teams.find(CONST_TEMP_STRING(name));
@@ -155,14 +155,14 @@ Lines 1136 - 1140:
 	// [/D6]
 }}}
 
-Lines 1148 - 1150:
+Lines 1149 - 1151:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	//return (int)m_teams.size();
 	// [/D6]
 }}}
 
-Lines 1158 - 1182:
+Lines 1159 - 1183:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*if (!inGame)
@@ -191,7 +191,7 @@ Lines 1158 - 1182:
 	// [/D6]
 }}}
 
-Lines 1190 - 1197:
+Lines 1191 - 1198:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TPlayerTeamIdMap::const_iterator it=m_playerteams.find(teamId);
@@ -203,7 +203,7 @@ Lines 1190 - 1197:
 	// [/D6]
 }}}
 
-Lines 1205 - 1210:
+Lines 1206 - 1211:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*players.resize(0);
@@ -213,7 +213,7 @@ Lines 1205 - 1210:
 	// [/D6]
 }}}
 
-Lines 1216 - 1275:
+Lines 1217 - 1276:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	//if (!gEnv->bServer )
@@ -277,7 +277,7 @@ Lines 1216 - 1275:
 	// [/D6]
 }}}
 
-Lines 1281 - 1285:
+Lines 1282 - 1286:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TEntityTeamIdMap::const_iterator it = m_entityteams.find(entityId);
@@ -286,7 +286,7 @@ Lines 1281 - 1285:
 	// [/D6]
 }}}
 
-Lines 1950 - 1961:
+Lines 1951 - 1962:
 {{{
 		// [D6] Let team manager handle this
 		/*TTeamIdEntityIdMap::iterator next;
@@ -302,7 +302,7 @@ Lines 1950 - 1961:
 		// [/D6]
 }}}
 
-Lines 2038 - 2045:
+Lines 2039 - 2046:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TTeamIdEntityIdMap::iterator it=m_teamdefaultspawns.find(teamId);
@@ -314,7 +314,7 @@ Lines 2038 - 2045:
 	// [/D6]
 }}}
 
-Lines 2051 - 2055:
+Lines 2052 - 2056:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TTeamIdEntityIdMap::iterator it=m_teamdefaultspawns.find(teamId);
@@ -323,7 +323,7 @@ Lines 2051 - 2055:
 	// [/D6]
 }}}
 
-Lines 2343 - 2356:
+Lines 2344 - 2357:
 {{{
 					// [D6] Use team manager
 					/*TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
@@ -341,7 +341,7 @@ Lines 2343 - 2356:
 					// [/D6]
 }}}
 
-Lines 2522 - 2540:
+Lines 2523 - 2541:
 {{{
 	// [D6] Use team manager
 	/*CGameRules *pGameRules=g_pGame->GetGameRules();
@@ -364,7 +364,7 @@ Lines 2522 - 2540:
 	// [/D6]
 }}}
 
-Lines 2558 - 2576:
+Lines 2559 - 2577:
 {{{
 	// [D6] Let team manager handle this
 	/*CGameRules *pGameRules=g_pGame->GetGameRules();
@@ -387,7 +387,7 @@ Lines 2558 - 2576:
 	// [/D6]
 }}}
 
-Lines 3034 - 3048:
+Lines 3035 - 3049:
 {{{
 				// [D6] Use team's player map
 				/*TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
@@ -406,7 +406,7 @@ Lines 3034 - 3048:
 				// [/D6]
 }}}
 
-Lines 3124 - 3129:
+Lines 3125 - 3130:
 {{{
 	// [D6] Following containers are no longer part of the GameRules class, migrated to Team Manager
 	//s->AddContainer(m_teams);
@@ -416,7 +416,7 @@ Lines 3124 - 3129:
 	// [/D6]
 }}}
 
-Lines 3143 - 3148:
+Lines 3144 - 3149:
 {{{
 	// [D6] Migrated to Team Manager
 	/*for (TTeamIdMap::iterator iter = m_teams.begin(); iter != m_teams.end(); ++iter)
