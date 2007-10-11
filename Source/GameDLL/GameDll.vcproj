@@ -75,15 +75,15 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				OutputFile="$(OutDir)/Dead6_D.dll"
+				OutputFile="$(OutDir)/Dead6.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories=".\..\SDKs\STLPORT\lib"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(OutDir)/Base.pdb"
+				ProgramDatabaseFile="$(OutDir)/Dead6.pdb"
 				SubSystem="2"
 				LargeAddressAware="2"
-				ImportLibrary="$(OutDir)/GameDll.lib"
+				ImportLibrary="$(OutDir)/Dead6.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -1463,6 +1463,14 @@
 				<File
 					RelativePath=".\GameFactory.cpp"
 					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
 					<FileConfiguration
 						Name="Release|Win32"
 						ExcludedFromBuild="true"

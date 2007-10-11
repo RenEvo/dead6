@@ -169,19 +169,28 @@ void CD6Game::OnLoadingComplete(ILevel *pLevel)
 	XmlNodeRef pRootNode = m_pFramework->GetISystem()->LoadXmlFile(szCNCRules);
 	if (NULL == pRootNode)
 	{
-		m_pFramework->GetISystem()->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
-			VALIDATOR_FLAG_FILE, szCNCRules, "Missing/Corrupted CNCRules file for level");
+		// Try default
+		pRootNode = m_pFramework->GetISystem()->LoadXmlFile(D6C_DEFAULT_GAMERULES);
+		if (NULL == pRootNode)
+		{
+			// No good..
+			m_pFramework->GetISystem()->Error("Missing/Corrupted CNCRules file for level : %s", "TODO"/*TODO: pLevel->GetLevelInfo()->GetName()*/);
+			return;
+		}
+		else
+		{
+			m_pFramework->GetISystem()->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
+				VALIDATOR_FLAG_FILE, szCNCRules, "Using default CNC Rules for level \'%s\'", "TODO"/*TODO: pLevel->GetLevelInfo()->GetName()*/);
+		}
 	}
-	else
-	{
-		// Parse general settings
-		XmlNodeRef pGeneralSettingsNode = pRootNode->findChild("General");
-		ParseCNCRules_General(pGeneralSettingsNode);
 
-		// Parse team settings
-		XmlNodeRef pTeamSettingsNode = pRootNode->findChild("Teams");
-		ParseCNCRules_Teams(pTeamSettingsNode);
-	}
+	// Parse general settings
+	XmlNodeRef pGeneralSettingsNode = pRootNode->findChild("General");
+	ParseCNCRules_General(pGeneralSettingsNode);
+
+	// Parse team settings
+	XmlNodeRef pTeamSettingsNode = pRootNode->findChild("Teams");
+	ParseCNCRules_Teams(pTeamSettingsNode);
 }
 
 ////////////////////////////////////////////////////
@@ -210,31 +219,27 @@ void CD6Game::ParseCNCRules_General(XmlNodeRef &pNode)
 		ITimeOfDay *pTOD = m_pFramework->GetISystem()->GetI3DEngine()->GetTimeOfDay();
 		assert(pTOD);
 		pTOD->SetTime(fHour, true);
-		pTOD->SetPaused(bLoop);
+		pTOD->SetPaused(!bLoop);
 	}
 }
 
 ////////////////////////////////////////////////////
 void CD6Game::ParseCNCRules_Teams(XmlNodeRef &pNode)
 {
-	if (NULL == pNode) return;
+	if (NULL == pNode || NULL == g_D6Core->pTeamManager) return;
 
 	// Parse each team entry
 	XmlNodeRef pTeamNode;
 	XmlString szName, szScript;
-	int nChildCount = pNode->getChildCount();
-	for (int i = 0; i < nChildCount; i++)
+	int nCount = pNode->getChildCount();
+	for (int i = 0; i < nCount; i++)
 	{
-		// Check tag
+		// Get attribute and create team with it
 		pTeamNode = pNode->getChild(i);
-		if (NULL == pTeamNode || 0 != stricmp(pTeamNode->getTag(), "team"))
-			continue;
-
-		// Add entry for this team
-		pTeamNode->getAttr("Name", szName);
-		pTeamNode->getAttr("Script", szScript);
-		//g_D6Core->pTeamManager->CreateTeam(szName, szScript);
-
-		// TODO Purchase setting extraction should go here!
+		if (NULL != pTeamNode && strcmp(pTeamNode->getTag(), "Team") == 0)
+		{
+			// Create it
+			g_D6Core->pTeamManager->CreateTeam(pTeamNode->getContent());
+		}
 	}
 }

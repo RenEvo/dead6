@@ -21,6 +21,16 @@
 #include "CD6Game.h"
 #include "CD6GameRules.h"
 
+// Path values
+#define D6C_PATH_GAMERULES		("Scripts\\GameRules\\")
+#define D6C_PATH_TEAMS			("Scripts\\Teams\\")
+#define D6C_PATH_TEAMSXML		("Scripts\\Teams\\XML\\")
+
+// Default values
+#define D6C_DEFAULT_GAMERULES	("Scripts\\GameRules\\XML\\CNCRules.xml")
+#define D6C_DEFAULT_TEAMXML		("Scripts\\Teams\\XML\\Default.xml")
+#define D6C_DEFAULT_TEAMSCRIPT	("Scripts\\Teams\\DefaultTeam.lua")
+
 ////////////////////////////////////////////////////
 // D6 Core global environment
 class CD6CoreGlobalEnvironment

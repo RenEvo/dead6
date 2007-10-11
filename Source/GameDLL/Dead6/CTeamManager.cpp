@@ -51,6 +51,8 @@ void CTeamManager::Reset(void)
 	// Clear the map
 	m_TeamMap.clear();
 
+	CryLog("-> TeamManager::Reset");
+
 	// Clear all teams from gamerules
 	//assert(m_pGame);
 	//m_pGame->GetD6GameRules()->ClearAllTeams();
@@ -64,7 +66,9 @@ void CTeamManager::GetMemoryStatistics(ICrySizer *s)
 	{
 		// String objects
 		s->Add(itTeam->second.szName);
+		s->Add(itTeam->second.szLongName);
 		s->Add(itTeam->second.szScript);
+		s->Add(itTeam->second.szXML);
 
 		// Player map
 		s->AddContainer(itTeam->second.PlayerList);
@@ -123,24 +127,68 @@ void CTeamManager::CmdDebugObjectives(IConsoleCmdArgs *pArgs, const char **statu
 }
 
 ////////////////////////////////////////////////////
-TeamID CTeamManager::CreateTeam(char const* szName)
+TeamID CTeamManager::CreateTeam(char const* szTeam)
 {
+	assert(g_D6Core->pSystem);
+
+	// Create path to XML file for this team
+	string szTeamXML = D6C_PATH_TEAMSXML, szMapTeamXML;
+	szTeamXML += szTeam;
+	szTeamXML += ".xml";
+	szMapTeamXML = g_D6Core->pSystem->GetI3DEngine()->GetLevelFilePath("Teams\\");
+	szMapTeamXML += szTeam;
+	szMapTeamXML += ".xml";
+
 	// Check if team already exists
 	for (TeamMap::iterator itI = m_TeamMap.begin(); itI != m_TeamMap.end(); itI++)
 	{
-		if (0 == stricmp(szName, itI->second.szName.c_str()))
+		if (0 == stricmp(szTeamXML.c_str(), itI->second.szXML.c_str()))
 			return itI->first;
+	}
+
+	// Find and open team's XML file
+	XmlNodeRef pRootNode = NULL;
+	if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szMapTeamXML.c_str())))
+	{
+		// Try default dir
+		if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szTeamXML.c_str())))
+		{
+			g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
+				VALIDATOR_FLAG_FILE, szTeamXML.c_str(), "Failed to load Team Definition for \'%s\'", szTeam);
+			return TEAMID_INVALID;
+		}
 	}
 
 	// Create entry for team
 	STeamDef TeamDef;
 	TeamDef.nID = ++m_nTeamIDGen;
 	TeamDef.nSpawnGroupID = 0;
-	TeamDef.szName = szName;
+	TeamDef.szXML = szTeamXML;
 
-	// TODO Load script from CNCRules.xml
+	// Extract attributes
+	{
+		// Name
+		XmlString szAttrName = "";
+		pRootNode->getAttr("Name", szAttrName);
+		TeamDef.szName = szAttrName;
+	}
+	{
+		// Long Name
+		XmlString szAttrLongName = "";
+		pRootNode->getAttr("LongName", szAttrLongName);
+		TeamDef.szLongName = szAttrLongName;
+	}
+	{
+		// Script
+		XmlString szScript = "";
+		pRootNode->getAttr("Script", szScript);
+		TeamDef.szScript = szScript;
+	}
+
+	// TODO Load script
 
 	// Create entry and return ID
+	CryLog("[TeamManager] Created team \'%s\' (%d)", TeamDef.szName.c_str(), TeamDef.nID);
 	m_TeamMap[TeamDef.nID] = TeamDef;
 	return TeamDef.nID;
 }
@@ -151,6 +199,8 @@ void CTeamManager::RemoveTeam(TeamID nTeamID)
 	// Find team entry
 	TeamMap::iterator itEntry = m_TeamMap.find(nTeamID);
 	if (itEntry == m_TeamMap.end()) return;
+
+	CryLog("Removed team \'%s\' (%d)", itEntry->second.szName.c_str(), itEntry->first);
 
 	m_TeamMap.erase(itEntry);
 }
