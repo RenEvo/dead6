@@ -261,13 +261,13 @@
 				SuppressStartupBanner="true"
 				AdditionalLibraryDirectories=".\..\SDKs\STLPORT\lib"
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile="$(OutDir)/Base.pdb"
+				ProgramDatabaseFile="$(OutDir)/Dead6.pdb"
 				SubSystem="2"
 				LargeAddressAware="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
 				LinkTimeCodeGeneration="1"
-				ImportLibrary="$(OutDir)/GameDll.lib"
+				ImportLibrary="$(OutDir)/Dead6.lib"
 				TargetMachine="1"
 			/>
 			<Tool
@@ -1169,6 +1169,14 @@
 					>
 				</File>
 				<File
+					RelativePath=".\Dead6\Interfaces\IBuildingController.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\Interfaces\IPurchaseSystem.h"
+					>
+				</File>
+				<File
 					RelativePath=".\Dead6\Interfaces\ITeamManager.h"
 					>
 				</File>
@@ -1194,6 +1202,14 @@
 				</File>
 				<File
 					RelativePath=".\Dead6\CBaseManager.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CBuildingController.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CBuildingController.h"
 					>
 				</File>
 				<File

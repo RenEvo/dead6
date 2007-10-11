@@ -16,6 +16,7 @@
 #define _D6C_d6platform_impl_H_
 
 #include "ISystem.h"
+#include "IBuildingController.h"
 #include "IBaseManager.h"
 #include "ITeamManager.h"
 #include "CD6Game.h"
@@ -25,11 +26,11 @@
 #define D6C_PATH_GAMERULES		("Scripts\\GameRules\\")
 #define D6C_PATH_TEAMS			("Scripts\\Teams\\")
 #define D6C_PATH_TEAMSXML		("Scripts\\Teams\\XML\\")
+#define D6C_PATH_BUILDINGS		("Scripts\\Buildings\\")
+#define D6C_PATH_BUILDINGSXML	("Scripts\\Buildings\\XML\\")
 
 // Default values
 #define D6C_DEFAULT_GAMERULES	("Scripts\\GameRules\\XML\\CNCRules.xml")
-#define D6C_DEFAULT_TEAMXML		("Scripts\\Teams\\XML\\Default.xml")
-#define D6C_DEFAULT_TEAMSCRIPT	("Scripts\\Teams\\DefaultTeam.lua")
 
 ////////////////////////////////////////////////////
 // D6 Core global environment
@@ -79,5 +80,39 @@ public:
 	CD6GameRules *pD6GameRules;
 };
 extern CD6CoreGlobalEnvironment* g_D6Core;
+
+////////////////////////////////////////////////////
+// Helper Macros for making script calls!
+////////////////////////////////////////////////////
+
+// Call to begin a call for server
+#define BEGIN_CALL_SERVER(pSS, pSO, szFunc) \
+	if (true == gEnv->bServer) \
+	{ \
+		SmartScriptTable pServerSO; ScriptAnyValue temp; \
+		(pSO)->GetValueAny("Server", temp); \
+		if (false != temp.CopyTo(pServerSO) && NULL != (pSS) && false != (pSS)->BeginCall(pServerSO, (szFunc))) \
+		{ \
+			(pSS)->PushFuncParam((pSO));
+
+// Call to begin a call for cleint
+#define BEGIN_CALL_CLIENT(pSS, pSO, szFunc) \
+	if (true == gEnv->bClient) \
+	{ \
+		SmartScriptTable pClientSO; ScriptAnyValue temp; \
+		(pSO)->GetValueAny("Client", temp); \
+		if (false != temp.CopyTo(pClientSO) && NULL != (pSS) && false != (pSS)->BeginCall(pClientSO, (szFunc))) \
+		{ \
+			(pSS)->PushFuncParam((pSO));
+
+// Call to end any call made
+#define END_CALL(pSS) \
+			(pSS)->EndCall(); \
+		} \
+	}
+#define END_CALL_ARG(pSS, arg) \
+			(pSS)->EndCallAny(arg); \
+		} \
+	}
 
 #endif //_D6C_d6platform_impl_H_

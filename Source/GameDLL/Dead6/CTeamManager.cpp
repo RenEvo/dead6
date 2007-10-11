@@ -18,21 +18,19 @@
 ////////////////////////////////////////////////////
 CTeamManager::CTeamManager(void)
 {
-	m_pGame = NULL;
 	m_nTeamIDGen = TEAMID_NOTEAM;
 }
 
 ////////////////////////////////////////////////////
 CTeamManager::~CTeamManager(void)
 {
-
+	Shutdown();
 }
 
 ////////////////////////////////////////////////////
-void CTeamManager::Initialize(CD6Game *pGame)
+void CTeamManager::Initialize(void)
 {
 	CryLogAlways("Initializing Dead6 Core: CTeamManager...");
-	m_pGame = pGame;
 
 	// Initial reset
 	Reset();
@@ -41,21 +39,18 @@ void CTeamManager::Initialize(CD6Game *pGame)
 ////////////////////////////////////////////////////
 void CTeamManager::Shutdown(void)
 {
-	// Clear the map
-	m_TeamMap.clear();
+	// Final reset
+	Reset();
 }
 
 ////////////////////////////////////////////////////
 void CTeamManager::Reset(void)
 {
+	CryLog("[TeamManager] Reset");
+
 	// Clear the map
 	m_TeamMap.clear();
-
-	CryLog("-> TeamManager::Reset");
-
-	// Clear all teams from gamerules
-	//assert(m_pGame);
-	//m_pGame->GetD6GameRules()->ClearAllTeams();
+	m_nTeamIDGen = TEAMID_NOTEAM;
 }
 
 ////////////////////////////////////////////////////
@@ -188,7 +183,7 @@ TeamID CTeamManager::CreateTeam(char const* szTeam)
 	// TODO Load script
 
 	// Create entry and return ID
-	CryLog("[TeamManager] Created team \'%s\' (%d)", TeamDef.szName.c_str(), TeamDef.nID);
+	CryLog("[TeamManager] Created team \'%s\' (%u)", TeamDef.szName.c_str(), TeamDef.nID);
 	m_TeamMap[TeamDef.nID] = TeamDef;
 	return TeamDef.nID;
 }

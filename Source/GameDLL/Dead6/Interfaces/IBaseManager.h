@@ -28,20 +28,28 @@ typedef unsigned short BuildingClassID;
 typedef unsigned int BuildingGUID;
 #define GUID_INVALID (0x00000000)
 
+////////////////////////////////////////////////////
+// Make a building GUID quickly
+////////////////////////////////////////////////////
+#define MAKE_BUILDING_GUID(TEAMID, CLASSID) ((((TeamID)TEAMID)<<16)|(BuildingClassID)CLASSID)
+
 
 ////////////////////////////////////////////////////
 //	Building class definition structure
-struct SBuildingClassDef
-{
-	// Building class ID
-	BuildingClassID nID;
-
-	// Building class name
-	string szName;
-
-	// Building class script file
-	string szScript;
-};
+//struct SBuildingClassDef
+//{
+//	// Building class ID
+//	BuildingClassID nID;
+//
+//	// Building class name
+//	string szName;
+//
+//	// Building class script file
+//	string szScript;
+//
+//	// XML file
+//	string szXML;
+//};
 
 
 ////////////////////////////////////////////////////
@@ -51,6 +59,15 @@ struct IBaseManager
 	// Destructor
 	////////////////////////////////////////////////////
 	virtual ~IBaseManager(void) {}
+
+	////////////////////////////////////////////////////
+	// GetMemoryStatistics
+	//
+	// Purpose: Used by memory management
+	//
+	// In:	s - Cry Sizer object
+	////////////////////////////////////////////////////
+	virtual void GetMemoryStatistics(class ICrySizer *s) = 0;
 
 	////////////////////////////////////////////////////
 	// Initialize
@@ -67,67 +84,41 @@ struct IBaseManager
 	virtual void Shutdown(void) = 0;
 
 	////////////////////////////////////////////////////
-	// SetTeamManager
+	// CreateBuildingController
 	//
-	// Purpose: Set the team manager
+	// Purpose: Create a building controller
 	//
-	// In:	pTM - Team manager to use
+	// In:	szTeam - Team that owns the controller
+	//		szName - Class name to use for controller
+	//		pAttr - XML node containing attributes for it
+	//
+	// Out:	ppController - Optional controller catcher
+	//
+	// Returns the building's GUID or GUID_INVALID on error
 	////////////////////////////////////////////////////
-	virtual void SetTeamManager(ITeamManager const* pTM) = 0;
-
-	////////////////////////////////////////////////////
-	// GetTeamManager
-	//
-	// Purpose; Returns the team manager in use
-	////////////////////////////////////////////////////
-	virtual ITeamManager const* GetTeamManager(void) const = 0;
-
-	////////////////////////////////////////////////////
-	// DefineBuildingClass
-	//
-	// Purpose: Define a building class for use
-	//
-	// In:	szName - Building class name
-	//		szScript - Building script to use
-	//
-	// Returns Building CLass ID or BC_INVALID on error
-	////////////////////////////////////////////////////
-	virtual BuildingClassID DefineBuildingClass(char const* szName, char const* szScript) = 0;
+	virtual BuildingGUID CreateBuildingController(char const* szTeam, char const* szName,
+		XmlNodeRef pAttr, struct IBuildingController **ppController = NULL) = 0;
 
 	////////////////////////////////////////////////////
 	// Reset
 	//
-	// Purpose: Remove all team definitions
+	// Purpose: Clears all loaded BCs and prepares
+	//	for new controller definitions
 	//
-	// Note: Should be called when a level is loading
+	// Note: Should be called at the start of a level
+	//	load
 	////////////////////////////////////////////////////
 	virtual void Reset(void) = 0;
 
 	////////////////////////////////////////////////////
-	// GetBuildingClassByName
+	// ResetControllers
 	//
-	// Purpose: Find and returns a building class'
-	//	definition by its name
+	// Purpose: Reset all loaded building controllers
 	//
-	// In:	szName - Building Class name
-	//
-	// Returns team's definition or NULL on error
-	//
-	// Note: Slower, use ID if you have it!
+	// Note: Should be used whenever the "game" is reset,
+	//	like in the Editor
 	////////////////////////////////////////////////////
-	virtual SBuildingClassDef const* GetBuildingClassByName(char const* szName) const = 0;
-
-	////////////////////////////////////////////////////
-	// GetBuildingClassByID
-	//
-	// Purpose: Find and return a building class'
-	//	definition by its ID
-	//
-	// In:	nID - Building Class ID
-	//
-	// Returns team's definition or NULL on error
-	////////////////////////////////////////////////////
-	virtual SBuildingClassDef const* GetBuildingClassByID(BuildingClassID const& nID) const = 0;
+	virtual void ResetControllers(void) = 0;
 };
 
 #endif //_D6C_IBASEMANAGER_H_
