@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<CNCRules>
+  <Teams>
+    <Team>GDI</Team>
+    <Team>Nod</Team>
+  </Teams>
+  <General>
+    <TimeOfDay Hour="9" Minute="45" EnableLoop="0" />
+  </General>
+</CNCRules>

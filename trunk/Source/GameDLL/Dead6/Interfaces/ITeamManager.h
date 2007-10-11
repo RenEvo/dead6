@@ -38,9 +38,13 @@ struct STeamDef
 
 	// Team name
 	string szName;
+	string szLongName;
 
 	// Script file
 	string szScript;
+
+	// XML file
+	string szXML;
 
 	// Player list
 	TeamPlayerList PlayerList;
@@ -131,14 +135,12 @@ struct ITeamManager
 	//
 	// Purpose: Create a team definition
 	//
-	// In:	szName - Name of the team
+	// In:	szTeam - Team to load (looks for its .XML file)
 	//
-	// Returns ID of the team created
-	//
-	// Note: Looks for the definition of the team in
-	//	the currently-loaded CNCRules file via the name.
+	// Returns ID of the team created or TEAMID_INVALID
+	//	on error
 	////////////////////////////////////////////////////
-	virtual TeamID CreateTeam(char const* szName) = 0;
+	virtual TeamID CreateTeam(char const* szTeam) = 0;
 
 	////////////////////////////////////////////////////
 	// RemoveTeam

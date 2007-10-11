@@ -1114,6 +1114,7 @@ void CGameRules::RemoveTeam(int teamId)
 	//}
 
 	//m_playerteams.erase(m_playerteams.find(teamId));
+	// [/D6]
 }
 
 //------------------------------------------------------------------------
