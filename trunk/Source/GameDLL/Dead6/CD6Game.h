@@ -75,6 +75,7 @@ public:
 	virtual int Update(bool haveFocus, unsigned int updateFlags);
 	virtual const char *GetLongName();
 	virtual const char *GetName();
+	virtual void EditorResetGame(bool bStart);
 	
 	////////////////////////////////////////////////////
 	// ILevelSystemListener overloads
@@ -104,6 +105,16 @@ protected:
 	// In:	pNode - XML node containing team settings
 	////////////////////////////////////////////////////
 	virtual void ParseCNCRules_Teams(XmlNodeRef &pNode);
+
+	////////////////////////////////////////////////////
+	// ParseCNCRules_Buildings
+	//
+	// Purpose: Parses the buildings settings of the CNC
+	//	rules file
+	//
+	// In:	pNode - XML node containing building settings
+	////////////////////////////////////////////////////
+	virtual void ParseCNCRules_Buildings(XmlNodeRef &pNode);
 
 	////////////////////////////////////////////////////
 	// CGame overloads

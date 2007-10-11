@@ -8,7 +8,7 @@
 --
 -- History:
 --      - 9/28/07 : File created - KAK
------------------------------------------------
+------------------------------------------------
 
 -- Inherit from Team Instant Action
 Script.LoadScript("Scripts/GameRules/TeamInstantAction.lua", 1, 1);
@@ -20,7 +20,7 @@ CNCRules.teamName = {};
 CNCRules.teamModel = {};
 CNCRules.teamRadio = {};
 
------------------------------------------------
+------------------------------------------------
 -- Net table
 Net.Expose {
 	Class = CNCRules,
@@ -39,14 +39,14 @@ Net.Expose {
 	ServerProperties = {
 	},
 };
------------------------------------------------
+------------------------------------------------
 
------------------------------------------------
+------------------------------------------------
 -- Server.OnInit
 --
 -- Purpose: Called when the game rules are
 --	first initialized on the server
------------------------------------------------
+------------------------------------------------
 function CNCRules.Server:OnInit()
 	-- TODO Fill teamId table with IDs of current teams
 	self.teamId = {};
@@ -57,12 +57,12 @@ function CNCRules.Server:OnInit()
 	end
 end
 
------------------------------------------------
+------------------------------------------------
 -- Client.OnInit
 --
 -- Purpose: Called when the game rules are
 --	first initialized on the client
------------------------------------------------
+------------------------------------------------
 function CNCRules.Client:OnInit()
 	-- Let base init
 	if (self.Base) then

@@ -57,7 +57,7 @@ bool CD6Game::Init(IGameFramework *pFramework)
 		m_pScriptBindBaseManager->AttachTo(g_D6Core->pBaseManager);
 
 		// Init team manager
-		g_D6Core->pTeamManager->Initialize(this);
+		g_D6Core->pTeamManager->Initialize();
 		m_pScriptBindTeamManager->AttachTo(g_D6Core->pTeamManager);
 	}
 
@@ -126,6 +126,17 @@ const char *CD6Game::GetName()
 }
 
 ////////////////////////////////////////////////////
+void CD6Game::EditorResetGame(bool bStart)
+{
+	// Base reset
+	CGame::EditorResetGame(bStart);
+
+	// Reset building controllers
+	if (NULL != g_D6Core->pBaseManager)
+		g_D6Core->pBaseManager->ResetControllers();
+}
+
+////////////////////////////////////////////////////
 void CD6Game::InitScriptBinds()
 {
 	m_pScriptBindBaseManager = new CScriptBind_BaseManager(m_pFramework->GetISystem());
@@ -148,22 +159,23 @@ void CD6Game::ReleaseScriptBinds()
 ////////////////////////////////////////////////////
 void CD6Game::OnLoadingStart(ILevelInfo *pLevel)
 {
+	// Reset the team manager
+	assert(g_D6Core->pTeamManager);
+	g_D6Core->pTeamManager->Reset();
+
+	// Reset base manager
+	assert(g_D6Core->pBaseManager);
+	g_D6Core->pBaseManager->Reset();
+
 	// TODO Hope and pray pLevel becomes valid!
 	// We want to parse the XML file from this location, so any entities that get created
 	//	during the level load have the required info to initialize themselves.
 	// For now, we will send a message to all entities to let them do a post-init after the
 	//	XML file has been parsed.
 
-	// Reset the team manager
-	assert(g_D6Core->pTeamManager);
-	g_D6Core->pTeamManager->Reset();
-}
+	// TODO Don't do the CNC rules load if no level is loaded. The editor gives a false alarm here
+	//	when it is first loaded.
 
-////////////////////////////////////////////////////
-void CD6Game::OnLoadingComplete(ILevel *pLevel)
-{
-	// TODO Migrate this to OnLoadingStart
-	
 	// Get CNC rules file path and open to root
 	char const* szCNCRules = m_pFramework->GetISystem()->GetI3DEngine()->GetLevelFilePath("CNCRules.xml");
 	XmlNodeRef pRootNode = m_pFramework->GetISystem()->LoadXmlFile(szCNCRules);
@@ -174,13 +186,16 @@ void CD6Game::OnLoadingComplete(ILevel *pLevel)
 		if (NULL == pRootNode)
 		{
 			// No good..
-			m_pFramework->GetISystem()->Error("Missing/Corrupted CNCRules file for level : %s", "TODO"/*TODO: pLevel->GetLevelInfo()->GetName()*/);
+			g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_ERROR,
+				VALIDATOR_FLAG_FILE, "", "Missing/Corrupted CNCRules file for level : %s",
+				"TODO"/*TODO: pLevel->GetLevelInfo()->GetName()*/);
 			return;
 		}
 		else
 		{
 			m_pFramework->GetISystem()->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
-				VALIDATOR_FLAG_FILE, szCNCRules, "Using default CNC Rules for level \'%s\'", "TODO"/*TODO: pLevel->GetLevelInfo()->GetName()*/);
+				VALIDATOR_FLAG_FILE, szCNCRules, "Using default CNC Rules for level \'%s\'",
+				"TODO"/*TODO: pLevel->GetLevelInfo()->GetName()*/);
 		}
 	}
 
@@ -191,6 +206,16 @@ void CD6Game::OnLoadingComplete(ILevel *pLevel)
 	// Parse team settings
 	XmlNodeRef pTeamSettingsNode = pRootNode->findChild("Teams");
 	ParseCNCRules_Teams(pTeamSettingsNode);
+
+	// Parse building controller settings
+	XmlNodeRef pBuildingSettingsNode = pRootNode->findChild("Buildings");
+	ParseCNCRules_Buildings(pBuildingSettingsNode);
+}
+
+////////////////////////////////////////////////////
+void CD6Game::OnLoadingComplete(ILevel *pLevel)
+{
+	// TODO Post load on team and base managers for validation checks
 }
 
 ////////////////////////////////////////////////////
@@ -230,16 +255,38 @@ void CD6Game::ParseCNCRules_Teams(XmlNodeRef &pNode)
 
 	// Parse each team entry
 	XmlNodeRef pTeamNode;
-	XmlString szName, szScript;
 	int nCount = pNode->getChildCount();
 	for (int i = 0; i < nCount; i++)
 	{
 		// Get attribute and create team with it
 		pTeamNode = pNode->getChild(i);
-		if (NULL != pTeamNode && strcmp(pTeamNode->getTag(), "Team") == 0)
+		if (NULL != pTeamNode && stricmp(pTeamNode->getTag(), "Team") == 0)
 		{
 			// Create it
 			g_D6Core->pTeamManager->CreateTeam(pTeamNode->getContent());
+		}
+	}
+}
+
+////////////////////////////////////////////////////
+void CD6Game::ParseCNCRules_Buildings(XmlNodeRef &pNode)
+{
+	if (NULL == pNode || NULL == g_D6Core->pBaseManager) return;
+
+	// Parse each building entry and create the controllers for them
+	XmlNodeRef pBuildingNode;
+	XmlString szTeam, szName;
+	int nCount = pNode->getChildCount();
+	for (int i = 0; i < nCount; i++)
+	{
+		// Check if it is a real building
+		pBuildingNode = pNode->getChild(i);
+		if (NULL != pBuildingNode && stricmp(pBuildingNode->getTag(), "Building") == 0)
+		{
+			// Get team and name attributes
+			if (false == pBuildingNode->getAttr("Team", szTeam) || false == pBuildingNode->getAttr("Class", szName))
+				continue;
+			g_D6Core->pBaseManager->CreateBuildingController(szTeam, szName, pBuildingNode);
 		}
 	}
 }

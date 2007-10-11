@@ -64,10 +64,8 @@ struct ITeamManager
 	// Initialize
 	//
 	// Purpose: One-time initialization at the start
-	//
-	// In:	pGame - Game class
 	////////////////////////////////////////////////////
-	virtual void Initialize(class CD6Game *pGame) = 0;
+	virtual void Initialize(void) = 0;
 
 	////////////////////////////////////////////////////
 	// Shutdown

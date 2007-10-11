@@ -48,10 +48,8 @@ public:
 	// Initialize
 	//
 	// Purpose: One-time initialization at the start
-	//
-	// In:	pGame - Game class
 	////////////////////////////////////////////////////
-	virtual void Initialize(CD6Game *pGame);
+	virtual void Initialize(void);
 
 	////////////////////////////////////////////////////
 	// Shutdown

@@ -8,7 +8,7 @@
 --
 -- History:
 --      - 9/28/07 : File created - KAK
------------------------------------------------
+------------------------------------------------
 
 DefaultTeam =
 {
@@ -27,42 +27,42 @@ DefaultTeam.Client =
 
 };
 
------------------------------------------------
+------------------------------------------------
 -- Server.OnInit
 --
 -- Purpose: Called when the team is first created
 --	on the server
------------------------------------------------
+------------------------------------------------
 function DefaultTeam.Server:OnInit()
 
 end
 
------------------------------------------------
+------------------------------------------------
 -- Client.OnInit
 --
 -- Purpose: Called when the team is first created
 --	on the client
------------------------------------------------
+------------------------------------------------
 function DefaultTeam.Server:OnInit()
 
 end
 
------------------------------------------------
+------------------------------------------------
 -- Server.OnShutdown
 --
 -- Purpose: Called when the team is destroyed
 --	on the server
------------------------------------------------
+------------------------------------------------
 function DefaultTeam.Server:OnShutdown()
 
 end
 
------------------------------------------------
+------------------------------------------------
 -- Client.OnShutdown
 --
 -- Purpose: Called when the team is destroyed
 --	on the client
------------------------------------------------
+------------------------------------------------
 function DefaultTeam.Server:OnShutdown()
 
 end

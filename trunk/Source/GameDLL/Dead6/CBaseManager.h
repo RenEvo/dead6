@@ -14,9 +14,19 @@
 #define _D6C_CBASEMANAGER_H_
 
 #include "IBaseManager.h"
+#include "IBuildingController.h"
 
 class CBaseManager : public IBaseManager
 {
+	// Class name repository
+	typedef std::map<string, BuildingClassID> ClassRepository;
+	BuildingClassID m_nClassNameIDGen;
+	ClassRepository m_ClassNameList;
+
+	// Building controllers
+	typedef std::map<BuildingGUID, IBuildingController*> ControllerList;
+	ControllerList m_ControllerList;
+
 public:
 	////////////////////////////////////////////////////
 	// Constructor
@@ -34,6 +44,15 @@ public:
 
 public:
 	////////////////////////////////////////////////////
+	// GetMemoryStatistics
+	//
+	// Purpose: Used by memory management
+	//
+	// In:	s - Cry Sizer object
+	////////////////////////////////////////////////////
+	virtual void GetMemoryStatistics(class ICrySizer *s);
+
+	////////////////////////////////////////////////////
 	// Initialize
 	//
 	// Purpose: One-time initialization at the start
@@ -48,67 +67,41 @@ public:
 	virtual void Shutdown(void);
 
 	////////////////////////////////////////////////////
-	// SetTeamManager
+	// CreateBuildingController
 	//
-	// Purpose: Set the team manager
+	// Purpose: Create a building controller
 	//
-	// In:	pTM - Team manager to use
+	// In:	szTeam - Team that owns the controller
+	//		szName - Class name to use for controller
+	//		pAttr - XML node containing attributes for it
+	//
+	// Out:	ppController - Optional controller catcher
+	//
+	// Returns the building's GUID or GUID_INVALID on error
 	////////////////////////////////////////////////////
-	virtual void SetTeamManager(ITeamManager const* pTM);
-
-	////////////////////////////////////////////////////
-	// GetTeamManager
-	//
-	// Purpose; Returns the team manager in use
-	////////////////////////////////////////////////////
-	virtual ITeamManager const* GetTeamManager(void) const;
-
-	////////////////////////////////////////////////////
-	// DefineBuildingClass
-	//
-	// Purpose: Define a building class for use
-	//
-	// In:	szName - Building class name
-	//		szScript - Building script to use
-	//
-	// Returns Building CLass ID or BC_INVALID on error
-	////////////////////////////////////////////////////
-	virtual BuildingClassID DefineBuildingClass(char const* szName, char const* szScript);
+	virtual BuildingGUID CreateBuildingController(char const* szTeam, char const* szName,
+		XmlNodeRef pAttr, struct IBuildingController **ppController = NULL);
 
 	////////////////////////////////////////////////////
 	// Reset
 	//
-	// Purpose: Remove all team definitions
+	// Purpose: Clears all loaded BCs and prepares
+	//	for new controller definitions
 	//
-	// Note: Should be called when a level is loading
+	// Note: Should be called at the start of a level
+	//	load
 	////////////////////////////////////////////////////
 	virtual void Reset(void);
 
 	////////////////////////////////////////////////////
-	// GetBuildingClassByName
+	// ResetControllers
 	//
-	// Purpose: Find and returns a building class'
-	//	definition by its name
+	// Purpose: Reset all loaded building controllers
 	//
-	// In:	szName - Building Class name
-	//
-	// Returns team's definition or NULL on error
-	//
-	// Note: Slower, use ID if you have it!
+	// Note: Should be used whenever the "game" is reset,
+	//	like in the Editor
 	////////////////////////////////////////////////////
-	virtual SBuildingClassDef const* GetBuildingClassByName(char const* szName) const;
-
-	////////////////////////////////////////////////////
-	// GetBuildingClassByID
-	//
-	// Purpose: Find and return a building class'
-	//	definition by its ID
-	//
-	// In:	nID - Building Class ID
-	//
-	// Returns team's definition or NULL on error
-	////////////////////////////////////////////////////
-	virtual SBuildingClassDef const* GetBuildingClassByID(BuildingClassID const& nID) const;
+	virtual void ResetControllers(void);
 };
 
 #endif //_D6C_CBASEMANAGER_H_
