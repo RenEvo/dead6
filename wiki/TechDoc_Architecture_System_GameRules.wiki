@@ -1,0 +1,45 @@
+#summary System Feature - Dead6 GameRules
+
+= Overview =
+
+The Dead6 GameRules is derived from the Crysis' GameRules (CGameRules) and handles the specific rules of the Dead 6 Core. Mainly, it is used to overwrite the team management code present in Crysis, and instead delegate the workload to the Team Manager.
+
+
+= Functionality =
+
+== !D6GameRules ==
+Below are the methods defined in the !D6GameRules module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !ClearAllTeams _* ===
+*Purpose*:
+loaded in the gamerules and removes all
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+[TechDoc_Architecture Back]
