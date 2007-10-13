@@ -19,12 +19,15 @@ The following sections will outline the system and game features present in the 
 == System Features ==
 
  * [TechDoc_Architecture_System_TeamManager Team Manager]
+ * [TechDoc_Architecture_System_TeamManager Base Manager]
+ * [TechDoc_Architecture_System_TeamManager Building Controller]
  * [TechDoc_Architecture_System_Purchase Purchase System]
 
 == Game Features ==
 
- * [TechDoc_Architecture_Game_CNCRules CNC Game Rules]
- * [TechDoc_Architecture_Game_CNCTeams CNC Teams]
+ * [TechDoc_Architecture_Game_CNCRules CNC Game Rules (XML/Lua)]
+ * [TechDoc_Architecture_Game_CNCTeams CNC Teams (XML/Lua)]
+ * [TechDoc_Architecture_Game_CNCBuildingClasses CNC Building Classes (XML/Lua)]
 
 = Appendix =
 
