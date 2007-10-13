@@ -15,11 +15,16 @@
 
 #include "IBaseManager.h"
 #include "IBuildingController.h"
+#include "IEntitySystem.h"
 
+class CBaseManagerEntitySink;
 class CBaseManager : public IBaseManager
 {
+	friend class CBaseManagerEntitySink;
+	CBaseManagerEntitySink *m_pSink;
+
 	// Class name repository
-	typedef std::map<string, BuildingClassID> ClassRepository;
+	typedef std::map<BuildingClassID, string> ClassRepository;
 	BuildingClassID m_nClassNameIDGen;
 	ClassRepository m_ClassNameList;
 
@@ -102,6 +107,108 @@ public:
 	//	like in the Editor
 	////////////////////////////////////////////////////
 	virtual void ResetControllers(void);
+
+	////////////////////////////////////////////////////
+	// Validate
+	//
+	// Purpose: Validates all controllers by (re)setting
+	//	any interfaces to them and checks for errors
+	//
+	// In:	nGUID - Controller GUID to validate or GUID_INVALID
+	//	to validate all controlles
+	//
+	// Note: Should be called at least once after level
+	//	has loaded and when game is reset
+	////////////////////////////////////////////////////
+	virtual void Validate(BuildingGUID nGUID = GUID_INVALID);
+
+	////////////////////////////////////////////////////
+	// FindBuildingController
+	//
+	// Purpose: Find the building controller with the
+	//	given GUID
+	//
+	// In:	nGUID - GUID to use
+	//
+	// Returns building controller's object or NULL on
+	//	error
+	////////////////////////////////////////////////////
+	virtual IBuildingController *FindBuildingController(BuildingGUID nGUID) const;
+
+	////////////////////////////////////////////////////
+	// GetClassName
+	//
+	// Purpose: Returns the name of the given class
+	//
+	// In:	nClassID - ID of the class
+	////////////////////////////////////////////////////
+	virtual const char *GetClassName(BuildingClassID nClassID) const;
+
+	////////////////////////////////////////////////////
+	// GetClassId
+	//
+	// Purpose: Returns the ID of the class with the
+	//	given ID
+	//
+	// In:	szName - Name to search for
+	////////////////////////////////////////////////////
+	virtual BuildingClassID GetClassId(char const* szName) const;
+
+	////////////////////////////////////////////////////
+	// IsValidClass
+	//
+	// Purpose: Returns TRUE if the specified class ID or
+	//	name is valid
+	//
+	// In:	nID - Class ID
+	//		szName - Name of the class
+	//
+	// Note: Using the name is slower than the ID!
+	////////////////////////////////////////////////////
+	virtual bool IsValidClass(BuildingClassID nID) const;
+	virtual bool IsValidClass(char const* szName) const;
+
+	////////////////////////////////////////////////////
+	// GenerateGUID
+	//
+	// Purpose: Generates a Building GUID given the
+	//	team and class names
+	//
+	// In:	szTeam - Team name
+	//		szClass - Class name
+	//
+	// Returns building GUID or GUID_INVALID on error
+	////////////////////////////////////////////////////
+	virtual BuildingGUID GenerateGUID(char const* szTeam, char const* szClass) const;
+};
+
+////////////////////////////////////////////////////
+////////////////////////////////////////////////////
+
+class CBaseManagerEntitySink : public IEntitySystemSink
+{
+	CBaseManager *m_pManager;
+
+public:
+	////////////////////////////////////////////////////
+	// Constructor
+	//
+	// In:	pManager - Base manager
+	////////////////////////////////////////////////////
+	CBaseManagerEntitySink(CBaseManager *pManager);
+
+	////////////////////////////////////////////////////
+	// Destructor
+	////////////////////////////////////////////////////
+	virtual ~CBaseManagerEntitySink(void);
+
+	////////////////////////////////////////////////////
+	// Callbacks
+	////////////////////////////////////////////////////
+	virtual bool OnBeforeSpawn(SEntitySpawnParams &params);
+	virtual void OnSpawn(IEntity *pEntity, SEntitySpawnParams &params);
+	virtual bool OnRemove(IEntity *pEntity);
+	virtual void OnEvent(IEntity *pEntity, SEntityEvent &event);
 };
 
 #endif //_D6C_CBASEMANAGER_H_

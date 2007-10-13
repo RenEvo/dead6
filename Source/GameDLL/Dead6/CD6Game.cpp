@@ -17,6 +17,7 @@
 // Script binds
 #include "ScriptBind_BaseManager.h"
 #include "ScriptBind_TeamManager.h"
+#include "ScriptBind_BuildingController.h"
 
 ////////////////////////////////////////////////////
 CD6Game::CD6Game(void)
@@ -24,6 +25,7 @@ CD6Game::CD6Game(void)
 	g_pGame = this;
 	m_pScriptBindBaseManager = NULL;
 	m_pScriptBindTeamManager = NULL;
+	m_pScriptBindBuildingController = NULL;
 }
 
 ////////////////////////////////////////////////////
@@ -141,6 +143,7 @@ void CD6Game::InitScriptBinds()
 {
 	m_pScriptBindBaseManager = new CScriptBind_BaseManager(m_pFramework->GetISystem());
 	m_pScriptBindTeamManager = new CScriptBind_TeamManager(m_pFramework->GetISystem());
+	m_pScriptBindBuildingController = new CScriptBind_BuildingController(m_pFramework->GetISystem(), m_pFramework);
 
 	// Base script bind init
 	CGame::InitScriptBinds();
@@ -151,6 +154,7 @@ void CD6Game::ReleaseScriptBinds()
 {
 	SAFE_DELETE(m_pScriptBindBaseManager);
 	SAFE_DELETE(m_pScriptBindTeamManager);
+	SAFE_DELETE(m_pScriptBindBuildingController);
 
 	// Base script bind release
 	CGame::ReleaseScriptBinds();
@@ -215,7 +219,10 @@ void CD6Game::OnLoadingStart(ILevelInfo *pLevel)
 ////////////////////////////////////////////////////
 void CD6Game::OnLoadingComplete(ILevel *pLevel)
 {
-	// TODO Post load on team and base managers for validation checks
+	assert(g_D6Core->pBaseManager);
+
+	// Validate controllers
+	g_D6Core->pBaseManager->Validate();
 }
 
 ////////////////////////////////////////////////////

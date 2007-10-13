@@ -229,7 +229,7 @@ public:
 	// In:	nTeamID - ID of team
 	//		nSpawnGroupId - ID of spawn group to use
 	////////////////////////////////////////////////////
-	virtual void SetTeamDefaultSpawnGroup(int nTeamID, EntityId nSpawnGroupId);
+	virtual void SetTeamDefaultSpawnGroup(TeamID nTeamID, EntityId nSpawnGroupId);
 
 	////////////////////////////////////////////////////
 	// GetTeamDefaultSpawnGroup
@@ -241,7 +241,7 @@ public:
 	//
 	// Returns ID of the spawn group
 	////////////////////////////////////////////////////
-	virtual EntityId GetTeamDefaultSpawnGroup(int nTeamID) const;
+	virtual EntityId GetTeamDefaultSpawnGroup(TeamID nTeamID) const;
 
 	////////////////////////////////////////////////////
 	// RemoveTeamDefaultSpawnGroup
@@ -251,7 +251,7 @@ public:
 	//
 	// In:	nTeamID - ID of team
 	////////////////////////////////////////////////////
-	virtual void RemoveTeamDefaultSpawnGroup(int nTeamID);
+	virtual void RemoveTeamDefaultSpawnGroup(TeamID nTeamID);
 
 	////////////////////////////////////////////////////
 	// RemoveDefaultSpawnGroupFromTeams
@@ -262,6 +262,20 @@ public:
 	// In:	nSpawnGroupId - ID of spawn group to remove
 	////////////////////////////////////////////////////
 	virtual void RemoveDefaultSpawnGroupFromTeams(EntityId nSpawnGroupId);
+
+	////////////////////////////////////////////////////
+	// IsValidTeam
+	//
+	// Purpose: Returns TRUE if the specified team ID or
+	//	name is valid
+	//
+	// In:	nID - Team ID
+	//		szName - Name of the team
+	//
+	// Note: Using the name is slower than the ID!
+	////////////////////////////////////////////////////
+	virtual bool IsValidTeam(TeamID nID) const;
+	virtual bool IsValidTeam(char const* szName) const;
 };
 
 #endif //_D6C_CTEAMMANAGER_H_

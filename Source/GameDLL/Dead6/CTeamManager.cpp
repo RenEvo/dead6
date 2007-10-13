@@ -341,7 +341,7 @@ TeamID CTeamManager::GetTeam(EntityId nEntityID) const
 }
 
 ////////////////////////////////////////////////////
-void CTeamManager::SetTeamDefaultSpawnGroup(int nTeamID, EntityId nSpawnGroupId)
+void CTeamManager::SetTeamDefaultSpawnGroup(TeamID nTeamID, EntityId nSpawnGroupId)
 {
 	// Find team entry
 	TeamMap::iterator itEntry = m_TeamMap.find(nTeamID);
@@ -352,7 +352,7 @@ void CTeamManager::SetTeamDefaultSpawnGroup(int nTeamID, EntityId nSpawnGroupId)
 }
 
 ////////////////////////////////////////////////////
-EntityId CTeamManager::GetTeamDefaultSpawnGroup(int nTeamID) const
+EntityId CTeamManager::GetTeamDefaultSpawnGroup(TeamID nTeamID) const
 {
 	// Find team entry
 	TeamMap::const_iterator itEntry = m_TeamMap.find(nTeamID);
@@ -361,7 +361,7 @@ EntityId CTeamManager::GetTeamDefaultSpawnGroup(int nTeamID) const
 }
 
 ////////////////////////////////////////////////////
-void CTeamManager::RemoveTeamDefaultSpawnGroup(int nTeamID)
+void CTeamManager::RemoveTeamDefaultSpawnGroup(TeamID nTeamID)
 {
 	// Find team entry
 	TeamMap::iterator itEntry = m_TeamMap.find(nTeamID);
@@ -383,4 +383,21 @@ void CTeamManager::RemoveDefaultSpawnGroupFromTeams(EntityId nSpawnGroupId)
 			itTeam->second.nSpawnGroupID = 0;
 		}
 	}
+}
+
+////////////////////////////////////////////////////
+bool CTeamManager::IsValidTeam(TeamID nID) const
+{
+	TeamMap::const_iterator itTeam = m_TeamMap.find(nID);
+	return (itTeam != m_TeamMap.end());
+}
+bool CTeamManager::IsValidTeam(char const* szName) const
+{
+	for (TeamMap::const_iterator itTeam = m_TeamMap.begin(); itTeam != m_TeamMap.end();
+		itTeam++)
+	{
+		if (itTeam->second.szName == szName)
+			return true;
+	}
+	return false;
 }

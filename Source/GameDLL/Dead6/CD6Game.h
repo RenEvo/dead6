@@ -22,6 +22,7 @@
 
 class CScriptBind_BaseManager;
 class CScriptBind_TeamManager;
+class CScriptBind_BuildingController;
 
 class CD6GameRules;
 
@@ -64,6 +65,14 @@ public:
 	// Purpose: Returns the script bind for the team manager
 	////////////////////////////////////////////////////
 	virtual CScriptBind_TeamManager *GetTeamManagerScriptBind() { return m_pScriptBindTeamManager; }
+
+	////////////////////////////////////////////////////
+	// GetBuildingControllerScriptBind
+	//
+	// Purpose: Returns the script bind for the
+	//	building controller
+	////////////////////////////////////////////////////
+	virtual CScriptBind_BuildingController *GetBuildingControllerScriptBind() { return m_pScriptBindBuildingController; }
 
 
 	////////////////////////////////////////////////////
@@ -123,6 +132,7 @@ protected:
 
 	CScriptBind_BaseManager *m_pScriptBindBaseManager;
 	CScriptBind_TeamManager *m_pScriptBindTeamManager;
+	CScriptBind_BuildingController *m_pScriptBindBuildingController;
 };
 
 #endif //_D6C_CD6GAME_H_
