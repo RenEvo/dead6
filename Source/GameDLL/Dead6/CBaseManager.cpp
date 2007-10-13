@@ -187,22 +187,64 @@ void CBaseManager::ResetControllers(void)
 ////////////////////////////////////////////////////
 void CBaseManager::Validate(BuildingGUID nGUID)
 {
+	ControllerList ValidateList;
 	ControllerList::iterator itBuilding = m_ControllerList.begin();
 	if (GUID_INVALID != nGUID)
 	{
 		// Find it
 		itBuilding = m_ControllerList.find(nGUID);
+
+		// Check if it is ready to be validated
+		if (true == itBuilding->second->BeforeValidate())
+			ValidateList[itBuilding->first] = itBuilding->second;
+	}
+	else
+	{
+		// Check all of them
+		for (itBuilding; itBuilding != m_ControllerList.end(); itBuilding++)
+		{
+			if (true == itBuilding->second->BeforeValidate())
+				ValidateList[itBuilding->first] = itBuilding->second;
+		}
+	}
+	if (true == ValidateList.empty()) return; // Must have something to continue with
+
+	// Look for new interfaces and tell them they now represent me
+	IEntity *pEntity = NULL;
+	IEntitySystem *pES = gEnv->pEntitySystem;
+	IEntityItPtr pIt = pES->GetEntityIterator();
+	while (false == pIt->IsEnd())
+	{
+		if (NULL != (pEntity = pIt->Next()))
+		{
+			// Check if it has a CNCBuilding property table and that it is
+			//	interfacing this particular one
+			IScriptTable *pTable;
+			if (NULL != pEntity && NULL != (pTable = pEntity->GetScriptTable()))
+			{
+				// Get property table
+				SmartScriptTable props, cncbuilding;
+				if (true == pTable->GetValue("Properties", props) &&
+					true == props->GetValue("CNCBuilding", cncbuilding))
+				{
+					// Extract and build GUID
+					char const* szTeam = 0;
+					char const* szClass = 0;
+					cncbuilding->GetValue("Team", szTeam);
+					cncbuilding->GetValue("Class", szClass);
+					BuildingGUID GUID = g_D6Core->pBaseManager->GenerateGUID(szTeam, szClass);
+					itBuilding = ValidateList.find(GUID);
+					if (itBuilding != ValidateList.end())
+						itBuilding->second->AddInterface(pEntity);
+				}
+			}
+		}
 	}
 
-	// Iterate through list. If we specified a specific, iterator it already pointing
-	//	to it
-	for (itBuilding; itBuilding != m_ControllerList.end(); itBuilding++)
+	// And finally, validate them all
+	for (itBuilding = ValidateList.begin(); itBuilding != ValidateList.end(); itBuilding++)
 	{
-		// Validate
 		itBuilding->second->Validate();
-
-		// If we specified a GUID, break out at end
-		if (GUID_INVALID != nGUID) break;
 	}
 }
 

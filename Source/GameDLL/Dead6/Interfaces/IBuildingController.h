@@ -57,6 +57,16 @@ struct IBuildingController
 	virtual void Reset(void) = 0;
 
 	////////////////////////////////////////////////////
+	// BeforeValidate
+	//
+	// Purpose: Prepare the controller for validation
+	//
+	// Returns TRUE if validation should proceed, or
+	//	FALSE if it should be skipped
+	////////////////////////////////////////////////////
+	virtual bool BeforeValidate(void) = 0;
+
+	////////////////////////////////////////////////////
 	// Validate
 	//
 	// Purpose: Validate the controller by checking for
