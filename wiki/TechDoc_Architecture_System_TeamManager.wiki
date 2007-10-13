@@ -300,7 +300,7 @@ Based on the [TechDoc_Architecture_Game_CNCRules CNCRules] XML file, each team l
 <Team>GDI</Team>
 }}}
 
-Then the system will look first for "<map>\Teams\XML\GDI.xml" and then "Game\Scripts\Teams\GDI.xml". The attributes contained in this file are used to define the team, including the name, Lua script, and other properties. To view the contents of this file, see [TechDoc_Architecture_Game_CNCTeams here].
+Then the system will look first for "<map>\Teams\XML\GDI.xml" and then "Game\Scripts\Teams\XML\GDI.xml". The attributes contained in this file are used to define the team, including the name, Lua script, and other properties. To view the contents of this file, see [TechDoc_Architecture_Game_CNCTeams here].
 
 
 [TechDoc_Architecture Back]
