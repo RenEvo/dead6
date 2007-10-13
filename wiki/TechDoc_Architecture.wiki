@@ -26,8 +26,8 @@ The following sections will outline the system and game features present in the 
 
 === CNC Logic ===
  * [TechDoc_Architecture_System_TeamManager Team Manager]
- * [TechDoc_Architecture_System_TeamManager Base Manager]
- * [TechDoc_Architecture_System_TeamManager Building Controller]
+ * [TechDoc_Architecture_System_BaseManager Base Manager]
+ * [TechDoc_Architecture_System_BuildingController Building Controller]
  * [TechDoc_Architecture_System_Purchase Purchase System]
 
 == Game Features ==
