@@ -1,0 +1,120 @@
+#summary System Feature - Dead6 Main Game Module
+
+= Overview =
+The Main Game Module is a derived version of the Crysis' Main Game Module (CGame). It handles routine control of game initialization including script bind creation, level loading, and core initialization.
+
+= Functionality =
+
+== !D6Game ==
+Below are the methods defined in the !D6Game module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetD6GameRules _* ===
+*Purpose*:
+Returns OUR game rules
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetBaseManagerScriptBind _* ===
+*Purpose*:
+Returns the script bind for the base manager
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetTeamManagerScriptBind _* ===
+*Purpose*:
+Returns the script bind for the team manager
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetBuildingControllerScriptBind _* ===
+*Purpose*:
+building controller
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !CGame overloads _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !ParseCNCRules_General _* ===
+*Purpose*:
+rules file
+
+*Arguments*:
+ * _pNode_ - `[In]` XML node containing general settings
+
+*Returns*:
+void
+
+
+=== *_ !ParseCNCRules_Teams _* ===
+*Purpose*:
+rules file
+
+*Arguments*:
+ * _pNode_ - `[In]` XML node containing team settings
+
+*Returns*:
+void
+
+
+=== *_ !ParseCNCRules_Buildings _* ===
+*Purpose*:
+rules file
+
+*Arguments*:
+ * _pNode_ - `[In]` XML node containing building settings
+
+*Returns*:
+void
+
+[TechDoc_Architecture Back]
