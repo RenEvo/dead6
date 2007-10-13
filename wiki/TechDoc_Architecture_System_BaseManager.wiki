@@ -1,0 +1,225 @@
+#summary System Feature - Base Manager
+
+= Overview =
+
+The Base Manager is responsible for aggregating all Building Controllers created during the lifetime of the Core. The Manager also listens to the entity system for entity creation/removing and damage reports, and delegates these to the Building Controllers as needed.
+
+The Manager also holds on to a repository of building classes as they are defines, and creates unique IDs for them that are used in creating a building's GUID.
+
+A Script Bind also exists that allows the Script System to communicate with the Base Manager.
+
+= Functionality =
+
+== !BaseManager ==
+Below are the methods defined in the !BaseManager interface.
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+=== *_ Initialize _* ===
+*Purpose*:
+One-time initialization at the start
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Shutdown _* ===
+*Purpose*:
+One-time clean up at the end
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !CreateBuildingController _* ===
+*Purpose*:
+Create a building controller
+
+*Arguments*:
+ * _pAttr_ - `[In]` XML node containing attributes for it
+ * _ppController_ - `[Out]` Optional controller catcher
+ * _szName_ - `[In]` Class name to use for controller
+ * _szTeam_ - `[In]` Team that owns the controller
+
+*Returns*:
+the building's GUID or GUID_INVALID on error
+
+
+=== *_ Reset _* ===
+*Purpose*:
+Clears all loaded BCs and prepares for new controller definitions
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+*Note*:
+Should be called at the start of a level load
+
+=== *_ !ResetControllers _* ===
+*Purpose*:
+Reset all loaded building controllers
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+*Note*:
+Should be used whenever the "game" is reset, like in the Editor
+
+=== *_ Validate _* ===
+*Purpose*:
+Validates all controllers by (re)setting any interfaces to them and checks for errors
+
+*Arguments*:
+ * _nGUID_ - `[In]` Controller GUID to validate or GUID_INVALID to validate all controlles
+
+*Returns*:
+void
+
+*Note*:
+Should be called at least once after level has loaded and when game is reset
+
+=== *_ !FindBuildingController _* ===
+*Purpose*:
+Find the building controller with the given GUID
+
+*Arguments*:
+ * _nGUID_ - `[In]` GUID to use
+
+*Returns*:
+building controller's object or NULL on error
+
+
+=== *_ !GetClassName _* ===
+*Purpose*:
+Returns the name of the given class
+
+*Arguments*:
+ * _nClassID_ - `[In]` ID of the class
+
+*Returns*:
+void
+
+
+=== *_ !GetClassId _* ===
+*Purpose*:
+Returns the ID of the class with the given ID
+
+*Arguments*:
+ * _szName_ - `[In]` Name to search for
+
+*Returns*:
+void
+
+
+=== *_ !IsValidClass _* ===
+*Purpose*:
+Returns TRUE if the specified class ID or name is valid
+
+*Arguments*:
+ * _nID_ - `[In]` Class ID
+ * _szName_ - `[In]` Name of the class
+
+*Returns*:
+void
+
+*Note*:
+Using the name is slower than the ID!
+
+=== *_ !GenerateGUID _* ===
+*Purpose*:
+Generates a Building GUID given the team and class names
+
+*Arguments*:
+ * _szClass_ - `[In]` Class name
+ * _szTeam_ - `[In]` Team name
+
+*Returns*:
+building GUID or GUID_INVALID on error
+
+
+== !ScriptBind_BaseManager ==
+Below are the methods defined in the !ScriptBind_BaseManager module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !AttachTo _* ===
+*Purpose*:
+Attaches binding to a base manager
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+
+= Sub Modules =
+
+== CBaseManagerEntitySink ==
+
+Description: This sub-module derives from the IEntitySystemSink and is used to listen for entity creation/removing and events such as hit reports. It works with the Base Manager to control Building Controller interface adding/removing and OnDamage reports.
+
+= Creating a Building Controller =
+Based on the [TechDoc_Architecture_Game_CNCRules CNCRules] XML file, each building listed in the Buildings section is created through the base manager. The system first looks for the XML file of the listed team in the map's Buildings\XML folder. If not found, the system looks for it in the Game\Scripts\Buildings\XML folder. Therefore, if listed:
+
+{{{
+<Building Team="GDI" Class="Refinery" ... />
+}}}
+
+Then the system will look first for "<map>\Buildings\XML\Refinery.xml" and then "Game\Scripts\Buildings\XML\Refinery.xml". Additional attributes in the Building line are used to overwrite default values used when creating the building controller. These values are defined in the [TechDoc_Architecture_Game_CNCRules CNCRules] XML file. The other attributes used to define the building are contained in its XML file. To view the contents of this file, see [TechDoc_Architecture_Game_CNCBuildingControllers here].
+
+
+[TechDoc_Architecture Back]
