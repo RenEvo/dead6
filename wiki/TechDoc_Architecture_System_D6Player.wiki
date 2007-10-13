@@ -1,0 +1,12 @@
+#summary System Feature - Dead6 Player Entity
+
+= Overview =
+
+The Dead6 Player Entity derives from the Crysis Player Entity and is used to expand on the player for CNC-specific logic, including player credits. The Dead6 Game Factory ensures this module is used to represent in the player in place of the one used in Crysis.
+
+= Functionality =
+
+== !D6Player ==
+Below are the methods defined in the !D6Player module.
+
+[TechDoc_Architecture Back]
