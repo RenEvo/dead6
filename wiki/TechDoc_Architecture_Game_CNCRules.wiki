@@ -10,7 +10,7 @@ The CNC Rules XML file (CNCRules.xml) is a *per-map defined* file. It defines th
  * Building class definitions
  * Environment settings
 
-The default rules file loaded when not defined by a map is located in the !GameRules/XML folder. (Game\Scripts\!GameRules\XML) This file contains the generic CNC rule's contents inherited by all maps that do not define their own.
+The default rules file loaded when not defined by a map is located in the !GameRules\XML folder. (Game\Scripts\!GameRules\XML) This file contains the generic CNC rule's contents inherited by all maps that do not define their own.
 
 A CNC-mode map is free to create their own CNCRules.xml file for use when that map is played. The file must be placed in the level's root folder. An entry must be added to the map's filelist.xml to ensure it is not tampered with on the client's end via the md5 checksum.
 
@@ -24,6 +24,10 @@ This is an example of a typical CNCRules.xml file:
     <Team>GDI</Team>
     <Team>Nod</Team>
   </Teams>
+  <Buildings>
+    <Building Team="GDI" Class="Refinery" InitHealth="500"/>
+    <Building Team="Nod" Class="Refinery" InitHealth="500"/>
+  </Buildings>
   <General>
     <TimeOfDay Hour="9" Minute="45" EnableLoop="0" />
   </General>
@@ -32,6 +36,14 @@ This is an example of a typical CNCRules.xml file:
 
 === Teams ===
 The Teams section specifies what teams are present on this map. Each team is contained within its own _Team_ tag. The name specified must match the filename of the team's XML file, located in the Teams/XML folder. (Game\Scripts\Teams\XML). The team-specific definition file is located in this XML file; here, you are simply telling the Dead 6 Core what files to load and parse for team management.
+
+=== Buildings ===
+Similar to how the Teams section works, this area defines what Building Controllers should be created when the map is loading. Each building controller is contained within its own _Building_ tag. *The _Team_ and _Class_ attributes MUST BE DEFINED!* These are used to not only determine what team owns the controller, but also what XML file should be used to define the controller's attributes. They are also used to construct the building's GUID. For more information on this, see [TechDoc_Architecture_System_BuildingController here].
+
+Below are the attributes that can be defined alongside the _Building_ tag:
+ * Team - The owning team. This name must match the name of the Team specified in the team's XML file.
+ * Class - Building class. This serves two purposes: 1. The name is used in the Class Repository of the [TechDoc_Architecture_System_BaseManager Base Manager] to create a unique ID for it, which is in turn used to create the building's GUID. 2. The name is used to determine which Building XML file should be used to define the controller's attributes. See [TechDoc_Architecture_System_BaseManager here] for more information on how this works.
+ * InitHealth - Initial health of the building. If not specified or invalid, the building's health will be set to its Max value. An invalid value would be negative or greater than the building's Max health. The health of the building is also set to this value whenever it is "Reset".
 
 === General ===
 The General section defines general items for the map, such as environment settings. The following items can be defined here to give you more control over your map:
