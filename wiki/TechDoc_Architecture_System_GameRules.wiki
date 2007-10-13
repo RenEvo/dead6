@@ -34,7 +34,7 @@ void
 
 === *_ !ClearAllTeams _* ===
 *Purpose*:
-loaded in the gamerules and removes all
+Clears all teams that are currently loaded in the gamerules and removes all actor/player team definitions that may be loaded
 
 *Arguments*:
 void
