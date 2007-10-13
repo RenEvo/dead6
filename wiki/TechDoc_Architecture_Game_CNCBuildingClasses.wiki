@@ -1,0 +1,30 @@
+#summary Game Feature - CNC Building Classes
+
+= Overview =
+A Building Class represents a unique building in CNC rules. Combined with an owning team, a Building Class becomes a living Building Controller which in turn has its own interface entities that allow players to communicate with the building. A Building Class has its own XML file that is used to define its attributes and a Lua Script that is used to define its behaviors.
+
+
+= Building Class XML File =
+The Building Class XML file is the blueprint for a class. It defines the class' attributes and is the lookup book used by the Dead 6 Core to create the a Building Controller. When a Building Controller is created, the class' XML file is loaded from the Buildings\XML folder. (Game\Scripts\Buildings\XML)
+
+== Sample XML File ==
+This is an example of a typical building class XML file:
+{{{
+<?xml version="1.0" encoding="utf-8"?>
+<Refinery Name="Refinery" Script="Refinery.lua" MaxHealth="500" />
+}}}
+
+The Building Class' tag's attributes are as such:
+ * Name - The name of the building class. This must match the script table defined in its Lua script.
+ * Script - The Lua script inherited and used by the Building Controller for building behavior.
+
+
+= Building Class LUA File =
+Each Building Controller has the ability to run a Lua script along side it to handle building behaviors. Special callbacks are made to it to control when the building gains/losses an interface, when the building is damaged, and when special events take place on the building such as power loss.
+
+== Script Functionality ==
+All callbacks have a separate server and client path that are called on the server and local client's ends, respectively.
+
+TODO
+
+[TechDoc_Architecture Back]
