@@ -65,7 +65,7 @@ void
 
 === *_ !GetBuildingControllerScriptBind _* ===
 *Purpose*:
-building controller
+Returns the script bind for the building controller
 
 *Arguments*:
 void
@@ -87,7 +87,7 @@ void
 
 === *_ !ParseCNCRules_General _* ===
 *Purpose*:
-rules file
+Parses the general settings of the CNC rules file
 
 *Arguments*:
  * _pNode_ - `[In]` XML node containing general settings
@@ -98,7 +98,7 @@ void
 
 === *_ !ParseCNCRules_Teams _* ===
 *Purpose*:
-rules file
+Parses the team settings of the CNC rules file
 
 *Arguments*:
  * _pNode_ - `[In]` XML node containing team settings
@@ -109,7 +109,7 @@ void
 
 === *_ !ParseCNCRules_Buildings _* ===
 *Purpose*:
-rules file
+Parses the buildings settings of the CNC rules file
 
 *Arguments*:
  * _pNode_ - `[In]` XML node containing building settings
