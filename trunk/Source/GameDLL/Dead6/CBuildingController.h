@@ -89,6 +89,16 @@ public:
 	virtual void Reset(void);
 
 	////////////////////////////////////////////////////
+	// BeforeValidate
+	//
+	// Purpose: Prepare the controller for validation
+	//
+	// Returns TRUE if validation should proceed, or
+	//	FALSE if it should be skipped
+	////////////////////////////////////////////////////
+	virtual bool BeforeValidate(void);
+
+	////////////////////////////////////////////////////
 	// Validate
 	//
 	// Purpose: Validate the controller by checking for

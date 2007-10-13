@@ -83,7 +83,7 @@ void CBuildingController::Reset(void)
 }
 
 ////////////////////////////////////////////////////
-void CBuildingController::Validate(void)
+bool CBuildingController::BeforeValidate(void)
 {
 	// Reset interface list and inform all interfaces they no longer represent me
 	for (InterfaceMap::iterator itI = m_Interfaces.begin(); itI != m_Interfaces.end(); itI++)
@@ -92,40 +92,12 @@ void CBuildingController::Validate(void)
 	}
 	m_Interfaces.clear();
 
-	// Look for new interfaces and tell them they now represent me
-	IEntity *pEntity = NULL;
-	IEntitySystem *pES = gEnv->pEntitySystem;
-	IEntityItPtr pIt = pES->GetEntityIterator();
-	while (false == pIt->IsEnd())
-	{
-		if (NULL != (pEntity = pIt->Next()))
-		{
-			// Check if it has a CNCBuilding property table and that it is
-			//	interfacing this particular one
-			IScriptTable *pTable;
-			if (NULL != pEntity && NULL != (pTable = pEntity->GetScriptTable()))
-			{
-				// Get property table
-				SmartScriptTable props, cncbuilding;
-				if (true == pTable->GetValue("Properties", props) &&
-					true == props->GetValue("CNCBuilding", cncbuilding))
-				{
-					// Extract and build GUID
-					char const* szTeam = 0;
-					char const* szClass = 0;
-					cncbuilding->GetValue("Team", szTeam);
-					cncbuilding->GetValue("Class", szClass);
-					BuildingGUID GUID = g_D6Core->pBaseManager->GenerateGUID(szTeam, szClass);
-					if (GUID == m_nGUID)
-					{
-						// Add it
-						AddInterface(pEntity);
-					}
-				}
-			}
-		}
-	}
+	return true;
+}
 
+////////////////////////////////////////////////////
+void CBuildingController::Validate(void)
+{
 	// If no interfaces are found, warning and turn off bMustBeDestroyed
 	if (true == m_Interfaces.empty())
 	{
