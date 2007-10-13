@@ -1220,6 +1220,14 @@
 					RelativePath=".\Dead6\ScriptBind_BaseManager.h"
 					>
 				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_BuildingController.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_BuildingController.h"
+					>
+				</File>
 			</Filter>
 			<Filter
 				Name="Core Startup Files"

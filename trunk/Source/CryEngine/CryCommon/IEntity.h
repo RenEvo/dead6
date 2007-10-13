@@ -381,6 +381,9 @@ enum EEntityFlags
   ENTITY_FLAG_RECVWIND	    				   = BIT(29),  // Receives wind
 	ENTITY_FLAG_LOCAL_PLAYER             = BIT(30),
 
+	// [D6] Special flag - Used to mark if an entity is an interface to a building
+	ENTITY_FLAG_ISINTERFACE				= BIT(31),
+	// [/D6]
 };
 
 //////////////////////////////////////////////////////////////////////////

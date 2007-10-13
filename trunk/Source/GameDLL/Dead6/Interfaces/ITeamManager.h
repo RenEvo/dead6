@@ -245,7 +245,7 @@ struct ITeamManager
 	// In:	nTeamID - ID of team
 	//		nSpawnGroupId - ID of spawn group to use
 	////////////////////////////////////////////////////
-	virtual void SetTeamDefaultSpawnGroup(int nTeamID, EntityId nSpawnGroupId) = 0;
+	virtual void SetTeamDefaultSpawnGroup(TeamID nTeamID, EntityId nSpawnGroupId) = 0;
 
 	////////////////////////////////////////////////////
 	// GetTeamDefaultSpawnGroup
@@ -257,7 +257,7 @@ struct ITeamManager
 	//
 	// Returns ID of the spawn group
 	////////////////////////////////////////////////////
-	virtual EntityId GetTeamDefaultSpawnGroup(int nTeamID) const = 0;
+	virtual EntityId GetTeamDefaultSpawnGroup(TeamID nTeamID) const = 0;
 
 	////////////////////////////////////////////////////
 	// RemoveTeamDefaultSpawnGroup
@@ -267,7 +267,7 @@ struct ITeamManager
 	//
 	// In:	nTeamID - ID of team
 	////////////////////////////////////////////////////
-	virtual void RemoveTeamDefaultSpawnGroup(int nTeamID) = 0;
+	virtual void RemoveTeamDefaultSpawnGroup(TeamID nTeamID) = 0;
 
 	////////////////////////////////////////////////////
 	// RemoveDefaultSpawnGroupFromTeams
@@ -278,6 +278,20 @@ struct ITeamManager
 	// In:	nSpawnGroupId - ID of spawn group to remove
 	////////////////////////////////////////////////////
 	virtual void RemoveDefaultSpawnGroupFromTeams(EntityId nSpawnGroupId) = 0;
+
+	////////////////////////////////////////////////////
+	// IsValidTeam
+	//
+	// Purpose: Returns TRUE if the specified team ID or
+	//	name is valid
+	//
+	// In:	nID - Team ID
+	//		szName - Name of the team
+	//
+	// Note: Using the name is slower than the ID!
+	////////////////////////////////////////////////////
+	virtual bool IsValidTeam(TeamID nID) const = 0;
+	virtual bool IsValidTeam(char const* szName) const = 0;
 };
 
 #endif //_D6C_ITEAMMANAGER_H_

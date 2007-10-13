@@ -35,6 +35,7 @@ end
 ------------------------------------------------
 function Refinery.Client:OnInit()
 	System.Log("Refinery.Client:OnInit()");
+	self.controller:Test(5);
 end
 
 ------------------------------------------------

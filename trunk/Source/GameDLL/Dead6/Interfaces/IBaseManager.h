@@ -32,25 +32,8 @@ typedef unsigned int BuildingGUID;
 // Make a building GUID quickly
 ////////////////////////////////////////////////////
 #define MAKE_BUILDING_GUID(TEAMID, CLASSID) ((((TeamID)TEAMID)<<16)|(BuildingClassID)CLASSID)
-
-
-////////////////////////////////////////////////////
-//	Building class definition structure
-//struct SBuildingClassDef
-//{
-//	// Building class ID
-//	BuildingClassID nID;
-//
-//	// Building class name
-//	string szName;
-//
-//	// Building class script file
-//	string szScript;
-//
-//	// XML file
-//	string szXML;
-//};
-
+#define GET_TEAM_FROM_GUID(GUID) ((GUID&0xFFFF0000)>>16)
+#define GET_CLASS_FROM_GUID(GUID) (GUID&0x0000FFFF)
 
 ////////////////////////////////////////////////////
 struct IBaseManager
@@ -119,6 +102,79 @@ struct IBaseManager
 	//	like in the Editor
 	////////////////////////////////////////////////////
 	virtual void ResetControllers(void) = 0;
+
+	////////////////////////////////////////////////////
+	// Validate
+	//
+	// Purpose: Validates all controllers by (re)setting
+	//	any interfaces to them and checks for errors
+	//
+	// In:	nGUID - Controller GUID to validate or GUID_INVALID
+	//	to validate all controlles
+	//
+	// Note: Should be called at least once after level
+	//	has loaded and when game is reset
+	////////////////////////////////////////////////////
+	virtual void Validate(BuildingGUID nGUID = GUID_INVALID) = 0;
+
+	////////////////////////////////////////////////////
+	// FindBuildingController
+	//
+	// Purpose: Find the building controller with the
+	//	given GUID
+	//
+	// In:	nGUID - GUID to use
+	//
+	// Returns building controller's object or NULL on
+	//	error
+	////////////////////////////////////////////////////
+	virtual IBuildingController *FindBuildingController(BuildingGUID nGUID) const = 0;
+
+	////////////////////////////////////////////////////
+	// GetClassName
+	//
+	// Purpose: Returns the name of the given class
+	//
+	// In:	nClassID - ID of the class
+	////////////////////////////////////////////////////
+	virtual const char *GetClassName(BuildingClassID nClassID) const = 0;
+
+	////////////////////////////////////////////////////
+	// GetClassId
+	//
+	// Purpose: Returns the ID of the class with the
+	//	given ID
+	//
+	// In:	szName - Name to search for
+	////////////////////////////////////////////////////
+	virtual BuildingClassID GetClassId(char const* szName) const = 0;
+
+	////////////////////////////////////////////////////
+	// IsValidClass
+	//
+	// Purpose: Returns TRUE if the specified class ID or
+	//	name is valid
+	//
+	// In:	nID - Class ID
+	//		szName - Name of the class
+	//
+	// Note: Using the name is slower than the ID!
+	////////////////////////////////////////////////////
+	virtual bool IsValidClass(BuildingClassID nID) const = 0;
+	virtual bool IsValidClass(char const* szName) const = 0;
+
+	////////////////////////////////////////////////////
+	// GenerateGUID
+	//
+	// Purpose: Generates a Building GUID given the
+	//	team and class names
+	//
+	// In:	szTeam - Team name
+	//		szClass - Class name
+	//
+	// Returns building GUID or GUID_INVALID on error
+	////////////////////////////////////////////////////
+	virtual BuildingGUID GenerateGUID(char const* szTeam, char const* szClass) const = 0;
 };
 
 #endif //_D6C_IBASEMANAGER_H_

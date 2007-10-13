@@ -13,6 +13,7 @@
 
 #include "stdafx.h"
 #include "CBuildingController.h"
+#include "ScriptBind_BuildingController.h"
 
 ////////////////////////////////////////////////////
 CBuildingController::CBuildingController(void)
@@ -59,6 +60,13 @@ void CBuildingController::Shutdown(void)
 		m_pSS->UnloadScript(m_szScript);
 		m_pSS = NULL;
 	}
+
+	// Reset interface list and inform all interfaces they no longer represent me
+	for (InterfaceMap::iterator itI = m_Interfaces.begin(); itI != m_Interfaces.end(); itI++)
+	{
+		(*itI)->ClearFlags(ENTITY_FLAG_ISINTERFACE);
+	}
+	m_Interfaces.clear();
 }
 
 ////////////////////////////////////////////////////
@@ -72,6 +80,60 @@ void CBuildingController::Reset(void)
 	END_CALL(m_pSS)
 	BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnReset")
 	END_CALL(m_pSS)
+}
+
+////////////////////////////////////////////////////
+void CBuildingController::Validate(void)
+{
+	// Reset interface list and inform all interfaces they no longer represent me
+	for (InterfaceMap::iterator itI = m_Interfaces.begin(); itI != m_Interfaces.end(); itI++)
+	{
+		(*itI)->ClearFlags(ENTITY_FLAG_ISINTERFACE);
+	}
+	m_Interfaces.clear();
+
+	// Look for new interfaces and tell them they now represent me
+	IEntity *pEntity = NULL;
+	IEntitySystem *pES = gEnv->pEntitySystem;
+	IEntityItPtr pIt = pES->GetEntityIterator();
+	while (false == pIt->IsEnd())
+	{
+		if (NULL != (pEntity = pIt->Next()))
+		{
+			// Check if it has a CNCBuilding property table and that it is
+			//	interfacing this particular one
+			IScriptTable *pTable;
+			if (NULL != pEntity && NULL != (pTable = pEntity->GetScriptTable()))
+			{
+				// Get property table
+				SmartScriptTable props, cncbuilding;
+				if (true == pTable->GetValue("Properties", props) &&
+					true == props->GetValue("CNCBuilding", cncbuilding))
+				{
+					// Extract and build GUID
+					char const* szTeam = 0;
+					char const* szClass = 0;
+					cncbuilding->GetValue("Team", szTeam);
+					cncbuilding->GetValue("Class", szClass);
+					BuildingGUID GUID = g_D6Core->pBaseManager->GenerateGUID(szTeam, szClass);
+					if (GUID == m_nGUID)
+					{
+						// Add it
+						AddInterface(pEntity);
+					}
+				}
+			}
+		}
+	}
+
+	// If no interfaces are found, warning and turn off bMustBeDestroyed
+	if (true == m_Interfaces.empty())
+	{
+		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
+			0, 0, "Building \'%s\' \'%s\' (GUID = %u) has no interfaces! bMustBeDestroyed forced to FALSE.",
+			GetTeamName(), GetClassName(), m_nGUID);
+		// TODO Set bMustBeDestroyed to TRUE
+	}
 }
 
 ////////////////////////////////////////////////////
@@ -132,6 +194,12 @@ bool CBuildingController::LoadFromXml(char const* szName)
 	}
 	else
 	{
+		// Attach it to the building controller script bind
+		if (NULL != g_D6Core->pD6Game)
+		{
+			g_D6Core->pD6Game->GetBuildingControllerScriptBind()->AttachTo(this);
+		}
+
 		// Call OnInit
 		BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnInit")
 		END_CALL(m_pSS)
@@ -140,4 +208,92 @@ bool CBuildingController::LoadFromXml(char const* szName)
 	}
 
 	return true;
+}
+
+////////////////////////////////////////////////////
+BuildingGUID CBuildingController::GetGUID(void) const
+{
+	return m_nGUID;
+}
+
+////////////////////////////////////////////////////
+IScriptTable *CBuildingController::GetScriptTable(void) const
+{
+	return m_pScriptTable;
+}
+
+////////////////////////////////////////////////////
+TeamID CBuildingController::GetTeam(void) const
+{
+	TeamID nID = GET_TEAM_FROM_GUID(m_nGUID);
+	if (NULL == g_D6Core->pTeamManager || false == g_D6Core->pTeamManager->IsValidTeam(nID))
+		return TEAMID_NOTEAM;
+	return nID;
+}
+
+////////////////////////////////////////////////////
+char const* CBuildingController::GetTeamName(void) const
+{
+	TeamID nID = GET_TEAM_FROM_GUID(m_nGUID);
+	if (NULL == g_D6Core->pTeamManager || false == g_D6Core->pTeamManager->IsValidTeam(nID))
+		return TEAMID_NOTEAM;
+	return g_D6Core->pTeamManager->GetTeamName(nID);
+}
+
+////////////////////////////////////////////////////
+BuildingClassID CBuildingController::GetClass(void) const
+{
+	BuildingClassID nID = GET_CLASS_FROM_GUID(m_nGUID);
+	if (NULL == g_D6Core->pBaseManager || false == g_D6Core->pBaseManager->IsValidClass(nID))
+		return BC_INVALID;
+	return nID;
+}
+
+////////////////////////////////////////////////////
+char const* CBuildingController::GetClassName(void) const
+{
+	BuildingClassID nID = GET_CLASS_FROM_GUID(m_nGUID);
+	if (NULL == g_D6Core->pBaseManager || false == g_D6Core->pBaseManager->IsValidClass(nID))
+		return BC_INVALID;
+	return g_D6Core->pBaseManager->GetClassName(nID);
+}
+
+////////////////////////////////////////////////////
+bool CBuildingController::AddInterface(IEntity *pEntity)
+{
+	if (NULL == pEntity) return false;
+
+	// Check to see if it already is an interface
+	if (true == pEntity->CheckFlags(ENTITY_FLAG_ISINTERFACE))
+		return false;
+
+	// Check to see if it isn't already in the list
+	for (InterfaceMap::iterator itI = m_Interfaces.begin(); itI != m_Interfaces.end(); itI++)
+	{
+		if ((*itI)->GetId() == pEntity->GetId())
+			return true;
+	}
+	
+	// Set the flag and add it
+	pEntity->AddFlags(ENTITY_FLAG_ISINTERFACE);
+	m_Interfaces.push_back(pEntity);
+	//CryLog("[%s %s] Added interface %d", GetTeamName(), GetClassName(), pEntity->GetId());
+	return true;
+}
+
+////////////////////////////////////////////////////
+void CBuildingController::RemoveInterface(IEntity *pEntity)
+{
+	if (NULL == pEntity) return;
+
+	// Find it
+	for (InterfaceMap::iterator itI = m_Interfaces.begin(); itI != m_Interfaces.end(); itI++)
+	{
+		if ((*itI)->GetId() == pEntity->GetId())
+		{
+			pEntity->ClearFlags(ENTITY_FLAG_ISINTERFACE);
+			m_Interfaces.erase(itI);
+			return;
+		}
+	}
 }
