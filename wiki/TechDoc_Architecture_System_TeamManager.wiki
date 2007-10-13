@@ -5,6 +5,8 @@ The Team Manager module is responsible for managing the defined teams. Teams are
 
 The current team management code present in the Crysis codebase is stripped out and migrated into the Team Manager module. As such, some functionality present in the module is there for backwards compatibility.
 
+A Script Bind also exists that allows the Script System to communicate with the Team Manager.
+
 = Functionality =
 
 == !TeamManager ==
@@ -277,6 +279,42 @@ void
 
 *Note*:
 Using the name is slower than the ID!
+
+
+== !ScriptBind_TeamManager ==
+Below are the methods defined in the !ScriptBind_TeamManager module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !AttachTo _* ===
+*Purpose*:
+Attaches binding to a team manager
+
+*Arguments*:
+void
+
+*Returns*:
+void
 
 
 = Sub Modules =
