@@ -45,7 +45,7 @@ void
 
 === *_ Reset _* ===
 *Purpose*:
-for new team definitions
+Clears all loaded teams and prepares for new team definitions
 
 *Arguments*:
 void
@@ -54,7 +54,7 @@ void
 void
 
 *Note*:
-load
+Should be called at the start of a level load
 
 === *_ !GetMemoryStatistics _* ===
 *Purpose*:
@@ -69,7 +69,7 @@ void
 
 === *_ !PostInitClient _* ===
 *Purpose*:
-loading for net synch issues
+Called when the local client has finished loading for net synch issues
 
 *Arguments*:
  * _nChannelID_ - `[In]` Network channel ID
@@ -93,7 +93,7 @@ Delegated from GameRules
 
 === *_ !CmdDebugObjectives _* ===
 *Purpose*:
-objectives
+Console command used to debug team objectives
 
 *Arguments*:
  * _pArgs_ - `[In]` Console command arguments
@@ -113,12 +113,12 @@ Create a team definition
  * _szTeam_ - `[In]` Team to load (looks for its .XML file)
 
 *Returns*:
-on error
+ID of the team created or TEAMID_INVALID on error
 
 
 === *_ !RemoveTeam _* ===
 *Purpose*:
-team onto another.
+Remove a team and force anyone on that team onto another.
 
 *Arguments*:
  * _nTeamID_ - `[In]` ID of the team to destroy
@@ -140,7 +140,7 @@ void
 
 === *_ !GetTeamId _* ===
 *Purpose*:
-given ID
+Returns the ID of the team with the given ID
 
 *Arguments*:
  * _szName_ - `[In]` Name to search for
@@ -162,7 +162,7 @@ void
 
 === *_ !GetTeamPlayerCount _* ===
 *Purpose*:
-given team
+Returns how many players belong to the given team
 
 *Arguments*:
  * _bInGame_ - `[In]` TRUE to count only players who are currently in the game
@@ -174,7 +174,7 @@ void
 
 === *_ !GetTeamPlayer _* ===
 *Purpose*:
-the specified team.
+Returns the player in the given slot on the specified team.
 
 *Arguments*:
  * _nTeamID_ - `[In]` ID of the team
@@ -186,7 +186,7 @@ the ID of the entity in the slot
 
 === *_ !GetTeamPlayers _* ===
 *Purpose*:
-team
+Returns the list of players on the given team
 
 *Arguments*:
  * _nTeamID_ - `[In]` ID of the team
@@ -233,7 +233,7 @@ void
 
 === *_ !GetTeamDefaultSpawnGroup _* ===
 *Purpose*:
-the given team
+Get the spawn group ID being used by the given team
 
 *Arguments*:
  * _nTeamID_ - `[In]` ID of team to get
@@ -244,7 +244,7 @@ ID of the spawn group
 
 === *_ !RemoveTeamDefaultSpawnGroup _* ===
 *Purpose*:
-the given ID
+Removes the spawn group being used by the given ID
 
 *Arguments*:
  * _nTeamID_ - `[In]` ID of team
@@ -255,7 +255,7 @@ void
 
 === *_ !RemoveDefaultSpawnGroupFromTeams _* ===
 *Purpose*:
-that is using it
+Remove the spawn group from any team that is using it
 
 *Arguments*:
  * _nSpawnGroupId_ - `[In]` ID of spawn group to remove
@@ -266,7 +266,7 @@ void
 
 === *_ !IsValidTeam _* ===
 *Purpose*:
-name is valid
+Returns TRUE if the specified team ID or name is valid
 
 *Arguments*:
  * _nID_ - `[In]` Team ID
