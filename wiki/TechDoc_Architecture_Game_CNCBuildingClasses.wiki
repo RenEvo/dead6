@@ -17,6 +17,7 @@ This is an example of a typical building class XML file:
 The Building Class' tag's attributes are as such:
  * Name - The name of the building class. This must match the script table defined in its Lua script.
  * Script - The Lua script inherited and used by the Building Controller for building behavior.
+ * MaxHealth - Maximum amount of health this building can hold. If no Initial Health value is specified for the controller when it is created, the building's health is set to this value. This is also the cap point for repairing.
 
 
 = Building Class LUA File =
