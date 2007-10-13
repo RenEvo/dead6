@@ -12,6 +12,15 @@ Below, seperated by files, are the explinations for all changes made. Developmen
 
 = Changes =
 
+== !IEntity.h ==
+
+Lines 384 - 386:
+{{{
+	// [D6] Special flag - Used to mark if an entity is an interface to a building
+	ENTITY_FLAG_ISINTERFACE				= BIT(31),
+	// [/D6]
+}}}
+
 == Game.cpp ==
 
 Lines 45 - 47:
