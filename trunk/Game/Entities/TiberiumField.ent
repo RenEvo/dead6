@@ -1,0 +1,4 @@
+<Entity
+ Name="TiberiumField" 
+ Script="Scripts/Entities/Tiberium/TiberiumField.lua"
+/>
