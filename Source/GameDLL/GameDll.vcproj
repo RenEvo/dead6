@@ -1293,6 +1293,14 @@
 					>
 				</File>
 			</Filter>
+			<Filter
+				Name="Nodes"
+				>
+				<File
+					RelativePath=".\Dead6\FlowHarvesterNodes.cpp"
+					>
+				</File>
+			</Filter>
 		</Filter>
 		<Filter
 			Name="Crysis"
