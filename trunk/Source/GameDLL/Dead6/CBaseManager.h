@@ -99,14 +99,12 @@ public:
 	virtual void Reset(void);
 
 	////////////////////////////////////////////////////
-	// ResetControllers
+	// ResetGame
 	//
-	// Purpose: Reset all loaded building controllers
-	//
-	// Note: Should be used whenever the "game" is reset,
-	//	like in the Editor
+	// Purpose: Called when the game is reset, such as
+	//	when the editor game starts up
 	////////////////////////////////////////////////////
-	virtual void ResetControllers(void);
+	virtual void ResetGame(void);
 
 	////////////////////////////////////////////////////
 	// Validate

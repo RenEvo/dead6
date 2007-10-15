@@ -14,11 +14,13 @@
 #include "stdafx.h"
 #include "CTeamManager.h"
 #include "..\HUD\HUDMissionObjectiveSystem.h"
+#include "IVehicleSystem.h"
 
 ////////////////////////////////////////////////////
 CTeamManager::CTeamManager(void)
 {
 	m_nTeamIDGen = TEAMID_NOTEAM;
+	m_nHarvIDGen = HARVESTERID_INVALID;
 }
 
 ////////////////////////////////////////////////////
@@ -48,9 +50,61 @@ void CTeamManager::Reset(void)
 {
 	CryLog("[TeamManager] Reset");
 
-	// Clear the map
-	m_TeamMap.clear();
+	// Do a game reset
+	ResetGame();
+
+	// Remove all teams
+	while (false == m_TeamMap.empty())
+	{
+		RemoveTeam(m_TeamMap.begin()->first);
+	}
+
+	// Reset ID gens
 	m_nTeamIDGen = TEAMID_NOTEAM;
+}
+
+////////////////////////////////////////////////////
+void CTeamManager::ResetGame(void)
+{
+	CryLog("[TeamManager] Removing team's harvesters...");
+
+	// Remove all harvesters for all the teams
+	for (TeamMap::iterator itTeam = m_TeamMap.begin(); itTeam != m_TeamMap.end(); itTeam++)
+	{
+		_RemoveTeamsHarvesters(itTeam->first);
+	}
+
+	// Reset ID generator
+	m_nHarvIDGen = HARVESTERID_INVALID;
+}
+
+////////////////////////////////////////////////////
+void CTeamManager::_RemoveTeamsHarvesters(TeamID nID)
+{
+	// Find team entry
+	TeamMap::iterator itTeam = m_TeamMap.find(nID);
+	if (itTeam == m_TeamMap.end()) return;
+
+	// Remove them
+	std::string szTeamName = GetTeamName(itTeam->first);
+	for (HarvesterList::iterator itHarv = itTeam->second.Harvesters.begin();
+		itHarv != itTeam->second.Harvesters.end(); itHarv++)
+	{
+		CryLog("[TeamManager] Removing harvester %d (Team \'%s\' : %u)", itHarv->first,
+			szTeamName.c_str(), itTeam->first);
+		gEnv->pEntitySystem->RemoveEntity(itHarv->second.nEntityID);
+	}
+	itTeam->second.Harvesters.clear();
+}
+
+////////////////////////////////////////////////////
+void CTeamManager::Update(bool bHaveFocus, unsigned int nUpdateFlags)
+{
+	// TODO Update harvester logic here
+
+
+	// TODO Check for harvester respawn
+
 }
 
 ////////////////////////////////////////////////////
@@ -180,6 +234,21 @@ TeamID CTeamManager::CreateTeam(char const* szTeam)
 		TeamDef.szScript = szScript;
 	}
 
+	// Get harvester info
+	XmlNodeRef pHarvesterNode = pRootNode->findChild("Harvester");
+	XmlString szHarvName = "";
+	float fCapacity = 0.0f;
+	float fBuildTime = 0.0f;
+	if (NULL != pHarvesterNode)
+	{
+		pHarvesterNode->getAttr("Entity", szHarvName);
+		pHarvesterNode->getAttr("Capacity", fCapacity);
+		pHarvesterNode->getAttr("BuildTime", fBuildTime);
+	}
+	TeamDef.DefHarvester.fCapacity = fCapacity;
+	TeamDef.DefHarvester.fBuildTime = fBuildTime;
+	TeamDef.DefHarvester.szEntityName = szHarvName;
+
 	// TODO Load script
 
 	// Create entry and return ID
@@ -195,7 +264,10 @@ void CTeamManager::RemoveTeam(TeamID nTeamID)
 	TeamMap::iterator itEntry = m_TeamMap.find(nTeamID);
 	if (itEntry == m_TeamMap.end()) return;
 
-	CryLog("Removed team \'%s\' (%d)", itEntry->second.szName.c_str(), itEntry->first);
+	// Remove all harvesters
+	_RemoveTeamsHarvesters(itEntry->first);
+
+	CryLog("[TeamManager] Removed team \'%s\' (%d)", itEntry->second.szName.c_str(), itEntry->first);
 
 	m_TeamMap.erase(itEntry);
 }
@@ -400,4 +472,126 @@ bool CTeamManager::IsValidTeam(char const* szName) const
 			return true;
 	}
 	return false;
+}
+
+////////////////////////////////////////////////////
+HarvesterID CTeamManager::CreateTeamHarvester(TeamID nID, bool bUseFactory, Vec3 const& vPos)
+{
+	// Find team
+	TeamMap::iterator itTeam = m_TeamMap.find(nID);
+	if (itTeam == m_TeamMap.end()) return HARVESTERID_INVALID;
+
+	// Create new harvester profile for it
+	STeamHarvesterDef harvester = itTeam->second.DefHarvester;
+	harvester.ucFlags = (true == bUseFactory ? HARVESTER_USEFACTORY : 0);
+	harvester.vCreateAt = vPos;
+	harvester.nID = ++m_nHarvIDGen;
+
+	// Create the entity
+	if (true == _CreateHarvesterEntity(harvester))
+	{
+		CryLog("[TeamManager] Created harvester %d for Team \'%s\' (%u)", harvester.nID,
+			GetTeamName(nID), nID);
+	}
+	else
+	{
+		GameWarning("[TeamManager] Failed to create harvester for team \'%s\' (%u) [Entity = \'%s\']",
+			GetTeamName(nID), nID, harvester.szEntityName);
+	}
+
+	// Add to map
+	itTeam->second.Harvesters[harvester.nID] = harvester;
+	return harvester.nID;
+}
+
+////////////////////////////////////////////////////
+bool CTeamManager::_CreateHarvesterEntity(STeamHarvesterDef &def)
+{
+	// Create entity
+	SEntitySpawnParams spawnParams;
+	IEntityClassRegistry* pClassRegistry = gEnv->pEntitySystem->GetClassRegistry();
+	pClassRegistry->IteratorMoveFirst();
+	if (NULL != (spawnParams.pClass = pClassRegistry->FindClass(def.szEntityName)))
+		spawnParams.sName = spawnParams.pClass->GetName();
+
+	// TODO Go through factory
+	if (HARVESTER_USEFACTORY != (def.ucFlags&HARVESTER_USEFACTORY))
+		spawnParams.vPosition = def.vCreateAt;
+
+	IEntity *pNewEntity = gEnv->pEntitySystem->SpawnEntity(spawnParams);
+	if (NULL == pNewEntity) return false;
+
+	// Set ID
+	def.nEntityID = pNewEntity->GetId();
+	def.ucFlags |= HARVESTER_ALIVE;
+
+	// Get the vehicle and turn its engine on
+	IVehicle *pVehicle = g_D6Core->pD6Game->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(def.nEntityID);
+	IVehicleMovement *pVehicleMovement = (NULL == pVehicle ? NULL : pVehicle->GetMovement());
+	if (NULL != pVehicleMovement)
+	{
+		pVehicleMovement->DisableEngine(false);
+		pVehicleMovement->EnableMovementProcessing(true);
+		pVehicleMovement->StartEngine(0);
+	}
+
+	return true;
+}
+
+////////////////////////////////////////////////////
+bool CTeamManager::GetTeamHarvesterInfo(TeamID nID, HarvesterList& list)
+{
+	// Find team
+	TeamMap::const_iterator itTeam = m_TeamMap.find(nID);
+	if (itTeam == m_TeamMap.end()) return false;
+
+	// Set it
+	list = itTeam->second.Harvesters;
+	return true;
+}
+
+////////////////////////////////////////////////////
+bool CTeamManager::CheckHarvesterFlag(TeamID nID, HarvesterID nHarvesterID, int nFlag)
+{
+	// Must be valid flag (power of 2)
+	if (0 != (nFlag & (nFlag - 1)))
+		return false;
+
+	// Get harvester info
+	HarvesterList list;
+	if (false == GetTeamHarvesterInfo(nID, list))
+		return false;
+
+	// Find the harvester
+	HarvesterList::const_iterator itHarv = list.find(nHarvesterID);
+	if (itHarv == list.end())
+		return false;
+
+	// Check the flag
+	return (nFlag == (itHarv->second.ucFlags & nFlag));
+}
+
+////////////////////////////////////////////////////
+bool CTeamManager::SetHarvesterFlag(TeamID nID, HarvesterID nHarvesterID, int nFlag, bool bOn)
+{
+	// Must be valid flag (power of 2)
+	if (0 != (nFlag & (nFlag - 1)))
+		return false;
+
+	// Get harvester info
+	HarvesterList list;
+	if (false == GetTeamHarvesterInfo(nID, list))
+		return false;
+
+	// Find the harvester
+	HarvesterList::iterator itHarv = list.find(nHarvesterID);
+	if (itHarv == list.end())
+		return false;
+
+	// Set flag
+	if (true == bOn)
+		itHarv->second.ucFlags |= nFlag;
+	else
+		itHarv->second.ucFlags &= (~nFlag);
+	return true;
 }

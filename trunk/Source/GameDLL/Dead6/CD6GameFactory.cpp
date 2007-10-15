@@ -20,6 +20,7 @@
 
 // Dead6 classes
 #include "CD6Player.h"
+#include "CVehicleMovementHarvester.h"
 
 // Crysis classes
 #include "Player.h"
@@ -58,54 +59,6 @@
 #include <IItemSystem.h>
 #include <IVehicleSystem.h>
 #include <IGameRulesSystem.h>
-
-////////////////////////////////////////////////////
-// !BEGIN KEEP UP TO DATE FROM: GameFactory.cpp
-////////////////////////////////////////////////////
-//#define HIDE_FROM_EDITOR(className)																																				\
-//  { IEntityClass *pItemClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(className);\
-//  pItemClass->SetFlags(pItemClass->GetFlags() | ECLF_INVISIBLE); }																				\
-//
-//#define REGISTER_GAME_OBJECT(framework, name, script)\
-//	{\
-//	IEntityClassRegistry::SEntityClassDesc clsDesc;\
-//	clsDesc.sName = #name;\
-//	clsDesc.sScriptFile = script;\
-//	struct C##name##Creator : public IGameObjectExtensionCreatorBase\
-//		{\
-//		C##name *Create()\
-//			{\
-//			return new C##name();\
-//			}\
-//			void GetGameObjectExtensionRMIData( void ** ppRMI, size_t * nCount )\
-//			{\
-//			C##name::GetGameObjectExtensionRMIData( ppRMI, nCount );\
-//			}\
-//		};\
-//		static C##name##Creator _creator;\
-//		framework->GetIGameObjectSystem()->RegisterExtension(#name, &_creator, &clsDesc);\
-//	}
-//
-//#define REGISTER_GAME_OBJECT_EXTENSION(framework, name)\
-//	{\
-//	struct C##name##Creator : public IGameObjectExtensionCreatorBase\
-//		{\
-//		C##name *Create()\
-//			{\
-//			return new C##name();\
-//			}\
-//			void GetGameObjectExtensionRMIData( void ** ppRMI, size_t * nCount )\
-//			{\
-//			C##name::GetGameObjectExtensionRMIData( ppRMI, nCount );\
-//			}\
-//		};\
-//		static C##name##Creator _creator;\
-//		framework->GetIGameObjectSystem()->RegisterExtension(#name, &_creator, NULL);\
-//	}
-////////////////////////////////////////////////////
-// !END
-////////////////////////////////////////////////////
-
 
 ////////////////////////////////////////////////////
 void InitD6GameFactory(IGameFramework *pFramework)
@@ -164,6 +117,7 @@ void InitD6GameFactory(IGameFramework *pFramework)
 	REGISTER_FACTORY(pVehicleSystem, "StdWheeled", CVehicleMovementStdWheeled, false);
 	REGISTER_FACTORY(pVehicleSystem, "Tank", CVehicleMovementTank, false);
 	REGISTER_FACTORY(pVehicleSystem, "VTOL", CVehicleMovementVTOL, false);
+	REGISTER_FACTORY(pVehicleSystem, "Harvester", CVehicleMovementHarvester, false);
 
 	// Custom Extensions
 	//REGISTER_GAME_OBJECT(pFramework, CustomFreezing);

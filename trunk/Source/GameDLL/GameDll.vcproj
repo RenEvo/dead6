@@ -1300,6 +1300,26 @@
 					RelativePath=".\Dead6\FlowHarvesterNodes.cpp"
 					>
 				</File>
+				<File
+					RelativePath=".\Dead6\FlowMiscNodes.cpp"
+					>
+				</File>
+			</Filter>
+			<Filter
+				Name="Vehicle Files"
+				>
+				<Filter
+					Name="Movement Files"
+					>
+					<File
+						RelativePath=".\Dead6\CVehicleMovementHarvester.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\Dead6\CVehicleMovementHarvester.h"
+						>
+					</File>
+				</Filter>
 			</Filter>
 		</Filter>
 		<Filter

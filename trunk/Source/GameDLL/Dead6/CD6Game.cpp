@@ -26,6 +26,7 @@ CD6Game::CD6Game(void)
 	m_pScriptBindBaseManager = NULL;
 	m_pScriptBindTeamManager = NULL;
 	m_pScriptBindBuildingController = NULL;
+	m_bEditorGameStarted = false;
 }
 
 ////////////////////////////////////////////////////
@@ -101,6 +102,10 @@ int CD6Game::Update(bool haveFocus, unsigned int updateFlags)
 	// Base update
 	int nUpdate = CGame::Update(haveFocus, updateFlags);
 
+	// Update team manager
+	if (NULL != g_D6Core->pTeamManager)
+		g_D6Core->pTeamManager->Update(haveFocus, updateFlags);
+
 	return nUpdate;
 }
 	
@@ -128,14 +133,24 @@ const char *CD6Game::GetName()
 }
 
 ////////////////////////////////////////////////////
+bool CD6Game::IsEditorGameStarted(void) const
+{
+	return m_bEditorGameStarted;
+}
+
+////////////////////////////////////////////////////
 void CD6Game::EditorResetGame(bool bStart)
 {
+	m_bEditorGameStarted = bStart;
+
 	// Base reset
 	CGame::EditorResetGame(bStart);
 
-	// Reset building controllers
+	// Perform soft resets
 	if (NULL != g_D6Core->pBaseManager)
-		g_D6Core->pBaseManager->ResetControllers();
+		g_D6Core->pBaseManager->ResetGame();
+	if (NULL != g_D6Core->pTeamManager)
+		g_D6Core->pTeamManager->ResetGame();
 }
 
 ////////////////////////////////////////////////////
