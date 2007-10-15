@@ -1,2 +1,4 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Team Name="GDI" LongName="Global Defense Initiative" Script="CNCTeam.lua"></Team>
+<Team Name="GDI" LongName="Global Defense Initiative" Script="CNCTeam.lua">
+  <Harvester Entity="Harvester" Capacity="300" BuildTime="10" />
+</Team>

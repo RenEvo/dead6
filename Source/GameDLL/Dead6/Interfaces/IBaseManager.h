@@ -94,14 +94,12 @@ struct IBaseManager
 	virtual void Reset(void) = 0;
 
 	////////////////////////////////////////////////////
-	// ResetControllers
+	// ResetGame
 	//
-	// Purpose: Reset all loaded building controllers
-	//
-	// Note: Should be used whenever the "game" is reset,
-	//	like in the Editor
+	// Purpose: Called when the game is reset, such as
+	//	when the editor game starts up
 	////////////////////////////////////////////////////
-	virtual void ResetControllers(void) = 0;
+	virtual void ResetGame(void) = 0;
 
 	////////////////////////////////////////////////////
 	// Validate

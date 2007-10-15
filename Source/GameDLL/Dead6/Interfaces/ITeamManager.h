@@ -26,8 +26,41 @@ typedef unsigned short TeamID;
 
 typedef CGameRules::TPlayers TeamPlayerList;
 
-////////////////////////////////////////////////////
-//	Team definition structure
+// Harvester definition
+#define HARVESTER_ALIVE			(0x01)		// Set if harvester is alive
+#define HARVESTER_HASLOAD		(0x02)		// Set if harvester is carrying a load
+#define HARVESTER_ISLOADING		(0x04)		// Set if harvester is loading up
+#define HARVESTER_ISUNLOADING	(0x08)		// Set if harvester is unloading
+#define HARVESTER_USEFACTORY	(0x10)		// Set if harvester should be created through the factory
+typedef unsigned int HarvesterID;
+#define HARVESTERID_INVALID 0
+struct STeamHarvesterDef
+{
+	// Properties
+	float fCapacity;
+	float fBuildTime;
+
+	// Flags
+	unsigned char ucFlags;
+
+	// Creation point
+	Vec3 vCreateAt;
+
+	// Entity ID
+	HarvesterID nID;
+	EntityId nEntityID;
+
+	// Entity name
+	string szEntityName;
+
+	STeamHarvesterDef(void) :
+		fCapacity(0.0f), fBuildTime(0.0f), ucFlags(0), nEntityID(0), nID(0),
+		vCreateAt(0,0,0)
+		{}
+};
+typedef std::map<HarvesterID, STeamHarvesterDef> HarvesterList;
+
+// Team definition structure
 struct STeamDef
 {
 	// Team ID
@@ -48,6 +81,10 @@ struct STeamDef
 
 	// Player list
 	TeamPlayerList PlayerList;
+
+	// Harvester list
+	STeamHarvesterDef DefHarvester;
+	HarvesterList Harvesters;
 };
 typedef std::map<TeamID, STeamDef>	TeamMap;
 typedef std::map<TeamID, TeamPlayerList> TeamPlayerMap;
@@ -84,6 +121,24 @@ struct ITeamManager
 	//	load
 	////////////////////////////////////////////////////
 	virtual void Reset(void) = 0;
+
+	////////////////////////////////////////////////////
+	// ResetGame
+	//
+	// Purpose: Called when the game is reset, such as
+	//	when the editor game starts up
+	////////////////////////////////////////////////////
+	virtual void ResetGame(void) = 0;
+	
+	////////////////////////////////////////////////////
+	// Update
+	//
+	// Purpose: Update the teams
+	//
+	// In:	bHaveFocus - TRUE if game has focus
+	//		nUpdateFlags - Update flags
+	////////////////////////////////////////////////////
+	virtual void Update(bool bHaveFocus, unsigned int nUpdateFlags) = 0;
 
 	////////////////////////////////////////////////////
 	// GetMemoryStatistics
@@ -292,6 +347,64 @@ struct ITeamManager
 	////////////////////////////////////////////////////
 	virtual bool IsValidTeam(TeamID nID) const = 0;
 	virtual bool IsValidTeam(char const* szName) const = 0;
+
+	////////////////////////////////////////////////////
+	// CreateTeamHarvester
+	//
+	// Purpose: Create a harvester for the team
+	//
+	// In:	nID - Team ID
+	//		bUseFactory - TRUE to create the harvester
+	//			through the vehicle factory (if present)
+	//		vPos - Where to create the harvester at if not
+	//			though the vehicle factory
+	//
+	// Returns ID of harvester or HARVESTERID_INVALID
+	//	on error
+	////////////////////////////////////////////////////
+	virtual HarvesterID CreateTeamHarvester(TeamID nID, bool bUseFactory, Vec3 const& vPos) = 0;
+
+	////////////////////////////////////////////////////
+	// GetTeamHarvesterInfo
+	//
+	// Purpose: Return map of harvesters owned by the
+	//	given team
+	//
+	// In:	nID - Team ID
+	//
+	// Out:	list - List of harvesters
+	//
+	// Returns TRUE on success
+	////////////////////////////////////////////////////
+	virtual bool GetTeamHarvesterInfo(TeamID nID, HarvesterList& list) = 0;
+
+	////////////////////////////////////////////////////
+	// CheckHarvesterFlag
+	//
+	// Purpose: Returns TRUE if the given flag is set on
+	//	the harvester specified
+	//
+	// In:	nID - Owning team ID
+	//		nHarvesterID - ID of the harvester
+	//		nFlag - Flag to check
+	//
+	// Returns TRUE if flag is set, FALSE if not
+	////////////////////////////////////////////////////
+	virtual bool CheckHarvesterFlag(TeamID nID, HarvesterID nHarvesterID, int nFlag) = 0;
+
+	////////////////////////////////////////////////////
+	// SetHarvesterFlag
+	//
+	// Purpose: Set the flag on the harvester specified
+	//
+	// In:	nID - Owning team ID
+	//		nHarvesterID - ID of the harvester
+	//		nFlag - Flag to set
+	//		bOn - TRUE to turn it on, FALSE to clear it
+	//
+	// Returns TRUE on success, FALSE on failure
+	////////////////////////////////////////////////////
+	virtual bool SetHarvesterFlag(TeamID nID, HarvesterID nHarvesterID, int nFlag, bool bOn = true) = 0;
 };
 
 #endif //_D6C_ITEAMMANAGER_H_

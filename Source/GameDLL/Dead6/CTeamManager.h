@@ -25,6 +25,9 @@ class CTeamManager : public ITeamManager
 	// Team ID generator
 	TeamID m_nTeamIDGen;
 
+	// Harvester ID generator
+	HarvesterID m_nHarvIDGen;
+
 	// Team map
 	TeamMap m_TeamMap;
 
@@ -68,6 +71,24 @@ public:
 	//	load
 	////////////////////////////////////////////////////
 	virtual void Reset(void);
+
+	////////////////////////////////////////////////////
+	// ResetGame
+	//
+	// Purpose: Called when the game is reset, such as
+	//	when the editor game starts up
+	////////////////////////////////////////////////////
+	virtual void ResetGame(void);
+	
+	////////////////////////////////////////////////////
+	// Update
+	//
+	// Purpose: Update the teams
+	//
+	// In:	bHaveFocus - TRUE if game has focus
+	//		nUpdateFlags - Update flags
+	////////////////////////////////////////////////////
+	virtual void Update(bool bHaveFocus, unsigned int nUpdateFlags);
 
 	////////////////////////////////////////////////////
 	// GetMemoryStatistics
@@ -276,6 +297,89 @@ public:
 	////////////////////////////////////////////////////
 	virtual bool IsValidTeam(TeamID nID) const;
 	virtual bool IsValidTeam(char const* szName) const;
+
+	////////////////////////////////////////////////////
+	// CreateTeamHarvester
+	//
+	// Purpose: Create a harvester for the team
+	//
+	// In:	nID - Team ID
+	//		bUseFactory - TRUE to create the harvester
+	//			through the vehicle factory (if present)
+	//		vPos - Where to create the harvester at if not
+	//			though the vehicle factory
+	//
+	// Returns ID of harvester or HARVESTERID_INVALID
+	//	on error
+	////////////////////////////////////////////////////
+	virtual HarvesterID CreateTeamHarvester(TeamID nID, bool bUseFactory, Vec3 const& vPos);
+
+	////////////////////////////////////////////////////
+	// GetTeamHarvesterInfo
+	//
+	// Purpose: Return map of harvesters owned by the
+	//	given team
+	//
+	// In:	nID - Team ID
+	//
+	// Out:	list - List of harvesters
+	//
+	// Returns TRUE on success
+	////////////////////////////////////////////////////
+	virtual bool GetTeamHarvesterInfo(TeamID nID, HarvesterList& list);
+
+	////////////////////////////////////////////////////
+	// CheckHarvesterFlag
+	//
+	// Purpose: Returns TRUE if the given flag is set on
+	//	the harvester specified
+	//
+	// In:	nID - Owning team ID
+	//		nHarvesterID - ID of the harvester
+	//		nFlag - Flag to check
+	//
+	// Returns TRUE if flag is set, FALSE if not
+	////////////////////////////////////////////////////
+	virtual bool CheckHarvesterFlag(TeamID nID, HarvesterID nHarvesterID, int nFlag);
+
+	////////////////////////////////////////////////////
+	// SetHarvesterFlag
+	//
+	// Purpose: Set the flag on the harvester specified
+	//
+	// In:	nID - Owning team ID
+	//		nHarvesterID - ID of the harvester
+	//		nFlag - Flag to set
+	//		bOn - TRUE to turn it on, FALSE to clear it
+	//
+	// Returns TRUE on success, FALSE on failure
+	////////////////////////////////////////////////////
+	virtual bool SetHarvesterFlag(TeamID nID, HarvesterID nHarvesterID, int nFlag, bool bOn = true);
+
+protected:
+	////////////////////////////////////////////////////
+	// _CreateHarvesterEntity
+	//
+	// Purpose: Create the harvester entity and set up
+	//	its initial properties
+	//
+	// In:	def - Harvester definition to use
+	//
+	// Out:	def - Updated definition with entity id
+	//
+	// Return TRUE on success, FALSE otherwise
+	////////////////////////////////////////////////////
+	virtual bool _CreateHarvesterEntity(STeamHarvesterDef &def);
+
+	////////////////////////////////////////////////////
+	// _RemoveTeamsHarvesters
+	//
+	// Purpose: Remove all harvesters from the world that
+	//	belong to the given team
+	//
+	// In:	nID - Team ID
+	////////////////////////////////////////////////////
+	virtual void _RemoveTeamsHarvesters(TeamID nID);
 };
 
 #endif //_D6C_CTEAMMANAGER_H_

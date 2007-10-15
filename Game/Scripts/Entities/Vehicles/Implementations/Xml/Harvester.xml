@@ -403,7 +403,7 @@
  <SeatGroups>
  </SeatGroups>
  <MovementParams>
-  <StdWheeled vMaxSteerMax="20" steerSpeed="70" steerSpeedMin="100" steerSpeedScale="1" steerSpeedScaleMin="1" v0SteerMax="33" kvSteerMax="4" steerRelaxation="500" pedalLimitMax="0.1" rpmInterpSpeed="4" rpmRelaxSpeed="2" rpmGearShiftSpeed="3">
+  <Harvester vMaxSteerMax="20" steerSpeed="70" steerSpeedMin="100" steerSpeedScale="1" steerSpeedScaleMin="1" v0SteerMax="33" kvSteerMax="4" steerRelaxation="500" pedalLimitMax="0.1" rpmInterpSpeed="4" rpmRelaxSpeed="2" rpmGearShiftSpeed="3">
    <Wheeled axleFriction="700" axleFrictionMax="2000" brakeTorque="5000" brakeImpulse="0.5" clutchSpeed="2.3" damping="0" engineIdleRPM="500" engineMaxRPM="3050" engineMinRPM="100" enginePower="160" engineShiftDownRPM="1300" engineShiftUpRPM="2000" engineStartRPM="500" stabilizer="0.2" maxBrakingFriction="0.60000002" maxSteer="0.44999999" maxSpeed="23" maxTimeStep="0.02" minEnergy="0.012" slipThreshold="0.02" suspDampingMin="-0.18000001" suspDampingMax="-0.5" suspDampingMaxSpeed="15" gearDirSwitchRPM="1000" dynFriction="1.1" latFriction="1">
     <gearRatios>
      <gearRatio value="-20"/>
@@ -431,7 +431,7 @@
      </Tweaks>
     </TweakGroup>
    </TweakGroups>
-  </StdWheeled>
+  </Harvester>
  </MovementParams>
  <Particles>
   <Exhaust insideWater="0" outsideWater="1">

@@ -95,6 +95,22 @@ void CBaseManager::Reset(void)
 }
 
 ////////////////////////////////////////////////////
+void CBaseManager::ResetGame(void)
+{
+	CryLog("[BaseManager] Resetting building controllers...");
+
+	// Validate the controllers
+	Validate();
+
+	// Call reset on all controllers
+	for (ControllerList::iterator itBuilding = m_ControllerList.begin();
+		itBuilding != m_ControllerList.end(); itBuilding++)
+	{
+		itBuilding->second->Reset();
+	}
+}
+
+////////////////////////////////////////////////////
 BuildingGUID CBaseManager::CreateBuildingController(char const* szTeam, char const* szName,
 													XmlNodeRef pAttr, IBuildingController **ppController)
 {
@@ -166,22 +182,6 @@ IBuildingController *CBaseManager::FindBuildingController(BuildingGUID nGUID) co
 	if (itBuilding == m_ControllerList.end())
 		return NULL;
 	return itBuilding->second;
-}
-
-////////////////////////////////////////////////////
-void CBaseManager::ResetControllers(void)
-{
-	CryLog("[BaseManager] Resetting controllers...");
-	
-	// Validate them first
-	Validate();
-
-	// Call reset on all of them
-	for (ControllerList::iterator itBuilding = m_ControllerList.begin();
-		itBuilding != m_ControllerList.end(); itBuilding++)
-	{
-		itBuilding->second->Reset();
-	}
 }
 
 ////////////////////////////////////////////////////
