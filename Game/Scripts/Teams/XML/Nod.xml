@@ -1,2 +1,4 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
-<Team Name="Nod" LongName="Brotherhood of Nod" Script="CNCTeam.lua"></Team>
+<Team Name="Nod" LongName="Brotherhood of Nod" Script="CNCTeam.lua">
+  <Harvester Entity="Harvester" Capacity="300.0" BuildTime="10.0" LoadRate="10.0" UnloadRate="20.0" />
+</Team>
