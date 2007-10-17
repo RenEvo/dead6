@@ -13,6 +13,26 @@
 #include "StdAfx.h"
 #include "Nodes/G2FlowBaseNode.h"
 #include "Interfaces/ITeamManager.h"
+#include "IVehicleSystem.h"
+
+// Index used in Graph Entity list for storing harvester ID between nodes in the same graph
+// Please note: You should not put more than one controller in the same graph!
+#define HARVESTER_GRAPH_INDEX (1)
+#define PACK_TEAM_HARV_ID(teamid, harvid) ((((teamid)&0xFFFF)<<16)|((harvid)&0xFFFF))
+#define UNPACK_TEAM_HARV_ID(recv, teamid, harvid) \
+	(teamid) = (((recv)&0xFFFF0000)>>16); \
+	(harvid) = (((recv)&0xFFFF));
+
+enum ESignals
+{
+	SIGNAL_MOVETOFIELD = 0,	// Calls "ToField" Output Port on controller
+	SIGNAL_MOVEFROMFIELD,	// Calls "FromField" Output Port on controller
+	SIGNAL_LOAD,			// Causes Harvester to begin loading up on tiberium
+	SIGNAL_UNLOAD,			// Causes Harvester to begin unloading its load
+	SIGNAL_ABORT,			// Causes Harvester to stop loading/unloading and continue on with whatever it got
+	SIGNAL_STARTENGINE,		// Causes Harvester to start its engine so it can move
+	SIGNAL_STOPENGINE,		// Causes Harvester to stop its engine to it can't move
+};
 
 // CFlowHarvesterControllerNode
 //	Controls the Harvester for a given team. Just create
@@ -21,9 +41,10 @@
 class CFlowHarvesterControllerNode : public CFlowBaseNode
 {
 protected:
-	float m_fMakerTime;			// Set to time when harvester was marked for recreation or 0 if it doesn't need to be remade
-	HarvesterID m_nHarvester;	// Harvester ID
-	TeamID m_nTeamID;			// Team ID
+	bool m_bReportPurchase;
+	float m_fLastUpdate;
+	float m_fMakerTime;					// Set to time when harvester was marked for recreation or 0 if it doesn't need to be remade
+	STeamHarvesterDef *m_pHarvester;	// Harvester definition
 
 public:
 	////////////////////////////////////////////////////
@@ -31,9 +52,9 @@ public:
 	////////////////////////////////////////////////////
 	CFlowHarvesterControllerNode(SActivationInfo * pActInfo)
 	{
+		m_fLastUpdate = 0.0f;
 		m_fMakerTime = 0.0f;
-		m_nHarvester = HARVESTERID_INVALID;
-		m_nTeamID = TEAMID_NOTEAM;
+		m_pHarvester = NULL;
 	}
 
 	////////////////////////////////////////////////////
@@ -50,6 +71,7 @@ public:
 		EIP_Team,			// String: Owning team
 		EIP_UnloadTime,		// Float: How long it takes to unload
 		EIP_CreateAt,		// Vector: Where to create Harvester at if Vehicle Factory is not used or not present
+		EIP_CreateFace,		// Float: Direction to face when created 
 		EIP_UseFactory,		// Bool: TRUE to use the factory, FALSE to use the CreateAt point. If no factory present, always false.
 	};
 
@@ -104,7 +126,7 @@ public:
 class CFlowHarvesterSignalNode : public CFlowBaseNode
 {
 protected:
-	
+	STeamHarvesterDef *m_pHarvester;	// Harvester definition
 
 public:
 	////////////////////////////////////////////////////
@@ -112,7 +134,7 @@ public:
 	////////////////////////////////////////////////////
 	CFlowHarvesterSignalNode(SActivationInfo * pActInfo)
 	{
-		
+		m_pHarvester = NULL;
 	}
 
 	////////////////////////////////////////////////////
@@ -126,16 +148,110 @@ public:
 	// Input Ports
 	enum EInputPorts
 	{
-		EIP_Signal,			// Call to make the signal
-		EIP_SignalVal,		// Int: Signal to make (0 = "MoveToField", 1 = "MoveFromField", 2 = "Unload")
+		EIP_Signal = 0,		// Call to make the signal
+		EIP_SignalVal,		// Int: Signal to make (see ESignals)
 	};
 
 	// Output Ports
 	enum EOutputPorts
 	{
-		EOP_Done = 0,	// Called when the signal was made, always
-		EOP_Success,	// Called when the signal was made successfully
-		EOP_Fail,		// Called when the signal was not made successfully
+		EOP_Done = 0,		// Called when the signal was made
+	};
+
+	////////////////////////////////////////////////////
+	// GetConfiguration
+	//
+	// Purpose: Set up and return the configuration for
+	//	this node for the Flow Graph
+	//
+	// Out:	config - The node's config
+	////////////////////////////////////////////////////
+	virtual void GetConfiguration(SFlowNodeConfig& config);
+
+	////////////////////////////////////////////////////
+	// ProcessEvent
+	//
+	// Purpose: Called when an event is to be processed
+	//
+	// In:	event - Flow event to process
+	//		pActInfo - Activation info for the event
+	////////////////////////////////////////////////////
+	virtual void ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo);
+
+	////////////////////////////////////////////////////
+	// GetMemoryStatistics
+	//
+	// Purpose: Used by memory management
+	//
+	// In:	s - Cry Sizer object
+	////////////////////////////////////////////////////
+	virtual void GetMemoryStatistics(ICrySizer *s)
+	{
+		s->Add(*this);
+	}
+};
+
+// CFlowHarvesterGotoNode
+//	Used to move a Harvester to a point in space
+class CFlowHarvesterGotoNode : public CFlowBaseNode
+{
+protected:
+	// Set to TRUE when active
+	bool m_bIsActive;
+	bool m_bHasPastPoint, m_bNeedsTurnAround;
+	float m_fSpeedRat;
+	float m_fStartTime;
+
+	// Params
+	bool m_bBreakPast;
+	float m_fMaxSpeed, m_fMinSpeed;
+	float m_fSlowDist;
+	float m_fTimeOut;
+	Vec3 m_vGotoPos;
+
+	// Harvester info associated with graph
+	STeamHarvesterDef *m_pHarvester;	// Harvester definition
+
+public:
+	////////////////////////////////////////////////////
+	// Constructor
+	////////////////////////////////////////////////////
+	CFlowHarvesterGotoNode(SActivationInfo * pActInfo)
+	{
+		m_bIsActive = m_bHasPastPoint = m_bNeedsTurnAround = false;
+		m_fSpeedRat = 0.0f;
+		m_fStartTime = 0.0f;
+
+		m_bBreakPast = false;
+		m_fMaxSpeed = m_fMinSpeed = m_fSlowDist = m_fTimeOut = 0.0f;
+		m_pHarvester = NULL;
+	}
+
+	////////////////////////////////////////////////////
+	// Destructor
+	////////////////////////////////////////////////////
+	virtual ~CFlowHarvesterGotoNode()
+	{
+
+	}
+
+	// Input Ports
+	enum EInputPorts
+	{
+		EIP_Move = 0,		// Call to move the harvester to the specified location
+		EIP_GotoPos,		// Vec3: Where the harvester should move to
+		EIP_MaxSpeed,		// Float: Top speed the harvester should move
+		EIP_MinSpeed,		// Float: Low speed the harvester should move
+		EIP_SlowDist,		// Float: How far away before slowing down
+		EIP_BreakPast,		// Bool: TRUE if harvester should slam on the breaks once the point has been passed
+		EIP_TimeOut,		// Float: How long before timeout is called
+	};
+
+	// Output Ports
+	enum EOutputPorts
+	{
+		EOP_AtLoc = 0,		// Called when the harvester has made it to the location specified
+		EOP_TimedOut,		// Called if node timed out and harvester did not make it to the location in time
 	};
 
 	////////////////////////////////////////////////////
@@ -182,27 +298,29 @@ void CFlowHarvesterControllerNode::GetConfiguration(SFlowNodeConfig& config)
 	{
 		InputPortConfig<string>("Team", _HELP("Owning team")),
 		InputPortConfig<float>("UnloadTime", 10.0f, _HELP("How long it should take to unload")),
-		InputPortConfig<Vec3>("CreateAt", _HELP("Where to create the Harvester at if not going through factory")),
+		InputPortConfig<Vec3>("CreateAt", _HELP("Where to create the Harvester at if not going through factory"), _HELP("Create At")),
+		InputPortConfig<float>("CreateFace", 0.0f, _HELP("Direction (degrees) Harvester should face if not created through factory"), _HELP("Create Dir")),
 		InputPortConfig<bool>("UseFactory", true, _HELP("TRUE Create Harvester through the Vechicle Factory, FALSE to use CreateAt point")),
 		{0},
 	};
 
 	// Output
-	static const SOutputPortConfig outputs[] = {
-		OutputPortConfig_Void("Purchased", _HELP("Trigger when the harvester is (re)purchased")),
-		OutputPortConfig_Void("ToField", _HELP("Trigger when the harvester is to begin its route to the Tiberium Field.")),
-		OutputPortConfig_Void("FromField", _HELP("Trigger when the harvester is to begin its route back from the Tiberium Field.")),
-		OutputPortConfig_Void("Loading", _HELP("Trigger when the harvester is starting to load up")),
-		OutputPortConfig_Void("Loaded", _HELP("Trigger when the harvester has loaded")),
-		OutputPortConfig_Void("Unloading", _HELP("Trigger when the harvester is starting to unload")),
-		OutputPortConfig_Void("Unloaded", _HELP("Trigger when the harvester has unloaded")),
+	static const SOutputPortConfig outputs[] =
+	{
+		OutputPortConfig_Void("Purchased", _HELP("Triggered when the harvester is (re)purchased")),
+		OutputPortConfig_Void("ToField", _HELP("Triggered when the harvester is to begin its route to the Tiberium Field.")),
+		OutputPortConfig_Void("FromField", _HELP("Triggered when the harvester is to begin its route back from the Tiberium Field.")),
+		OutputPortConfig_Void("Loading", _HELP("Triggered when the harvester is starting to load up")),
+		OutputPortConfig_Void("Loaded", _HELP("Triggered when the harvester has loaded")),
+		OutputPortConfig_Void("Unloading", _HELP("Triggered when the harvester is starting to unload")),
+		OutputPortConfig_Void("Unloaded", _HELP("Triggered when the harvester has unloaded")),
 		{0},
 	};
 
 	// Set up config
 	config.pInputPorts = inputs;
 	config.pOutputPorts = outputs;
-	config.sDescription = _HELP("Main Harvester control point. Define the path using AI:AIGoto nodes and bring the harvester to/from the Tiberium Field!");
+	config.sDescription = _HELP("Main Harvester control point. Drop to create a harvester for a given team.");
 	config.SetCategory(EFLN_WIP);
 }
 
@@ -214,6 +332,9 @@ void CFlowHarvesterControllerNode::ProcessEvent(EFlowEvent event, SActivationInf
 		// eFE_Initialize - Flow node initialization
 		case eFE_Initialize:
 		{
+			m_bReportPurchase = false;
+			pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+
 			// If we're in the editor, only go through if game has started
 			if (true == g_D6Core->pSystem->IsEditor() &&
 				false == g_D6Core->pD6Game->IsEditorGameStarted())
@@ -224,42 +345,236 @@ void CFlowHarvesterControllerNode::ProcessEvent(EFlowEvent event, SActivationInf
 			{
 				// Get team ID
 				string szTeamName = GetPortString(pActInfo, EIP_Team);
-				m_nTeamID = g_D6Core->pTeamManager->GetTeamId(szTeamName.c_str());
+				TeamID nTeamID = g_D6Core->pTeamManager->GetTeamId(szTeamName.c_str());
 
 				// Get factory and position settings
 				bool bUseFactory = GetPortBool(pActInfo, EIP_UseFactory);
 				Vec3 vPos(0,0,0);
+				float fDir = 0.0f;
 				if (false == bUseFactory)
 				{
 					vPos = GetPortVec3(pActInfo, EIP_CreateAt);
+					fDir = GetPortFloat(pActInfo, EIP_CreateFace);
 				}
 
 				// Create harvester for first time
-				m_nHarvester = g_D6Core->pTeamManager->CreateTeamHarvester(m_nTeamID, bUseFactory, vPos);
-				if (HARVESTERID_INVALID == m_nHarvester)
+				HarvesterID nHarvesterID = g_D6Core->pTeamManager->CreateTeamHarvester(nTeamID, 
+					bUseFactory, vPos, fDir, &m_pHarvester);
+				if (HARVESTERID_INVALID == nHarvesterID || NULL == m_pHarvester)
 				{
 					// Warning...
 					GameWarning("[Harvester Controller] Failed to create harvester for team \'%s\' (%u)",
-						szTeamName.c_str(), m_nTeamID);
+						szTeamName.c_str(), nTeamID);
+					break;
 				}
+
+				// Need updating
+				pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, true);
+				m_fLastUpdate = gEnv->pTimer->GetCurrTime();
+				m_bReportPurchase = true;
+
+				// Set graph entity
+				pActInfo->pGraph->SetGraphEntity(PACK_TEAM_HARV_ID(nTeamID, nHarvesterID), HARVESTER_GRAPH_INDEX);
 			}
 			m_fMakerTime = 0.0f;
-		}
-		break;
-
-		// eFE_Activate - A port is active, handle it
-		case eFE_Activate:
-		{
-			
 		}
 		break;
 
 		// eFE_Update - Flow node update
 		case eFE_Update:
 		{
-			// TODO Check on harvester if it is alive, recreate if not
+			if (NULL == m_pHarvester) break;
+			IVehicle *pVehicle = g_D6Core->pD6Game->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(m_pHarvester->nEntityID);
+			IVehicleMovement *pVehicleMovement = (NULL == pVehicle ? NULL : pVehicle->GetMovement());
+			if (NULL == pVehicle || NULL == pVehicleMovement) break;
 
-			// TODO Check recreation timer
+			float fTime = gEnv->pTimer->GetCurrTime();
+			float fDT = fTime - m_fLastUpdate;
+			m_fLastUpdate = fTime;
+
+			// Signal it was purchased
+			// Note: We do this because the harvester is created in Initialize, which can't activate output ports
+			if (true == m_bReportPurchase)
+			{
+				m_bReportPurchase = false;
+				ActivateOutput(pActInfo, EOP_Purchased, true);
+			}
+
+			// Check on harvester if it is alive, recreate if not
+			const SVehicleStatus status = pVehicle->GetStatus();
+			if (status.health <= 0.0f /*|| status.flipped*/)
+			{
+				// TODO Handle
+				break;
+			}
+
+			// Check signals
+			while (false == m_pHarvester->SignalQueue.empty())
+			{
+				// Dispatch signals
+				int nSignal = m_pHarvester->SignalQueue.front();
+				switch(nSignal)
+				{
+					// Move towards the field
+					case SIGNAL_MOVETOFIELD:
+					{
+						ActivateOutput(pActInfo, EOP_ToField, true);
+					}
+					break;
+
+					// Move away from field
+					case SIGNAL_MOVEFROMFIELD:
+					{
+						ActivateOutput(pActInfo, EOP_FromField, true);
+					}
+					break;
+
+					// Load tiberium
+					case SIGNAL_LOAD:
+					{
+						// Cannot be unloading
+						if (true == m_pHarvester->CheckFlag(HARVESTER_ISUNLOADING))
+							break;
+
+						// Set loading flag and begin the loading process
+						m_pHarvester->SetFlag(HARVESTER_ISLOADING, true);
+						m_pHarvester->fPayload = 0.0f;
+						m_pHarvester->fPayloadTimer = gEnv->pTimer->GetCurrTime();
+
+						// Signal out
+						ActivateOutput(pActInfo, EOP_Loading, true);
+					}
+					break;
+
+					// Unload tiberium
+					case SIGNAL_UNLOAD:
+					{
+						// Cannot be loading and must have a load
+						if (true == m_pHarvester->CheckFlag(HARVESTER_ISLOADING) ||
+							false == m_pHarvester->CheckFlag(HARVESTER_HASLOAD))
+							break;
+
+						// Set unloading flag and begin the unloading process
+						m_pHarvester->SetFlag(HARVESTER_ISUNLOADING, true);
+						m_pHarvester->fPayloadTimer = gEnv->pTimer->GetCurrTime();
+
+						// Signal out
+						ActivateOutput(pActInfo, EOP_Unloading, true);
+					}
+					break;
+
+					// Abort loading/unloading
+					case SIGNAL_ABORT:
+					{
+						if (true == m_pHarvester->CheckFlag(HARVESTER_ISLOADING))
+						{
+							// Keep what we have and continue on
+							m_pHarvester->SetFlag(HARVESTER_ISLOADING, false);
+							m_pHarvester->SetFlag(HARVESTER_HASLOAD, true);
+							m_pHarvester->fPayloadTimer = 0.0f;
+
+							// Signal we are done
+							ActivateOutput(pActInfo, EOP_Loaded, true);
+						}
+						else if (true == m_pHarvester->CheckFlag(HARVESTER_ISUNLOADING))
+						{
+							// Keep what we have and continue on
+							m_pHarvester->SetFlag(HARVESTER_ISUNLOADING, false);
+							m_pHarvester->SetFlag(HARVESTER_HASLOAD, true);
+							m_pHarvester->fPayloadTimer = 0.0f;
+
+							// Signal we are done
+							ActivateOutput(pActInfo, EOP_Unloaded, true);
+						}
+					}
+					break;
+
+					// Start the engine
+					case SIGNAL_STARTENGINE:
+					{
+						pVehicleMovement->StartEngine(0);
+					}
+					break;
+
+					// Stop the engine
+					case SIGNAL_STOPENGINE:
+					{
+						pVehicleMovement->StopEngine();
+					}
+					break;
+
+					default:
+						GameWarning("[Harvester Controller] Unknown signal given to harvester for team \'%s\' (%u) - Signal = %d",
+							g_D6Core->pTeamManager->GetTeamName(m_pHarvester->nTeamID), m_pHarvester->nTeamID, nSignal);
+				}
+				m_pHarvester->SignalQueue.pop_front();
+			}
+
+			// Handle load/unload logic
+			if (true == m_pHarvester->CheckFlag(HARVESTER_ISLOADING))
+			{
+				// Increase payload
+				m_pHarvester->fPayload += m_pHarvester->fLoadRate*fDT;
+#ifdef _DEBUG
+				static int nLastPercent = 0;
+				int nCurrPercent = int((m_pHarvester->fPayload/m_pHarvester->fCapacity)*10.0f);
+				if (nCurrPercent > nLastPercent)
+				{
+					CryLogAlways("[Harvester] Debug: (Load) Payload at %d0%%", nCurrPercent);
+					nLastPercent = nCurrPercent;
+				}
+#endif //_DEBUG
+				if (m_pHarvester->fPayload >= m_pHarvester->fCapacity)
+				{
+					// At max
+					m_pHarvester->fPayload = m_pHarvester->fCapacity;
+					m_pHarvester->SetFlag(HARVESTER_ISLOADING, false);
+					m_pHarvester->SetFlag(HARVESTER_HASLOAD, true);
+					m_pHarvester->fPayloadTimer = 0.0f;
+
+					// Signal we are done
+					ActivateOutput(pActInfo, EOP_Loaded, true);
+#ifdef _DEBUG
+					nLastPercent = 0;
+#endif //_DEBUG
+				}
+			}
+			else if (true == m_pHarvester->CheckFlag(HARVESTER_ISUNLOADING))
+			{
+				// Decrease payload
+				float fDecAmount = m_pHarvester->fUnloadRate*fDT;
+				float fTransferAmount = fDecAmount;
+				if (m_pHarvester->fPayload - fDecAmount < 0.0f)
+					fTransferAmount = m_pHarvester->fPayload;
+
+				// TODO Give players on team fTransferAmount
+
+
+				// Check if we are done unloading
+				m_pHarvester->fPayload -= fTransferAmount;
+#ifdef _DEBUG
+				static int nLastPercent = 10;
+				int nCurrPercent = int((m_pHarvester->fPayload/m_pHarvester->fCapacity)*10.0f);
+				if (nCurrPercent < nLastPercent)
+				{
+					CryLogAlways("[Harvester] Debug: (Unload) Payload at %d0%%", nCurrPercent);
+					nLastPercent = nCurrPercent;
+				}
+#endif //_DEBUG
+				if (m_pHarvester->fPayload <= 0.0f)
+				{
+					m_pHarvester->fPayload = 0.0f;
+					m_pHarvester->SetFlag(HARVESTER_ISUNLOADING, false);
+					m_pHarvester->SetFlag(HARVESTER_HASLOAD, false);
+					m_pHarvester->fPayloadTimer = 0.0f;
+
+					// Signal we are done
+					ActivateOutput(pActInfo, EOP_Unloaded, true);
+#ifdef _DEBUG
+					nLastPercent = 10;
+#endif //_DEBUG
+				}
+			}
 		}
 		break;
 	}
@@ -272,15 +587,15 @@ void CFlowHarvesterSignalNode::GetConfiguration(SFlowNodeConfig& config)
 	static const SInputPortConfig inputs[] =
 	{
 		InputPortConfig_Void("Signal", _HELP("Make the signal")),
-		InputPortConfig<int>("Value", 0, _HELP("Signal to send"), 0, _UICONFIG("enum_int:MoveToField=0,MoveFromField=1,Unload=2") ),
+		InputPortConfig<int>("Value", 0, _HELP("Signal to send"), 0,
+			_UICONFIG("enum_int:MoveToField=0,MoveFromField=1,Load=2,Unload=3,Abort=4,StartEngine=5,StopEngine=6") ),
 		{0},
 	};
 
 	// Output
-	static const SOutputPortConfig outputs[] = {
-		OutputPortConfig_Void("Done", _HELP("Trigger when signal is made, always")),
-		OutputPortConfig_Void("Success", _HELP("Trigger when signal is made successfully")),
-		OutputPortConfig_Void("Fail", _HELP("Trigger when signal is not made successfully")),
+	static const SOutputPortConfig outputs[] =
+	{
+		OutputPortConfig_Void("Done", _HELP("Triggered when signal is made")),
 		{0},
 	};
 
@@ -296,19 +611,130 @@ void CFlowHarvesterSignalNode::ProcessEvent(EFlowEvent event, SActivationInfo *p
 {
 	switch (event)
 	{
+		// eFE_Activate - A port is active, handle it
+		case eFE_Activate:
+		{
+			if (true == IsPortActive(pActInfo, EIP_Signal))
+			{
+				// Get harvester associated with graph
+				TeamID nTeamID = TEAMID_NOTEAM;
+				HarvesterID nHarvesterID = HARVESTERID_INVALID;
+				UNPACK_TEAM_HARV_ID(pActInfo->pGraph->GetGraphEntity(HARVESTER_GRAPH_INDEX), nTeamID, nHarvesterID);
+				m_pHarvester = (NULL == g_D6Core->pTeamManager ? NULL : 
+					g_D6Core->pTeamManager->GetTeamHarvester(nTeamID, nHarvesterID));
+				if (NULL == m_pHarvester)
+				{
+					GameWarning("[Harvester Signal %d] Failed to get harvester associated with graph", pActInfo->myID);
+					break;
+				}
+
+				// Send signal
+				int nSignal = GetPortInt(pActInfo, EIP_SignalVal);
+				m_pHarvester->SignalQueue.push_back(nSignal);
+
+				// Activate done
+				ActivateOutput(pActInfo, EOP_Done, true);
+			}
+		}
+		break;
+	}
+}
+
+////////////////////////////////////////////////////
+void CFlowHarvesterGotoNode::GetConfiguration(SFlowNodeConfig& config)
+{
+	// Input
+	static const SInputPortConfig inputs[] =
+	{
+		InputPortConfig_Void("Move", _HELP("Move to the specified location")),
+		InputPortConfig<Vec3>("GotoPos", _HELP("Where to move to. Note: 'Z' is ignored"), _HELP("Goto Position")),
+		InputPortConfig<float>("MaxSpeed", 0.0f, _HELP("How fast the harvester can move (max)"), _HELP("Top Speed")),
+		InputPortConfig<float>("MinSpeed", 0.0f, _HELP("How fast the harvester can move (min)"), _HELP("Low Speed")),
+		InputPortConfig<float>("SlowDist", 0.0f, _HELP("How far away before harvester should start to slow down"), _HELP("Slow Distance")),
+		InputPortConfig<bool>("BreakPast", false, _HELP("Set to signal harvester to break once it passes the location"), _HELP("Break Past")),
+		InputPortConfig<float>("TimeOut", 0.0f, _HELP("Set how long the harvester may attempt to move before timing out")),
+		{0},
+	};
+
+	// Output
+	static const SOutputPortConfig outputs[] =
+	{
+		OutputPortConfig_Void("AtLoc", _HELP("Triggered when harvester is at or passes the location"), _HELP("At Location")),
+		OutputPortConfig_Void("TimedOut", _HELP("Triggered when harvester times out and did not make it to the location"), _HELP("Timed Out")),
+		{0},
+	};
+
+	// Set up config
+	config.pInputPorts = inputs;
+	config.pOutputPorts = outputs;
+	config.sDescription = _HELP("Use to move a harvester to a new location.");
+	config.SetCategory(EFLN_WIP);
+}
+
+////////////////////////////////////////////////////
+void CFlowHarvesterGotoNode::ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo)
+{
+	switch (event)
+	{
 		// eFE_Initialize - Flow node initialization
 		case eFE_Initialize:
 		{
-			
+			m_bIsActive = m_bHasPastPoint = m_bNeedsTurnAround = false;
+			m_fSpeedRat = 0.0f;
+			m_fStartTime = gEnv->pTimer->GetCurrTime();
+
+			m_bBreakPast = false;
+			m_fMaxSpeed = m_fMinSpeed = m_fSlowDist = m_fTimeOut = 0.0f;
+			pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
 		}
 		break;
 
 		// eFE_Activate - A port is active, handle it
 		case eFE_Activate:
 		{
-			if (true == IsPortActive(pActInfo, EIP_Signal))
+			if (true == IsPortActive(pActInfo, EIP_Move))
 			{
-				int a = 2;
+				// Get params
+				m_bBreakPast = GetPortBool(pActInfo, EIP_BreakPast);
+				m_fMaxSpeed = GetPortFloat(pActInfo, EIP_MaxSpeed);
+				m_fMinSpeed = GetPortFloat(pActInfo, EIP_MinSpeed);
+				m_fSlowDist = GetPortFloat(pActInfo, EIP_SlowDist);
+				m_fTimeOut = GetPortFloat(pActInfo, EIP_TimeOut);
+				m_vGotoPos = GetPortVec3(pActInfo, EIP_GotoPos);
+
+				// Validate speeds
+				if (m_fMinSpeed > m_fMaxSpeed) m_fMinSpeed = m_fMaxSpeed;
+				if (m_fMaxSpeed < m_fMinSpeed) m_fMaxSpeed = m_fMinSpeed;
+
+				// Square slow distance for faster math
+				m_fSlowDist *= m_fSlowDist;
+				if (m_fMaxSpeed == m_fMinSpeed) m_fSpeedRat = 1.0f;
+				else m_fSpeedRat = m_fSlowDist/(m_fMaxSpeed-m_fMinSpeed);
+
+				// Get harvester associated with graph
+				TeamID nTeamID = TEAMID_NOTEAM;
+				HarvesterID nHarvesterID = HARVESTERID_INVALID;
+				UNPACK_TEAM_HARV_ID(pActInfo->pGraph->GetGraphEntity(HARVESTER_GRAPH_INDEX), nTeamID, nHarvesterID);
+				m_pHarvester = (NULL == g_D6Core->pTeamManager ? NULL : 
+					g_D6Core->pTeamManager->GetTeamHarvester(nTeamID, nHarvesterID));
+				if (NULL == m_pHarvester)
+				{
+					GameWarning("[Harvester Goto %d] Failed to get harvester associated with graph", pActInfo->myID);
+					break;
+				}
+
+				// Determine if vehicle needs to turn around first
+				IEntity *pVehEntity = gEnv->pEntitySystem->GetEntity(m_pHarvester->nEntityID);
+				Vec3 vVehPos(pVehEntity->GetPos());
+				vVehPos.z = 0.0f;
+				Quat orientation = pVehEntity->GetRotation();
+				Vec3 vVehForward = orientation * Vec3Constants<float>::fVec3_OneY;
+				float fDot = vVehForward.Dot((m_vGotoPos-vVehPos).GetNormalized());
+				m_bNeedsTurnAround = (fDot < 0.0f);
+
+				// Start a movin'!
+				pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, true);
+				m_bIsActive = true;
 			}
 		}
 		break;
@@ -316,7 +742,82 @@ void CFlowHarvesterSignalNode::ProcessEvent(EFlowEvent event, SActivationInfo *p
 		// eFE_Update - Flow node update
 		case eFE_Update:
 		{
-			
+			// Only update if active
+			if (false == m_bIsActive) break;
+
+			// Check timeout
+			if (m_fTimeOut > 0.0f)
+			{
+				if (m_fTimeOut <= (gEnv->pTimer->GetCurrTime()-m_fStartTime))
+				{
+					ActivateOutput(pActInfo, EOP_TimedOut, true);
+					m_bIsActive = false;
+					break;
+				}
+			}
+
+			// Manipulate harvester movement
+			IEntity *pVehEntity = (NULL == m_pHarvester ? NULL : gEnv->pEntitySystem->GetEntity(m_pHarvester->nEntityID));
+			IVehicle *pVehicle = (NULL == m_pHarvester ? NULL : g_D6Core->pD6Game->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(m_pHarvester->nEntityID));
+			IVehicleMovement *pVehicleMovement = (NULL == pVehicle ? NULL : pVehicle->GetMovement());
+			if (NULL != pVehEntity && NULL != pVehicleMovement)
+			{
+				float fRealSpeed = m_fMaxSpeed;
+				Vec3 vVehPos(pVehEntity->GetPos());
+				vVehPos.z = 0.0f;
+
+				// See if it has passed the point
+				if (false == m_bHasPastPoint)
+				{
+					Quat orientation = pVehEntity->GetRotation();
+					Vec3 vVehForward = orientation * Vec3Constants<float>::fVec3_OneY;
+					float fDot = vVehForward.Dot((m_vGotoPos-vVehPos).GetNormalized());
+					if (false == m_bNeedsTurnAround && fDot <= 0.0f)
+					{
+						m_bHasPastPoint = true;
+					}
+					else if (true == m_bNeedsTurnAround && fDot > 0.0f)
+					{
+						m_bNeedsTurnAround = false; // We've turned around and are now heading towards it
+					}
+				}
+				
+				// Handle movement logic
+				if (false == m_bHasPastPoint)
+				{
+					// Look to see if we should start slowing down
+					if (m_fSlowDist > 0.0f)
+					{
+						float fDistSq = vVehPos.GetSquaredDistance2D(m_vGotoPos);
+						if (fDistSq < m_fSlowDist)
+						{
+							// Calculate slowed speed
+							fRealSpeed = (fDistSq/m_fSpeedRat) + m_fMinSpeed;
+						}
+					}
+				}
+				else
+				{
+					// Look if we need to apply the breaks
+					if (true == m_bBreakPast)
+						fRealSpeed = 0.0f;			// A speed of '0' activates the breaks
+					else
+						fRealSpeed = m_fMinSpeed;	// Use min speed to coast to a stop
+				}
+
+				// Request it to continue to move
+				CMovementRequest request;
+				request.SetDesiredSpeed(fRealSpeed); // Will clamp to max speed based on vehicle settings
+				request.SetMoveTarget(m_vGotoPos);
+				pVehicleMovement->RequestMovement(request);
+
+				// If we have arrived at the point, signal
+				if (true == m_bHasPastPoint)
+				{
+					ActivateOutput(pActInfo, EOP_AtLoc, true);
+					m_bIsActive = false;
+				}
+			}
 		}
 		break;
 	}
@@ -326,4 +827,5 @@ void CFlowHarvesterSignalNode::ProcessEvent(EFlowEvent event, SActivationInfo *p
 ////////////////////////////////////////////////////
 
 REGISTER_FLOW_NODE("Harvester:Controller", CFlowHarvesterControllerNode);
-REGISTER_FLOW_NODE_SINGLETON("Harvester:Signal", CFlowHarvesterSignalNode);
+REGISTER_FLOW_NODE("Harvester:Signal", CFlowHarvesterSignalNode);
+REGISTER_FLOW_NODE("Harvester:Goto", CFlowHarvesterGotoNode);

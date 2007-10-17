@@ -308,11 +308,16 @@ public:
 	//			through the vehicle factory (if present)
 	//		vPos - Where to create the harvester at if not
 	//			though the vehicle factory
+	//		fDir - Direction to face if not created through
+	//			the vehicle factory
+	//
+	// Out:	ppDef - Harvester defintion (optional)
 	//
 	// Returns ID of harvester or HARVESTERID_INVALID
 	//	on error
 	////////////////////////////////////////////////////
-	virtual HarvesterID CreateTeamHarvester(TeamID nID, bool bUseFactory, Vec3 const& vPos);
+	virtual HarvesterID CreateTeamHarvester(TeamID nID, bool bUseFactory,
+		Vec3 const& vPos, float fDir, STeamHarvesterDef **ppDef = NULL);
 
 	////////////////////////////////////////////////////
 	// GetTeamHarvesterInfo
@@ -329,32 +334,16 @@ public:
 	virtual bool GetTeamHarvesterInfo(TeamID nID, HarvesterList& list);
 
 	////////////////////////////////////////////////////
-	// CheckHarvesterFlag
+	// GetTeamHarvester
 	//
-	// Purpose: Returns TRUE if the given flag is set on
-	//	the harvester specified
-	//
-	// In:	nID - Owning team ID
-	//		nHarvesterID - ID of the harvester
-	//		nFlag - Flag to check
-	//
-	// Returns TRUE if flag is set, FALSE if not
-	////////////////////////////////////////////////////
-	virtual bool CheckHarvesterFlag(TeamID nID, HarvesterID nHarvesterID, int nFlag);
-
-	////////////////////////////////////////////////////
-	// SetHarvesterFlag
-	//
-	// Purpose: Set the flag on the harvester specified
+	// Purpose: Return the harvestere definition
 	//
 	// In:	nID - Owning team ID
 	//		nHarvesterID - ID of the harvester
-	//		nFlag - Flag to set
-	//		bOn - TRUE to turn it on, FALSE to clear it
 	//
-	// Returns TRUE on success, FALSE on failure
+	// Returns STeamHarvesterDef object or NULL on error
 	////////////////////////////////////////////////////
-	virtual bool SetHarvesterFlag(TeamID nID, HarvesterID nHarvesterID, int nFlag, bool bOn = true);
+	virtual STeamHarvesterDef *GetTeamHarvester(TeamID nID, HarvesterID nHarvesterID);
 
 protected:
 	////////////////////////////////////////////////////
@@ -369,7 +358,7 @@ protected:
 	//
 	// Return TRUE on success, FALSE otherwise
 	////////////////////////////////////////////////////
-	virtual bool _CreateHarvesterEntity(STeamHarvesterDef &def);
+	virtual bool _CreateHarvesterEntity(STeamHarvesterDef *def);
 
 	////////////////////////////////////////////////////
 	// _RemoveTeamsHarvesters
