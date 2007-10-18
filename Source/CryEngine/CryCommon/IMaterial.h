@@ -33,6 +33,9 @@ class CCamera;
 
 #define MAX_SUB_MATERIALS 32
 
+// Special names for materials.
+#define MTL_SPECIAL_NAME_COLLISION_PROXY "collision_proxy"
+
 //////////////////////////////////////////////////////////////////////////
 // Description:
 //    IMaterial is an interface to the material object, SShaderItem host which is a combination of IShader and SShaderInputResources.
@@ -56,16 +59,17 @@ enum EMaterialFlags
 	MTL_FLAG_NODRAW				= 0x0400,   // Do not render this material.
 	MTL_FLAG_NOPREVIEW		= 0x0800,   // Cannot preview the material.
 	MTL_FLAG_NOTINSTANCED = 0x1000,   // Do not instantiate this material.
-    //MTL_FLAG_GLOW			    = 0x2000,   // Use glow for this material    
+  MTL_FLAG_COLLISION_PROXY = 0x2000,// This material is the collision proxy.
 	MTL_FLAG_SCATTER			= 0x4000,   // Use scattering for this material
 	MTL_FLAG_TRANSLUCENCE	= 0x8000,   // This material has to be rendered as a translucense layer
   MTL_FLAG_NON_REMOVABLE= 0x10000,  // Material with this flag once created are never removed from material manager (Used for decal materials, this flag should not be saved).
 	MTL_FLAG_HIDEONBREAK  = 0x20000,   // Non-physicalized subsets with such materials will be removed after the object breaks
+	MTL_FLAG_UIMATERIAL  = 0x40000,   // Used for UI in Editor. Don't need show it DB.
 	MTL_FLAG_PER_OBJECT_SHADOW_PASS_NEEDED = 0x40000,   // materials with alpha blending requires special processing for shadows
 };
 
 #define MTL_FLAGS_SAVE_MASK (MTL_FLAG_WIRE|MTL_FLAG_2SIDED|MTL_FLAG_ADDITIVE|MTL_FLAG_ADDITIVE_DECAL|MTL_FLAG_LIGHTING|\
-				MTL_FLAG_NOSHADOW|MTL_FLAG_PURE_CHILD|MTL_FLAG_MULTI_SUBMTL|MTL_FLAG_SCATTER|MTL_FLAG_TRANSLUCENCE|MTL_FLAG_HIDEONBREAK)
+				MTL_FLAG_NOSHADOW|MTL_FLAG_PURE_CHILD|MTL_FLAG_MULTI_SUBMTL|MTL_FLAG_SCATTER|MTL_FLAG_TRANSLUCENCE|MTL_FLAG_HIDEONBREAK|MTL_FLAG_UIMATERIAL)
 
 // Post effects flags
 enum EPostEffectFlags
@@ -84,13 +88,26 @@ enum EMaterialLayerFlags
 
 	MTL_LAYER_FROZEN = 0x0001,       
 	MTL_LAYER_WET    = 0x0002,
-	MTL_LAYER_DIRT   = 0x0004,
-	MTL_LAYER_BURNED = 0x0008,
+	MTL_LAYER_CLOAK   = 0x0004,
+	MTL_LAYER_DYNAMICFROZEN = 0x0008,
 
   // Usage flags
 
   MTL_LAYER_USAGE_NODRAW = 0x0001,       // Layer is disabled
   MTL_LAYER_USAGE_REPLACEBASE = 0x0002,  // Replace base pass rendering with layer - optimization
+
+  // Blend offsets
+
+  MTL_LAYER_BLEND_FROZEN = 0xff000000,       
+  MTL_LAYER_BLEND_WET    = 0x00ff0000,
+  MTL_LAYER_BLEND_CLOAK  = 0x0000ff00,
+  MTL_LAYER_BLEND_DYNAMICFROZEN = 0x000000ff,
+
+  MTL_LAYER_BLEND_MASK = (MTL_LAYER_BLEND_FROZEN|MTL_LAYER_BLEND_WET|MTL_LAYER_BLEND_CLOAK|MTL_LAYER_BLEND_DYNAMICFROZEN),
+
+  // Slot count
+  
+  MTL_LAYER_MAX_SLOTS = 3
 };
 
 //////////////////////////////////////////////////////////////////////////////////////

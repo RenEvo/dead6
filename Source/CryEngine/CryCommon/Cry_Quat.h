@@ -29,10 +29,18 @@ template <typename F> struct Quat_tpl
 #ifdef _DEBUG
 	ILINE Quat_tpl() 
 	{
-		w=NanTraits<F>::GetNan();	v.x=NanTraits<F>::GetNan();	v.y=NanTraits<F>::GetNan();	v.z=NanTraits<F>::GetNan();
+		if (sizeof(F)==4)
+		{
+			uint32* p=(uint32*)&v.x; 		p[0]=F32NAN;	p[1]=F32NAN;	p[2]=F32NAN;	p[3]=F32NAN;
+		}
+		if (sizeof(F)==8)
+		{
+			uint64* p=(uint64*)&v.x;		p[0]=F64NAN;	p[1]=F64NAN;	p[2]=F64NAN;	p[3]=F64NAN;
+		}
 	}
 #else
-	ILINE Quat_tpl() : w(1),v(0,0,0) {}
+//	ILINE Quat_tpl() : w(1),v(0,0,0) {}
+	ILINE Quat_tpl() {}
 #endif
 
 
@@ -40,6 +48,23 @@ template <typename F> struct Quat_tpl
 	ILINE Quat_tpl( F W,F X,F Y,F Z ) : w(W),v(X,Y,Z)	{}
 	ILINE Quat_tpl( F angle, const Vec3_tpl<F> &axis) : w(angle),v(axis) {};
 	ILINE Quat_tpl(type_identity) : w(1),v(0,0,0) {}
+
+#if defined(__SPU__)
+	ILINE Quat_tpl(const Quat_s& floatQuat)
+	{
+		STATIC_CHECK(sizeof(*this) == 16, ONLY_USE_ALIGNED_QUATS);
+		//assert(((uint32)this & 15) == 0);
+		*(vec_uint4*)this = *(vec_uint4*)&floatQuat;
+	}
+
+	ILINE Quat_tpl& operator=(const Quat_s& floatQuat)
+	{
+		STATIC_CHECK(sizeof(*this) == 16, ONLY_USE_ALIGNED_QUATS);
+		//assert(((uint32)this & 15) == 0);
+		*(vec_uint4*)this = *(vec_uint4*)&floatQuat;
+		return *this;
+	}
+#endif
 
 	explicit ILINE Quat_tpl( const Ang3_tpl<F>& rad ) {
 		assert(rad.IsValid());
@@ -85,8 +110,6 @@ template <typename F> struct Quat_tpl
 		return true;
 	}
 
-	void SetRotationAA(const Vec3_tpl<F> &rot);
-	static Quat_tpl<F> CreateRotationAA(const Vec3_tpl<F> &rot);
 
 	void SetRotationAA(F rad, const Vec3_tpl<F> &axis);
 	static Quat_tpl<F> CreateRotationAA(F rad, const Vec3_tpl<F> &axis);
@@ -161,6 +184,16 @@ template <typename F> struct Quat_tpl
 
 	static Quat_tpl<F> CreateSquad( const Quat_tpl<F>& p,const Quat_tpl<F>& a,const Quat_tpl<F>& b,const Quat_tpl<F>& q, F t );
 	static Quat_tpl<F> CreateSquadRev( F angle, const Vec3& axis, const Quat_tpl<F>& p, const Quat_tpl<F>& a, const Quat_tpl<F>& b, const Quat_tpl<F>& q, F t );
+
+	Quat_tpl<F> GetScaled(F scale) const
+	{
+		return CreateNlerp(IDENTITY, *this, scale);
+/*
+		AngleAxis_tpl<F> aa = *this;
+		aa.angle *= scale;
+		return CreateRotationAA(aa.angle, aa.axis);
+*/
+	}
 
 	void ClampAngle(F maxAngleDeg)
 	{
@@ -442,26 +475,6 @@ template <typename F> ILINE Quat_tpl<F> Quat_tpl<F>::CreateIdentity(void)	{ retu
 template <typename F> ILINE void	Quat_tpl<F>::SetIdentity(void) { w=1; v.x=0; v.y=0; v.z=0; }
 
 
-/*!
-* Create rotation-quaternion around an arbitrary axis (=CVector).
-* This is an implemetation of "Eulers Theorem". the axis is assumed to be nomalised.
-*
-* Example:
-*		Quat q=Quat::CreateRotationAA( 2.14255f, axis );
-*   or
-*		q.SetRotationAA( 2.14255f, axis );
-*/
-template<typename F> ILINE Quat_tpl<F> Quat_tpl<F>::CreateRotationAA(const Vec3_tpl<F> &rot) { 	
-	Quat_tpl<F> q;	q.SetRotationAA(rot); 	return q;	
-}
-template<typename F> ILINE void Quat_tpl<F>::SetRotationAA(const Vec3_tpl<F> &rot) { 
-	F angle = rot.GetLength();
-	if (angle == F(0))
-		SetIdentity();
-	else
-		SetRotationAA(angle, rot / angle);
-}
-
 template<typename F> ILINE Quat_tpl<F> Quat_tpl<F>::CreateRotationAA(F rad, const Vec3_tpl<F> &axis) { 	
 	Quat_tpl<F> q;	q.SetRotationAA(rad,axis); 	return q;	
 }
@@ -570,8 +583,8 @@ template<typename F> ILINE void Quat_tpl<F>::SetRotationZ( f32 r )
 template<typename F> ILINE Quat_tpl<F> Quat_tpl<F>::CreateRotationV0V1(const Vec3_tpl<F>& v0, const Vec3_tpl<F>& v1) {	Quat_tpl<F> q;	q.SetRotationV0V1(v0,v1); 	return q;	}
 template<typename F> void Quat_tpl<F>::SetRotationV0V1(const Vec3_tpl<F>& v0, const Vec3_tpl<F>& v1)	
 { 
-	assert(v0.IsUnit(0.001f));
-	assert(v1.IsUnit(0.001f));
+	assert(v0.IsUnit(0.01f));
+	assert(v1.IsUnit(0.01f));
 	f64 dot = v0.x*v1.x+v0.y*v1.y+v0.z*v1.z+1.0;
 	if (dot > 0.0001) 
 	{
@@ -620,7 +633,7 @@ template<typename F> void Quat_tpl<F>::SetRotationV0V1(const Vec3_tpl<F>& v0, co
 template<typename F> ILINE Quat_tpl<F> Quat_tpl<F>::CreateRotationVDir( const Vec3_tpl<F>& vdir ) {	Quat_tpl<F> q;	q.SetRotationVDir(vdir); return q;	}
 template<typename F> ILINE void Quat_tpl<F>::SetRotationVDir( const Vec3_tpl<F>& vdir )
 {
-	assert(vdir.IsUnit(0.001f));
+	assert(vdir.IsUnit(0.01f));
 	//set default initialisation for up-vector	
 	w=F(0.70710676908493042);	v.x=F((vdir.z+vdir.z)*0.35355338454246521);	v.y=F(0.0); 	v.z=F(0.0); 
 	f64 l = sqrt(vdir.x*vdir.x+vdir.y*vdir.y);
@@ -996,8 +1009,14 @@ template <typename F> struct QuatT_tpl
 #ifdef _DEBUG
 	ILINE QuatT_tpl() 
 	{
-		q.w=NanTraits<F>::GetNan();	q.v.x=NanTraits<F>::GetNan();	q.v.y=NanTraits<F>::GetNan();	q.v.z=NanTraits<F>::GetNan();
-		t.x=NanTraits<F>::GetNan();	t.y=NanTraits<F>::GetNan();	t.z=NanTraits<F>::GetNan();
+		if (sizeof(F)==4)
+		{
+			uint32* p=(uint32*)&q.v.x; 		p[0]=F32NAN;p[1]=F32NAN;p[2]=F32NAN;p[3]=F32NAN; p[4]=F32NAN;p[5]=F32NAN;p[6]=F32NAN;
+		}
+		if (sizeof(F)==8)
+		{
+			uint64* p=(uint64*)&q.v.x;		p[0]=F64NAN;p[1]=F64NAN;p[2]=F64NAN;p[3]=F64NAN; p[4]=F64NAN;p[5]=F64NAN;p[6]=F64NAN;
+		}
 	}
 #else
 	ILINE QuatT_tpl()	{};
@@ -1150,7 +1169,7 @@ template <typename F> struct QuatT_tpl
 
 	QuatT_tpl<F> GetScaled(F scale)
 	{
-		return CreateNLerp(QuatT_tpl<F>(IDENTITY), *this, scale);
+		return QuatT_tpl<F>(t * scale, q.GetScaled(scale));
 	}
 
 	AUTO_STRUCT_INFO
@@ -1274,9 +1293,14 @@ template <typename F> struct QuatTS_tpl
 #ifdef _DEBUG
 	ILINE QuatTS_tpl() 
 	{
-		q.w=NanTraits<F>::GetNan();	q.v.x=NanTraits<F>::GetNan();	q.v.y=NanTraits<F>::GetNan();	q.v.z=NanTraits<F>::GetNan();
-		t.x=NanTraits<F>::GetNan();	t.y=NanTraits<F>::GetNan();	t.z=NanTraits<F>::GetNan();
-		s	 =NanTraits<F>::GetNan();
+		if (sizeof(F)==4)
+		{
+			uint32* p=(uint32*)&q.v.x; 		p[0]=F32NAN;p[1]=F32NAN;p[2]=F32NAN;p[3]=F32NAN; p[4]=F32NAN;p[5]=F32NAN;p[6]=F32NAN;p[7]=F32NAN;
+		}
+		if (sizeof(F)==8)
+		{
+			uint64* p=(uint64*)&q.v.x;		p[0]=F64NAN;p[1]=F64NAN;p[2]=F64NAN;p[3]=F64NAN; p[4]=F64NAN;p[5]=F64NAN;p[6]=F64NAN;p[7]=F64NAN;
+		}
 	}
 #else
 	ILINE QuatTS_tpl()	{};

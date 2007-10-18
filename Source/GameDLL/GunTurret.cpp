@@ -18,6 +18,7 @@ History:
 #include <IMovementController.h>
 #include <IGameObjectSystem.h>
 #include <IVehicleSystem.h>
+#include <IMusicSystem.h>
 #include <GameRules.h>
 #include "Actor.h"
 #include "Game.h"
@@ -121,76 +122,93 @@ void CGunTurret::PostInit(IGameObject * pGameObject)
 {
 	CItem::PostInit(pGameObject);
 
+	if(gEnv->bServer)
+		UpdateEntityProperties();
+
+	SetOwnerId(GetEntityId());
+
 	if ( !gEnv->bServer )
 		for (int i=0; i<4;i++)
 			pGameObject->SetUpdateSlotEnableCondition(this, i, eUEC_InRange);
 }
 
 //------------------------------------------------------------------------
-void CGunTurret::Serialize(TSerialize ser, unsigned aspects)
+bool CGunTurret::NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int flags )
 {
 	// call base class
-	CWeapon::Serialize(ser, aspects);
+	if (!CWeapon::NetSerialize(ser, aspect, profile, flags))
+		return false;
 
-	if (ser.GetSerializationTarget()==eST_Network)
+	if(aspect == ASPECT_STATEBITS)
 	{
-		if(aspects&ASPECT_STATEBITS)
+		bool was_destroyed = IsDestroyed();
+		bool destr=was_destroyed;
+		ser.Value("destroyed",destr,'bool');
+		if(ser.IsReading() && destr != was_destroyed)
 		{
-			bool was_destroyed = IsDestroyed();
-			bool destr=was_destroyed;
-			ser.Value("destroyed",destr,'bool');
-			if(ser.IsReading() && destr != was_destroyed)
-			{
-				if(destr)
-					OnDestroyed();
-				else
-				{
-					OnRepaired();
-				}
-			}
-			bool enabled = m_turretparams.enabled;
-			ser.Value("enabled",m_turretparams.enabled,'bool');
-			if(ser.IsReading() && enabled != m_turretparams.enabled)
-				Activate(m_turretparams.enabled);
-
-			ser.Value("health", m_stats.health, 'iii');
-
-			if (ser.IsReading())
-				UpdateDamageLevel();
-		}
-
-		if (aspects&ASPECT_GOALORIENTATION)
-		{
-			//adjust the range
-			if(ser.IsReading())
-			{
-				float yaw = 0;
-				ser.Value("target_yaw",yaw, 'frad');
-				m_goalYaw = yaw<0.0f?yaw + g_PI2:yaw;
-			}
+			if(destr)
+				OnDestroyed();
 			else
 			{
-				float yaw = m_goalYaw>g_PI?m_goalYaw - g_PI2:m_goalYaw;
-				ser.Value("target_yaw",yaw, 'frad');
+				OnRepaired();
 			}
-			ser.Value("target_pitch",m_goalPitch, 'frad');
-
-			EntityId old_id = m_targetId;
-			ser.Value("target", m_targetId, 'eid');
-			if(old_id != m_targetId)
-			{
-        OnTargetLocked(m_targetId ? gEnv->pEntitySystem->GetEntity(m_targetId) : 0);                
-			}
-
-      if (m_fireparams.deviation_amount != 0.f)
-        ser.Value("deviation", m_deviationPos);
 		}
+		bool enabled = m_turretparams.enabled;
+		ser.Value("enabled",m_turretparams.enabled,'bool');
+		if(ser.IsReading() && enabled != m_turretparams.enabled)
+			Activate(m_turretparams.enabled);
+
+		ser.Value("health", m_stats.health, 'iii');
+
+		if (ser.IsReading())
+			UpdateDamageLevel();
 	}
-	else
+
+	if (aspect == ASPECT_GOALORIENTATION)
 	{
-		ser.BeginGroup("GunTurret");
+		//adjust the range
+		if(ser.IsReading())
+		{
+			float yaw = 0;
+			ser.Value("target_yaw",yaw, 'frad');
+			m_goalYaw = yaw<0.0f?yaw + g_PI2:yaw;
+		}
+		else
+		{
+			float yaw = m_goalYaw>g_PI?m_goalYaw - g_PI2:m_goalYaw;
+			ser.Value("target_yaw",yaw, 'frad');
+		}
+		ser.Value("target_pitch",m_goalPitch, 'frad');
+
+		EntityId old_id = m_targetId;
 		ser.Value("target", m_targetId, 'eid');
-		ser.EndGroup();
+		if(old_id != m_targetId)
+		{
+      OnTargetLocked(m_targetId ? gEnv->pEntitySystem->GetEntity(m_targetId) : 0);                
+		}
+
+    if (m_fireparams.deviation_amount != 0.f)
+      ser.Value("deviation", m_deviationPos);
+	}
+
+	return true;
+}
+
+void CGunTurret::FullSerialize( TSerialize ser )
+{
+	CWeapon::FullSerialize(ser);
+
+	ser.BeginGroup("GunTurret");
+	ser.Value("target", m_targetId);
+	ser.EndGroup();
+
+	if(ser.IsReading())
+	{	
+		if(!IsDestroyed())
+		{
+			if(IGameObject *pGameObject = GetGameObject())
+				PostInit(pGameObject);
+		}
 	}
 }
 
@@ -240,7 +258,7 @@ void CGunTurret::OnReset()
 
   if (m_turretparams.light_fov > 0.f)  
   { 
-    m_lightId = AttachLight(eIGS_ThirdPerson, 0, true, false, m_turretparams.mg_range, m_searchparams.light_color*m_searchparams.light_diffuse_mul, 1.f/m_searchparams.light_diffuse_mul, m_searchparams.light_texture, m_turretparams.light_fov, m_searchparams.light_helper, Vec3(0,0,0), Vec3(-1,0,0), m_searchparams.light_material, m_searchparams.light_hdr_dyn);
+    m_lightId = AttachLight(eIGS_ThirdPerson, 0, true, m_turretparams.mg_range, m_searchparams.light_color*m_searchparams.light_diffuse_mul, 1.f/m_searchparams.light_diffuse_mul, m_searchparams.light_texture, m_turretparams.light_fov, m_searchparams.light_helper, Vec3(0,0,0), Vec3(-1,0,0), m_searchparams.light_material, m_searchparams.light_hdr_dyn);
     m_lightSound = PlayAction(g_pItemStrings->use_light);
   }
 
@@ -271,7 +289,7 @@ void CGunTurret::OnDestroyed()
 	if (m_fm2)
 	{
 		if (m_fm2->IsFiring())
-			m_fm2->StopFire(GetEntity()->GetId());
+			m_fm2->StopFire();
 	}
 
   StopSound(m_lightSound);
@@ -353,6 +371,11 @@ bool CGunTurret::ReadItemParams(const IItemParamsNode *root)
       tm.SetTranslation(GetSlotHelperPos(eIGS_ThirdPerson,m_barrelHelper.c_str(),false));
       GetEntity()->SetSlotLocalTM(eIGS_Aux1,tm);
     }*/   
+		m_radarHelperPos = GetSlotHelperPos(eIGS_Aux0, m_radarHelper.c_str(), false);
+		m_barrelHelperPos = GetSlotHelperPos(eIGS_ThirdPerson, m_barrelHelper.c_str(), false);
+		m_fireHelperPos = GetSlotHelperPos(eIGS_ThirdPerson, m_fireHelper.c_str(), false);
+		m_rocketHelperPos = GetSlotHelperPos(eIGS_ThirdPerson, m_rocketHelper, false);
+		
   }
 
   if (const IItemParamsNode* turret = root->GetChild("turret"))
@@ -384,53 +407,42 @@ bool CGunTurret::IsOperational()
 }
 
 //------------------------------------------------------------------------
-void CGunTurret::GetTargetBounds(IEntity* pEntity, AABB& bounds) const
+Vec3 CGunTurret::GetTargetPos(IEntity* pEntity) const
 {
-	if (ICharacterInstance* pCharInstance = pEntity->GetCharacter(0))
+	pEntity=ResolveTarget(pEntity);
+
+	if (IPhysicalEntity *pPE = pEntity->GetPhysics())
 	{
-		if (ISkeleton* pSkeleton = pCharInstance->GetISkeleton())
+		pe_status_dynamics dyn;
+		if (pPE->GetStatus(&dyn))
 		{
-      bounds = pCharInstance->GetAABB();
-      return;
+			if (dyn.submergedFraction<=0.05f)
+				return dyn.centerOfMass;
+
+			Vec3 pos=dyn.centerOfMass;
+			float waterLevel=gEnv->p3DEngine->GetWaterLevel(&pos);
+			if (waterLevel>=pos.z)
+				pos.z=waterLevel;
+
+			return pos;
 		}
 	}
 
-  pEntity->GetLocalBounds(bounds);
-}
-
-//------------------------------------------------------------------------
-Vec3 CGunTurret::GetTargetPos(IEntity* pEntity) const
-{
-  AABB bounds;
-  GetTargetBounds(pEntity, bounds);
-  
-  return pEntity->GetWorldTM() * bounds.GetCenter();
-}
-
-//------------------------------------------------------------------------
-Vec3 CGunTurret::GetTargetPos(IActor* pTarget) const
-{
-	IEntity *pEntity = pTarget->GetEntity();
-
-	if(IVehicle* pV = pTarget->GetLinkedVehicle())
-	{
-		pEntity = pV->GetEntity();
-	}
-
-	return GetTargetPos(pEntity);
+	return pEntity->GetWorldPos();
 }
 
 //------------------------------------------------------------------------
 Vec3 CGunTurret::PredictTargetPos(IEntity* pTarget, bool sec)//sec - weapon to use
 {
+	pTarget = ResolveTarget(pTarget);
   Vec3 tpos = GetTargetPos(pTarget);
 
   if (m_turretparams.search_only || m_turretparams.prediction == 0.f)
     return tpos;
 
 	IPhysicalEntity* pe = pTarget->GetPhysics();
-	pe_status_dynamics	dyn;
-	if (!pe->GetStatus(&dyn))
+	pe_status_dynamics dyn;
+	if (!pe || !pe->GetStatus(&dyn))
     return tpos;
 	
 	Vec3 vel = dyn.v;
@@ -483,6 +495,8 @@ Vec3 CGunTurret::PredictTargetPos(IEntity* pTarget, bool sec)//sec - weapon to u
 //------------------------------------------------------------------------
 Vec3 CGunTurret::GetSweepPos(IEntity* pTarget, const Vec3& shootPos)
 { 
+	pTarget=ResolveTarget(pTarget);
+
   // sweep on ground    
   int nhints = m_fireparams.hints.size();
   float sweepTime = m_turretparams.sweep_time / (float)nhints;
@@ -502,10 +516,14 @@ Vec3 CGunTurret::GetSweepPos(IEntity* pTarget, const Vec3& shootPos)
   
   dir2d /= dist2d;   
   Vec3 right = Vec3(0,0,-1) % dir2d; 
+	Vec3 zoffset(0,0,0);
 
-  AABB bounds;
-  GetTargetBounds(pTarget, bounds);
-  Vec3 zoffset(0,0,-0.5f*(bounds.max.z-bounds.min.z));
+	if (IPhysicalEntity *pPE = pTarget->GetPhysics())
+	{
+		pe_status_pos ppos;
+		if (pPE->GetStatus(&ppos))
+			zoffset=Vec3(0,0,-0.5f*(ppos.BBox[1].z-ppos.BBox[0].z));
+	}
   
   Vec3 lastHintPos(shootPos);
   const Vec2& lastHint = m_fireparams.hints[m_fireHint-1];
@@ -596,6 +614,15 @@ bool CGunTurret::IsTargetHostile(IActor *pTarget) const
 }
 
 //------------------------------------------------------------------------
+bool CGunTurret::IsTargetSpectating(IActor* pTarget) const
+{
+	if(!pTarget)
+		return false;
+
+	return (static_cast<CActor*>(pTarget)->GetSpectatorMode() != 0);
+}
+
+//------------------------------------------------------------------------
 bool CGunTurret::IsTACBullet(IEntity* pTarget) const
 {	
   const static IEntityClass* pTacClass    = gEnv->pEntitySystem->GetClassRegistry()->FindClass("tacprojectile");
@@ -629,8 +656,11 @@ CGunTurret::ETargetClass CGunTurret::GetTargetClass(IEntity* pTarget)const
 	
 	if(IsTargetDead(pActor))
 		return eTC_NotATarget;
-
+	
 	if (!IsTargetHostile(pActor))
+		return eTC_NotATarget;
+
+	if(IsTargetSpectating(pActor))
 		return eTC_NotATarget;
 
 	bool vehicle = pActor->GetLinkedVehicle()!=0;
@@ -706,10 +736,23 @@ bool CGunTurret::IsAiming(const Vec3 &pos, float treshold) const
 {	
 	Vec3 tdir=(pos-GetWeaponPos()).normalized();
 
-	float angle=RAD2DEG(cry_acosf(GetWeaponDir().Dot(tdir)));
+	float dot = GetWeaponDir().Dot(tdir);
+	float angle=RAD2DEG(cry_acosf(CLAMP(dot,-1.f,1.f)));
 	if (cry_fabsf(angle)>treshold)
 		return false;
 	return true;
+}
+
+//------------------------------------------------------------------------
+IEntity *CGunTurret::ResolveTarget(IEntity *pTarget) const
+{
+	IActor *pActor=GetActor(pTarget->GetId());
+	if (pActor)
+	{
+		if(IVehicle* pV = pActor->GetLinkedVehicle())
+			return pV->GetEntity();
+	}
+	return pTarget;
 }
 
 //------------------------------------------------------------------------
@@ -804,11 +847,7 @@ IEntity *CGunTurret::GetClosestTarget()
 		if (t_class == eTC_NotATarget)
 			continue;
 		
-		Vec3 tpos;
-		if(IActor* pActor = GetActor(pEntity->GetId()))
-			tpos = GetTargetPos(pActor);
-		else
-			tpos = GetTargetPos(pEntity);
+		Vec3 tpos = GetTargetPos(pEntity);
 
 		if(!IsInRange(tpos,t_class))
 			continue;
@@ -821,8 +860,7 @@ IEntity *CGunTurret::GetClosestTarget()
 		bool canShoot = IsTargetShootable(pEntity);
 		if(!canShoot)
 			t_class = eTC_NotATarget;
-
-		if (distSq < closestDistSq || (t_class>=closest))
+		else if (distSq < closestDistSq || (t_class>=closest))
 		{
 			closestDistSq = distSq;
 			closest = t_class;
@@ -903,11 +941,15 @@ bool CGunTurret::RayCheck(IEntity* pTarget, const Vec3& pos, const Vec3& dir) co
   int nSkip = 1;
   int hits = 0;
 
-  if (hits = gEnv->pPhysicalWorld->RayWorldIntersection(pos, dir, ent_all, rwi_stop_at_pierceable|rwi_colltype_any, &rayhit, 1, pSkipEnts, nSkip))
+	//make sure you are not inside geometry when casting
+	Vec3 newPos = pos + 0.3f*dir;
+
+  if (hits = gEnv->pPhysicalWorld->RayWorldIntersection(newPos, dir, ent_all, rwi_stop_at_pierceable|rwi_colltype_any, &rayhit, 1, pSkipEnts, nSkip))
   { 
     if (rayhit.pCollider)
     {
       IEntity * pEntity = (IEntity*)rayhit.pCollider->GetForeignData(PHYS_FOREIGN_ID_ENTITY);
+
       if (pEntity==pTarget)
         return true;
       else if(CActor* pActor = GetActor(pTarget->GetId()))
@@ -927,7 +969,7 @@ bool CGunTurret::IsTargetShootable(IEntity* pTarget)
 { 
 	// raycast shootability check	
   Vec3 pos = m_fireHelper.empty() ? GetWeaponPos() : GetSlotHelperPos(eIGS_ThirdPerson, m_fireHelper.c_str(), true);
-	Vec3 tpos(GetTargetPos(pTarget));
+	Vec3 tpos = GetTargetPos(pTarget);
 	Vec3 dir = tpos - pos;	
 
   bool shootable = RayCheck(pTarget, pos, dir);
@@ -996,7 +1038,7 @@ bool CGunTurret::IsTargetCloaked(IActor* pActor) const
     const Matrix34& weaponTM = GetEntity()->GetSlotWorldTM(eIGS_ThirdPerson);
     Vec3 wpos(weaponTM.GetTranslation());
     Vec3 wdir(weaponTM.GetColumn1());
-    Vec3 tpos(GetTargetPos(pActor));
+    Vec3 tpos(GetTargetPos(pActor->GetEntity()));
 
     float epsilon = 0.8f;
     Quat rot = Quat::CreateRotationAA(epsilon*0.5f*DEG2RAD(m_turretparams.light_fov), weaponTM.GetColumn2()); 
@@ -1104,6 +1146,8 @@ float CGunTurret::GetBurstTime() const
 //------------------------------------------------------------------------
 void CGunTurret::UpdateOrientation(float deltaTime)
 { 
+	FUNCTION_PROFILER(GetISystem(), PROFILE_GAME);
+
 	bool changed = false;  
   bool searching = (m_targetId==0 && m_turretparams.searching);
   float speed	= searching ? m_turretparams.search_speed : m_turretparams.turn_speed;  	
@@ -1114,31 +1158,31 @@ void CGunTurret::UpdateOrientation(float deltaTime)
 	Matrix34 turretTM = GetEntity()->GetSlotLocalTM(eIGS_Aux0, false);
 	Ang3 turretAngles(turretTM);
 
-	if (turretAngles.z<0.0f)
+	if (turretAngles.z < 0.0f)
 		turretAngles.z+=gf_PI2;
 
-	if (cry_fabsf(m_goalYaw-turretAngles.z)>gf_PI)
+	if (cry_fabsf(m_goalYaw-turretAngles.z) > gf_PI)
 	{    
-		if (m_goalYaw>=gf_PI)
-			turretAngles.z+=gf_PI2;
+		if (m_goalYaw >= gf_PI)
+			turretAngles.z += gf_PI2;
 		else
-			turretAngles.z-=gf_PI2;
+			turretAngles.z -= gf_PI2;
 	}
 
-  if (m_turretparams.yaw_range<360.f)
+  if (m_turretparams.yaw_range < 360.f)
   { 
     // reverse, to avoid forbidden range
-    if (m_goalYaw>gf_PI && turretAngles.z<gf_PI)
-      turretAngles.z+=gf_PI2;
-    else if (m_goalYaw<gf_PI && turretAngles.z>gf_PI)
-      turretAngles.z-=gf_PI2;    
+    if (m_goalYaw > gf_PI && turretAngles.z < gf_PI)
+      turretAngles.z += gf_PI2;
+    else if (m_goalYaw < gf_PI && turretAngles.z > gf_PI)
+      turretAngles.z -= gf_PI2;    
   }
   
-	if(cry_fabsf(turretAngles.z-m_goalYaw)>0.0001f)
+	if(cry_fabsf(turretAngles.z-m_goalYaw) > 0.001f)
 	{        
     Interp(turretAngles.z, m_goalYaw, speed, deltaTime, 0.25*speed);    
 
-		if(m_turretSound == INVALID_SOUNDID)
+		if(m_turretSound == INVALID_SOUNDID && gEnv->bClient)
 			m_turretSound = PlayAction(g_pItemStrings->turret);
 		changed = true;
 	}
@@ -1159,11 +1203,11 @@ void CGunTurret::UpdateOrientation(float deltaTime)
 	Ang3 weaponAngles(weaponTM);
 
 	weaponAngles.z = turretAngles.z;  
-	if(cry_fabsf(weaponAngles.x-m_goalPitch)>0.0001f)
+	if(cry_fabsf(weaponAngles.x-m_goalPitch) > 0.001f)
 	{
     Interp(weaponAngles.x, m_goalPitch, speed, deltaTime, 0.25*speed);
 		
-		if(m_cannonSound == INVALID_SOUNDID)
+		if(m_cannonSound == INVALID_SOUNDID && gEnv->bClient)
 			m_cannonSound = PlayAction(g_pItemStrings->cannon);
 		changed = true;
 	}
@@ -1176,20 +1220,28 @@ void CGunTurret::UpdateOrientation(float deltaTime)
 	if(changed) 
 	{
 		weaponTM.SetRotationXYZ(weaponAngles);  
-		weaponTM.SetTranslation(GetSlotHelperPos(eIGS_Aux0,m_radarHelper.c_str(),false));
+		Vec3 w_trans = turretTM.TransformPoint(m_radarHelperPos);
+		//Vec3 w_trans = GetSlotHelperPos(eIGS_Aux0,m_radarHelper.c_str(),false);
+		weaponTM.SetTranslation(w_trans);
+
     GetEntity()->SetSlotLocalTM(eIGS_ThirdPerson, weaponTM);
 
     if (GetEntity()->IsSlotValid(eIGS_Aux1))
     {
-      weaponTM.SetTranslation(GetSlotHelperPos(eIGS_ThirdPerson,m_barrelHelper.c_str(),false));
-      GetEntity()->SetSlotLocalTM(eIGS_Aux1, weaponTM*m_barrelRotation);
+			Vec3 b_trans = weaponTM.TransformPoint(m_barrelHelperPos);
+			//Vec3 b_trans = GetSlotHelperPos(eIGS_ThirdPerson,m_barrelHelper.c_str(),false);
+      weaponTM.SetTranslation(b_trans);
+			GetEntity()->SetSlotLocalTM(eIGS_Aux1, weaponTM*m_barrelRotation);
     }
     
-    for (TEffectInfoMap::const_iterator it=m_effects.begin(); it!=m_effects.end(); ++it)
-    {   
-      Matrix34 tm(GetSlotHelperRotation(eIGS_ThirdPerson,it->second.helper.c_str(),true), GetSlotHelperPos(eIGS_ThirdPerson,it->second.helper.c_str(),true));            
-      SetEffectWorldTM(it->first, tm);
-    }
+		if(gEnv->bClient)
+		{
+			for (TEffectInfoMap::const_iterator it=m_effects.begin(); it!=m_effects.end(); ++it)
+			{   
+				Matrix34 tm(GetSlotHelperRotation(eIGS_ThirdPerson,it->second.helper.c_str(),true), GetSlotHelperPos(eIGS_ThirdPerson,it->second.helper.c_str(),true));            
+				SetEffectWorldTM(it->first, tm);
+			}
+		}
   }
 
   UpdatePhysics();
@@ -1327,9 +1379,9 @@ void CGunTurret::StartFire(bool sec)
     CryLog("%s StartFire(%i)", GetEntity()->GetName(), sec+1);
   
 	if (!sec)
-		CWeapon::StartFire(0);
+		CWeapon::StartFire();
 	else if (m_fm2)
-		m_fm2->StartFire(0);
+		m_fm2->StartFire();
 
   m_fireHint = 1;
 }
@@ -1341,9 +1393,9 @@ void CGunTurret::StopFire(bool sec)
     CryLog("%s StopFire(%i)", GetEntity()->GetName(), sec+1);
 
 	if (!sec)
-		CWeapon::StopFire(0);
+		CWeapon::StopFire();
 	else if (m_fm2)
-		m_fm2->StopFire(0);
+		m_fm2->StopFire();
 }
 
 //------------------------------------------------------------------------
@@ -1393,6 +1445,11 @@ void CGunTurret::OnTargetLocked(IEntity* pTarget)
       }
     }
   }  
+
+	if(IsClient())
+	{
+		m_pGameFramework->GetMusicLogic()->SetEvent(eMUSICLOGICEVENT_PLAYER_TURRET_ATTACK);
+	}
 }
 
 //------------------------------------------------------------------------
@@ -1413,8 +1470,13 @@ void CGunTurret::HandleEvent(const SGameObjectEvent& event)
   case (eCGE_Turret_LostTarget):
     m_destinationId = 0;          
     break;
+	case eCGE_PreFreeze:
+		if (m_fm)
+			m_fm->StopFire();
+		if (m_fm2)
+			m_fm2->StopFire();
+		break;
   }
-
 }
 
 //------------------------------------------------------------------------
@@ -1452,22 +1514,11 @@ bool CGunTurret::UpdateBurst(float deltaTime)
 //------------------------------------------------------------------------
 void CGunTurret::ServerUpdate(SEntityUpdateContext& ctx, int update)
 {
-	//update parameters
-	bool enabled = m_turretparams.enabled;
-	GetEntityProperty("GunTurret","bEnabled",m_turretparams.enabled);
-	if(enabled!=m_turretparams.enabled)
+	//update parameters. SNH: cache these in MP since they never change.
+	if(!gEnv->bMultiplayer)
 	{
-		Activate(m_turretparams.enabled);
-		GetGameObject()->ChangedNetworkState(ASPECT_STATEBITS);
+		UpdateEntityProperties();
 	}
-
-	GetEntityProperty("GunTurret", "bSearching", m_turretparams.searching);
-	GetEntityProperty("GunTurret", "bSurveillance", m_turretparams.surveillance);
-
-	const char* teamName=0;
-	GetEntityProperty("teamName", teamName);
-	if (teamName && teamName[0])
-		m_turretparams.team = g_pGame->GetGameRules()->GetTeamId(teamName);
 
 	bool currentShootable=true;
 
@@ -1480,7 +1531,7 @@ void CGunTurret::ServerUpdate(SEntityUpdateContext& ctx, int update)
 	bool rocket=false;
 	if(IsOperational()) 
 	{
-		bool    renew_target = false;
+		bool renew_target = false;
 		//do this before, cause it's more important
 		if(m_turretparams.TAC_check_time != 0.f)
     {
@@ -1540,7 +1591,10 @@ void CGunTurret::ServerUpdate(SEntityUpdateContext& ctx, int update)
       
       bool burst = (m_turretparams.burst_time == 0.f || UpdateBurst(ctx.fFrameTime));
         mg &= burst;
-			      
+
+			// a bit less tolerant for rockets
+			aim=aim&&IsAiming(tpos, m_turretparams.aim_tolerance*0.5f);
+
 			rocket = aim && !m_turretparams.search_only && m_fm2 && t_class == eTC_Vehicle && IsTargetRocketable(tpos);
 
       if (g_pGameCVars->i_debug_turrets)
@@ -1615,8 +1669,30 @@ void CGunTurret::ServerUpdate(SEntityUpdateContext& ctx, int update)
 }
 
 //------------------------------------------------------------------------
+void CGunTurret::UpdateEntityProperties()
+{
+	bool enabled = m_turretparams.enabled;
+	GetEntityProperty("GunTurret","bEnabled",m_turretparams.enabled);
+	if(enabled!=m_turretparams.enabled)
+	{
+		Activate(m_turretparams.enabled);
+		GetGameObject()->ChangedNetworkState(ASPECT_STATEBITS);
+	}
+
+	GetEntityProperty("GunTurret", "bSearching", m_turretparams.searching);
+	GetEntityProperty("GunTurret", "bSurveillance", m_turretparams.surveillance);
+
+	const char* teamName=0;
+	GetEntityProperty("teamName", teamName);
+	if (teamName && teamName[0])
+		m_turretparams.team = g_pGame->GetGameRules()->GetTeamId(teamName);
+}
+
+//------------------------------------------------------------------------
 void CGunTurret::Update( SEntityUpdateContext& ctx, int update)
 {  
+	FUNCTION_PROFILER(gEnv->pSystem, PROFILE_GAME);
+
 	if (m_frozen)
 		return;
 
@@ -1680,7 +1756,7 @@ void CGunTurret::DestroyedGeometry(bool use)
 			GetEntity()->SetSlotLocalTM(eIGS_Destroyed, GetEntity()->GetSlotLocalTM(eIGS_ThirdPerson, false));
     }
     DrawSlot(eIGS_Aux1,!use);
-    SetProfile(eIPhys_PhysicalizedRigid);
+    SetAspectProfile(eEA_Physics, eIPhys_PhysicalizedRigid);
     UpdatePhysics();
 	}
 
@@ -1702,12 +1778,12 @@ void CGunTurret::SetCharacterAttachmentLocalTM(int slot, const char *name, const
 }
 
 //------------------------------------------------------------------------
-bool CGunTurret::SetProfile( uint8 profile )
+bool CGunTurret::SetAspectProfile( EEntityAspects aspect, uint8 profile )
 {
-  if (!CItem::SetProfile(profile))
+  if (!CWeapon::SetAspectProfile(aspect, profile))
     return false;
   
-  if(profile == eIPhys_PhysicalizedRigid)
+  if (aspect == eEA_Physics && profile == eIPhys_PhysicalizedRigid)
   {
     SEntityPhysicalizeParams params;
     params.type = PE_RIGID;

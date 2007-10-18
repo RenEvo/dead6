@@ -39,6 +39,7 @@ public:
 
 protected:
   void Activate(bool activate);
+	void DamagePlayers();
 
 	IVehicle* m_pVehicle;
 	

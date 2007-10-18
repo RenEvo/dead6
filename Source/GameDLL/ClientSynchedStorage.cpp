@@ -142,6 +142,93 @@ DEFINE_GLOBAL_MESSAGE(CSetGlobalStringMsg, string, SetGlobalStringMsg);
 #undef DEFINE_GLOBAL_MESSAGE
 #undef IMPLEMENT_IMMEDIATE_GLOBAL_MESSAGE
 
+
+
+//------------------------------------------------------------------------
+// CHANNEL
+//------------------------------------------------------------------------
+
+#define DEFINE_CHANNEL_MESSAGE(class, type, msgdef) \
+	CClientSynchedStorage::class::class(int _channelId, CServerSynchedStorage *pStorage, TSynchedKey _key, TSynchedValue &_value) \
+	:	CSetChannelMsg(CClientSynchedStorage::msgdef, _channelId, pStorage, _key, _value) {}; \
+	EMessageSendResult CClientSynchedStorage::class::WritePayload(TSerialize ser, uint32 currentSeq, uint32 basisSeq) \
+{ m_pStorage->SerializeValue(ser, key, value, NTypelist::IndexOf<type, TSynchedValueTypes>::value); \
+	return eMSR_SentOk; }
+
+#define IMPLEMENT_IMMEDIATE_CHANNEL_MESSAGE(type) \
+	CCryMutex::CLock lock(m_mutex); \
+	TSynchedKey		key; \
+	TSynchedValue value; \
+	SerializeValue(ser, key, value, NTypelist::IndexOf<type, TSynchedValueTypes>::value); \
+	return true;
+
+
+NET_IMPLEMENT_IMMEDIATE_MESSAGE(CClientSynchedStorage, SetChannelBoolMsg, eNRT_ReliableUnordered, 0)
+{
+	IMPLEMENT_IMMEDIATE_CHANNEL_MESSAGE(bool);
+}
+
+//------------------------------------------------------------------------
+NET_IMPLEMENT_IMMEDIATE_MESSAGE(CClientSynchedStorage, SetChannelFloatMsg, eNRT_ReliableUnordered, 0)
+{
+	IMPLEMENT_IMMEDIATE_CHANNEL_MESSAGE(float);
+}
+
+//------------------------------------------------------------------------
+NET_IMPLEMENT_IMMEDIATE_MESSAGE(CClientSynchedStorage, SetChannelIntMsg, eNRT_ReliableUnordered, 0)
+{
+	IMPLEMENT_IMMEDIATE_CHANNEL_MESSAGE(int);
+}
+
+//------------------------------------------------------------------------
+NET_IMPLEMENT_IMMEDIATE_MESSAGE(CClientSynchedStorage, SetChannelEntityIdMsg, eNRT_ReliableUnordered, 0)
+{
+	IMPLEMENT_IMMEDIATE_CHANNEL_MESSAGE(EntityId);
+}
+
+//------------------------------------------------------------------------
+NET_IMPLEMENT_IMMEDIATE_MESSAGE(CClientSynchedStorage, SetChannelStringMsg, eNRT_ReliableUnordered, 0)
+{
+	IMPLEMENT_IMMEDIATE_CHANNEL_MESSAGE(string);
+}
+
+//------------------------------------------------------------------------
+CClientSynchedStorage::CSetChannelMsg::CSetChannelMsg(const SNetMessageDef *pDef, int _channelId, CServerSynchedStorage *pStorage, TSynchedKey _key, TSynchedValue &_value)
+:	channelId(_channelId),
+	m_pStorage(pStorage),
+	key(_key),
+	value(_value),
+	INetMessage(pDef)
+{
+	SetGroup( 'stor' );
+};
+
+//------------------------------------------------------------------------
+EMessageSendResult CClientSynchedStorage::CSetChannelMsg::WritePayload(TSerialize ser, uint32 currentSeq, uint32 basisSeq)
+{
+	return eMSR_SentOk;
+}
+
+//------------------------------------------------------------------------
+void CClientSynchedStorage::CSetChannelMsg::UpdateState(uint32 fromSeq, ENetSendableStateUpdate)
+{
+}
+
+//------------------------------------------------------------------------
+size_t CClientSynchedStorage::CSetChannelMsg::GetSize()
+{
+	return sizeof(this);
+};
+
+DEFINE_CHANNEL_MESSAGE(CSetChannelBoolMsg, bool, SetChannelBoolMsg);
+DEFINE_CHANNEL_MESSAGE(CSetChannelFloatMsg, float, SetChannelFloatMsg);
+DEFINE_CHANNEL_MESSAGE(CSetChannelIntMsg, int, SetChannelIntMsg);
+DEFINE_CHANNEL_MESSAGE(CSetChannelEntityIdMsg, EntityId, SetChannelEntityIdMsg);
+DEFINE_CHANNEL_MESSAGE(CSetChannelStringMsg, string, SetChannelStringMsg);
+
+#undef DEFINE_CHANNEL_MESSAGE
+#undef IMPLEMENT_IMMEDIATE_CHANNEL_MESSAGE
+
 //------------------------------------------------------------------------
 // ENTITY
 //------------------------------------------------------------------------

@@ -52,7 +52,6 @@ public:
     m_pRenderMesh = NULL;
     m_Center.Set(0,0,0);
   }
-  void mfFillRB(CRenderObject *pObj);
 
   virtual ~CREMesh()
   {
@@ -69,8 +68,8 @@ public:
   virtual void mfCenter(Vec3& Pos, CRenderObject*pObj);
   virtual bool mfDraw(CShader *ef, SShaderPass *sfm);
   virtual void *mfGetPointer(ESrcPointer ePT, int *Stride, EParamType Type, ESrcPointer Dst, int Flags);
-  virtual float mfMinDistanceToCamera(CRenderObject *pObj);
-  virtual float mfDistanceToCameraSquared(const CRenderObject & thisObject);
+  virtual float mfMinDistanceToCamera(Matrix34& matInst);
+  virtual float mfDistanceToCameraSquared(Matrix34& matInst);
   virtual bool mfCheckUpdate(int nVertFormat, int Flags);
   virtual void mfGetBBox(Vec3& vMins, Vec3& vMaxs);
   virtual void mfPrecache(const SShaderItem& SH);

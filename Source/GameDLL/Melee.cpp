@@ -17,6 +17,7 @@ History:
 #include "Weapon.h"
 #include "GameRules.h"
 #include "Player.h"
+#include "BulletTime.h"
 #include <IEntitySystem.h>
 #include "IMaterialEffects.h"
 #include "GameCVars.h"
@@ -31,12 +32,15 @@ History:
 //------------------------------------------------------------------------
 CMelee::CMelee()
 {
+	m_noImpulse = false;
 }
 
 //------------------------------------------------------------------------
 CMelee::~CMelee()
 {
 }
+
+const float STRENGTH_MULT = 0.018f;
 
 void CMelee::Init(IWeapon *pWeapon, const struct IItemParamsNode *params)
 {
@@ -95,7 +99,9 @@ void CMelee::Update(float frameTime, uint frameId)
 						if (curMode == NANOMODE_STRENGTH)
 						{
 							strength = pActor->GetActorStrength();
-							strength = strength * (1.0f + 1.0f * pSuit->GetSlotValue(NANOSLOT_STRENGTH)*0.015f);
+							strength = strength * (1.0f + 2.0f * pSuit->GetSlotValue(NANOSLOT_STRENGTH)* STRENGTH_MULT);
+							if(!pPlayer->IsPlayer() && g_pGameCVars->g_difficultyLevel < 4)
+								strength *= g_pGameCVars->g_AiSuitStrengthMeleeMult;
 						}
 					}
 				}
@@ -149,7 +155,7 @@ void CMelee::PatchParams(const struct IItemParamsNode *patch)
 //------------------------------------------------------------------------
 void CMelee::Activate(bool activate)
 {
-	m_attacking = false;
+	m_attacking = m_noImpulse = false;
 	m_delayTimer=0.0f;
 	m_durationTimer=0.0f;
 }
@@ -181,15 +187,22 @@ struct CMelee::StopAttackingAction
 	}
 };
 
-void CMelee::StartFire(EntityId shooterId)
+void CMelee::StartFire()
 {
 	if (!CanFire())
+		return;
+
+	//Prevent fists melee exploit 
+	if ((m_pWeapon->GetEntity()->GetClass() == CItem::sFistsClass) && m_pWeapon->IsBusy())
 		return;
 
 	CActor* pOwner = m_pWeapon->GetOwnerActor();
 
 	if(pOwner)
 	{
+		if(pOwner->GetStance()==STANCE_PRONE)
+			return;
+
 		if(SPlayerStats* stats = static_cast<SPlayerStats*>(pOwner->GetActorStats()))
 		{
 			if(stats->bLookingAtFriendlyAI)
@@ -202,24 +215,24 @@ void CMelee::StartFire(EntityId shooterId)
 	m_pWeapon->RequireUpdate(eIUS_FireMode);
 	m_pWeapon->ExitZoom();
 
+	bool isClient = pOwner?pOwner->IsClient():false;
+
+	if (g_pGameCVars->bt_end_melee && isClient)
+		g_pGame->GetBulletTime()->Activate(false);
+
+
 	float speedOverride = -1.0f;
-	if(pOwner)
+
+	if(CActor* pOwner = m_pWeapon->GetOwnerActor())
 	{
 		CPlayer *pPlayer = (CPlayer *)pOwner;
 		if(CNanoSuit *pSuit = pPlayer->GetNanoSuit())
 		{
 			ENanoMode curMode = pSuit->GetMode();
-			if (curMode == NANOMODE_SPEED)
-			{
-				pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-12.0f);
+			if (curMode == NANOMODE_SPEED && pSuit->GetSuitEnergy() > NANOSUIT_ENERGY * 0.1f)
 				speedOverride = 1.5f;
-			}
-			if(curMode == NANOMODE_STRENGTH)
-			{
-				pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-20.0f);
-				pSuit->PlaySound(STRENGTH_MELEE_SOUND, (pSuit->GetSlotValue(NANOSLOT_STRENGTH))*0.01f);
-			}
 		}
+		
 		pPlayer->PlaySound(CPlayer::ESound_Melee);
 	}
 
@@ -230,6 +243,10 @@ void CMelee::StartFire(EntityId shooterId)
 	m_pWeapon->GetScheduler()->TimerAction(m_pWeapon->GetCurrentAnimationTime(CItem::eIGS_FirstPerson), CSchedulerAction<StopAttackingAction>::Create(this), true);
 
 	m_delayTimer = m_meleeparams.delay;
+	
+	if (g_pGameCVars->dt_enable && m_delayTimer < g_pGameCVars->dt_time)
+		m_delayTimer = g_pGameCVars->dt_time;
+
 	m_durationTimer = m_meleeparams.duration;
 
 	m_pWeapon->OnMelee(m_pWeapon->GetOwnerId());
@@ -238,18 +255,33 @@ void CMelee::StartFire(EntityId shooterId)
 }
 
 //------------------------------------------------------------------------
-void CMelee::StopFire(EntityId shooterId)
+void CMelee::StopFire()
 {
 }
 
 //------------------------------------------------------------------------
-void CMelee::NetStartFire(EntityId shooterId)
+void CMelee::NetStartFire()
 {
-	m_pWeapon->PlayAction(m_meleeactions.attack.c_str());	
+	m_pWeapon->OnMelee(m_pWeapon->GetOwnerId());
+
+	float speedOverride = -1.0f;
+
+	if(CActor* pOwner = m_pWeapon->GetOwnerActor())
+	{
+		CPlayer *pPlayer = (CPlayer *)pOwner;
+		if(CNanoSuit *pSuit = pPlayer->GetNanoSuit())
+		{
+			ENanoMode curMode = pSuit->GetMode();
+			if (curMode == NANOMODE_SPEED)
+				speedOverride = 1.5f;
+		}
+	}
+
+	m_pWeapon->PlayAction(m_meleeactions.attack.c_str(), 0, false, CItem::eIPAF_Default, speedOverride);
 }
 
 //------------------------------------------------------------------------
-void CMelee::NetStopFire(EntityId shooterId)
+void CMelee::NetStopFire()
 {
 }
 
@@ -259,7 +291,7 @@ void CMelee::NetShoot(const Vec3 &hit, int ph)
 }
 
 //------------------------------------------------------------------------
-void CMelee::NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, int ph)
+void CMelee::NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, float extra, int ph)
 {
 	CActor *pActor = m_pWeapon->GetOwnerActor();
 	if(!pActor)
@@ -279,12 +311,11 @@ void CMelee::NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const
 			if (curMode == NANOMODE_STRENGTH)
 			{
 				strength = pActor->GetActorStrength();
-				strength = strength * (1.0f + 7.0f * pSuit->GetSlotValue(NANOSLOT_STRENGTH)*0.015f);
+				strength = strength * (1.0f + 2.0f * pSuit->GetSlotValue(NANOSLOT_STRENGTH)*STRENGTH_MULT);
 			}
 		}
 	}
 
-	
 	if (!PerformRayTest(pos, dir, strength, true))
 		if(!PerformCylinderTest(pos, dir, strength, true))
 			ApplyCameraShake(false);
@@ -441,29 +472,50 @@ void CMelee::Hit(const Vec3 &pt, const Vec3 &dir, const Vec3 &normal, IPhysicalE
 		}
 	}
 
-	CGameRules *pGameRules = g_pGame->GetGameRules();
+	bool ok = true;
+	if(pTarget)
+	{
+		if(!gEnv->bMultiplayer && pActor && pActor->IsPlayer())
+		{
+			IActor* pAITarget = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pTarget->GetId());
+			if(pAITarget && pTarget->GetAI() && !pTarget->GetAI()->IsHostile(pActor->GetEntity()->GetAI(),false))
+			{
+				ok = false;
+				m_noImpulse = true;
+			}
+		}
 
-	HitInfo info(m_pWeapon->GetOwnerId(), pTarget?pTarget->GetId():0, m_pWeapon->GetEntityId(),
-		m_meleeparams.damage*damageScale*m_meleeScale, 0.0f, pGameRules->GetHitMaterialIdFromSurfaceId(surfaceIdx), partId,
-		pGameRules->GetHitTypeId(m_meleeparams.hit_type.c_str()), pt, dir, normal);
+		if(ok)
+		{
+			CGameRules *pGameRules = g_pGame->GetGameRules();
 
-	info.remote = remote;
+			HitInfo info(m_pWeapon->GetOwnerId(), pTarget->GetId(), m_pWeapon->GetEntityId(),
+				m_meleeparams.damage*damageScale*m_meleeScale, 0.0f, pGameRules->GetHitMaterialIdFromSurfaceId(surfaceIdx), partId,
+				pGameRules->GetHitTypeId(m_meleeparams.hit_type.c_str()), pt, dir, normal);
 
-	if (m_pWeapon->GetForcedHitMaterial() != -1)
-		info.material=pGameRules->GetHitMaterialIdFromSurfaceId(m_pWeapon->GetForcedHitMaterial());
-	
-	pGameRules->ClientHit(info);
+			info.remote = remote;
+
+			if (m_pWeapon->GetForcedHitMaterial() != -1)
+				info.material=pGameRules->GetHitMaterialIdFromSurfaceId(m_pWeapon->GetForcedHitMaterial());
+
+			pGameRules->ClientHit(info);
+		}
+	}
 
 	// play effects
-	IMaterialEffects* pMaterialEffects = gEnv->pGame->GetIGameFramework()->GetIMaterialEffects();
-	
-	TMFXEffectId effectId = pMaterialEffects->GetEffectId("melee", surfaceIdx);
-	if (effectId != InvalidEffectId)
+	if(ok)
 	{
-		SMFXRunTimeEffectParams params;
-		params.pos = pt;
-		params.playflags = MFX_PLAY_ALL | MFX_DISABLE_DELAY;
-		pMaterialEffects->ExecuteEffect(effectId, params);
+		IMaterialEffects* pMaterialEffects = gEnv->pGame->GetIGameFramework()->GetIMaterialEffects();
+
+		TMFXEffectId effectId = pMaterialEffects->GetEffectId("melee", surfaceIdx);
+		if (effectId != InvalidEffectId)
+		{
+			SMFXRunTimeEffectParams params;
+			params.pos = pt;
+			params.playflags = MFX_PLAY_ALL | MFX_DISABLE_DELAY;
+			params.soundSemantic = eSoundSemantic_Player_Foley;
+			pMaterialEffects->ExecuteEffect(effectId, params);
+		}
 	}
 
 	ApplyCameraShake(true);
@@ -474,22 +526,76 @@ void CMelee::Hit(const Vec3 &pt, const Vec3 &dir, const Vec3 &normal, IPhysicalE
 //------------------------------------------------------------------------
 void CMelee::Impulse(const Vec3 &pt, const Vec3 &dir, const Vec3 &normal, IPhysicalEntity *pCollider, int partId, int ipart, int surfaceIdx, float impulseScale)
 {
+	if(m_noImpulse)
+	{
+		m_noImpulse = false;
+		return;
+	}
+
 	if (pCollider && m_meleeparams.impulse>0.001f)
 	{
+		bool strengthMode = false;
+		CPlayer *pPlayer = (CPlayer *)m_pWeapon->GetOwnerActor();
+		if(pPlayer)
+		{
+			if (CNanoSuit *pSuit = pPlayer->GetNanoSuit())
+			{
+				ENanoMode curMode = pSuit->GetMode();
+				if (curMode == NANOMODE_STRENGTH)
+					strengthMode = true;
+			}
+		}
+
 		pe_status_dynamics dyn;
 
-		pCollider->GetStatus(&dyn);
-		if (dyn.mass > 800.0f)
-			impulseScale *= 8.0f;
+		if (!pCollider->GetStatus(&dyn))
+		{
+			if(strengthMode)
+				impulseScale *= 3.0f;
+		}
+		else
+			impulseScale *= clamp((dyn.mass * 0.01f), 1.0f, 15.0f);
 		
 		//[kirill] add impulse to phys proxy - to make sure it's applied to cylinder as well (not only skeleton) - so that entity gets pushed
 		// if no pEntity - do it old way
 		IEntity * pEntity = (IEntity*) pCollider->GetForeignData(PHYS_FOREIGN_ID_ENTITY);
+
+		if(gEnv->bMultiplayer && pEntity)
+		{
+			if(g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEntity->GetId()) == NULL)
+				impulseScale *= 0.33f;
+		}
+
 		if(pEntity)
 		{
-			IEntityPhysicalProxy *pPhysicsProxy = (IEntityPhysicalProxy*)pEntity->GetProxy(ENTITY_PROXY_PHYSICS);
-			// scale impulse up a bit for player 
-			pPhysicsProxy->AddImpulse(partId, pt, dir*(m_meleeparams.impulse*impulseScale*m_meleeScale*1.6f), true, 1.f);
+			bool crapDollFilter = false;
+#ifdef CRAPDOLLS
+			static IEntityClass* pDeadBodyClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass("DeadBody");
+			if (pEntity->GetClass() == pDeadBodyClass)
+				crapDollFilter = true;
+#endif //CRAPDOLLS
+			if (!crapDollFilter)
+			{
+				IEntityPhysicalProxy* pPhysicsProxy = (IEntityPhysicalProxy*)pEntity->GetProxy(ENTITY_PROXY_PHYSICS);
+				CActor* pActor = (CActor*)g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEntity->GetId());
+
+				if (pActor)
+				{
+					SActorStats* pAS = pActor->GetActorStats();
+					if (pAS && pAS->isRagDoll)
+					{
+						//marcok: talk to me before touching this
+						impulseScale = 1.0f; //jan: melee impulses were scaled down, I made sure it still "barely moves"
+#ifdef CRAPDOLLS
+							crapDollFilter = true;
+#endif //CRAPDOLLS
+					}
+				}
+
+				// scale impulse up a bit for player 
+				if (!crapDollFilter)
+					pPhysicsProxy->AddImpulse(partId, pt, dir*m_meleeparams.impulse*impulseScale*m_meleeScale, true, 1.f);
+			}
 		}
 		else
 		{
@@ -510,7 +616,10 @@ void CMelee::Impulse(const Vec3 &pt, const Vec3 &dir, const Vec3 &normal, IPhysi
 
 		collision.collMass = 0.005f; // this is actually ignored
 		collision.partid[1] = partId;
-		collision.partid[0] = 0;
+
+		// collisions involving partId<-1 are to be ignored by game's damage calculations
+		// usually created articially to make stuff break.
+		collision.partid[0] = -2;
 		collision.idmat[1] = surfaceIdx;
 		collision.idmat[0] = invId;
 		collision.n = normal;
@@ -525,17 +634,35 @@ void CMelee::Impulse(const Vec3 &pt, const Vec3 &dir, const Vec3 &normal, IPhysi
 		Vec3	v = dir;
 		float speed = cry_sqrtf(4000.0f/(80.0f*0.5f)); // 80.0f is the mass of the player
 
+		// [marco] Check if an object. Should take lots of time to break stuff if not in nanosuit strength mode;
+		// and still creates a very low impulse for stuff that might depend on receiving an impulse.
+		IRenderNode *pBrush = (IRenderNode*)pCollider->GetForeignData(PHYS_FOREIGN_ID_STATIC);
+		if (pBrush)
+		{
+			CActor *pActor = m_pWeapon->GetOwnerActor();
+			if (pActor && (pActor->GetActorClass() == CPlayer::GetActorClassType()))
+			{
+				CPlayer *pPlayer = (CPlayer *)pActor;
+				if (CNanoSuit *pSuit = pPlayer->GetNanoSuit())
+				{
+					ENanoMode curMode = pSuit->GetMode();
+					if (curMode != NANOMODE_STRENGTH)
+						speed =0.003f;
+				}
+			}
+		}
+
 		collision.vSelf = (v.normalized()*speed*m_meleeScale);
 		collision.v = Vec3(0,0,0);
 		collision.pCollider = pCollider;
 
 		IEntity *pOwner = m_pWeapon->GetOwner();
-		if (pOwner && pOwner->GetCharacter(0) && pOwner->GetCharacter(0)->GetISkeleton()->GetCharacterPhysics())
+		if (pOwner && pOwner->GetCharacter(0) && pOwner->GetCharacter(0)->GetISkeletonPose()->GetCharacterPhysics())
 		{
-			if (ISkeleton *pSkeleton=pOwner->GetCharacter(0)->GetISkeleton())
+			if (ISkeletonPose *pSkeletonPose=pOwner->GetCharacter(0)->GetISkeletonPose())
 			{
-				if (pSkeleton && pSkeleton->GetCharacterPhysics())
-					pSkeleton->GetCharacterPhysics()->Action(&collision);
+				if (pSkeletonPose && pSkeletonPose->GetCharacterPhysics())
+					pSkeletonPose->GetCharacterPhysics()->Action(&collision);
 			}
 
 		}

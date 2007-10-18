@@ -48,8 +48,11 @@ private:
 	
 	//Special case for grenades (might need to switch firemode)
 	void    ShouldSwitchGrenade(IEntityClass* pClass);
+	void    OnIncendiaryAmmoPickedUp(IEntityClass *pClass, int count);
 
 	ItemString	m_modelName;
+	ItemString	m_ammoName;
+	int					m_ammoCount;
 	ItemString  m_pickup_sound;
 };
 

@@ -21,6 +21,7 @@ History:
 #include "IItem.h"
 #include "IWeapon.h"
 #include "ConfigurableVariant.h"
+#include "IActorSystem.h"
 
 
 typedef NTypelist::CConstruct<
@@ -53,12 +54,14 @@ struct IItemParamsNode
 	virtual const char *GetAttributeName(int i) const = 0;
 	virtual const char *GetAttribute(int i) const = 0;
 	virtual bool GetAttribute(int i, Vec3 &attr) const = 0;
+	virtual bool GetAttribute(int i, Ang3 &attr) const = 0;
 	virtual bool GetAttribute(int i, float &attr) const = 0;
 	virtual bool GetAttribute(int i, int &attr) const = 0;
 	virtual int GetAttributeType(int i) const = 0;
 
 	virtual const char *GetAttribute(const char *name) const = 0;
 	virtual bool GetAttribute(const char *name, Vec3 &attr) const = 0;
+	virtual bool GetAttribute(const char *name, Ang3 &attr) const = 0;
 	virtual bool GetAttribute(const char *name, float &attr) const = 0;
 	virtual bool GetAttribute(const char *name, int &attr) const = 0;
 	virtual int GetAttributeType(const char *name) const = 0;
@@ -194,9 +197,10 @@ struct IInventory: public IGameObjectExtension
 	virtual int GetCount() const = 0;
 	virtual int GetCountOfClass(const char *className) const = 0;
 	virtual int GetCountOfCategory(const char *categoryName) const = 0;
+	virtual int GetCountOfUniqueId(uint8 uniqueId) const = 0;
 
 	virtual EntityId GetItem(int slotId) const = 0;
-	virtual EntityId GetItemByClass(IEntityClass *pClass) const = 0;
+	virtual EntityId GetItemByClass(IEntityClass *pClass, IItem *pIgnoreItem = NULL) const = 0;
 
 	virtual int FindItem(EntityId itemId) const = 0;
 	
@@ -213,18 +217,27 @@ struct IInventory: public IGameObjectExtension
 	virtual void HolsterItem(bool holster) = 0;
 
 	virtual void SerializeInventoryForLevelChange( TSerialize ser ) = 0;
+	virtual bool IsSerializingForLevelChange() const = 0;
 
 	virtual void SetAmmoCount(IEntityClass* pAmmoType, int count) = 0;
 	virtual int GetAmmoCount(IEntityClass* pAmmoType) const = 0;
 	virtual void SetAmmoCapacity(IEntityClass* pAmmoType, int max) = 0;
 	virtual int GetAmmoCapacity(IEntityClass* pAmmoType) const = 0;
 	virtual void ResetAmmo() = 0;
+
+	virtual IActor* GetActor() = 0;
 };
 
 // Summary
 //   Used to give predefined inventory to actors
 struct IEquipmentManager
 {
+	struct IListener
+	{
+		virtual void OnBeginGiveEquipmentPack()	{}
+		virtual void OnEndGiveEquipmentPack()	{}
+	};
+
 	struct IEquipmentPackIterator
 	{
 		virtual void AddRef() = 0;
@@ -251,6 +264,9 @@ struct IEquipmentManager
 
 	// return iterator with all available equipment packs
 	virtual IEquipmentPackIteratorPtr CreateEquipmentPackIterator() = 0;
+
+	virtual void RegisterListener(IListener *pListener) = 0;
+	virtual void UnregisterListener(IListener *pListener) = 0;
 };
 
 struct IActor;
@@ -276,6 +292,12 @@ struct IItemSystem
 	virtual const char* GetItemParamName(int index) const = 0;
 	virtual uint8 GetItemPriority(const char *item) const = 0;
 	virtual const char *GetItemCategory(const char *item) const = 0;
+	virtual uint8 GetItemUniqueId(const char *item) const = 0;
+
+	virtual bool IsItemClass(const char *name) const = 0;
+
+	virtual void RegisterForCollection(EntityId itemId) = 0;
+	virtual void UnregisterForCollection(EntityId itemId) = 0;
 
 	virtual void AddItem(EntityId itemId, IItem *pItem) = 0;
 	virtual void RemoveItem(EntityId itemId) = 0;
@@ -293,6 +315,8 @@ struct IItemSystem
 
 	virtual void CacheItemSound(const char *className) = 0;
 	virtual void ClearSoundCache() = 0;
+
+	virtual void Serialize( TSerialize ser ) = 0;
 
 	virtual EntityId GiveItem(IActor *pActor, const char *item, bool sound, bool select, bool keepHistory) = 0;
 	virtual void SetActorItem(IActor *pActor, EntityId itemId, bool keepHistory = true) = 0;

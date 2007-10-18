@@ -16,22 +16,22 @@ History:
 #include "HUDPowerStruggle.h"
 
 #include "HUD.h"
-#include "HUDRadar.h"
 #include "GameFlashAnimation.h"
 #include "Menus/FlashMenuObject.h"
 #include "../Game.h"
 #include "../GameCVars.h"
 #include "../GameRules.h"
 #include "Weapon.h"
+#include "HUDVehicleInterface.h"
 #include "Menus/OptionsManager.h"
 
 #define HUD_CALL_LISTENERS_PS(func) \
 { \
 	if (g_pHUD->m_hudListeners.empty() == false) \
 	{ \
-		g_pHUD->m_hudTempListeners = g_pHUD->m_hudListeners; \
-		for (std::vector<CHUD::IHUDListener*>::iterator tmpIter = g_pHUD->m_hudTempListeners.begin(); tmpIter != g_pHUD->m_hudTempListeners.end(); ++tmpIter) \
-			(*tmpIter)->func; \
+	g_pHUD->m_hudTempListeners = g_pHUD->m_hudListeners; \
+	for (std::vector<CHUD::IHUDListener*>::iterator tmpIter = g_pHUD->m_hudTempListeners.begin(); tmpIter != g_pHUD->m_hudTempListeners.end(); ++tmpIter) \
+	(*tmpIter)->func; \
 	} \
 }
 
@@ -42,13 +42,26 @@ static inline bool SortByPrice(const CHUDPowerStruggle::SItem &rItem1,const CHUD
 
 //-----------------------------------------------------------------------------------------------------
 
-CHUDPowerStruggle::CHUDPowerStruggle(CHUD *pHUD, CGameFlashAnimation *pBuyMenu, CGameFlashAnimation *pBuyIcon, CGameFlashAnimation *pCaptureProgress) : 
-	g_pHUD(pHUD), g_pBuyMenu(pBuyMenu), g_pBuyIcon(pBuyIcon), g_pCaptureProgress(pCaptureProgress)
+CHUDPowerStruggle::CHUDPowerStruggle(CHUD *pHUD, CGameFlashAnimation *pBuyMenu, CGameFlashAnimation *pHexIcon) : 
+g_pHUD(pHUD), g_pBuyMenu(pBuyMenu), g_pHexIcon(pHexIcon)
+{
+	Reset();
+	m_animSwingOMeter.Load("Libs/UI/HUD_Swing-O-Meter.gfx", eFD_Center, eFAF_ManualRender|eFAF_Visible);
+	m_animSwingOMeter.GetFlashPlayer()->SetVisible(true);
+}
+
+CHUDPowerStruggle::~CHUDPowerStruggle()
+{
+}
+
+void CHUDPowerStruggle::Reset()
 {
 	m_bInBuyZone = false;
-	m_eCurBuyMenuPage = E_AMMO;
+	m_bInServiceZone = false;
+	m_eCurBuyMenuPage = E_LOADOUT;
 	m_nkLeft = true; //NK is left on default
 	m_factoryTypes.resize(5);
+	m_serviceZoneTypes.resize(5);
 	m_teamId = 0;
 	m_gotpowerpoints = false;
 	m_protofactory = 0;
@@ -59,18 +72,22 @@ CHUDPowerStruggle::CHUDPowerStruggle(CHUD *pHUD, CGameFlashAnimation *pBuyMenu, 
 	m_constructionQueued=false;
 	m_constructionTime=0.0f;
 	m_constructionTimer=0.0f;
-	m_reviveCycle=0.0f;
-	m_reviveCycleEnd=0.0f;
+	m_lastConstructionTime = -1;
+	m_lastBuildingTime = -1;
 
-	m_animSwingOMeter.Load("Libs/UI/HUD_Swing-O-Meter.gfx", eGFD_Center, eFAF_ManualRender|eFAF_Visible);
-	m_animSwingOMeter.GetFlashPlayer()->SetVisible(true);
+	m_lastPurchase.iPrice = 0;
+	m_thisPurchase.iPrice = 0;
+
+	m_lastTeamCol = -1;
+	m_lastPowerPoints = -1;
+	m_lastAlienArg1 = m_lastAlienArg2 = m_lastPowerArg1 = m_lastPowerArg2 = -1;
+
+	m_currentHexIconState = E_HEX_ICON_NONE;
+	m_currentBuyZones.clear();
+	m_currentServiceZones.clear();
 }
 
-CHUDPowerStruggle::~CHUDPowerStruggle()
-{
-}
-
-void DrawBar(float x, float y, float width, float height, float border, float progress, ColorF &color0, ColorF &color1, const char *text, ColorF &textColor, float bgalpha)
+void DrawBar(float x, float y, float width, float height, float border, float progress, const ColorF &color0, const ColorF &color1, const char *text, const ColorF &textColor, float bgalpha)
 {
 	float sy=gEnv->pRenderer->ScaleCoordY(y);
 	float sx=gEnv->pRenderer->ScaleCoordX(x+width*0.5f);
@@ -88,79 +105,32 @@ void DrawBar(float x, float y, float width, float height, float border, float pr
 		gEnv->pRenderer->Draw2dLabel(sx, sy, 1.6f, (float*)&textColor, true, "%s", text);
 }
 
-void DrawSemiCircle(float x, float y, float r, int slices, float start, float end, ColorF &center, ColorF &color0, ColorF &color1)
-{
-	gEnv->pRenderer->SelectTMU(0);
-	gEnv->pRenderer->EnableTMU(false);
-
-	static std::vector<ushort>																indices;
-	static std::vector<struct_VERTEX_FORMAT_P3F_COL4UB_TEX2F> vertices;
-	vertices.resize(0);
-	indices.resize(0);
-
-	struct_VERTEX_FORMAT_P3F_COL4UB_TEX2F vtx;
-	vtx.color.dcolor=center.pack_argb8888();
-	vtx.xyz[0]=x;
-	vtx.xyz[1]=y;
-	vtx.xyz[2]=0.0f;
-	vtx.st[0]=0.0f;
-	vtx.st[1]=0.0f;
-
-	vertices.push_back(vtx);
-
-	float time=end-start;
-	int nslices=cry_ceilf((slices*time*gf_PI)/gf_PI);
-	float t=start;
-	float dt=time/nslices;
-
-	ColorF color;
-
-	for (int i=0;i<nslices;i++)
-	{
-		if (t+dt>end)
-			dt=end-t;
-		
-		color.lerpFloat(color0, color1, t/time);
-		vtx.color.dcolor=color.pack_argb8888();
-		vtx.xyz[0]=x+r*cry_sinf(t*gf_PI*2.0f);
-		vtx.xyz[1]=y-r*cry_cosf(t*gf_PI*2.0f);
-		vertices.push_back(vtx);
-
-		color.lerpFloat(color0, color1, (t+dt)/time);
-		vtx.color.dcolor=color.pack_argb8888();
-		vtx.xyz[0]=x+r*cry_sinf((t+dt)*gf_PI*2.0f);
-		vtx.xyz[1]=y-r*cry_cosf((t+dt)*gf_PI*2.0f);
-		vertices.push_back(vtx);
-
-		indices.push_back(0);
-		indices.push_back(1+i*2+0);
-		indices.push_back(1+i*2+1);
-
-		t+=dt;
-	}
-
-	gEnv->pRenderer->DrawDynVB(&vertices[0], &indices[0], vertices.size(), indices.size(), R_PRIMV_TRIANGLES);
-}
-
-void CHUDPowerStruggle::OnUpdate(float fDeltaTime,float fFadeValue)
+void CHUDPowerStruggle::Update(float fDeltaTime)
 {
 	CGameRules *pGameRules = g_pGame->GetGameRules();
-	
-	if (pGameRules && !stricmp(pGameRules->GetEntity()->GetClass()->GetName(), "PowerStruggle"))
+
+	if (pGameRules && m_animSwingOMeter.IsLoaded() && !stricmp(pGameRules->GetEntity()->GetClass()->GetName(), "PowerStruggle"))
 	{
 		int teamId=0;
 		IActor *pLocalActor=g_pGame->GetIGameFramework()->GetClientActor();
 		if (pLocalActor)
+		{
 			teamId=pGameRules->GetTeam(pLocalActor->GetEntityId());
 
-		if (!m_gotpowerpoints || !m_protofactory)
+			// if local actor is currently spectating another player, use the team of the player we're watching...
+			CActor* pCActor = static_cast<CActor*>(pLocalActor);
+			if(pCActor && pCActor->GetSpectatorMode() == CActor::eASM_Follow)
+			{
+				teamId = pGameRules->GetTeam(pCActor->GetSpectatorTarget());
+			}
+		}
+
+		if (!m_gotpowerpoints)
 		{
 			m_powerpoints.resize(0);
-			m_turrets.resize(0);
 
 			IEntityClass *pAlienEnergyPoint=gEnv->pEntitySystem->GetClassRegistry()->FindClass("AlienEnergyPoint");
-			IEntityClass *pTurret=gEnv->pEntitySystem->GetClassRegistry()->FindClass("AutoTurret");
-			IEntityClass *pAATurret=gEnv->pEntitySystem->GetClassRegistry()->FindClass("AutoTurretAA");
+			IEntityClass *pHQ=gEnv->pEntitySystem->GetClassRegistry()->FindClass("HQ");
 			IEntityClass *pFactory=gEnv->pEntitySystem->GetClassRegistry()->FindClass("Factory");
 
 			IEntityItPtr pIt = gEnv->pEntitySystem->GetEntityIterator();
@@ -177,21 +147,25 @@ void CHUDPowerStruggle::OnUpdate(float fDeltaTime,float fFadeValue)
 					else if (pClass == pFactory)
 					{
 						SmartScriptTable props;
-						if (pEntity->GetScriptTable()->GetValue("Properties", props))
+						if (pEntity->GetScriptTable() && pEntity->GetScriptTable()->GetValue("Properties", props))
 						{
 							int proto=0;
 							if (props->GetValue("bPowerStorage", proto) && proto)
 								m_protofactory=pEntity->GetId();
 						}
 					}
-					else if (pClass == pTurret || pClass == pAATurret)
-					{
-						m_turrets.push_back(pEntity->GetId());
-					}
+					else if (pClass == pHQ)
+						m_hqs.push_back(pEntity->GetId());
 				}
 			}
 
 			m_gotpowerpoints=true;
+			int points = (int)m_powerpoints.size();
+			if(m_lastPowerPoints != points)
+			{
+				m_animSwingOMeter.Invoke("setAliens", SFlashVarValue((int)m_powerpoints.size()));
+				m_lastPowerPoints = points;
+			}
 		}
 
 		if (teamId==0)
@@ -204,101 +178,149 @@ void CHUDPowerStruggle::OnUpdate(float fDeltaTime,float fFadeValue)
 		}
 
 		float power[2]={0.0f};
-		float turret[2]={0.0f};
+		float hq[2]={0.0f};
 		int aliens[2]={0};
 		EntityId proto[2]={0};
 
-		GetTeamStatus(1, power[0], turret[0], aliens[0], proto[0]);
-		GetTeamStatus(2, power[1], turret[1], aliens[1], proto[1]);
+		GetTeamStatus(1, power[0], hq[0], aliens[0], proto[0]);
+		GetTeamStatus(2, power[1], hq[1], aliens[1], proto[1]);
 
-		if (teamId==1)
+		int ihq[2]={(int)(hq[0]*100.0f), (int)(hq[1]*100.0f)};
+		static char chq[2][16];
+		memset(chq, 0, 2*16);
+		itoa(ihq[0], chq[0], 10);
+		itoa(ihq[1], chq[1], 10);
+
+		wstring hqFormatter[2];
+		hqFormatter[0] = g_pGame->GetHUD()->LocalizeWithParams("@mp_HQLife", false, chq[0]);
+		hqFormatter[1] = g_pGame->GetHUD()->LocalizeWithParams("@mp_HQLife", false, chq[1]);
+
+		SFlashVarValue aliensarg[2]={aliens[(teamId==1)?0:1], aliens[(teamId==1)?1:0]};
+		if(aliensarg[0].GetInt() != m_lastAlienArg1 || aliensarg[1].GetInt() != m_lastAlienArg2)
 		{
-			SFlashVarValue aliensarg[2]={aliens[0], aliens[1]};
 			m_animSwingOMeter.Invoke("showAliens", aliensarg, 2);
-
-			if (proto[0])
-			{
-				SFlashVarValue glowarg(1);
-				m_animSwingOMeter.Invoke("showGlow", &glowarg, 1);
-			}
-
-			SFlashVarValue turretarg[2]={turret[0]*100.0f, turret[1]*100.0f};
-			m_animSwingOMeter.Invoke("setStatusBars", turretarg, 2);
-
-			SFlashVarValue powerarg[2]={cry_floorf(power[0]), cry_floorf(power[1])};
-			m_animSwingOMeter.Invoke("setLoadBar", powerarg, 2);
-		}
-		else
-		{
-			SFlashVarValue aliensarg[2]={aliens[1], aliens[0]};
-			m_animSwingOMeter.Invoke("showAliens", aliensarg, 2);
-
-			if (proto[0])
-			{
-				SFlashVarValue glowarg(2);
-				m_animSwingOMeter.Invoke("showGlow", &glowarg, 1);
-			}
-
-			SFlashVarValue turretarg[2]={turret[1]*100.0f, turret[0]*100.0f};
-			m_animSwingOMeter.Invoke("setStatusBars", turretarg, 2);
-
-			SFlashVarValue powerarg[2]={cry_floorf(power[1]), cry_floorf(power[0])};
-			m_animSwingOMeter.Invoke("setLoadBar", powerarg, 2);
-
+			m_lastAlienArg1 = aliensarg[0].GetInt();
+			m_lastAlienArg2 = aliensarg[1].GetInt();
 		}
 
-		int time=(int)pGameRules->GetRemainingGameTime();
-		CryFixedStringT<32> timeFormatter;
-		timeFormatter.Format("%02d:%02d", time/60, time%60);
-		SFlashVarValue timearg(timeFormatter.c_str());
-		m_animSwingOMeter.Invoke("setTimer", &timearg, 1);
+		SFlashVarValue hqarg[2]={hqFormatter[(teamId==1)?0:1].c_str(), hqFormatter[(teamId==1)?1:0].c_str()};
+		if(wcscmp(hqarg[0].GetConstWstrPtr(), m_lastHQArg1.c_str()) || wcscmp(hqarg[1].GetConstWstrPtr(), m_lastHQArg2.c_str()) )
+		{
+			m_animSwingOMeter.Invoke("setStatusBars", hqarg, 2);
+			m_lastHQArg1 = hqarg[0].GetConstWstrPtr();
+			m_lastHQArg2 = hqarg[1].GetConstWstrPtr();
+		}
+		
+		SFlashVarValue powerarg[2]={int(cry_floorf(power[(teamId==1)?0:1])), int(cry_floorf(power[(teamId==1)?1:0]))};
+		if(powerarg[0].GetInt() != m_lastPowerArg1 || powerarg[1].GetInt() != m_lastPowerArg2)
+		{
+			m_animSwingOMeter.Invoke("setLoadBar", powerarg, 2);
+			m_lastPowerArg1 = powerarg[0].GetInt();
+			m_lastPowerArg2 =	powerarg[1].GetInt();
+		}
+
+		if (teamId!=0)
+		{
+			int teamCol = 0;
+			bool blue=(teamId==1 && proto[0]) || (teamId==2 && proto[1]);
+			bool red=(teamId==1 && !proto[0] && proto[1]) || (teamId==2 && !proto[1] && proto[0]);
+			if(blue)
+				teamCol = 1;
+			else if(red)
+				teamCol = 2;
+			if(teamCol != m_lastTeamCol)
+			{
+				m_animSwingOMeter.Invoke("showGlow", teamCol);
+				m_lastTeamCol = teamCol;
+			}
+		}
+
+		IEntityScriptProxy *pScriptProxy=static_cast<IEntityScriptProxy *>(pGameRules->GetEntity()->GetProxy(ENTITY_PROXY_SCRIPT));
+		if (pScriptProxy)
+		{
+			if (!stricmp(pScriptProxy->GetState(), "InGame") && pGameRules->IsTimeLimited())
+			{
+				int time = (int)(pGameRules->GetRemainingGameTime());
+
+				int mins=time/60;
+				int secs=time-(mins*60);
+				CryFixedStringT<32> timeFormatter;
+				timeFormatter.Format("%02d:%02d", mins, secs);
+				SFlashVarValue timearg(timeFormatter.c_str());
+				m_animSwingOMeter.Invoke("setTimer", &timearg, 1);
+			}
+			else
+				m_animSwingOMeter.Invoke("setTimer", "");
+		}
 
 		m_animSwingOMeter.GetFlashPlayer()->Advance(fDeltaTime);
 		m_animSwingOMeter.GetFlashPlayer()->Render();
-
-		gEnv->pRenderer->Set2DMode(true, 800.0f, 600.0f);
-		gEnv->pRenderer->SetState(GS_BLSRC_SRCALPHA|GS_BLDST_ONEMINUSSRCALPHA);
-		gEnv->pRenderer->SetWhiteTexture();
-		//gEnv->pRenderer->SetState(GS_NODEPTHTEST);
 
 		static char text[32];
 		if (m_capturing)
 		{
 			int icap=(int)(m_captureProgress*100.0f);
-			sprintf(text, "%d%%", icap);
-			DrawBar(16.0f, 80.0f, 72.0f, 14.0f, 2.0f, m_captureProgress, Col_DarkGray, Col_LightGray, text, Col_White, fabsf(cry_sinf(gEnv->pTimer->GetCurrTime()*2.5f)));
+			//sprintf(text, "%d%%", icap);
+			//DrawBar(16.0f, 80.0f, 72.0f, 14.0f, 2.0f, m_captureProgress, Col_DarkGray, Col_LightGray, text, Col_White, fabsf(cry_sinf(gEnv->pTimer->GetCurrTime()*2.5f)));
+			if(icap != m_lastBuildingTime)
+			{
+				m_currentHexIconState = E_HEX_ICON_CAPTURING;
+				g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+				g_pHexIcon->Invoke("setHexProgress", icap);
+				m_lastBuildingTime = icap;
+			}
 		}
-
-		if (m_reviveCycle>0.0f)
+		else if(m_currentHexIconState == E_HEX_ICON_CAPTURING)
 		{
-			float remaining=(m_reviveCycleEnd-gEnv->pTimer->GetFrameStartTime()).GetSeconds()/m_reviveCycle;
-			remaining=CLAMP(remaining, 0.0f, 1.0f);
-
-			ColorF color=Col_Aquamarine*0.9f;
-			color.a=0.75f;
-			DrawSemiCircle(400, 300, 30, 20, 0.0f, 1.0f-remaining, color, color, color);
-
-			ColorF bg=Col_Black;
-			bg.a=0.35f;
-			DrawSemiCircle(400, 300, 30, 20, 1.0f-remaining, 1.0f, bg, bg, bg);
+			m_currentHexIconState = E_HEX_ICON_NONE;
+			g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
 		}
 
+		bool constructing = false;
 		if (m_constructing)
 		{
 			if (!m_constructionQueued)
 			{
-				sprintf(text, "ETA: %.1f", m_constructionTimer);
-				DrawBar(16.0f, 100.0f, 72.0f, 14.0f, 2.0f, 1.0f-(m_constructionTimer/m_constructionTime), Col_DarkSlateBlue, Col_LightSteelBlue, text, Col_White, fabsf(cry_sinf(gEnv->pTimer->GetCurrTime()*2.5f)));
-
+				constructing = true;
+				int conTime = 0;
+				if(m_constructionTime != 0.0f)
+					conTime = int(100.0f*(1.0f-(m_constructionTimer/m_constructionTime)));
+				if(conTime != m_lastConstructionTime)
+				{
+					if(m_currentHexIconState != E_HEX_ICON_CAPTURING) //capturing overwrites building by design
+					{
+						m_currentHexIconState = E_HEX_ICON_BUILDING;
+						g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+						g_pHexIcon->Invoke("setHexProgress", conTime);
+						m_lastConstructionTime = conTime;
+					}
+				}
 				m_constructionTimer-=fDeltaTime;
 				if (m_constructionTimer<0.0f)
 					m_constructionTimer=0.0f;
 			}
-			else
-				DrawBar(16.0f, 100.0f, 72.0f, 14.0f, 2.0f, 0.0f, Col_DarkSlateBlue, Col_LightSteelBlue, "ETA: N/A", Col_White, fabsf(cry_sinf(gEnv->pTimer->GetCurrTime()*2.5f)));
 		}
 
-		gEnv->pRenderer->Set2DMode(false, 0.0f, 0.0f);
+		if(!constructing)
+		{
+			if(m_currentHexIconState == E_HEX_ICON_BUILDING)
+			{
+				m_currentHexIconState = E_HEX_ICON_BUY;
+				g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+			}
+			if(!m_bInBuyZone && !(m_bInServiceZone && g_pHUD->GetVehicleInterface()->IsAbleToBuy()) && m_currentHexIconState == E_HEX_ICON_BUY)
+			{
+				m_currentHexIconState = E_HEX_ICON_NONE;
+				g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+			}
+			else if(!m_capturing && m_currentHexIconState != E_HEX_ICON_BUY && (m_bInBuyZone || (m_bInServiceZone && g_pHUD->GetVehicleInterface()->IsAbleToBuy())))
+			{
+				m_currentHexIconState = E_HEX_ICON_BUY;
+				g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+			}
+
+		}
+		//gEnv->pRenderer->Set2DMode(false, 0, 0);
 	}
 }
 
@@ -338,16 +360,33 @@ int CHUDPowerStruggle::GetPlayerTeamScore()
 
 //-----------------------------------------------------------------------------------------------------
 
+void CHUDPowerStruggle::UpdateLastPurchase()
+{
+	if(m_thisPurchase.iPrice>0)
+	{
+		m_lastPurchase = m_thisPurchase;
+		m_thisPurchase.iPrice = 0;
+		m_thisPurchase.itemArray.resize(0);
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------
+
 void CHUDPowerStruggle::Buy(const char* item, bool reload)
 {
 	string buy("buy ");
 
 	SItem itemdef;
-	if (GetItemFromName(item, itemdef) && itemdef.bAmmoType)
-		buy="buyammo ";
+	if (GetItemFromName(item, itemdef))
+	{
+		if(itemdef.bAmmoType)
+			buy="buyammo ";
+	}
 
 	buy.append(item);
 	gEnv->pConsole->ExecuteString(buy.c_str());
+
+	HUD_CALL_LISTENERS_PS(OnBuyItem(item));
 
 	if(reload)
 	{
@@ -358,46 +397,59 @@ void CHUDPowerStruggle::Buy(const char* item, bool reload)
 }
 
 //-----------------------------------------------------------------------------------------------------
-void CHUDPowerStruggle::BuyPackage(int index)
+void CHUDPowerStruggle::BuyPackage(SEquipmentPack equipmentPackage)
 {
-	if(index>=0 && m_EquipmentPacks.size()>index)
+	bool equipAttachments = (g_pGameCVars->hud_attachBoughtEquipment==1)?true:false;
+
+	CPlayer *pPlayer = static_cast<CPlayer*>(g_pGame->GetIGameFramework()->GetClientActor());
+	if(pPlayer && pPlayer->GetInventory())
 	{
-
-		CPlayer *pPlayer = static_cast<CPlayer*>(g_pGame->GetIGameFramework()->GetClientActor());
-		if(pPlayer && pPlayer->GetInventory())
+		std::vector<SItem>::const_iterator it = equipmentPackage.itemArray.begin();
+		for(; it != equipmentPackage.itemArray.end(); ++it)
 		{
-			std::vector<SItem>::const_iterator it = m_EquipmentPacks[index].itemArray.begin();
-			for(; it != m_EquipmentPacks[index].itemArray.end(); ++it)
+			SItem item = (*it);
+			if(item.bAmmoType)
+				Buy(item.strName, false);
+			else
 			{
-				SItem item = (*it);
-				if(item.bAmmoType)
+				if(item.iInventoryID==0  || !item.isUnique)
 					Buy(item.strName, false);
-				else
-				{
-					if(item.iInventoryID==0  || !item.isUnique)
-						Buy(item.strName, false);
 
-					CWeapon *pWeapon = g_pHUD->GetWeapon();
-					if(pWeapon)
+				if(equipAttachments)
+				{
+					if(g_pHUD->GetCurrentWeapon())
 					{
 						IEntityClass* pClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(item.strClass.c_str());
 						IItem *pItem = g_pGame->GetIGameFramework()->GetIItemSystem()->GetItem(pPlayer->GetInventory()->GetItemByClass(pClass));
-						if(pItem && pItem != pWeapon)
+						if(pItem && pItem != g_pHUD->GetCurrentWeapon())
 						{
-							const bool bAddAccessory = pWeapon->GetAccessory(item.strClass.c_str()) == 0;
+							const bool bAddAccessory = g_pHUD->GetCurrentWeapon()->GetAccessory(item.strClass.c_str()) == 0;
 							if(bAddAccessory)
 							{
-								pWeapon->SwitchAccessory(item.strClass.c_str());
-								HUD_CALL_LISTENERS_PS(WeaponAccessoryChanged(pWeapon, item.strClass.c_str(), bAddAccessory));
+								g_pHUD->GetCurrentWeapon()->SwitchAccessory(item.strClass.c_str());
+								HUD_CALL_LISTENERS_PS(WeaponAccessoryChanged(g_pHUD->GetCurrentWeapon(), item.strClass.c_str(), bAddAccessory));
 							}
 						}
 					}
 				}
 			}
 		}
-		InitEquipmentPacks();
-		UpdatePackageList();
-		UpdateCurrentPackage();
+	}
+	InitEquipmentPacks();
+	UpdatePackageList();
+	UpdateCurrentPackage();
+}
+
+//-----------------------------------------------------------------------------------------------------
+void CHUDPowerStruggle::BuyPackage(int index)
+{
+	if(index==-1)
+	{
+		BuyPackage(m_lastPurchase);
+	}
+	else if(index>=0 && m_EquipmentPacks.size()>index)
+	{
+		BuyPackage(m_EquipmentPacks[index]);
 	}
 }
 
@@ -408,6 +460,11 @@ void CHUDPowerStruggle::DeletePackage(int index)
 	if(index>=0 && m_EquipmentPacks.size()>index)
 	{
 		m_EquipmentPacks.erase(m_EquipmentPacks.begin() + index);
+		if(m_EquipmentPacks.size()<=index)
+		{
+			--index;
+		}
+		OnSelectPackage(index);
 	}
 	SaveEquipmentPacks();
 }
@@ -446,41 +503,77 @@ CHUDPowerStruggle::SEquipmentPack CHUDPowerStruggle::LoadEquipmentPack(int index
 	return newPack;
 }
 
-void CHUDPowerStruggle::RequestNewLoadoutName(string &name)
+void CHUDPowerStruggle::RequestNewLoadoutName(string &name, const char* bluePrint)
 {
-	const char *compareString = "Unnamed";
 	//define name
-	int maxNumber = 0;
-	for(int i(0); i<m_EquipmentPacks.size(); ++i)
+	int maxZahl(99);
+	int target(0);
+	for(int zahl(1); zahl<maxZahl; ++zahl)
 	{
-		SEquipmentPack *pack = &m_EquipmentPacks[i];
-		string strPackName = pack->strName;
-		int index = strPackName.find(compareString) ;
-		if(index==0)
+		bool found(false);
+		for(int i(0); i<m_EquipmentPacks.size(); ++i)
 		{
-			strPackName = strPackName.substr(strlen(compareString),strlen(strPackName));
-			int number = atoi(strPackName);
-			if(number>maxNumber)
-				maxNumber = number;
+			SEquipmentPack *pack = &m_EquipmentPacks[i];
+			string strPackName = pack->strName;
+			string checkOne(strPackName);
+			string checkTwo(bluePrint);
+			checkOne.MakeLower();
+			checkTwo.MakeLower();
+			int index = checkOne.find(checkTwo);
+			if(index==0)
+			{
+				strPackName = strPackName.substr(strlen(bluePrint),strlen(strPackName));
+				int number = atoi(strPackName);
+				if(number==zahl)
+				{
+					found = true;
+					break;
+				}
+			}
+		}
+		if(found==false)
+		{
+			target = zahl;
+			break;
 		}
 	}
-	++maxNumber;
-	char number[64];
-	sprintf(number,"%02d",maxNumber);
-	name = "Unnamed";
-	name.append(number);
+	if(target>0)
+	{
+		char number[64];
+		sprintf(number,"%02d",target);
+		name = bluePrint;
+		name.append(number);
+	}
+	else
+	{
+		name="LowtecWasHere";
+	}
+}
+
+bool CHUDPowerStruggle::CheckDoubleLoadoutName(const char *name)
+{
+	for(int i(0); i<m_EquipmentPacks.size(); ++i)
+	{
+		SEquipmentPack pack = m_EquipmentPacks[i];
+		if(!stricmp(pack.strName.c_str(), name)) return false;
+	}
+	return true;
 }
 
 void CHUDPowerStruggle::SavePackage(const char *name, int index)
 {
 	SEquipmentPack pack;
-	if(strlen(name)>0)
+	if(!name || !name[0])
 	{
-		pack.strName = name;
+		RequestNewLoadoutName(pack.strName, "");
+	}
+	else if(!CheckDoubleLoadoutName(name))
+	{
+		RequestNewLoadoutName(pack.strName, name);
 	}
 	else
 	{
-		RequestNewLoadoutName(pack.strName);
+		pack.strName = name;
 	}
 	pack.iPrice = 0;
 
@@ -498,7 +591,7 @@ void CHUDPowerStruggle::SavePackage(const char *name, int index)
 		SItem item;
 		if(GetItemFromName(*it,item))
 			pack.itemArray.push_back(item);
-			pack.iPrice += item.iPrice;
+		pack.iPrice += item.iPrice;
 	}
 
 	if(index>=0 && m_EquipmentPacks.size()>index)
@@ -510,6 +603,7 @@ void CHUDPowerStruggle::SavePackage(const char *name, int index)
 		m_EquipmentPacks.push_back(pack);
 	}
 	SaveEquipmentPacks();
+	UpdatePackageList();
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -537,6 +631,7 @@ void CHUDPowerStruggle::SaveEquipmentPacks()
 			}
 		}
 	}
+	g_pGame->GetOptions()->SaveProfile();
 }
 
 
@@ -592,11 +687,12 @@ bool CHUDPowerStruggle::GetItemFromName(const char *name, SItem &item)
 				const char *id=0;
 				if (pEntry->GetValue("id", id) && !strcmp(id, name))
 				{
-					bool ammo=false;
+					bool type=false;
 
 					CreateItemFromTableEntry(pEntry, item);
 
-					item.bAmmoType = pEntry->GetValue("ammo", ammo) && ammo;
+					item.bAmmoType = pEntry->GetValue("ammo", type) && type;
+					item.bVehicleType = pEntry->GetValue("vehicle", type) && type;
 					pEntry->EndIteration(iter);
 					return true;
 				}
@@ -611,16 +707,53 @@ bool CHUDPowerStruggle::GetItemFromName(const char *name, SItem &item)
 
 void CHUDPowerStruggle::ShowCaptureProgress(bool show)
 {
-	g_pCaptureProgress->SetVisible(show);
+	if (m_capturing!=show)
+	{
+		m_captureProgress=-1.0f;
+	}
+
+	if(show)
+	{
+		if(m_currentHexIconState != E_HEX_ICON_CAPTURING)
+		{
+			m_currentHexIconState = E_HEX_ICON_CAPTURING;
+			g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+		}
+	}
+	else if(m_currentHexIconState == E_HEX_ICON_CAPTURING)
+	{
+		if(m_bInBuyZone)
+		{
+			m_currentHexIconState = E_HEX_ICON_BUY;
+			g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+		}
+		else if(m_currentHexIconState != E_HEX_ICON_BUILDING)
+		{
+			m_currentHexIconState = E_HEX_ICON_NONE;
+			g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+		}
+	}
+
 	m_capturing=show;
 }
 
 //------------------------------------------------------------------------
 void CHUDPowerStruggle::SetCaptureProgress(float progress)
 {
-	g_pCaptureProgress->Invoke("setCapturing", true);
+	if(m_currentHexIconState != E_HEX_ICON_CAPTURING)
+	{
+		m_currentHexIconState = E_HEX_ICON_CAPTURING;
+		g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+	}
+
 	m_captureProgress=progress;
 }
+
+void CHUDPowerStruggle::SetCaptureContested(bool contested)
+{
+	g_pHexIcon->Invoke("setCapturePointContested", contested);
+}
+
 
 //-----------------------------------------------------------------------------------------------------
 
@@ -639,7 +772,7 @@ void CHUDPowerStruggle::CreateItemFromTableEntry(IScriptTable *pItemScriptTable,
 	pItemScriptTable->GetValue("price",iPrice);
 	pItemScriptTable->GetValue("uniqueId",unique);
 	pItemScriptTable->GetValue("level",level);
-
+	
 	float scale = g_pGameCVars->g_pp_scale_price;
 
 	item.strName = strId;
@@ -689,7 +822,7 @@ bool CHUDPowerStruggle::WeaponUseAmmo(CWeapon *pWeapon, IEntityClass* pAmmoType)
 	for (int fm=0; fm<nfm; fm++)
 	{
 		IFireMode *pFM = pWeapon->GetFireMode(fm);
-		if (pFM && pFM->GetAmmoType() == pAmmoType)
+		if (pFM && pFM->IsEnabled() && (pFM->GetAmmoType() == pAmmoType) && (pFM->GetClipSize()!=-1))
 			return true;
 	}
 
@@ -698,33 +831,12 @@ bool CHUDPowerStruggle::WeaponUseAmmo(CWeapon *pWeapon, IEntityClass* pAmmoType)
 
 bool CHUDPowerStruggle::CanUseAmmo(IEntityClass* pAmmoType)
 {
-	IActor *pActor = gEnv->pGame->GetIGameFramework()->GetClientActor();
-	if(!pActor)
-		return false;
-
-	IInventory *pInventory = pActor->GetInventory();
-	if (!pInventory)
-		return false;
-
 	if (!pAmmoType)
 		return true;
 
-	int n=pInventory->GetCount();
-	for (int i=0; i<n; i++)
-	{
-		if (EntityId itemId=pInventory->GetItem(i))
-		{
-			if (IItem *pItem=gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(itemId))
-			{
-				CWeapon *pWeapon=static_cast<CWeapon *>(pItem->GetIWeapon());
-				if (!pWeapon)
-					continue;
-
-				if (WeaponUseAmmo(pWeapon, pAmmoType))
-					return true;
-			}
-		}
-	}
+	IActor *pActor = gEnv->pGame->GetIGameFramework()->GetClientActor();
+	if(!pActor)
+		return false;
 
 	if (IVehicle *pVehicle=pActor->GetLinkedVehicle())
 	{
@@ -745,13 +857,37 @@ bool CHUDPowerStruggle::CanUseAmmo(IEntityClass* pAmmoType)
 			}
 		}
 	}
-	
+	else
+	{
+		IInventory *pInventory = pActor->GetInventory();
+		if (!pInventory)
+			return false;
+
+
+		int n=pInventory->GetCount();
+		for (int i=0; i<n; i++)
+		{
+			if (EntityId itemId=pInventory->GetItem(i))
+			{
+				if (IItem *pItem=gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(itemId))
+				{
+					CWeapon *pWeapon=static_cast<CWeapon *>(pItem->GetIWeapon());
+					if (!pWeapon)
+						continue;
+
+					if (WeaponUseAmmo(pWeapon, pAmmoType))
+						return true;
+				}
+			}
+		}
+	}
+
 	return false;
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-void CHUDPowerStruggle::GetItemList(EBuyMenuPage itemType, std::vector<SItem> &itemList)
+void CHUDPowerStruggle::GetItemList(EBuyMenuPage itemType, std::vector<SItem> &itemList, bool bBuyMenu)
 {
 	const char *list = "weaponList";
 	if(itemType==E_AMMO)
@@ -784,7 +920,7 @@ void CHUDPowerStruggle::GetItemList(EBuyMenuPage itemType, std::vector<SItem> &i
 
 	float scale = g_pGameCVars->g_pp_scale_price;
 
-	if(pGameRulesScriptTable->GetValue(list,pItemListScriptTable))
+	if(pGameRulesScriptTable && pGameRulesScriptTable->GetValue(list,pItemListScriptTable))
 	{
 		IScriptTable::Iterator iter = pItemListScriptTable->BeginIteration();
 		while(pItemListScriptTable->MoveNext(iter))
@@ -797,29 +933,42 @@ void CHUDPowerStruggle::GetItemList(EBuyMenuPage itemType, std::vector<SItem> &i
 			char *strId = NULL;
 			char *strName = NULL;
 			char *strClass = NULL;
+			char *strCategory = NULL;
 			int iPrice = 0;
 			float level = 0.0f;
 			bool bUnique = false;
 			bool bInvisible = false;
+			bool bVehicle = false;
+			bool bAmmoType=false;
+			bool loadout = false;
+			bool special = false;
 
 			pItemScriptTable->GetValue("invisible",bInvisible);
 			if (bInvisible)
 				continue;
 
 			pItemScriptTable->GetValue("id",strId);
-			if(itemType != E_AMMO)
-				pItemScriptTable->GetValue("level", level);
-			else
+			pItemScriptTable->GetValue("level", level);
+
+			if (pItemScriptTable->GetValue("ammo", bAmmoType) && bAmmoType)
 			{
 				IEntityClass* pClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(strId);
-				if (!CanUseAmmo(pClass))
+				if (bBuyMenu && (itemType==E_AMMO) && !CanUseAmmo(pClass))
 					continue;
 			}
+
 
 			pItemScriptTable->GetValue("name",strName);
 			pItemScriptTable->GetValue("class",strClass);
 			pItemScriptTable->GetValue("uniqueId",bUnique);
 			pItemScriptTable->GetValue("price",iPrice);
+			pItemScriptTable->GetValue("vehicle",bVehicle);
+			pItemScriptTable->GetValue("category",strCategory);
+			pItemScriptTable->GetValue("loadout",loadout);
+			pItemScriptTable->GetValue("special",special);
+
+			if (special)
+				loadout=false;
 
 			SItem item;
 			item.strName = strId;
@@ -830,7 +979,14 @@ void CHUDPowerStruggle::GetItemList(EBuyMenuPage itemType, std::vector<SItem> &i
 			item.isUnique = bUnique;
 			item.iCount = 0;
 			item.iMaxCount = 1;
+			item.bVehicleType = bVehicle;
+			item.strCategory = strCategory;
+			item.bAmmoType = bAmmoType;
+			item.loadout = loadout;
+			item.special = special;
+
 			EntityId inventoryItem = 0;
+			bool pistols = false;
 			if(strClass)
 			{
 				IEntityClass* pClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(strClass);
@@ -856,6 +1012,7 @@ void CHUDPowerStruggle::GetItemList(EBuyMenuPage itemType, std::vector<SItem> &i
 
 					if(pClass == CItem::sSOCOMClass)
 					{
+						pistols = true;
 						bool bSlave = pItem->IsDualWieldSlave();
 						bool bMaster = pItem->IsDualWieldMaster();
 						if(!bSlave && !bMaster)
@@ -871,7 +1028,7 @@ void CHUDPowerStruggle::GetItemList(EBuyMenuPage itemType, std::vector<SItem> &i
 				}
 			}
 
-			if (bUnique || (int)inventoryItem < 0)
+			if (bUnique || (int)inventoryItem < 0 || pistols)
 				item.iInventoryID = (int)inventoryItem;
 			else
 				item.iInventoryID = 0;
@@ -883,8 +1040,96 @@ void CHUDPowerStruggle::GetItemList(EBuyMenuPage itemType, std::vector<SItem> &i
 
 //-----------------------------------------------------------------------------------------------------
 
+void CHUDPowerStruggle::DetermineCurrentBuyZone(bool sendToFlash)
+{
+	IActor *pActor=g_pGame->GetIGameFramework()->GetClientActor();
+	if(!pActor) return;
+	
+	CGameRules *pGameRules = g_pGame->GetGameRules();
+	if(!pGameRules) return;
+
+	EntityId uiPlayerID = pActor->GetEntityId();
+
+	int playerTeam = pGameRules->GetTeam(uiPlayerID);
+	bool isDead = pGameRules->IsDead(uiPlayerID);
+
+	EBuyMenuPage factory = E_LOADOUT;
+
+	if (isDead)
+	{
+		factory = E_WEAPONS;
+	}
+	else
+	{
+		std::vector<EntityId>::const_iterator it = m_currentBuyZones.begin();
+		for(; it != m_currentBuyZones.end(); ++it)
+		{
+			if(pGameRules->GetTeam(*it) == playerTeam)
+			{
+				if(IsFactoryType(*it,E_PROTOTYPES))
+				{
+					factory = E_PROTOTYPES;
+					break;
+				}
+				else if(IsFactoryType(*it,E_VEHICLES))
+				{
+					factory = E_VEHICLES;
+					break;
+				}
+				else if(IsFactoryType(*it,E_WEAPONS))
+				{
+					factory = E_WEAPONS;
+					break;
+				}
+				else if(IsFactoryType(*it,E_AMMO))
+				{
+					factory = E_AMMO;
+					break;
+				}
+			}
+		}
+		if(factory == E_LOADOUT && g_pHUD->GetVehicleInterface()->IsAbleToBuy())
+		{
+			std::vector<EntityId>::const_iterator it = m_currentServiceZones.begin();
+			for(; it != m_currentServiceZones.end(); ++it)
+			{
+				if(pGameRules->GetTeam(*it) == playerTeam)
+				{
+					factory = E_AMMO;
+					break;
+				}
+			}
+		}
+	}
+
+	m_eCurBuyMenuPage = factory;
+	if(sendToFlash)
+	{
+		int page = 1;
+		if(m_eCurBuyMenuPage==E_AMMO)
+			page = 2;
+		else if(m_eCurBuyMenuPage==E_EQUIPMENT)
+			page = 3;
+		else if(m_eCurBuyMenuPage==E_VEHICLES)
+			page = 4;
+		else if(m_eCurBuyMenuPage==E_PROTOTYPES)
+			page = 5;
+		else if(m_eCurBuyMenuPage==E_LOADOUT)
+			page = 6;
+		g_pBuyMenu->Invoke("Root.TabBar.gotoTab", (int)page);
+		PopulateBuyList();
+	}
+
+}
+
+//-----------------------------------------------------------------------------------------------------
+
 void CHUDPowerStruggle::UpdateBuyList(const char *page)
 {
+	if(page && page[0])
+	{
+		g_pHUD->m_buyMenuKeyLog.m_state = CHUD::SBuyMenuKeyLog::eBMKL_Frame;
+	}
 	if(gEnv->bMultiplayer)
 	{
 		if(page)
@@ -901,7 +1146,7 @@ CHUDPowerStruggle::EBuyMenuPage CHUDPowerStruggle::ConvertToBuyList(const char *
 {
 	if(page)
 	{
-		static EBuyMenuPage pages[] = { E_WEAPONS, E_WEAPONS, E_AMMO, E_EQUIPMENT, E_VEHICLES, E_PROTOTYPES };
+		static EBuyMenuPage pages[] = { E_WEAPONS, E_WEAPONS, E_AMMO, E_EQUIPMENT, E_VEHICLES, E_PROTOTYPES, E_LOADOUT };
 		static const int numPages = sizeof(pages) / sizeof(pages[0]);
 		int pageIndex = atoi(page); // returns 0, if no conversion made
 		pageIndex = pageIndex < 0 ? 0 : (pageIndex < numPages ? pageIndex : 0);
@@ -923,24 +1168,49 @@ void CHUDPowerStruggle::PopulateBuyList()
 	if(!g_pHUD->IsBuyMenuActive())
 		return;
 
+	CGameRules *pGameRules = g_pGame->GetGameRules();
+	if(!pGameRules)
+		return;
+
 	EBuyMenuPage itemType = m_eCurBuyMenuPage;
 
 	IFlashPlayer *pFlashPlayer = g_pBuyMenu->GetFlashPlayer();
 
 	std::vector<SItem> itemList;
 
-	pFlashPlayer->Invoke0("Root.PDAArea.clearAllEntities");
+	pFlashPlayer->Invoke0("clearAllEntities");
 
 	GetItemList(itemType, itemList);
 
 	IEntity *pFirstVehicleFactory = NULL;
 
 	EntityId uiPlayerID = g_pGame->GetIGameFramework()->GetClientActor()->GetEntityId();
-	int playerTeam = g_pGame->GetGameRules()->GetTeam(uiPlayerID);
-	CGameRules *pGameRules = g_pGame->GetGameRules();
+	int playerTeam = pGameRules->GetTeam(uiPlayerID);
 	bool bInvalidBuyZone = true;
 	float CurBuyZoneLevel = 0.0f;
 	{
+		if(g_pHUD->GetVehicleInterface()->IsAbleToBuy())
+		{
+			std::vector<EntityId>::const_iterator it = m_currentServiceZones.begin();
+			for(; it != m_currentServiceZones.end(); ++it)
+			{
+				if(pGameRules->GetTeam(*it) == playerTeam)
+				{
+					IEntity *pEntity = gEnv->pEntitySystem->GetEntity(*it);
+					if(IsFactoryType(*it, itemType))
+					{
+						float level = g_pHUD->CallScriptFunction(pEntity,"GetPowerLevel");
+						if(level>CurBuyZoneLevel)
+							CurBuyZoneLevel = level;
+						bInvalidBuyZone = false;
+						if(itemType == E_VEHICLES || itemType == E_PROTOTYPES)
+						{
+							pFirstVehicleFactory = pEntity;
+						}
+					}
+				}
+			}
+		}
 		std::vector<EntityId>::const_iterator it = m_currentBuyZones.begin();
 		for(; it != m_currentBuyZones.end(); ++it)
 		{
@@ -953,7 +1223,7 @@ void CHUDPowerStruggle::PopulateBuyList()
 					if(level>CurBuyZoneLevel)
 						CurBuyZoneLevel = level;
 					bInvalidBuyZone = false;
-					if(itemType == E_VEHICLES)
+					if(itemType == E_VEHICLES || itemType == E_PROTOTYPES)
 					{
 						pFirstVehicleFactory = pEntity;
 					}
@@ -961,6 +1231,8 @@ void CHUDPowerStruggle::PopulateBuyList()
 			}
 		}
 	}
+
+	bool isDead = pGameRules->IsDead(uiPlayerID);
 
 	//std::sort(itemList.begin(),itemList.end(),SortByPrice);
 	std::vector<string> itemArray;
@@ -972,7 +1244,7 @@ void CHUDPowerStruggle::PopulateBuyList()
 		SItem item = (*iter);
 		const char* sReason = "ready";
 
-		if(bInvalidBuyZone)
+		if(bInvalidBuyZone && !isDead)
 		{
 			sReason = "buyzone";
 		}
@@ -981,7 +1253,7 @@ void CHUDPowerStruggle::PopulateBuyList()
 			if(CurBuyZoneLevel<item.level)
 				sReason = "level";
 
-			if(itemType == E_VEHICLES)
+			if(itemType == E_VEHICLES || (itemType == E_PROTOTYPES && item.bVehicleType==true))
 			{
 				if(!CanBuild(pFirstVehicleFactory,item.strName.c_str()))
 				{
@@ -1005,8 +1277,24 @@ void CHUDPowerStruggle::PopulateBuyList()
 			}
 			item.iInventoryID = 0;
 		}
+
+		if (item.special && !IsPlayerSpecial())
+			sReason="level";
+
 		itemArray.push_back(item.strName.c_str());
 		itemArray.push_back(item.strDesc.c_str());
+		// Autobuy, this one is special!
+		if(item.strName == "")
+		{
+			// Retrieve its current price, which depends on the weapon the player has
+			IScriptTable *pGameRulesScriptTable = g_pGame->GetGameRules()->GetEntity()->GetScriptTable();
+			HSCRIPTFUNCTION hGetAutoBuyPrice = NULL;
+			if(pGameRulesScriptTable && pGameRulesScriptTable->GetValue("GetAutoBuyPrice",hGetAutoBuyPrice))
+			{
+				Script::CallReturn(gEnv->pScriptSystem,hGetAutoBuyPrice,pGameRulesScriptTable,item.iPrice);
+				gEnv->pScriptSystem->ReleaseFunc(hGetAutoBuyPrice);
+			}
+		}
 		_snprintf(tempBuf,sizeof(tempBuf),"%d",item.iPrice);
 		tempBuf[sizeof(tempBuf)-1]='\0';
 		itemArray.push_back(tempBuf);
@@ -1014,10 +1302,24 @@ void CHUDPowerStruggle::PopulateBuyList()
 		_snprintf(tempBuf,sizeof(tempBuf),"%d",item.iInventoryID);
 		tempBuf[sizeof(tempBuf)-1]='\0';
 		itemArray.push_back(tempBuf);
+		if(!item.strCategory.empty())
+		{
+			itemArray.push_back(item.strCategory);
+		}
+		else
+		{
+			itemArray.push_back("");
+		}
 	}
+	
+	ActivateBuyMenuTabs();
 
-	SFlashVarValue arg[5] = {(int)m_factoryTypes[0], (int)m_factoryTypes[1], (int)m_factoryTypes[2], (int)m_factoryTypes[3], (int)m_factoryTypes[4]};
-	g_pBuyMenu->CheckedInvoke("Root.PDAArea.Tabs.activateTabs",arg,5);
+	char buffer[10];
+	itoa(m_lastPurchase.iPrice, buffer, 10);
+
+	wstring localized;
+	localized = g_pHUD->LocalizeWithParams("@ui_buy_REPEATLASTBUY", true, buffer);
+	g_pBuyMenu->Invoke("setLastPurchase", SFlashVarValue(localized));
 
 	int size = itemArray.size();
 	if(size)
@@ -1029,10 +1331,36 @@ void CHUDPowerStruggle::PopulateBuyList()
 			pushArray.push_back(itemArray[i].c_str());
 		}
 
-		pFlashPlayer->SetVariableArray(FVAT_ConstStrPtr, "Root.PDAArea.m_allValues", 0, &pushArray[0], size);
+		pFlashPlayer->SetVariableArray(FVAT_ConstStrPtr, "m_allValues", 0, &pushArray[0], size);
 	}
 
-	pFlashPlayer->Invoke0("Root.PDAArea.updateList");
+	pFlashPlayer->Invoke0("updateList");
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void CHUDPowerStruggle::ActivateBuyMenuTabs()
+{
+	CGameRules *pGameRules = g_pGame->GetGameRules();
+	if(!pGameRules) return;
+
+	IActor *pLocalActor=g_pGame->GetIGameFramework()->GetClientActor();
+	if (!pLocalActor) return;
+
+	EntityId id=pLocalActor->GetEntityId();
+	
+	bool isDead = pGameRules->IsDead(id);
+	bool inVehicle = g_pHUD->GetVehicleInterface()->IsAbleToBuy();
+
+	bool b0, b1, b2, b3, b4;
+	b0 = (m_serviceZoneTypes[0]&&inVehicle)||m_factoryTypes[0]||isDead;
+	b1 = (m_serviceZoneTypes[1]&&inVehicle)||m_factoryTypes[1]||isDead;
+	b2 = (m_serviceZoneTypes[2]&&inVehicle)||m_factoryTypes[2]||isDead;
+	b3 = ((m_serviceZoneTypes[3]&&inVehicle)||m_factoryTypes[3]) && !isDead;
+	b4 = ((m_serviceZoneTypes[4]&&inVehicle)||m_factoryTypes[4]) && !isDead;
+
+	SFlashVarValue arg[5] = {(int)b0, (int)b1, (int)b2, (int)b3, (int)b4};
+	g_pBuyMenu->Invoke("activateTabs",arg,5);
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -1041,6 +1369,8 @@ void CHUDPowerStruggle::UpdatePackageList()
 {
 	if(!g_pBuyMenu)
 		return;
+
+	g_pHUD->m_buyMenuKeyLog.m_state = CHUD::SBuyMenuKeyLog::eBMKL_NoInput;
 
 	std::vector<string>itemList;
 	char tempBuf[256];
@@ -1054,8 +1384,7 @@ void CHUDPowerStruggle::UpdatePackageList()
 		itemList.push_back(tempBuf);
 	}
 
-	SFlashVarValue arg[5] = {(int)m_factoryTypes[0], (int)m_factoryTypes[1], (int)m_factoryTypes[2], (int)m_factoryTypes[3], (int)m_factoryTypes[4]};
-	g_pBuyMenu->CheckedInvoke("Root.PDAArea.Tabs.activateTabs",arg,5);
+	ActivateBuyMenuTabs();
 
 	int size = itemList.size();
 
@@ -1068,10 +1397,10 @@ void CHUDPowerStruggle::UpdatePackageList()
 			pushArray.push_back(itemList[i].c_str());
 		}
 
-		g_pBuyMenu->GetFlashPlayer()->SetVariableArray(FVAT_ConstStrPtr, "Root.PDAArea.m_allValues", 0, &pushArray[0], pushArray.size());
+		g_pBuyMenu->GetFlashPlayer()->SetVariableArray(FVAT_ConstStrPtr, "m_allValues", 0, &pushArray[0], pushArray.size());
 	}
 
-	g_pBuyMenu->Invoke("Root.PDAArea.updatePackageList");
+	g_pBuyMenu->Invoke("updatePackageList");
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -1081,13 +1410,18 @@ void CHUDPowerStruggle::UpdateCurrentPackage()
 	if(!g_pBuyMenu)
 		return;
 
-	g_pBuyMenu->Invoke("Root.PDAArea.updateCurrentPackage");
+	g_pBuyMenu->Invoke("updateCurrentPackage");
 }
 
 //-----------------------------------------------------------------------------------------------------
 
 void CHUDPowerStruggle::OnSelectPackage(int index)
 {
+	if(index<0)
+	{
+		g_pBuyMenu->Invoke("updatePackageContent");
+		return;
+	}
 	SEquipmentPack pack = m_EquipmentPacks[index];
 	std::vector<string>itemList;
 	char tempBuf[256];
@@ -1118,9 +1452,9 @@ void CHUDPowerStruggle::OnSelectPackage(int index)
 			pushArray.push_back(itemList[i].c_str());
 		}
 
-		g_pBuyMenu->GetFlashPlayer()->SetVariableArray(FVAT_ConstStrPtr, "Root.PDAArea.m_allValues", 0, &pushArray[0], size);
+		g_pBuyMenu->GetFlashPlayer()->SetVariableArray(FVAT_ConstStrPtr, "m_allValues", 0, &pushArray[0], size);
 	}
-	g_pBuyMenu->Invoke("Root.PDAArea.updatePackageContent");
+	g_pBuyMenu->Invoke("updatePackageContent");
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -1150,9 +1484,9 @@ void CHUDPowerStruggle::UpdateModifyPackage(int index)
 			pushArray.push_back(itemList[i].c_str());
 		}
 
-		g_pBuyMenu->GetFlashPlayer()->SetVariableArray(FVAT_ConstStrPtr, "POPUP.POPUP_NewPackage.m_allValues", 0, &pushArray[0], size);
+		g_pBuyMenu->GetFlashPlayer()->SetVariableArray(FVAT_ConstStrPtr, "m_allValues", 0, &pushArray[0], size);
 	}
-	g_pBuyMenu->Invoke("POPUP.POPUP_NewPackage.updateContentList");
+	g_pBuyMenu->Invoke("updatePackageContentList");
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -1168,12 +1502,10 @@ void CHUDPowerStruggle::UpdatePackageItemList(const char *page)
 
 	IFlashPlayer *pFlashPlayer = g_pBuyMenu->GetFlashPlayer();
 
-	pFlashPlayer->Invoke0("POPUP.POPUP_NewPackage.clearAllEntities");
-
 	std::vector<SItem> itemList;
 	EBuyMenuPage itemType = ConvertToBuyList(page);
 
-	GetItemList(itemType, itemList);
+	GetItemList(itemType, itemList, false);
 
 	EntityId uiPlayerID = g_pGame->GetIGameFramework()->GetClientActor()->GetEntityId();
 	int playerTeam = g_pGame->GetGameRules()->GetTeam(uiPlayerID);
@@ -1188,6 +1520,7 @@ void CHUDPowerStruggle::UpdatePackageItemList(const char *page)
 	{
 		SItem item = (*iter);
 		if(item.iPrice == 0) continue;
+		if(item.loadout == false) continue;
 
 		itemArray.push_back(item.strName.c_str());
 		itemArray.push_back(item.strDesc.c_str());
@@ -1213,16 +1546,18 @@ void CHUDPowerStruggle::UpdatePackageItemList(const char *page)
 			pushArray.push_back(itemArray[i].c_str());
 		}
 
-		pFlashPlayer->SetVariableArray(FVAT_ConstStrPtr, "POPUP.POPUP_NewPackage.m_allValues", 0, &pushArray[0], size);
+		pFlashPlayer->SetVariableArray(FVAT_ConstStrPtr, "m_allValues", 0, &pushArray[0], size);
 	}
 
-	pFlashPlayer->Invoke0("POPUP.POPUP_NewPackage.updatePackageList");
+	pFlashPlayer->Invoke0("updatePackageItemList");
 }
 
 //-----------------------------------------------------------------------------------------------------
 
 void CHUDPowerStruggle::UpdateBuyZone(bool trespassing, EntityId zone)
 {
+	bool wasInBuyZone=m_bInBuyZone||m_bInServiceZone;
+
 	if(zone)
 	{
 		if(trespassing)
@@ -1280,30 +1615,141 @@ void CHUDPowerStruggle::UpdateBuyZone(bool trespassing, EntityId zone)
 
 		if(inBuyZone)
 		{
-			IActor *pActor = g_pGame->GetIGameFramework()->GetClientActor();
-			if(pActor && pActor->GetLinkedVehicle())
+			if(g_pHUD->GetVehicleInterface()->IsAbleToBuy())
 				inBuyZone = 2;	//this is a service zone
 		}
 
 		if(g_pHUD->IsBuyMenuActive())
 		{
-			SFlashVarValue arg[5] = {(int)m_factoryTypes[0], (int)m_factoryTypes[1], (int)m_factoryTypes[2], (int)m_factoryTypes[3], (int)m_factoryTypes[4]};
-			g_pBuyMenu->CheckedInvoke("Root.PDAArea.Tabs.activateTabs",arg,5);
+			ActivateBuyMenuTabs();
+			DetermineCurrentBuyZone(true);
 		}
 
 		//update buy zone
 		m_bInBuyZone = (inBuyZone)?true:false;
-		if(g_pBuyIcon)
+
+		// if we leave buy zone, close the buy menu
+		if(!m_bInBuyZone && (!m_bInServiceZone || !g_pHUD->GetVehicleInterface()->IsAbleToBuy()) && wasInBuyZone)
+			g_pHUD->ShowPDA(false, true);
+
+		if(g_pHexIcon)
 		{
-			if(inBuyZone)
+			if(!m_capturing && (m_bInBuyZone || (m_bInServiceZone && g_pHUD->GetVehicleInterface()->IsAbleToBuy())))
 			{
-				g_pBuyIcon->SetVisible(true);
-				g_pBuyIcon->Invoke("setCapturing", false);
+				if(m_currentHexIconState != E_HEX_ICON_BUY && m_currentHexIconState != E_HEX_ICON_BUILDING)
+				{
+					m_currentHexIconState = E_HEX_ICON_BUY;
+					g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+				}
 			}
-			else
-				g_pBuyIcon->SetVisible(false);
+			else if(m_currentHexIconState != E_HEX_ICON_BUILDING && m_currentHexIconState != E_HEX_ICON_CAPTURING && m_currentHexIconState != E_HEX_ICON_NONE)
+			{
+				m_currentHexIconState = E_HEX_ICON_NONE;
+
+				g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+			}
+		}
+	}
+}
+//-----------------------------------------------------------------------------------------------------
+
+void CHUDPowerStruggle::UpdateServiceZone(bool trespassing, EntityId zone)
+{
+	bool wasInBuyZone=m_bInBuyZone || (m_bInServiceZone && g_pHUD->GetVehicleInterface()->IsAbleToBuy());
+
+	if(zone)
+	{
+		if(trespassing)
+		{
+			if(!stl::find(m_currentServiceZones, zone))
+				m_currentServiceZones.push_back(zone);
+		}
+		else
+		{
+			std::vector<EntityId>::iterator it = m_currentServiceZones.begin();
+			for(; it != m_currentServiceZones.end(); ++it)
+			{
+				if(*it == zone)
+				{
+					m_currentServiceZones.erase(it);
+					break;
+				}
+			}
+		}
+	}
+
+	m_serviceZoneTypes[0] = false;
+	m_serviceZoneTypes[1] = false;
+	m_serviceZoneTypes[2] = false;
+	m_serviceZoneTypes[3] = false;
+	m_serviceZoneTypes[4] = false;
+
+	if (IActor *pActor=g_pGame->GetIGameFramework()->GetClientActor())
+	{
+		//check whether the player is in a buy zone, he can use ...
+		EntityId uiPlayerID = pActor->GetEntityId();
+		int playerTeam = g_pGame->GetGameRules()->GetTeam(uiPlayerID);
+		int inBuyZone = false;
+		CGameRules *pGameRules = g_pGame->GetGameRules();
+		{
+			std::vector<EntityId>::const_iterator it = m_currentServiceZones.begin();
+			for(; it != m_currentServiceZones.end(); ++it)
+			{
+				if(pGameRules->GetTeam(*it) == playerTeam)
+				{
+					m_serviceZoneTypes[1] = true;
+/*					if(IsFactoryType(*it,E_WEAPONS))
+						m_serviceZoneTypes[0] = true;
+					if(IsFactoryType(*it,E_AMMO))
+						m_serviceZoneTypes[1] = true;
+					if(IsFactoryType(*it,E_EQUIPMENT))
+						m_serviceZoneTypes[2] = true;
+					if(IsFactoryType(*it,E_VEHICLES))
+						m_serviceZoneTypes[3] = true;
+					if(IsFactoryType(*it,E_PROTOTYPES))
+						m_serviceZoneTypes[4] = true;
+*/					inBuyZone = true;
+				}
+			}
 		}
 
+		if(inBuyZone)
+		{
+			if(g_pHUD->GetVehicleInterface()->IsAbleToBuy())
+				inBuyZone = 2;	//this is a service zone
+		}
+
+		if(g_pHUD->IsBuyMenuActive())
+		{
+			ActivateBuyMenuTabs();
+		}
+
+		//update buy zone
+		//m_bInBuyZone = (inBuyZone)?true:false;
+		m_bInServiceZone = (inBuyZone)?true:false;
+
+		// if we leave buy zone, close the buy menu
+		if(!m_bInBuyZone && !m_bInServiceZone && wasInBuyZone)
+		{
+			g_pHUD->ShowPDA(false, true);
+		}
+
+		if(g_pHexIcon)
+		{
+			if(!m_capturing && (m_bInBuyZone || (m_bInServiceZone && g_pHUD->GetVehicleInterface()->IsAbleToBuy())))
+			{
+				if(m_currentHexIconState != E_HEX_ICON_BUY && m_currentHexIconState != E_HEX_ICON_BUILDING)
+				{
+					m_currentHexIconState = E_HEX_ICON_BUY;
+					g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+				}
+			}
+			else if(m_currentHexIconState != E_HEX_ICON_BUILDING && m_currentHexIconState != E_HEX_ICON_CAPTURING && m_currentHexIconState != E_HEX_ICON_NONE)
+			{
+				m_currentHexIconState = E_HEX_ICON_NONE;
+				g_pHexIcon->Invoke("setHexIcon", m_currentHexIconState);
+			}
+		}
 	}
 }
 
@@ -1331,13 +1777,21 @@ bool CHUDPowerStruggle::CanBuild(IEntity *pEntity, const char *vehicle)
 
 	bool buyable = false;
 	//sum up available vehicles if tech level is high enough
-	if(pScriptTable->GetValue("CanBuild", scriptFuncHelper) && scriptFuncHelper)
+	if(pScriptTable && pScriptTable->GetValue("CanBuild", scriptFuncHelper) && scriptFuncHelper)
 	{
 		Script::CallReturn(gEnv->pScriptSystem, scriptFuncHelper, pScriptTable, vehicle, buyable);
 		gEnv->pScriptSystem->ReleaseFunc(scriptFuncHelper);
 		scriptFuncHelper = NULL;
 	}
 	return buyable;
+}
+
+//------------------------------------------------------------------------
+bool CHUDPowerStruggle::IsPlayerSpecial()
+{
+	if (INetChannel *pNetChannel=g_pGame->GetIGameFramework()->GetClientChannel())
+		return pNetChannel->IsPreordered();
+	return false;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -1356,7 +1810,7 @@ void CHUDPowerStruggle::HideSOM(bool hide)
 	}
 }
 
-void CHUDPowerStruggle::GetTeamStatus(int teamId, float &power, float &turretstatus, int &controlledAliens, EntityId &prototypeFactoryId)
+void CHUDPowerStruggle::GetTeamStatus(int teamId, float &power, float &hq, int &controlledAliens, EntityId &prototypeFactoryId)
 {
 	CGameRules *pGameRules = g_pGame->GetGameRules();
 
@@ -1379,26 +1833,44 @@ void CHUDPowerStruggle::GetTeamStatus(int teamId, float &power, float &turretsta
 
 	controlledAliens=owned;
 
-	float totalTurretLife=0.0f;
-	float currentTurretLife=0.0f;
-	for (int t=0;t<m_turrets.size();t++)
+	float maxHP=1.0f;
+	float currentHP=0.0f;
+	for (int h=0;h<m_hqs.size();h++)
 	{
-		if (pGameRules->GetTeam(m_turrets[t])!=teamId)
+		if (pGameRules->GetTeam(m_hqs[h])!=teamId)
 			continue;
 
-		if (CItem *pItem=static_cast<CItem *>(g_pGame->GetIGameFramework()->GetIItemSystem()->GetItem(m_turrets[t])))
+		if (IEntity *pEntity=gEnv->pEntitySystem->GetEntity(m_hqs[h]))
 		{
-			currentTurretLife+=MAX(0,pItem->GetStats().health);
-			totalTurretLife+=pItem->GetProperties().hitpoints;
+			if (IScriptTable *pScriptTable=pEntity->GetScriptTable())
+			{
+				SmartScriptTable props;
+				if (pScriptTable->GetValue("Properties", props))
+					props->GetValue("nHitPoints", maxHP);
+
+				HSCRIPTFUNCTION pfnGetHealth=0;
+				if (pScriptTable->GetValue("GetHealth", pfnGetHealth) && pfnGetHealth)
+				{
+					Script::CallReturn(gEnv->pScriptSystem, pfnGetHealth, pScriptTable, currentHP);
+					gEnv->pScriptSystem->ReleaseFunc(pfnGetHealth);
+				}
+			}
 		}
 	}
 
-	turretstatus=currentTurretLife/totalTurretLife;
+	hq=max(0.0f, currentHP/maxHP);
 
 	// draw proto factory ownership indicator
 	prototypeFactoryId=0;
 	if (m_protofactory && pGameRules->GetTeam(m_protofactory)==teamId)
 		prototypeFactoryId=m_protofactory;
+}
+
+void CHUDPowerStruggle::Scroll(int direction)
+{
+	if(!g_pBuyMenu) return;
+
+	g_pBuyMenu->Invoke("scrollList",direction);
 }
 
 void CHUDPowerStruggle::ShowConstructionProgress(bool show, bool queued, float time)
@@ -1409,8 +1881,3 @@ void CHUDPowerStruggle::ShowConstructionProgress(bool show, bool queued, float t
 	m_constructionTimer=time;
 }
 
-void CHUDPowerStruggle::ReviveCycle(float total, float remaining)
-{
-	m_reviveCycle=total;
-	m_reviveCycleEnd=gEnv->pTimer->GetFrameStartTime()+CTimeValue(remaining);
-}

@@ -66,6 +66,7 @@ enum EColliderMode
 	eColliderMode_Pushable,
 	eColliderMode_NonPushable,
 	eColliderMode_PushesPlayersOnly,
+	eColliderMode_Spectator,
 
 	// !!! WARNING: Update g_szColliderModeString in AnimationGraph.cpp !!!
 
@@ -80,10 +81,10 @@ enum EColliderModeLayer
 {
 	// !!! WARNING: Update g_szColliderModeLayerString in AnimationGraph.cpp !!!
 
-	eColliderModeLayer_FlowGraph = 0,
-	eColliderModeLayer_AnimGraph,
-
+	eColliderModeLayer_AnimGraph = 0,
 	eColliderModeLayer_Game,
+	eColliderModeLayer_Script,
+	eColliderModeLayer_FlowGraph,
 	eColliderModeLayer_ForceSleep,
 
 	eColliderModeLayer_Debug,
@@ -192,7 +193,7 @@ struct SAnimationStateData
 	class CAnimationGraphState* pState;
 	IGameObject* pGameObject;
 	IEntity* pEntity;
-	IAnimatedCharacter* pAnimatedCharacter;
+	class CAnimatedCharacter* pAnimatedCharacter;
 	CryCharAnimationParams params[MAX_LAYERS];
 	SAnimationOverrides overrides[MAX_LAYERS];
 	bool isPaused;
@@ -210,13 +211,27 @@ struct SAnimationStateData
 
 struct SAnimationTargetRequest
 {
-	SAnimationTargetRequest() : position(ZERO), direction(FORWARD_DIRECTION), positionRadius(0.5f), directionRadius(gf_PI), prepareRadius(3.0f), startRadius(0.5f) {}
+	SAnimationTargetRequest()
+		: position(ZERO)
+		, direction(FORWARD_DIRECTION)
+		, positionRadius(0.5f)
+		, directionRadius(gf_PI)
+		, prepareRadius(3.0f)
+		, startRadius(0.5f)
+		, projectEnd(false)
+		, navSO(false)
+	{}
 	Vec3 position;
 	Vec3 direction;
 	float positionRadius;
 	float directionRadius;
 	float prepareRadius;
 	float startRadius;
+	bool projectEnd;
+
+	// we allow bigger errors in start position while passing through
+	// a smart object to avoid too much slowing down in front of it
+	bool navSO;
 
 	bool operator==( const SAnimationTargetRequest& rhs ) const
 	{
@@ -226,7 +241,9 @@ struct SAnimationTargetRequest
 			&& fabsf(positionRadius - rhs.positionRadius) < eps
 			&& fabsf(directionRadius - rhs.directionRadius) < eps
 			&& fabsf(prepareRadius - rhs.prepareRadius) < eps
-			&& fabsf(startRadius - rhs.startRadius) < eps;
+			&& fabsf(startRadius - rhs.startRadius) < eps
+			&& projectEnd == rhs.projectEnd
+			&& navSO == rhs.navSO;
 	}
 	bool operator!=( const SAnimationTargetRequest& rhs ) const
 	{
@@ -236,11 +253,28 @@ struct SAnimationTargetRequest
 
 struct SAnimationTarget
 {
-	SAnimationTarget() : preparing(false), activated(false), doingSomething(false), allowActivation(false), maxRadius(0), position(ZERO), positionRadius(0.0f), orientationRadius(0.0f), orientation(Quat::CreateIdentity()), activationTimeRemaining(0), errorVelocity(ZERO), errorRotationalVelocity(Quat::CreateIdentity()) {}
-	bool preparing;
-	bool activated;
-	bool doingSomething;
-	mutable bool allowActivation;
+	SAnimationTarget()
+		: preparing(false)
+		, activated(false)
+		, doingSomething(false)
+		, allowActivation(false)
+		, notAiControlledAnymore(false)
+		, isNavigationalSO(false)
+		, maxRadius(0)
+		, position(ZERO)
+		, positionRadius(0.0f)
+		, orientationRadius(0.0f)
+		, orientation(IDENTITY)
+		, activationTimeRemaining(0)
+		, errorVelocity(ZERO)
+		, errorRotationalVelocity(IDENTITY)
+		{}
+	int preparing : 1;
+	int activated : 1;
+	int doingSomething : 1;
+	mutable int allowActivation : 1;
+	mutable int notAiControlledAnymore : 1;
+	int isNavigationalSO : 1;
 	float maxRadius;
 	Vec3 position;
 	float positionRadius;

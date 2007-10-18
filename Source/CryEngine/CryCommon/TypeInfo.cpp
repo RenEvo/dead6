@@ -15,32 +15,113 @@
 
 //#define TEST_TYPEINFO
 
+STRUCT_INFO_EMPTY(SSerializeString)
+
 #if defined(PS3) || defined(LINUX)
 
-char* _i64toa( uint64 value, char *string, int32 radix )
+#undef CVTDIGITHEX
+#undef CVTDIGITDEC
+#define CVTDIGITHEX(VALUE, P, STRING) \
+{ \
+  if (VALUE) \
+  { \
+    unsigned int _digit = (VALUE % 16); \
+    _digit += (_digit > 10) ? 'a' - 10 : '0'; \
+    *P++ = (char)_digit; \
+  } \
+  else \
+  { \
+    *P = 0; \
+    return STRING; \
+  } \
+  VALUE /= 16; \
+}
+#define CVTDIGITDEC(VALUE, P, STRING) \
+{ \
+  if (VALUE) \
+    *P++ = '0' + (char)(VALUE % 10); \
+  else \
+  { \
+    *P = 0; \
+    return STRING; \
+  } \
+  VALUE /= 10; \
+}
+
+char* _i64toa( int64 value, char *string, int32 radix )
 {
-#if defined(__GNUC__)
+#ifndef PS3OPT
 	if( 10 == radix )
 		sprintf( string, "%llu", (unsigned long long)value );
 	else
 		sprintf( string, "%llx", (unsigned long long)value );
-#else
-	if( 10 == radix )
-		sprintf( string, "%I64u", value );
-	else
-		sprintf( string, "%I64x", value );
-#endif
 	return( string );
+#else
+	char *p = string;
+  uint64 uValue = value < 0 ? (uint64)-value : (uint64)value;
+  if (value < 0)
+    *p++ = '-';
+  if (radix == 10)
+  {
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+    CVTDIGITDEC(uValue, p, string) CVTDIGITDEC(uValue, p, string)
+  }
+  else
+  {
+    CVTDIGITHEX(uValue, p, string) CVTDIGITHEX(uValue, p, string)
+    CVTDIGITHEX(uValue, p, string) CVTDIGITHEX(uValue, p, string)
+    CVTDIGITHEX(uValue, p, string) CVTDIGITHEX(uValue, p, string)
+    CVTDIGITHEX(uValue, p, string) CVTDIGITHEX(uValue, p, string)
+    CVTDIGITHEX(uValue, p, string) CVTDIGITHEX(uValue, p, string)
+    CVTDIGITHEX(uValue, p, string) CVTDIGITHEX(uValue, p, string)
+    CVTDIGITHEX(uValue, p, string) CVTDIGITHEX(uValue, p, string)
+    CVTDIGITHEX(uValue, p, string) CVTDIGITHEX(uValue, p, string)
+  }
+  *p = 0;
+  return string;
+#endif // PS3OPT
 }
 
 char* ultoa( uint32 value, char *string, int32 radix )
 {
+#ifndef PS3OPT
 	if( 10 == radix )
 		sprintf( string, "%.d", value );
 	else
 		sprintf( string, "%.x", value );
 	return( string );
+#else
+	char *p = string;
+  if (radix == 10)
+  {
+    CVTDIGITDEC(value, p, string) CVTDIGITDEC(value, p, string)
+    CVTDIGITDEC(value, p, string) CVTDIGITDEC(value, p, string)
+    CVTDIGITDEC(value, p, string) CVTDIGITDEC(value, p, string)
+    CVTDIGITDEC(value, p, string) CVTDIGITDEC(value, p, string)
+    CVTDIGITDEC(value, p, string) CVTDIGITDEC(value, p, string)
+  }
+  else
+  {
+    CVTDIGITHEX(value, p, string) CVTDIGITHEX(value, p, string)
+    CVTDIGITHEX(value, p, string) CVTDIGITHEX(value, p, string)
+    CVTDIGITHEX(value, p, string) CVTDIGITHEX(value, p, string)
+    CVTDIGITHEX(value, p, string) CVTDIGITHEX(value, p, string)
+  }
+  *p = 0;
+  return string;
+#endif // PS3OPT
 }
+
+#undef CVTDIGITDEC
+#undef CVTDIGITHEX
 
 #endif // PS3 || LINUX
 
@@ -64,6 +145,7 @@ private:
 
 TYPE_INFO_BASIC(bool)
 TYPE_INFO_BASIC(char)
+TYPE_INFO_BASIC(wchar_t)
 
 TYPE_INFO_BASIC(signed char)
 TYPE_INFO_BASIC(unsigned char)
@@ -97,16 +179,25 @@ inline bool NoString(T const& val, int flags)
 // bool
 string ToString(bool const& val, int flags)
 {
+#ifndef PS3OPT
 	if (val)
 		return "true";
 	else if (flags & CTypeInfo::WRITE_SKIP_DEFAULT)
 		return string();
 	else
 		return "false";
+#else
+  static string sTrue = "true", sFalse = "false", sEmpty;
+  const string *pFalse;
+
+  pFalse = (flags & CTypeInfo::WRITE_SKIP_DEFAULT) ? &sEmpty : &sFalse;
+  return val ? sTrue : *pFalse;
+#endif
 }
 
 bool FromString(bool& val, const char *s)
 {
+#ifndef PS3OPT
 	if (!strcmp(s,"0") || !strcmpi(s,"false"))
 	{
 		val = false;
@@ -118,6 +209,12 @@ bool FromString(bool& val, const char *s)
 		return true;
 	}
 	return false;
+#else
+  // Nobody is checking the return value, so this is just as good as the
+  // correct implementation...
+  val = ((*s - 1) & 0x4) != 0x4;
+  return true;
+#endif
 }
 
 // int64
@@ -150,15 +247,32 @@ string ToString(uint64 const& val, int flags)
 	_ui64toa(val, buffer, 10);
 	return buffer;
 }
+
 bool FromString(uint64& val, const char* s)
 {
-#if defined(__GNUC__)
+#ifndef PS3OPT
+# if defined(__GNUC__)
 	unsigned long long val_ull = (unsigned long long)val;
 	bool rv = sscanf(s, "%llu", &val_ull) == 1;
 	val = (uint64)val_ull;
 	return rv;
-#else
+# else
 	return sscanf(s, "%I64u", &val) == 1;
+# endif
+#else
+  unsigned digit = (unsigned char)*s - '0';
+  if (digit < 10)
+  {
+    uint64 v = digit;
+    while (true)
+    {
+      digit = (unsigned char)*++s - '0';
+      if (digit > 9) { val = v; return true; }
+      v *= 10;
+      v += digit;
+    }
+  }
+  return false;
 #endif
 }
 
@@ -186,47 +300,88 @@ string ToString(unsigned long const& val, int flags)
 template<class T>
 bool IntFromString(T& val, const char* s)
 {
+#ifndef PS3OPT
 	// Read long value, convert with possible truncation, check for range.
 	long lval;
 	if (sscanf(s, "%ld", &lval) != 1)
 		return false;
 	val = (T)lval;
 	return val == lval;
+#else
+  bool signbit = *s == '-';
+  s += signbit;
+  unsigned digit = (unsigned char)*s - '0';
+  if (digit < 10)
+  {
+    uint64 v = digit;
+    while (true)
+    {
+      digit = (unsigned char)*++s - '0';
+      if (digit > 9)
+      {
+        val = signbit ? -(T)v : (T)v;
+        return val == v;
+      }
+      v *= 10;
+      v += digit;
+    }
+  }
+  return false;
+#endif
 }
 template<class T>
 bool UIntFromString(T& val, const char* s)
 {
+#ifndef PS3OPT
 	// Read long value, convert with possible truncation, check for range.
 	unsigned long lval;
 	if (sscanf(s, "%lu", &lval) != 1)
 		return false;
 	val = (T)lval;
 	return val == lval;
+#else
+  unsigned digit = (unsigned char)*s - '0';
+  if (digit < 10)
+  {
+    uint64 v = digit;
+    while (true)
+    {
+      digit = (unsigned char)*++s - '0';
+      if (digit > 9) { val = (T)v; return v == val; }
+      v *= 10;
+      v += digit;
+    }
+  }
+  return false;
+#endif
 }
 
-bool FromString(long& val, const char* s)						{ return IntFromString(val, s); }
-bool FromString(unsigned long& val, const char* s)	{ return UIntFromString(val, s); }
+bool FromString(long& val, const char* s)							{ return IntFromString(val, s); }
+bool FromString(unsigned long& val, const char* s)		{ return UIntFromString(val, s); }
 
 string ToString(int const& val, int flags)						{ return ToString(long(val), flags); }
-bool FromString(int& val, const char* s)						{ return IntFromString(val, s); }
+bool FromString(int& val, const char* s)							{ return IntFromString(val, s); }
 
 string ToString(unsigned int const& val, int flags)		{ return ToString((unsigned long)(val), flags); }
-bool FromString(unsigned int& val, const char* s)		{ return UIntFromString(val, s); }
+bool FromString(unsigned int& val, const char* s)			{ return UIntFromString(val, s); }
 
 string ToString(short const& val, int flags)					{ return ToString(long(val), flags); }
-bool FromString(short& val, const char* s)					{	return IntFromString(val, s); }
+bool FromString(short& val, const char* s)						{	return IntFromString(val, s); }
 
 string ToString(unsigned short const& val, int flags)	{ return ToString((unsigned long)(val), flags); }
-bool FromString(unsigned short& val, const char* s)	{	return UIntFromString(val, s); }
+bool FromString(unsigned short& val, const char* s)		{	return UIntFromString(val, s); }
 
 string ToString(char const& val, int flags)						{ return ToString(long(val), flags); }
-bool FromString(char& val, const char* s)						{	return IntFromString(val, s); }
+bool FromString(char& val, const char* s)							{	return IntFromString(val, s); }
+
+string ToString(wchar_t const& val, int flags)				{ return ToString(long(val), flags); }
+bool FromString(wchar_t& val, const char* s)					{	return IntFromString(val, s); }
 
 string ToString(signed char const& val, int flags)		{ return ToString(long(val), flags); }
-bool FromString(signed char& val, const char* s)		{	return IntFromString(val, s); }
+bool FromString(signed char& val, const char* s)			{	return IntFromString(val, s); }
 
 string ToString(unsigned char const& val, int flags)	{ return ToString((unsigned long)(val), flags); }
-bool FromString(unsigned char& val, const char* s)	{	return UIntFromString(val, s); }
+bool FromString(unsigned char& val, const char* s)		{	return UIntFromString(val, s); }
 
 // double
 string ToString(double const& val, int flags)
@@ -267,9 +422,13 @@ bool FromString(string& val, const char* s)
 	return true;
 }
 
+template <>
 size_t TTypeInfo<string>::GetMemoryUsage(ICrySizer* pSizer, void const* data) const
 {
+// CRAIG: just a temp hack to try and get things working
+#ifndef LINUX
 	pSizer->AddString(*(string*)data);
+#endif
 	return 0;
 }
 
@@ -317,47 +476,13 @@ static STypeInfoTest _Test;
 //////////////////////////////////////////////////////////////////////
 // CTypeInfo implementation
 
-int CTypeInfo::ToInt(const void* data) const
-{
-	switch (Size)
-	{
-		case sizeof(int8): return *(const int8*)data;
-		case sizeof(int16): return *(const int16*)data;
-		case sizeof(int32): return *(const int32*)data;
-		case sizeof(int64): { int64 val = *(const int64*)data; assert(val == int(val)); return (int)val; }
-		default: assert(0); return 0;
-	}
-}
-
-bool CTypeInfo::FromInt(void* data, int val) const
-{
-	switch (Size)
-	{
-		case sizeof(int8):	*(int8*)data = val; return *(int8*)data == val;
-		case sizeof(int16): *(int16*)data = val; return *(int16*)data == val;
-		case sizeof(int32): *(int32*)data = val; return true;
-		case sizeof(int64): *(int64*)data = val; return true;
-		default: assert(0); return false;
-	}
-}
-
-bool CTypeInfo::CVarInfo::GetAttr(cstr name, float& val) const
+bool CTypeInfo::CVarInfo::GetAttr(cstr name, float& num, cstr& str) const
 {
 	for (int i = 0; i < (int)Attrs.size(); i++)
 		if (NoCase(name) == Attrs[i].Name)
 		{
-			val = Attrs[i].fValue;
-			return true;
-		}
-	return false;
-}
-
-bool CTypeInfo::CVarInfo::GetAttr(cstr name, cstr& val) const
-{
-	for (int i = 0; i < (int)Attrs.size(); i++)
-		if (NoCase(name) == Attrs[i].Name)
-		{
-			val = Attrs[i].sValue;
+			num = Attrs[i].fValue;
+			str = Attrs[i].sValue;
 			return true;
 		}
 	return false;
@@ -379,50 +504,65 @@ template<class T> void binary_swap(T& a, T& b)
 	memcpy(&b, &c, sizeof(T));
 }
 
-CStructInfo::CStructInfo( const char* name, size_t size, size_t num_vars, CVarInfo* vars )
+CStructInfo::CStructInfo( cstr name, size_t size, size_t num_vars, CVarInfo* vars )
 : CTypeInfo(name, size), Vars(num_vars, vars)
 {
-	// Validate sizes.
+	// Process and validate offsets and sizes.
 	if (Vars.size() > 0)
 	{
-		// Re-order in offset order if needed. Fixes bug in type info generator tool.
-		// We must use binary swap here, because assignment operators are not possible on structs with references.
-		// Personally, I find that C++ restriction to be nonsensicle.
-		for (int i = 0; i < (int)Vars.size(); i++)
-		{
-			int p = i;
-			while (p > 0 && Vars[p].Offset < Vars[p-1].Offset)
-			{
-				binary_swap(Vars[p], Vars[p-1]);
-				p--;
-			}
-		}
-
 		size = 0;
 		int bitoffset = 0;
+
 		for (int i = 0; i < (int)Vars.size(); i++)
 		{
 			CStructInfo::CVarInfo& var = Vars[i];
 			if (var.bBitfield)
 			{
-				// Activate only first field in every word, swap entire word.
-				assert(var.ArrayDim <= var.GetSize()*8);
-				if (bitoffset + var.ArrayDim > var.GetSize()*8)
+				if (bitoffset > 0)
 				{
-					// Overflows word, start on next one.
-					bitoffset = 0;
+					// Continuing bitfield.
+					var.Offset = Vars[i-1].Offset;
+					var.BitWordWidth = Vars[i-1].BitWordWidth;
+					var.bUnionAlias = 1;
+
+					if (bitoffset + var.ArrayDim > var.GetSize()*8)
+					{
+						// Overflows word, start on next one.
+						bitoffset = 0;
+						size += var.GetSize();
+					}
 				}
+
 				if (bitoffset == 0)
 				{
 					var.Offset = size;
 					var.bUnionAlias = 0;
-					size += var.GetSize();
+
+					// Detect real word size of bitfield, from offset of next field.
+					size_t next_offset = Size;
+					for (int j = i+1; j < (int)Vars.size(); j++)
+					{
+						if (!Vars[j].bBitfield)
+						{
+							next_offset = Vars[j].Offset;
+							break;
+						}
+					}
+					assert(next_offset > size);
+					size_t wordsize = min(next_offset - size, var.Type.Size);
+					size = next_offset;
+					switch (wordsize)
+					{
+						case 1: var.BitWordWidth = 0; break;
+						case 2: var.BitWordWidth = 1; break;
+						case 4: var.BitWordWidth = 2; break;
+						case 8: var.BitWordWidth = 3; break;
+						default: assert(0);
+					}
 				}
-				else
-				{
-					var.Offset = size - var.GetSize();
-					var.bUnionAlias = 1;
-				}
+
+				assert(var.ArrayDim <= var.GetSize()*8);
+				var.BitOffset = bitoffset;
 				bitoffset += var.ArrayDim;
 			}
 			else
@@ -435,7 +575,7 @@ CStructInfo::CStructInfo( const char* name, size_t size, size_t num_vars, CVarIn
 					size_t var_size = var.GetSize();
 					
 					// Handle anomalous case of zero-size base class that compiler misreports as size 1.
-					if (!*var.Name && !var.Type.HasSubVars() && var_size == 1)
+					if (var.bBaseClass && !var.Type.HasSubVars() && var_size == 1)
 						var_size = 0;
 					size = var.Offset + var_size;
 				}
@@ -476,7 +616,7 @@ string CStructInfo::ToString(const void* data, int flags, const void* def_data) 
 		if (i > 0)
 			str += ",";
 
-		if (*var.Name)
+		if (!var.bBaseClass)
 		{
 			// Nested named struct.
 			string substr = var.Type.ToString((char*)data + var.Offset, flags & ~WRITE_SUB, (def_data ? (char*)def_data + var.Offset : 0));
@@ -537,7 +677,7 @@ bool ParseElement(cstr& src, cstr& substr, int& len)
 		end--;
 	}
 
-	len = end-substr;
+	len = static_cast<int>(end-substr);
 	return true;
 }
 
@@ -550,7 +690,7 @@ bool CStructInfo::FromStringParse(void* data, cstr& str, int flags) const
 	for (int i = 0; *str && i < int(Vars.size()); i++)
 	{
 		const CTypeInfo::CVarInfo* pVar = &Vars[i];
-		if (!*pVar->Name && pVar->Type.HasSubVars())
+		if (pVar->bBaseClass && pVar->Type.HasSubVars())
 		{
 			// Recurse sub-struct in same string group.
 			CStructInfo const& typeSub = static_cast<CStructInfo const&>(pVar->Type);
@@ -699,14 +839,26 @@ bool CEnumInfo::FromString(int& val, cstr str, int flags) const
 //////////////////////////////////////////////////////////////////////
 // SwapEndian implementation.
 
-void SwapEndian(void* pData, size_t nCount, const CTypeInfo& info, size_t nSizeCheck)
+static bool NeedBitfieldSwap()
 {
-	assert(info.Size == nSizeCheck);
+	static struct
+	{
+		uint32	bit: 2;
+	} 
+	sBitTest = {1};
+	uint32& nInt = *(uint32*)&sBitTest;
+	assert(nInt == 1 || nInt == 0x40000000);
+	return nInt != 1;
+}
 
+void SwapEndian(void* pData, size_t nCount, const CTypeInfo& info, size_t nSize)
+{
 	if (!info.HasSubVars())
 	{
+		assert(nSize <= info.Size);
+
 		// Primitive type.
-		switch (info.Size)
+		switch (nSize)
 		{
 			case 1:
 				break;
@@ -715,7 +867,7 @@ void SwapEndian(void* pData, size_t nCount, const CTypeInfo& info, size_t nSizeC
 					while (nCount--)
 					{
 						uint16& i = *((uint16*&)pData)++;
-						i = (i>>8) + (i<<8);
+						i = ((i>>8) + (i<<8) & 0xFFFF);
 					}
 					break;
 				}
@@ -744,12 +896,30 @@ void SwapEndian(void* pData, size_t nCount, const CTypeInfo& info, size_t nSizeC
 	}
 	else
 	{
+		assert(nSize == info.Size);
 		while (nCount--)
 		{
+			uint64 uOrigBits = 0, uNewBits = 0;
 			for AllSubVars( pVar, info )
 			{
+				void* pVarAddr = pVar->GetAddress(pData);
 				if (!pVar->bUnionAlias)
-					SwapEndian(pVar->GetAddress(pData), pVar->GetDim(), pVar->Type, pVar->Type.Size);
+					SwapEndian(pVarAddr, pVar->GetDim(), pVar->Type, pVar->GetElemSize());
+				if (pVar->bBitfield && NeedBitfieldSwap())
+				{
+					// Reverse location of all bitfields in word.
+					int nWordBits = pVar->GetElemSize()*8;
+					assert(nWordBits <= 64);
+					if (pVar->BitOffset == 0)
+					{
+						// Initialise bitfield swapping.
+						uOrigBits = ToInt<uint64>(pVar->GetSize(), pVarAddr);
+						uNewBits = 0;
+					}
+					uint64 uVal = (uOrigBits >> pVar->BitOffset) & ((1<<pVar->GetBits())-1);
+					uNewBits |= uVal << (nWordBits-pVar->BitOffset);
+					FromInt(pVar->GetElemSize(), pVarAddr, uNewBits);
+				}
 			}
 			pData = (char*)pData + info.Size;
 		}

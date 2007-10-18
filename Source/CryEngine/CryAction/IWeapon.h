@@ -5,7 +5,6 @@
 
 struct IWeapon;
 
-//I need to this to be able to modify spread/recoil from the zoommode (absolute values needed)
 struct SSpreadModParams;
 struct SRecoilModParams;
 
@@ -14,6 +13,7 @@ enum EPhysicalizationType
 	ePT_None = 0,
 	ePT_Particle,
 	ePT_Rigid,
+	ePT_Static,
 };
 
 struct IFireMode
@@ -42,26 +42,32 @@ struct IFireMode
 
 	virtual float GetRecoil() const = 0;
 	virtual float GetSpread() const = 0;
+	virtual float GetMinSpread() const = 0;
+	virtual float GetMaxSpread() const = 0;
+	virtual float GetHeat() const = 0;
 	virtual const char *GetCrosshair() const = 0;
+	virtual bool	CanOverheat() const = 0;
 
 	virtual void SetRecoilMultiplier(float recoilMult) = 0;
 	virtual float GetRecoilMultiplier() const = 0;
 	
 	virtual bool CanFire(bool considerAmmo=true) const = 0;
-	virtual void StartFire(EntityId shooterId) = 0;
-	virtual void StopFire(EntityId shooterId) = 0;
+	virtual void StartFire() = 0;
+	virtual void StopFire() = 0;
 	virtual bool IsFiring() const = 0;
 	virtual bool AllowZoom() const = 0;
 	virtual void Cancel() = 0;
 
 	virtual void NetShoot(const Vec3 &hit, int predictionHandle) = 0;
-	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, int predictionHandle) = 0;
+	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, float extra, int predictionHandle) = 0;
+	virtual void NetEndReload() = 0;
 
-	virtual void NetStartFire(EntityId shooterId) = 0;
-	virtual void NetStopFire(EntityId shooterId) = 0;
+	virtual void NetStartFire() = 0;
+	virtual void NetStopFire() = 0;
 
 	virtual EntityId GetProjectileId() const = 0;
 	virtual void SetProjectileId(EntityId id) = 0;
+	virtual EntityId RemoveProjectileId() = 0;
 
 	virtual const char *GetType() const = 0;
 	virtual IEntityClass* GetAmmoType() const = 0;
@@ -70,6 +76,7 @@ struct IFireMode
 	virtual float GetSpinUpTime() const = 0;
 	virtual float GetSpinDownTime() const = 0;
   virtual float GetNextShotTime() const = 0;
+	virtual void SetNextShotTime(float time) = 0;
   virtual float GetFireRate() const = 0;
 
 	virtual Vec3 GetFiringPos(const Vec3 &probableHit) const = 0;
@@ -88,6 +95,7 @@ struct IFireMode
   virtual int GetCurrentBarrel() const = 0;
 
 	virtual void Serialize(TSerialize ser) = 0;
+	virtual void PostSerialize() = 0;
 
 	virtual void PatchSpreadMod(SSpreadModParams &sSMP) = 0;
 	virtual void ResetSpreadMod() = 0;
@@ -96,8 +104,8 @@ struct IFireMode
 	virtual void ResetRecoilMod() = 0;
 
 	virtual void ResetLock() = 0;
-	virtual void StartLocking(EntityId targetId) = 0;
-	virtual void Lock(EntityId targetId) = 0;
+	virtual void StartLocking(EntityId targetId, int partId) = 0;
+	virtual void Lock(EntityId targetId, int partId) = 0;
 	virtual void Unlock() = 0;
 };
 
@@ -122,6 +130,7 @@ struct IZoomMode
 	virtual void ExitZoom() = 0;
 
 	virtual int GetCurrentStep() const = 0;
+	virtual float GetZoomFoVScale(int step) const = 0;
 
 	virtual void ZoomIn() = 0;
 	virtual bool ZoomOut() = 0;
@@ -135,8 +144,15 @@ struct IZoomMode
 	virtual void Serialize(TSerialize ser) = 0;
 
 	virtual void UpdateFPView(float frameTime) = 0;
+	virtual void FilterView(struct SViewParams &viewParams) = 0;
+	virtual void PostFilterView(struct SViewParams &viewParams) = 0;
 
 	virtual int  GetMaxZoomSteps() = 0;
+
+	virtual void ApplyZoomMod(IFireMode *pFM) = 0;
+
+	//! zoom mode is activated by toggling
+	virtual bool IsToggle() = 0;
 };
 
 
@@ -168,6 +184,8 @@ struct IWeaponEventListener
 
 	virtual void OnStartTargetting(IWeapon *pWeapon) = 0;
 	virtual void OnStopTargetting(IWeapon *pWeapon) = 0;
+
+	virtual void OnSelected(IWeapon *pWeapon, bool selected) = 0;
 };
 
 struct AIWeaponDescriptor;
@@ -226,17 +244,13 @@ struct IWeapon
 
 	// Summary
 	//   Requests the weapon to start firing
-	// Parameters
-	//   shooterId - EntityId of the actor who shot the weapon
 	// See Also
 	//   CanFire
-	virtual void StartFire(EntityId shooterId) = 0;
+	virtual void StartFire() = 0;
 
 	// Summary
 	//   Requests the weapon to stop firing
-	// Parameters
-	//   shooterId - EntityId of the actor who shot the weapon
-	virtual void StopFire(EntityId shooterId) = 0;
+	virtual void StopFire() = 0;
 
 	// Summary
 	//   Determines if the weapon can shoot
@@ -426,7 +440,7 @@ struct IWeapon
 	//   MeleeAttack
 	virtual bool CanMeleeAttack() const = 0;
 
-	virtual void PerformThrow(EntityId shooterId, float speedScale) = 0;
+	virtual void PerformThrow(float speedScale) = 0;
 
 	virtual bool	PredictProjectileHit(IPhysicalEntity *pShooter, const Vec3 &pos, const Vec3 &dir,
 		const Vec3 &velocity, float speed, Vec3& predictedPosOut, float& projectileSpeedOut,
@@ -437,10 +451,14 @@ struct IWeapon
 
 	virtual bool IsZoomed() const = 0;
 	virtual bool IsZooming() const = 0;
+	virtual bool IsReloading() const = 0;
+
+	virtual	void		RaiseWeapon(bool raise, bool faster = false) = 0;
 
 	virtual const AIWeaponDescriptor& GetAIWeaponDescriptor( ) const = 0;
 
 	virtual bool		IsLamAttached() = 0;
+	virtual bool    IsFlashlightAttached() = 0;
 	virtual void    ActivateLamLaser(bool activate, bool aiRequest = true) = 0;
 	virtual void		ActivateLamLight(bool activate, bool aiRequest = true) = 0;
 	virtual bool	  IsLamLaserActivated() = 0;

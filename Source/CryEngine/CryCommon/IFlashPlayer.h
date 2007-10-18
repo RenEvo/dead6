@@ -5,6 +5,7 @@
 
 
 struct IFSCommandHandler;
+struct IExternalInterfaceHandler;
 struct SFlashCursorEvent;
 struct SFlashKeyEvent;
 
@@ -144,19 +145,14 @@ struct IFlashPlayer
 {
 	enum EOptions
 	{
-		LOG_FLASH_LOADING			= 0x01, // logs loading of flash file
-		LOG_ACTION_SCRIPT			= 0x02, // logs action script
+		//LOG_FLASH_LOADING			= 0x01, // logs loading of flash file
+		//LOG_ACTION_SCRIPT			= 0x02, // logs action script
 		RENDER_EDGE_AA				= 0x04, // enables edge anti-aliased flash rendering
 		INIT_FIRST_FRAME			= 0x08, // init objects of frame #1 when creating instance of flash file
 		ENABLE_MOUSE_SUPPORT	= 0x10, // enable mouse input support
 
 		DEFAULT								= RENDER_EDGE_AA | INIT_FIRST_FRAME | ENABLE_MOUSE_SUPPORT,
 		DEFAULT_NO_MOUSE			= RENDER_EDGE_AA | INIT_FIRST_FRAME
-	};
-
-	enum EFlags
-	{
-		DONT_SHARE_AS_DYNTEXSRC = 0x01 // don't share this flash file as dynamic texture source in renderer
 	};
 
 	// lifetime
@@ -174,9 +170,11 @@ struct IFlashPlayer
 	virtual void GetScissorRect(int& x0, int& y0, int& width, int& height) = 0;
 	virtual void Advance(float deltaTime) = 0;
 	virtual void Render() = 0;
+	virtual void SetCompositingDepth(float depth) = 0;
 
 	// callbacks & events
 	virtual void SetFSCommandHandler(IFSCommandHandler* pHandler) = 0;
+	virtual void SetExternalInterfaceHandler(IExternalInterfaceHandler* pHandler) = 0;
 	virtual void SendCursorEvent(const SFlashCursorEvent& cursorEvent) = 0;
 	virtual void SendKeyEvent(const SFlashKeyEvent& keyEvent) = 0;
 
@@ -206,7 +204,6 @@ struct IFlashPlayer
 	virtual int GetWidth() const = 0;
 	virtual int GetHeight() const = 0;
 	virtual size_t GetMetadata(char* pBuff, unsigned int buffSize) const = 0;
-	virtual int GetFlags() const = 0;
 	virtual const char* GetFilePath() const = 0;
 
 	// coordinate translation
@@ -225,6 +222,13 @@ protected:
 struct IFSCommandHandler
 {
 	virtual void HandleFSCommand(const char* pCommand, const char* pArgs) = 0;
+};
+
+
+// clients of IFlashPlayer should implement this interface to expose external interface calls
+struct IExternalInterfaceHandler
+{
+	virtual void HandleExternalInterfaceCall(const char* pMethodName, const SFlashVarValue* pArgs, int numArgs, SFlashVarValue* pResult) = 0;
 };
 
 
@@ -295,6 +299,9 @@ public:
 
 	enum EKeyCode
 	{
+		VoidSymbol      = 0,
+
+		// A through Z and numbers 0 through 9.
 		A               = 65,
 		B,
 		C,
@@ -312,7 +319,7 @@ public:
 		O,
 		P,
 		Q,
-		R,
+		R,	
 		S,
 		T,
 		U,
@@ -391,20 +398,37 @@ public:
 		Help,
 		NumLock         = 144, // Toggle
 		ScrollLock      = 145, // Toggle
+
 		Semicolon       = 186,
 		Equal           = 187,
+		Comma           = 188, // Platform specific?
 		Minus           = 189,
+		Period          = 190, // Platform specific?
 		Slash           = 191,
 		Bar             = 192,
 		BracketLeft     = 219,
 		Backslash       = 220,
 		BracketRight    = 221,
 		Quote           = 222,
+
+		// Total number of keys.
+		KeyCount
 	};
 
-	SFlashKeyEvent(EKeyState state, EKeyCode keyCode, unsigned char asciiCode = 0, unsigned int wcharCode = 0)
+	enum ESpecialKeyState
+	{
+		eShiftPressed		= 0x01,
+		eCtrlPressed		= 0x02,
+		eAltPressed			= 0x04,
+		eCapsToggled		= 0x08,
+		eNumToggled			= 0x10,
+		eScrollToggled	= 0x20
+	};
+
+	SFlashKeyEvent(EKeyState state, EKeyCode keyCode, unsigned char specialKeyState, unsigned char asciiCode, unsigned int wcharCode)
 	: m_state(state)
 	, m_keyCode(keyCode)
+	, m_specialKeyState(specialKeyState)
 	, m_asciiCode(asciiCode)
 	, m_wcharCode(wcharCode)
 	{
@@ -412,8 +436,9 @@ public:
 
 	EKeyState m_state;
 	EKeyCode m_keyCode;
+	unsigned char m_specialKeyState;
 	unsigned char m_asciiCode;
-	unsigned int m_wcharCode;
+	unsigned int m_wcharCode;	
 };
 
 

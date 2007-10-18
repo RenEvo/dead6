@@ -24,7 +24,6 @@ History:
 #include "HUDCommon.h"
 #include "IFlashPlayer.h"
 #include "IActionMapManager.h"
-#include "IGameTokens.h"
 #include "IInput.h"
 #include "IMovementController.h"
 #include "IVehicleSystem.h"
@@ -34,10 +33,9 @@ History:
 #include "Voting.h"
 #include "IViewSystem.h"
 #include "ISubtitleManager.h"
+#include <CryFixedString.h>
 
 #include "HUDMissionObjectiveSystem.h"
-#include "HUDRadar.h"
-
 
 // uncomment following lines to support G15 LCD
 //#define USE_G15_LCD
@@ -45,9 +43,12 @@ History:
 
 //-----------------------------------------------------------------------------------------------------
 
-// Forward declarations
+struct ILevel;
+struct ILevelInfo;
 struct IRenderer;
+struct IAnimSequence;
 
+class CHUDMissionObjective;
 class CHUDObject;
 class CHUDRadar;
 class CHUDScore;
@@ -59,8 +60,8 @@ class CHUDVehicleInterface;
 class CHUDPowerStruggle;
 class CHUDScopes;
 class CHUDCrosshair;
+class CHUDSilhouettes;
 class CHUDTagNames;
-
 class CWeapon;
 
 //-----------------------------------------------------------------------------------------------------
@@ -68,17 +69,18 @@ class CWeapon;
 class CHUD :	public CHUDCommon, 
 							public IGameFrameworkListener, 
 							public IInputEventListener, 
-							public IGameTokenEventListener,
 							public IPlayerEventListener, 
 							public IItemSystemListener, 
 							public IWeaponEventListener, 
 							public CNanoSuit::INanoSuitListener,
 							public IViewSystemListener,
-							public ISubtitleHandler
+							public ISubtitleHandler,
+							public IEquipmentManager::IListener
 {
 	friend class CFlashMenuObject;
 	friend class CHUDPowerStruggle;
 	friend class CHUDScopes;
+	friend class CHUDCrosshair;
 
 public:
 	CHUD();
@@ -87,24 +89,28 @@ public:
 	//HUD initialisation
 	bool Init();
 	//setting local actor / player id
+	void ResetPostSerElements();
 	void PlayerIdSet(EntityId playerId);
-	void Serialize(TSerialize ser,unsigned aspects);
 	void PostSerialize();
   void GameRulesSet(const char* name);
 	//handle game events
 	void HandleEvent(const SGameObjectEvent &rGameObjectEvent);
 	void WeaponAccessoriesInterface(bool visible, bool force = false);
-	void SetFireMode(const char* name);
+	void SetFireMode(IItem *pItem, IFireMode *pFM);
 	void SetGrenade(EntityId id);
 	void AutoAimLocking(EntityId id);
 	void AutoAimNoText(EntityId id);
 	void AutoAimLocked(EntityId id);
 	void AutoAimUnlock(EntityId id);
 	void ActorDeath(IActor* pActor);
+	void ActorRevive(IActor* pActor);
 	void VehicleDestroyed(EntityId id);
 	void TextMessage(const char* message);
 
 	void UpdateHUDElements();
+	void UpdateCrosshair(IItem *pItem = NULL);
+	virtual void UpdateCrosshairVisibility();
+	bool ReturnFromLastModalScreen();
 
 	void GetMemoryStatistics( ICrySizer * );
 
@@ -112,11 +118,13 @@ public:
 	virtual void OnPostUpdate(float fDeltaTime);
 	virtual void OnSaveGame(ISaveGame* pSaveGame);
 	virtual void OnLoadGame(ILoadGame* pLoadGame) {};
+	virtual void OnLevelEnd(const char* nextLevel) {};
   virtual void OnActionEvent(const SActionEvent& event);
 	// ~IGameFrameworkListener
 
 	// IInputEventListener
 	virtual bool OnInputEvent(const SInputEvent &rInputEvent);
+	virtual bool OnInputEventUI(const SInputEvent &rInputEvent);
 	// ~IInputEventListener
 
 	// IFSCommandHandler
@@ -131,14 +139,12 @@ public:
 
 	// Overridden for specific functionality
 	virtual void UpdateRatio();
+	virtual void Serialize(TSerialize ser);
 
 	virtual bool OnAction(const ActionId& action, int activationMode, float value);
 
-	// IGameTokenEventListener
-	virtual void OnGameTokenEvent( EGameTokenEvent event,IGameToken *pGameToken );
-	// ~IGameTokenEventListener
-
 	virtual void BattleLogEvent(int type, const char *msg, const char *p0=0, const char *p1=0, const char *p2=0, const char *p3=0);
+	virtual const char *GetPlayerRank(EntityId playerId, bool shortName=false);
 	
 	// IPlayerEventListener
 	virtual void OnEnterVehicle(IActor *pActor,const char *strVehicleClassName,const char *strSeatName,bool bThirdPerson);
@@ -170,6 +176,7 @@ public:
 	virtual void OnMelee(IWeapon* pWeapon, EntityId shooterId) {}
 	virtual void OnStartTargetting(IWeapon *pWeapon);
 	virtual void OnStopTargetting(IWeapon *pWeapon);
+	virtual void OnSelected(IWeapon *pWeapon, bool select) {}
 	// ~IWeaponEventListener
 
 	// INanoSuitListener
@@ -181,6 +188,11 @@ public:
 	virtual void ShowSubtitle(ISound* pSound, bool bShow);
 	virtual void ShowSubtitle(const char* subtitleLabel, bool bShow);
 	// ~ISubTitleHandler
+
+	// IEquipmentPackManager::IListener
+	virtual void OnBeginGiveEquipmentPack()	{	m_quietMode = true;	}
+	virtual void OnEndGiveEquipmentPack()	{ m_quietMode = false;	}
+	// ~IEquipmentPackManager::IListener
 
 	// ILevelSystemListener - handled by FlashMenuObject
 	virtual void OnLoadingStart(ILevelInfo *pLevel);
@@ -217,7 +229,17 @@ public:
   //Game rules specific stuff - load/unload stuff
   void LoadGameRulesHUD(bool load);
 
-	virtual void UpdateCrosshairVisibility();
+	struct SWeaponAccessoriesHelpersOffsets
+	{
+		int iX;
+		int iY;
+	};
+	typedef std::map<string,SWeaponAccessoriesHelpersOffsets> TMapWeaponAccessoriesHelperOffsets;
+	std::map<string,TMapWeaponAccessoriesHelperOffsets> m_mapWeaponAccessoriesHelpersOffsets;
+	void LoadWeaponAccessories(XmlNodeRef weaponAccessoriesXmlNode);
+	void LoadWeaponsAccessories();
+	void AdjustWeaponAccessory(const char *szWeapon,const char *szHelper,Vec3 *pvScreenSpace);
+	bool UpdateWeaponAccessoriesScreen();
 
   void SetInMenu(bool m);
 
@@ -241,19 +263,29 @@ public:
 	// Airstrike interface
 	virtual bool IsAirStrikeAvailable();
 	virtual void SetAirStrikeEnabled(bool enabled);
-	void SetAirStrikeBinoculars(bool p_bEnabled);
+	void SetAirStrikeBinoculars(bool bEnabled);
 	void AddAirstrikeEntity(EntityId);
 	void ClearAirstrikeEntities();
-	void NotifyAirstrikeSucceeded(bool p_bSucceeded);
+	void NotifyAirstrikeSucceeded(bool bSucceeded);
 	bool StartAirStrike();
 	void UpdateAirStrikeTarget(EntityId target);
-	// ~Airtsrike interface
+	void DrawAirstrikeTargetMarkers();
+	// ~Airstrike interface
+
+	bool GetShowAllOnScreenObjectives(){ return m_bShowAllOnScreenObjectives; }
+	void SetShowAllOnScreenObjectives(bool show) {m_bShowAllOnScreenObjectives = show; }
 
 	// display a flash message
 	// label can be a plain text message or a localization label
 	// @pos   position: 1=top,2=middle,3=bottom
 	void DisplayFlashMessage(const char* label, int pos = 1, const ColorF &col = Col_White, bool formatWStringWithParams = false, const char* paramLabel1 = 0, const char* paramLabel2 = 0, const char* paramLabel3 = 0, const char* paramLabel4 = 0);
+	void DisplayOverlayFlashMessage(const char* label, const ColorF &col = Col_White, bool formatWStringWithParams = false, const char* paramLabel1 = 0, const char* paramLabel2 = 0, const char* paramLabel3 = 0, const char* paramLabel4 = 0);
+	void DisplayBigOverlayFlashMessage(const char* label, float duration=3.0f, int posX=400, int posY=300, ColorF col = Col_White);
+	void DisplayAmmoPickup(const char* ammoName, int ammoAmount);
+	void FadeOutBigOverlayFlashMessage();
 	void DisplayTempFlashText(const char* label, float seconds, const ColorF &col = Col_White);
+	void SetQuietMode(bool enabled);
+	bool GetQuietMode() const	{	return m_quietMode;	}
 
 	//Get and Set
 	void LockTarget(EntityId target, ELockingType type, bool showtext = true, bool multiple = false);
@@ -268,7 +300,7 @@ public:
 	//RadioButtons & Chat
 	void SetRadioButtons(bool active, int buttonNo = 0);
 	void ShowVirtualKeyboard(bool active);
-	void ObituaryMessage(EntityId targetId, EntityId shooterId, EntityId weaponId, bool headshot);
+	void ObituaryMessage(EntityId targetId, EntityId shooterId, const char *weaponClassName, int material, int hit_type);
 
 	//Radar
 	void AddToRadar(EntityId entityId) const;
@@ -283,17 +315,20 @@ public:
 	ILINE CHUDScopes* GetScopes() { return m_pHUDScopes; }
 	ILINE CHUDCrosshair* GetCrosshair() { return m_pHUDCrosshair; }
 	ILINE CHUDTagNames* GetTagNames() { return m_pHUDTagNames; }
+	ILINE CHUDSilhouettes* GetSilhouettes() { return m_pHUDSilhouettes; }
 
 	//mission objectives
-	void UpdateMissionObjectiveIcon(EntityId objective, int friendly, FlashOnScreenIcon iconType);
+	void UpdateMissionObjectiveIcon(EntityId objective, int friendly, FlashOnScreenIcon iconType, bool forceNoOffset = false, const Vec3 rotationTarget=Vec3(0, 0, 0));
 	void UpdateAllMissionObjectives();
 	void UpdateObjective(CHUDMissionObjective* pObjective);
 	void SetMainObjective(const char* objectiveKey, bool isGoal);
+	const char* GetMainObjective();
 	void AddOnScreenMissionObjective(IEntity *pEntity, int friendly);
 	void SetOnScreenObjective(EntityId pID);
+	EntityId GetOnScreenObjective() {return m_iOnScreenObjective; }
 	bool IsUnderAttack(IEntity *pEntity);
-	EntityId GetOnScreenObjective();
 	ILINE CHUDMissionObjectiveSystem& GetMissionObjectiveSystem() { return m_missionObjectiveSystem; }
+	const wchar_t* LocalizeWithParams(const char* label, bool bAdjustActions=true, const char* param1 = 0, const char* param2 = 0, const char* param3 = 0, const char* param4 = 0);
 	//~mission objectives
 
 	//BattleStatus code : consult Marco C.
@@ -316,6 +351,8 @@ public:
 	void ShowTutorialText(const wchar_t* text, int pos);
 	void SetTutorialTextPosition(int pos);
 	void SetTutorialTextPosition(float posX, float posY);
+	void MP_ResetBegin();
+	void MP_ResetEnd();
 
 	//script function helper
 	int CallScriptFunction(IEntity *pEntity, const char *function);
@@ -326,35 +363,43 @@ public:
 	void SetQuickMenuButtonDefect(EQuickMenuButtons button, bool defect = true);
 	ILINE bool IsQuickMenuButtonActive(EQuickMenuButtons button) const { return (m_activeButtons & (1<<button))?true:false;}
 	ILINE bool IsQuickMenuButtonDefect(EQuickMenuButtons button) const { return (m_defectButtons & (1<<button))?true:false;}
-
-	void GetGPSPosition(SMovementState *pMovementState,char *strN,char *strW);
-	void ShowDeltaEnergy(float energy);
+	void ResetQuickMenu();
+	void GetGPSPosition(wchar_t *szN,wchar_t *szW);
 	//~HUDPDA.cpp
 
 	// Some special HUD fx
-	void BreakHUD(int state = 1);
+	void BreakHUD(int state = 1);  //1 malfunction, 2 dead
 	void RebootHUD();
 
 	//bool ShowPDA(bool bShow, int iTab=-1);
 	ILINE bool ShowBuyMenu(bool show) { return ShowPDA(show, true); }
 	bool ShowPDA(bool show, bool buyMenu = false);
 	void ShowObjectives(bool bShow);
+	void ShowReviveCycle(bool show);
 	void StartPlayerFallAndPlay();
 	bool IsPDAActive() const { return m_animPDA.GetVisible(); };
-	bool IsBuyMenuActive() const { return m_animBuyMenu.GetVisible(); };
+	bool IsBuyMenuActive() const { return (m_pModalHUD == &m_animBuyMenu); };
+	bool IsScoreboardActive() const;
 	ILINE bool HasTACWeapon() { return m_hasTACWeapon; };
 	void SetTACWeapon(bool hasTACWeapon);
+	void SetStealthExposure(float exposure);
+
+	void SpawnPointInvalid();
 
 	//interface effects
 	void IndicateDamage(EntityId weaponId, Vec3 direction, bool onVehicle = false);
-	void IndicateHit();
+	void IndicateHit(bool enemyIndicator = false,IEntity *pEntity = NULL);
 	void ShowKillAreaWarning(bool active, int timer);
 	void ShowTargettingAI(EntityId id);
-	void ShowProgress(int progress = -1, bool init = false, int posX = 0, int posY = 0, const char* text = NULL, bool topText = true);
+	void ShowProgress(int progress = -1, bool init = false, int posX = 0, int posY = 0, const char* text = NULL, bool topText = true, bool lockingBar = false);
 	void FakeDeath(bool revive = false);
 	ILINE bool IsFakeDead() { return (m_fPlayerRespawnTimer)?true:false; }
 	void ShowDataUpload(bool active);
 	void ShowSpectate(bool active);
+	void ShowWeaponsOnGround();
+	void FireModeSwitch(bool grenades = false);
+	ILINE int GetSelectedFiremode() const { return m_curFireMode; }
+	void DrawGroundCircle(Vec3 pos, float radius, float thickness = 1.0f, float anglePerSection = 5.0f, ColorB col = ColorB(255,0,0,255), bool aligned = true, float offset = 0.1f, bool useSecondColor = false, ColorB colB = ColorB(0,255,0,255));
 
 	// called from CHUDRadar
 	void OnEntityAddedToRadar(EntityId entityId);
@@ -388,8 +433,9 @@ public:
 		virtual void OnBuyMenuOpen(bool open, FlashRadarType buyZoneType) {};
 		virtual void OnMapOpen(bool open) {};
 		virtual void OnBuyMenuItemHover(const char* itemname) {};
-		virtual void OnShowBuyMenuAmmoPage() {};
+		virtual void OnShowBuyMenuPage(int page) {};
 		virtual void OnShowScoreBoard() {};
+		virtual void OnBuyItem(const char* itemname) {};
 	};
 	bool RegisterListener(IHUDListener* pListener);
 	bool UnRegisterListener(IHUDListener* pListener);
@@ -397,63 +443,76 @@ public:
 	//assistance restriction
 	bool IsInputAssisted();
 
-	//has the AI the client's species ?
-	bool IsFriendlyToClient(EntityId uiEntityId);
+	CWeapon *GetCurrentWeapon();
+
+	void RecordExplosivePlaced(EntityId eid);
+	void RecordExplosiveDestroyed(EntityId eid);
+	void HideInventoryOverview();
+
+	ILINE EntityId GetGrenadeDetectorId() { return m_entityGrenadeDectectorId; }
+	ILINE bool IsInCinematic() { return m_cineHideHUD; }
+	ILINE bool IsInitializing() { return m_animInitialize.IsLoaded(); }
+	ILINE bool InSpectatorMode() { return m_animSpectate.GetVisible(); }
+	void RefreshSpectatorHUDText() { m_prevSpectatorMode = -1; }	// mark it as changed, so values are fetched again from the target actor
+
+	CGameFlashAnimation *GetWeaponMenu() { return &m_animWeaponAccessories; }
 
 private:
 
-	// Get the current weapon object
-	CWeapon *GetWeapon();
-
 	//some Update functions
 	void UpdateHealth();
-	bool UpdateWeaponAccessoriesScreen(bool sendToFlash = true);
 	bool UpdateNanoSlotMax();
-	void UpdateTimers(float frameTime);
+	bool UpdateTimers(float frameTime);
 	void UpdateWarningMessages(float frameTime);
+	void UpdateTeamActionHUD();
 
-	void SetOnScreenTargetter();
+	void RequestRevive();
+
 	void InitPDA();
 	void HandleFSCommandPDA(const char *strCommand,const char *strArgs);
+	void UpdatePlayerAmmo();
 
 	//HUDInterfaceEffects
 	void QuickMenuSnapToMode(ENanoMode mode);
 	void AutoSnap();
 	void GrenadeDetector(CPlayer* pPlayerActor);
-	void Targetting(EntityId p_iTarget, bool p_bStatic);
-	bool ShowLockingBrackets(EntityId p_iTarget, std::vector<double> *doubleArray);
+	void Targetting(EntityId pTargetEntity, bool bStatic);
 	void UpdateVoiceChat();
 	//~HUDInterfaceEffects
 
-	int FillUpMOArray(std::vector<double> *doubleArray, double a, double b, double c, double d, double e, double f, double g);
+	int FillUpMOArray(std::vector<double> *doubleArray, double a, double b, double c, double d, double e, double f, double g, double h);
 
 	void UpdateCinematicAnim(float frameTime);
 	void UpdateSubtitlesAnim(float frameTime);
 	void UpdateSubtitlesManualRender(float frameTime);
 	void InternalShowSubtitle(const char* subtitleLabel, ISound* pSound, bool bShow);
 	// returns pointer to static buffer! so NOT re-entrant!
-	const wchar_t* LocalizeWithParams(const char* label, bool bAdjustActions=true, const char* param1 = 0, const char* param2 = 0, const char* param3 = 0, const char* param4 = 0);
-	void RegisterTokens();
-	void UnregisterTokens();
 
-	//EHUDGAMERULES GetGameRules();
+	void ShowInventoryOverview(const char* curCategory, const char* curItem, bool grenades = false);
 
 	//modal hud management
 	void SwitchToModalHUD(CGameFlashAnimation* pModalHUD,bool bNeedMouse);
 	bool IsModalHUDAvailable() { return m_pModalHUD == 0; }
 
+	//helper funcs
+	void GetProjectionScale(CGameFlashAnimation *pGameFlashAnimation,float *pfScaleX,float *pfScaleY,float *pfHalfUselessSize);
+	bool WeaponHasAttachments();
+
+	bool ShowWeaponAccessories(bool enable);
+
 	//member hud objects (sub huds)
-	CHUDRadar			*m_pHUDRadar;
-	CHUDScore			*m_pHUDScore;
-	CHUDTextChat	*m_pHUDTextChat;
-	CHUDObituary	*m_pHUDObituary;
-	CHUDTextArea	*m_pHUDTextArea;
-	CHUDTweakMenu	*m_pHUDTweakMenu;
-	CHUDVehicleInterface *m_pHUDVehicleInterface;
-	CHUDPowerStruggle *m_pHUDPowerStruggle;
-	CHUDScopes		*m_pHUDScopes;
-	CHUDCrosshair *m_pHUDCrosshair;
-	CHUDTagNames	*m_pHUDTagNames;
+	CHUDRadar							*m_pHUDRadar;
+	CHUDScore							*m_pHUDScore;
+	CHUDTextChat					*m_pHUDTextChat;
+	CHUDObituary					*m_pHUDObituary;
+	CHUDTextArea					*m_pHUDTextArea;
+	CHUDTweakMenu					*m_pHUDTweakMenu;
+	CHUDVehicleInterface	*m_pHUDVehicleInterface;
+	CHUDPowerStruggle			*m_pHUDPowerStruggle;
+	CHUDScopes						*m_pHUDScopes;
+	CHUDCrosshair					*m_pHUDCrosshair;
+	CHUDTagNames					*m_pHUDTagNames;
+	CHUDSilhouettes 			*m_pHUDSilhouettes;
 
 	bool					m_forceScores;
 
@@ -470,6 +529,7 @@ private:
 
 	//this manages the mission objectives
 	CHUDMissionObjectiveSystem		m_missionObjectiveSystem;
+	string		m_currentGoal, m_currentMainObjective;
 
 	//status messages that are displayed on screen and trigger vocals
 	std::map<string, string> m_statusMessagesMap;
@@ -477,7 +537,6 @@ private:
 	//this controls which buttons are currently active (Speed, Strength, Cloak, Weapon, Armor)
 	int						m_activeButtons;
 	int						m_defectButtons;
-	bool					m_bHasWeaponAttachments;
 	bool					m_acceptNextWeaponCommand;
 
 	//NanoSuit-pointer for suit interaction
@@ -496,8 +555,7 @@ private:
 	bool m_bAutosnap;
 	bool m_bIgnoreMiddleClick;
 	bool m_bLaunchWS;
-	bool m_bBreakHUD;
-	bool m_bHUDInitialize;
+	bool m_bDestroyInitializePending;
 	bool m_bInMenu;
 	bool m_bGrenadeLeftOrRight;
 	bool m_bGrenadeBehind;
@@ -505,63 +563,73 @@ private:
 	bool m_bNightVisionActive;
 	bool m_bTacLock;
 	float m_fNightVisionTimer;
-	float m_fAlpha;
+	float m_fNightVisionEnergy;
+	float m_fXINightVisionActivateTimer;
 	float m_fSuitChangeSoundTimer;
 	float m_fLastReboot;
+	float m_fRemainingReviveCycleTime;
+	int m_iBreakHUD;
 	int m_iWeaponAmmo;
 	int m_iWeaponInvAmmo;
 	int m_iWeaponClipSize;
 	int m_iGrenadeAmmo;
-	int m_iCatchBuyMenuPage;
+	int m_playerAmmo, m_playerRestAmmo;
+	int m_playerClipSize;
 	string m_sGrenadeType;
-	int m_iFade;
 	int m_iVoiceMode;
 	bool m_bMiniMapZooming;
-	float m_fCatchBuyMenuTimer;
 	EntityId m_iPlayerOwnedVehicle;
 	bool m_bExclusiveListener;
 	float m_fMiddleTextLineTimeout;
+	float m_fOverlayTextLineTimeout;
+
+	float m_fBigOverlayTextLineTimeout; // serialized
+	string m_bigOverlayText; // serialized
+	ColorF m_bigOverlayTextColor; // serialized
+	int m_bigOverlayTextX; // serialized
+	int m_bigOverlayTextY; // serialized
+
 	int m_iOpenTextChat;
 	bool m_bNoMiniMap;
+	int m_iProgressBar;
+	int m_iProgressBarX, m_iProgressBarY;
+	string m_sProgressBarText;
+	bool m_bProgressBarTextPos;
+	bool m_bProgressLocking;
 
 	//airstrike
 	bool m_bAirStrikeAvailable;
 	float m_fAirStrikeStarted;
 	EntityId m_iAirStrikeTarget;
 	std::vector<EntityId> m_possibleAirStrikeTargets;
+	EntityId m_objectiveNearCenter;
 
 	//respawn and restart
 	float		m_fPlayerDeathTime;
 	float		m_fPlayerRespawnTimer;
 	float		m_fLastPlayerRespawnEffect;
 	bool		m_bRespawningFromFakeDeath;
-	string	m_sLastSaveGame;
+
+	bool		m_changedSpawnGroup;
 
 	EntityId m_uiWeapondID;
 	bool m_bShowAllOnScreenObjectives;
 	EntityId m_iOnScreenObjective;
-	IWeapon *m_pWeapon;
 	bool m_hasTACWeapon;
 
   EHUDGAMERULES m_currentGameRules;
 
-	CGameFlashAnimation	m_animAmmo;
 	CGameFlashAnimation	m_animGrenadeDetector;
 	CGameFlashAnimation	m_animMissionObjective;
-	CGameFlashAnimation	m_animHealthEnergy;
 	CGameFlashAnimation	m_animPDA;
 	CGameFlashAnimation	m_animQuickMenu;
 	CGameFlashAnimation	m_animRadarCompassStealth;
-	CGameFlashAnimation m_animSuitIcons;
 	CGameFlashAnimation m_animTacLock;
-	CGameFlashAnimation m_animTargetAutoAim;
 	CGameFlashAnimation m_animGamepadConnected;
 	CGameFlashAnimation m_animBuyMenu;
-	CGameFlashAnimation m_animCaptureProgress;
 	CGameFlashAnimation m_animScoreBoard;
 	CGameFlashAnimation m_animWeaponAccessories;
 	CGameFlashAnimation m_animWarningMessages;
-	CGameFlashAnimation m_animTargetLock;
 	CGameFlashAnimation m_animDownloadEntities;
 	CGameFlashAnimation	m_animInitialize;
 	CGameFlashAnimation m_animBreakHUD;
@@ -574,16 +642,28 @@ private:
 	CGameFlashAnimation m_animDeathMessage;
 	CGameFlashAnimation m_animCinematicBar;
 	CGameFlashAnimation m_animObjectivesTab;
-	CGameFlashAnimation m_animBuyZoneIcon;
 	CGameFlashAnimation m_animBattleLog;
 	CGameFlashAnimation m_animSubtitles;
 	CGameFlashAnimation m_animRadioButtons;
-	CGameFlashAnimation m_animTargetter;
 	CGameFlashAnimation m_animPlayerPP;
 	CGameFlashAnimation m_animProgress;
+	CGameFlashAnimation m_animProgressLocking;
 	CGameFlashAnimation m_animTutorial;
 	CGameFlashAnimation m_animDataUpload;
 	CGameFlashAnimation m_animSpectate;
+	CGameFlashAnimation m_animNightVisionBattery;
+	CGameFlashAnimation m_animHUDCornerLeft;
+	CGameFlashAnimation m_animHUDCornerRight;
+	CGameFlashAnimation m_animPlayerStats;
+	CGameFlashAnimation m_animHexIcons;
+	CGameFlashAnimation m_animKillLog;
+	CGameFlashAnimation m_animOverlayMessages;
+	CGameFlashAnimation m_animBigOverlayMessages;
+	CGameFlashAnimation m_animWeaponSelection;
+	CGameFlashAnimation m_animSpawnCycle;
+	CGameFlashAnimation m_animAmmoPickup;
+	CGameFlashAnimation m_animTeamSelection;
+	CGameFlashAnimation m_animNetworkConnection;
 
 	// HUD objects
 	typedef std::list<CHUDObject *> THUDObjectsList;
@@ -597,7 +677,6 @@ private:
 	int m_missionObjectiveNumEntries;
 
 	EntityId m_entityTargetAutoaimId;
-	EntityId m_entityTargetLockId;
 	EntityId m_entityGrenadeDectectorId;
 
 	//gamepad autosnapping
@@ -606,16 +685,22 @@ private:
 	float m_fAutosnapCursorControllerX;
 	float m_fAutosnapCursorControllerY;
 	bool m_bOnCircle;
+	float m_lastSpawnUpdate;
+
+	// sv_restart
+	bool m_bNoMouse;
+	bool m_bNoMove;
+	bool m_bSuitMenuFilter;
 
 	//timers
 	float m_fDamageIndicatorTimer;
 	float m_fPlayerFallAndPlayTimer;
-	float m_fSetAgressorIcon;
-	EntityId  m_agressorIconID;
+//	float m_fSetAgressorIcon;
+//	EntityId  m_agressorIconID;
 	int		m_lastPlayerPPSet;
 
 	//entity classes for faster comparison
-	IEntityClass *m_pSCAR, *m_pFY71, *m_pSMG, *m_pDSG1, *m_pShotgun, *m_pLAW, *m_pGauss;
+	IEntityClass *m_pSCAR, *m_pSCARTut, *m_pFY71, *m_pSMG, *m_pDSG1, *m_pShotgun, *m_pLAW, *m_pGauss, *m_pClaymore, *m_pAVMine;
 
 
 	//current mission objectives
@@ -646,34 +731,111 @@ private:
 		eHCS_Fading
 	};
 
+
+	struct SBuyMenuKeyLog
+	{
+		
+		enum EBMKL_State
+		{
+			eBMKL_NoInput = 0,
+			eBMKL_Tab,
+			eBMKL_Frame,
+			eBMKL_Button
+		};
+		
+		EBMKL_State m_state;
+		int m_tab;
+		int m_frame;
+		int m_button;
+		bool m_tempDisabled;
+
+		void Clear()
+		{
+			m_state = eBMKL_NoInput;
+			m_tab = 0;
+			m_frame = 0;
+			m_button = 0;
+			m_tempDisabled = false;
+		};
+	};
+
 	struct SSubtitleEntry
 	{
+		struct Chunk
+		{
+			float time; // wrt. timeRemaining
+			int start;
+			int len;
+		};
+
 		float      timeRemaining;
 		tSoundID   soundId;
 		string     key;     // cannot cache LocalizationInfo, would crash on reload dialog data
 		wstring    localized;
+		wstring    characterName; // p4
 		bool       bPersistant;
+		bool       bNameShown;
+		int        nChunks;       // p4
+		int        nCurChunk;     // p4
+		Chunk      chunks[10];    // p4
 
 		bool operator==(const char* otherKey) const
 		{
 			return key == otherKey;
 		}
+
+		SSubtitleEntry()
+		{
+			timeRemaining = 0.0f;
+			soundId = INVALID_SOUNDID;
+			bPersistant = false;
+			bNameShown = false;
+			nChunks = 0;
+			nCurChunk = 0;
+			memset(chunks, 0, sizeof(chunks));
+		}
 	};
 	typedef std::list<SSubtitleEntry> TSubtitleEntries;
+	void SubtitleCreateChunks(SSubtitleEntry& entry, const wstring& localizedString);
+	void SubtitleAssignCharacterName(SSubtitleEntry& entry);
+	void SubtitleAppendCharacterName(const CHUD::SSubtitleEntry& entry, CryFixedWStringT<1024>& locString);
 
 	TSubtitleEntries m_subtitleEntries;
 	HUDSubtitleMode m_hudSubTitleMode; // not serialized, as set by cvar
 	bool m_bSubtitlesNeedUpdate; // need update (mainly for flash re-pumping)
 	HUDCineState m_cineState;
 	bool m_cineHideHUD;
+	bool m_bCutscenePlaying;
+	bool m_bStopCutsceneNextUpdate;
+	bool m_bCutsceneAbortPressed;
+	bool m_bCutsceneCanBeAborted;
+	float m_fCutsceneSkipTimer;
+	float m_fBackPressedTime;
+
+	SBuyMenuKeyLog m_buyMenuKeyLog;
 
 	float m_lastNonAssistedInput;
 	bool m_hitAssistanceAvailable;
+
+	bool m_quietMode;
+
+	// list of claymore and mines (placed by all players)
+	std::list<EntityId> m_explosiveList;
+	//list of firemodes
+	std::map<string, int> m_hudFireModes;
+	int m_curFireMode;
+	//list of ammos
+	std::map<string, int> m_hudAmmunition;
 
 #ifdef USE_G15_LCD
 	// G15 LCD implementation ...
 	CLCDWrapper* m_pLCD;
 #endif//USE_G15_LCD
+
+	// to prevent localising strings / invoking flash every frame, just check for these changing...
+	int m_prevSpectatorMode;
+	int m_prevSpectatorHealth;
+	EntityId m_prevSpectatorTarget;
 };
 
 //-----------------------------------------------------------------------------------------------------

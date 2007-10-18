@@ -15,12 +15,18 @@ History:
 #include "StdAfx.h"
 #include "HUDScopes.h"
 #include "HUD.h"
+#include "HUDRadar.h"
+#include "HUDSilhouettes.h"
 #include "GameFlashAnimation.h"
 #include "../Actor.h"
 #include "IWorldQuery.h"
 #include "GameRules.h"
 #include "GameCVars.h"
+#include "Weapon.h"
 
+//-----------------------------------------------------------------------------------------------------
+
+#undef HUD_CALL_LISTENERS
 #define HUD_CALL_LISTENERS(func) \
 { \
 	if (g_pHUD->m_hudListeners.empty() == false) \
@@ -31,48 +37,76 @@ History:
 	} \
 }
 
+//-----------------------------------------------------------------------------------------------------
+
 CHUDScopes::CHUDScopes(CHUD *pHUD) : g_pHUD(pHUD)
 {
 	m_eShowScope = ESCOPE_NONE;
 	m_fBinocularDistance = 0.0f;
 	m_bShowBinoculars = false;
 	m_bShowBinocularsNoHUD = false;
-	m_oldScopeZoomLevel = 0;
 	m_bThirdPerson = false;
+	m_bDestroyBinocularsAtNextFrame = false;
+	m_iZoomLevel = 0;
 	LoadFlashFiles();
 }
+
+//-----------------------------------------------------------------------------------------------------
 
 CHUDScopes::~CHUDScopes()
 {
 	m_animBinoculars.Unload();
 	m_animSniperScope.Unload();
-	m_animBinocularsEnemyIndicator.Unload();
 }
+
+//-----------------------------------------------------------------------------------------------------
 
 void CHUDScopes::LoadFlashFiles(bool force)
 {
-//	m_animAssaultScope.Load("Libs/UI/HUD_ScopeAssault.gfx", eGFD_Center, eFAF_ManualRender);
-	m_animSniperScope.Load("Libs/UI/HUD_ScopeSniper.gfx", eGFD_Center, eFAF_ManualRender);
+	m_animSniperScope.Load("Libs/UI/HUD_ScopeSniper.gfx",eFD_Center, eFAF_ManualRender|eFAF_ThisHandler);
 	// Everything which is overlapped by the binoculars / scopes MUST be created before them
 	if(force)
 	{
-		m_animBinoculars.Load("Libs/UI/HUD_Binoculars.gfx",eGFD_Center,eFAF_ManualRender);
-		m_animBinocularsEnemyIndicator.Load("Libs/UI/HUD_Binoculars_EnemyIndicator.gfx",eGFD_Center,eFAF_ManualRender);
+		m_animBinoculars.Load("Libs/UI/HUD_Binoculars.gfx",eFD_Center,eFAF_ManualRender|eFAF_ThisHandler);
 	}
 	else
 	{
-		m_animBinoculars.Init("Libs/UI/HUD_Binoculars.gfx",eGFD_Center,eFAF_ManualRender);
-		m_animBinocularsEnemyIndicator.Init("Libs/UI/HUD_Binoculars_EnemyIndicator.gfx",eGFD_Center,eFAF_ManualRender);
+		m_animBinoculars.Init("Libs/UI/HUD_Binoculars.gfx",eFD_Center,eFAF_ManualRender|eFAF_ThisHandler);
 	}
 }
 
-void CHUDScopes::OnUpdate(float fDeltaTime,float fFadeValue)
+//-----------------------------------------------------------------------------------------------------
+
+void CHUDScopes::SetSilhouette(IActor *pActor,IAIObject *pAIObject)
 {
-/*	if(m_animAssaultScope.GetVisible())
+	IUnknownProxy *pUnknownProxy = pAIObject ? pAIObject->GetProxy() : NULL;
+	int iAlertnessState = pUnknownProxy ? pUnknownProxy->GetAlertnessState() : 0;
+	if(0 == iAlertnessState)
 	{
-		m_animAssaultScope.GetFlashPlayer()->Advance(fDeltaTime);
-		m_animAssaultScope.GetFlashPlayer()->Render();
-	}*/
+		float r = ((unsigned char) ((g_pGameCVars->hud_colorLine >> 16)	& 0xFF)) / 255.0f;
+		float g = ((unsigned char) ((g_pGameCVars->hud_colorLine >> 8)	& 0xFF)) / 255.0f;
+		float b = ((unsigned char) ((g_pGameCVars->hud_colorLine >> 0)	& 0xFF)) / 255.0f;
+		g_pHUD->m_pHUDSilhouettes->SetSilhouette(pActor,r,g,b,1.0f,-1);
+	}
+	else if(1 == iAlertnessState)
+	{
+		g_pHUD->m_pHUDSilhouettes->SetSilhouette(pActor,0.86274f,0.7f,0.4745f,1.0f,-1);
+	}
+	else
+	{
+		g_pHUD->m_pHUDSilhouettes->SetSilhouette(pActor,0.5f,0.19215f,0.17647f,1.0f,-1);
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void CHUDScopes::Update(float fDeltaTime)
+{
+	if(m_bDestroyBinocularsAtNextFrame)
+	{
+		m_animBinoculars.Unload();
+		m_bDestroyBinocularsAtNextFrame = false;
+	}
 	if(m_animSniperScope.GetVisible())
 	{
 		m_animSniperScope.GetFlashPlayer()->Advance(fDeltaTime);
@@ -83,28 +117,69 @@ void CHUDScopes::OnUpdate(float fDeltaTime,float fFadeValue)
 		m_animBinoculars.GetFlashPlayer()->Advance(fDeltaTime);
 		m_animBinoculars.GetFlashPlayer()->Render();
 	}
-	if(m_animBinocularsEnemyIndicator.GetVisible())
-	{
-		m_animBinocularsEnemyIndicator.GetFlashPlayer()->Advance(fDeltaTime);
-		m_animBinocularsEnemyIndicator.GetFlashPlayer()->Render();
-	}
 }
+
+//-----------------------------------------------------------------------------------------------------
 
 void CHUDScopes::DisplayBinoculars(CPlayer* pPlayerActor)
 {
-	SMovementState sMovementState;
-	pPlayerActor->GetMovementController()->GetMovementState(sMovementState);
+	if(!pPlayerActor)
+		return;
 
-	char strY[32];
-	sprintf(strY,"%f",336.0f+sMovementState.eyeDirection.z*360.0f);
+	CCamera &rCamera = gEnv->pSystem->GetViewCamera();
 
-	m_animBinoculars.CheckedSetVariable("Root.Binoculars.Attitude._y",strY);
+	int iZoomMode = -1;
 
-	char strN[32];
-	char strW[32];
-	g_pHUD->GetGPSPosition(&sMovementState,strN,strW);
+	// We need to update zoom factor even in cinematics (Scope::Zooom functions are not called)
+	IItemSystem *pItemSystem = gEnv->pGame->GetIGameFramework()->GetIItemSystem();
+	IInventory *pInventory = pPlayerActor->GetInventory();
+	if(pItemSystem && pInventory)
+	{
+		IEntityClass *pBinocularsClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass("Binoculars");
+		IItem *pBinocularsItem = pBinocularsClass ? pItemSystem->GetItem(pInventory->GetItemByClass(pBinocularsClass)) : NULL;
+		IWeapon *pBinocularsWeapon = pBinocularsItem ? pBinocularsItem->GetIWeapon() : NULL;
 
-	SFlashVarValue args[2] = {strN, strW};
+		if(pBinocularsWeapon)
+		{
+			IZoomMode *pZoomMode = pBinocularsWeapon->GetZoomMode("Scope");
+			CRY_ASSERT(pZoomMode);
+
+			if(pZoomMode)
+			{
+				int iMaxZoomSteps = pZoomMode->GetMaxZoomSteps();
+				CRY_ASSERT(3 == iMaxZoomSteps);
+
+				float fFov0 = pZoomMode->GetZoomFoVScale(0);
+				float fFov1 = pZoomMode->GetZoomFoVScale(1);
+				float fFov2 = pZoomMode->GetZoomFoVScale(2);
+				float fFov3 = pZoomMode->GetZoomFoVScale(3);
+
+				float fFov = rCamera.GetFov();
+
+				if(fFov <= fFov2)
+					iZoomMode = 3;
+				else if(fFov <= fFov1)
+					iZoomMode = 2;
+				else if(fFov <= fFov0)
+					iZoomMode = 1;
+				else
+					iZoomMode = 0;
+			}
+		}
+	}
+
+	m_animBinoculars.Invoke("setZoomMode",iZoomMode);
+
+	char szY[32];
+	sprintf(szY,"%f",336.0f+rCamera.GetViewdir().z*360.0f);
+
+	m_animBinoculars.CheckedSetVariable("Root.Binoculars.Attitude._y",szY);
+
+	wchar_t szN[32];
+	wchar_t szW[32];
+	g_pHUD->GetGPSPosition(szN,szW);
+
+	SFlashVarValue args[2] = {szN, szW};
 	m_animBinoculars.Invoke("setPosition", args, 2);
 
 	IAIObject *pAIPlayer = pPlayerActor->GetEntity()->GetAI();
@@ -117,38 +192,18 @@ void CHUDScopes::DisplayBinoculars(CPlayer* pPlayerActor)
 
 	if(!entitiesInProximity->empty() || !pEntitiesOnRadar->empty())
 	{
-		m_animBinocularsEnemyIndicator.SetVisible(true);
-		m_animBinocularsEnemyIndicator.SetVariable("Root._visible",SFlashVarValue(true));
-
-		// TODO: amazing copy/paste here !!!
-
-		float fMovieWidth		= (float) m_animBinocularsEnemyIndicator.GetFlashPlayer()->GetWidth();
-		float fMovieHeight	= (float) m_animBinocularsEnemyIndicator.GetFlashPlayer()->GetHeight();
-
-		float fRendererWidth	= (float) gEnv->pRenderer->GetWidth();
-		float fRendererHeight	= (float) gEnv->pRenderer->GetHeight();
-
-		float fScaleX = (fMovieHeight / 100.0f) * fRendererWidth / fRendererHeight;
-		float fScaleY = fMovieHeight / 100.0f;
-		float fScale = fMovieHeight / fRendererHeight;
-		float fUselessSize = fMovieWidth - fRendererWidth * fScale;
-		float fHalfUselessSize = fUselessSize * 0.5f;
-
-		std::vector<double> entityValues;
 		std::map<EntityId, bool> drawnEntities;
 
 		for(std::deque<CHUDRadar::RadarEntity>::const_iterator iter=pEntitiesOnRadar->begin(); iter!=pEntitiesOnRadar->end(); ++iter)
 		{
-
 			EntityId uiEntityId = (*iter).m_id;
 
 			IEntity *pEntity = gEnv->pEntitySystem->GetEntity(uiEntityId);
 			if(!pEntity)
 				continue;
 
-			// Do not display vehicles
-			IVehicle *pVehicle = gEnv->pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(pEntity->GetId());
-			if(pVehicle)
+			IActor *pActor = gEnv->pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEntity->GetId());
+			if(!pActor)
 				continue;
 
 			IAIObject *pAIObject = pEntity->GetAI();
@@ -162,10 +217,8 @@ void CHUDScopes::DisplayBinoculars(CPlayer* pPlayerActor)
 			if(!pAIObject->IsEnabled())
 				continue;
 
-			if(g_pHUD->ShowLockingBrackets(uiEntityId, &entityValues))
-			{
-				entityValues.push_back(true);
-			}
+			SetSilhouette(pActor,pAIObject);
+
 			drawnEntities[uiEntityId] = true;
 		}
 
@@ -179,9 +232,8 @@ void CHUDScopes::DisplayBinoculars(CPlayer* pPlayerActor)
 				if(!pEntity)
 					continue;
 
-				// Do not display vehicles
-				IVehicle *pVehicle = gEnv->pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(pEntity->GetId());
-				if(pVehicle)
+				IActor *pActor = gEnv->pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEntity->GetId());
+				if(!pActor)
 					continue;
 
 				if(stl::find_in_map(drawnEntities, uiEntityId, false))
@@ -199,95 +251,94 @@ void CHUDScopes::DisplayBinoculars(CPlayer* pPlayerActor)
 
 					if(!pAIObject->IsEnabled())
 						continue;
+
+					SetSilhouette(pActor,pAIObject);
 				}
 				else
 				{
 					if(g_pGame->GetGameRules()->GetTeam(pPlayerActor->GetEntityId()) == g_pGame->GetGameRules()->GetTeam(pEntity->GetId()))
 						continue;
-				}
 
-				if(g_pHUD->ShowLockingBrackets(*iter, &entityValues))
-				{
-					entityValues.push_back(false);
+					// Do not display any silouhette in MP (Eric's request)
+//					SetSilhouette(pActor,NULL);
 				}
 			}
-		}
-
-
-		if(!entityValues.empty())
-		{
-			m_animBinocularsEnemyIndicator.GetFlashPlayer()->SetVariableArray(FVAT_Double, "m_allValues", 0, &entityValues[0], entityValues.size());
-			m_animBinocularsEnemyIndicator.Invoke("updateLockBrackets");
-		}
-
-	}
-	else
-	{
-		m_animBinocularsEnemyIndicator.SetVisible(false);
-	}
-}
-
-void CHUDScopes::DisplayScope(CPlayer* pPlayerActor)
-{
-	CGameFlashAnimation *pScope = NULL;
-	if(m_eShowScope==ESCOPE_SNIPER)
-		pScope = &m_animSniperScope;
-//	else if(m_eShowScope==ESCOPE_ASSAULT)
-//		pScope = &m_animAssaultScope;
-
-	if(pScope)
-	{
-		SMovementState sMovementState;
-		pPlayerActor->GetMovementController()->GetMovementState(sMovementState);
-
-		char strY[32];
-		sprintf(strY,"%f",384.0f+sMovementState.eyeDirection.z*360.0f);
-
-		//pScope->CheckedSetVariable("Root.Scope.Attitude._y",strY);
-
-		const ray_hit *pRay = pPlayerActor->GetGameObject()->GetWorldQuery()->GetLookAtPoint(500.0f);
-
-		if(pRay)
-		{
-			char strDistance[32];
-			sprintf(strDistance,"%.1f",pRay->dist);
-
-			pScope->Invoke("setDistance", strDistance);
-		}
-		else
-		{
-			pScope->Invoke("setDistance", "- - - - - - ");
 		}
 	}
 }
 
 //-----------------------------------------------------------------------------------------------------
 
-void CHUDScopes::ShowBinoculars(bool bVisible, bool bShowIfNoHUD)
+void CHUDScopes::DisplayScope(CPlayer* pPlayerActor)
+{
+	CGameFlashAnimation *pScope = NULL;
+	if(m_eShowScope==ESCOPE_SNIPER)
+		pScope = &m_animSniperScope;
+
+	if(pScope)
+	{
+		SMovementState sMovementState;
+		pPlayerActor->GetMovementController()->GetMovementState(sMovementState);
+
+		char szY[32];
+		sprintf(szY,"%f",384.0f+sMovementState.eyeDirection.z*360.0f);
+
+		const ray_hit *pRay = pPlayerActor->GetGameObject()->GetWorldQuery()->GetLookAtPoint(500.0f);
+
+		if(pRay)
+		{
+			char szDistance[32];
+			sprintf(szDistance,"%.1f",pRay->dist);
+
+			pScope->Invoke("setDistance",szDistance);
+		}
+		else
+		{
+			pScope->Invoke("setDistance","0");
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void CHUDScopes::ShowBinoculars(bool bVisible, bool bShowIfNoHUD, bool bNoFadeOutOnHide)
 {
 	if(bVisible)
 	{
-		m_animBinoculars.Reload();
-		m_animBinocularsEnemyIndicator.Reload();
+		if(!m_bShowBinoculars)
+		{
+			g_pHUD->PlaySound(ESound_BinocularsSelect, true);
+			g_pHUD->PlaySound(ESound_BinocularsAmbience, true);
+		}
 
-		SFlashVarValue args[3] = {bVisible, 1, m_bThirdPerson};
+		m_animBinoculars.Reload();
+
+		SFlashVarValue args[3] = {true, 1, m_bThirdPerson};
 		m_animBinoculars.Invoke("setVisible", args, 3);
-		m_bShowBinoculars = bVisible;
+		m_bShowBinoculars = true;
 		m_bShowBinocularsNoHUD = bShowIfNoHUD;
-		g_pHUD->SetAirStrikeBinoculars(bVisible);
-		g_pHUD->PlaySound(ESound_BinocularsSelect, true);
-		g_pHUD->PlaySound(ESound_BinocularsAmbience, true);
+		m_bDestroyBinocularsAtNextFrame = false;
+		g_pHUD->SetAirStrikeBinoculars(true);
 	}
 	else /* if(!bVisible) */
 	{
-		g_pHUD->PlaySound(ESound_BinocularsDeselect, true);
-		g_pHUD->PlaySound(ESound_BinocularsAmbience, false);
-		m_bShowBinoculars = bVisible;
+		if(m_bShowBinoculars)
+		{
+			g_pHUD->PlaySound(ESound_BinocularsDeselect, true);
+			g_pHUD->PlaySound(ESound_BinocularsAmbience, false);
+		}
+		m_bShowBinoculars = false;
 		m_bShowBinocularsNoHUD = false;
-		g_pHUD->SetAirStrikeBinoculars(bVisible);
-		m_animBinoculars.Unload();
-		m_animBinocularsEnemyIndicator.Unload();
+		g_pHUD->SetAirStrikeBinoculars(false);
+		if (bNoFadeOutOnHide)
+			m_animBinoculars.Unload();
+		else
+			m_animBinoculars.Invoke("closeBinoculars");
+		m_iZoomLevel = 0;
 	}
+
+	g_pHUD->m_pHUDSilhouettes->SetType((IsBinocularsShown() && !m_bThirdPerson) ? 1 : 0);
+
 	HUD_CALL_LISTENERS(OnBinoculars(bVisible));
 }
 
@@ -304,7 +355,8 @@ void CHUDScopes::SetBinocularsDistance(float fDistance)
 
 void CHUDScopes::SetBinocularsZoomMode(int iZoomMode)
 {
-	m_animBinoculars.Invoke("setZoomMode", iZoomMode);
+//	m_animBinoculars.Invoke("setZoomMode", iZoomMode);
+	m_iZoomLevel = iZoomMode;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -313,17 +365,19 @@ void CHUDScopes::ShowScope(int iVisible)
 {
 	if(iVisible==ESCOPE_NONE)
 	{
-//		m_animAssaultScope.Invoke("setVisible", false);
 		m_animSniperScope.Invoke("setVisible", false);
 		m_eShowScope = ESCOPE_NONE;
 		return;
 	}
 
-//	m_animAssaultScope.Invoke("setVisible", false);
 	SFlashVarValue args[2] = {true, iVisible};
 	m_animSniperScope.Invoke("setVisible", args, 2);
 	m_eShowScope = (EScopeMode)iVisible;
-	m_oldScopeZoomLevel = 0;
+	m_iZoomLevel = 0;
+
+	IFlashPlayer* pScopePlayer = m_animSniperScope.GetFlashPlayer();
+	if(pScopePlayer)
+		pScopePlayer->SetCompositingDepth(0.1f);
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -336,45 +390,65 @@ void CHUDScopes::SetScopeZoomMode(int iZoomMode, string &scopeType)
 	else if(!stricmp(scopeType.c_str(), "scope_sniper"))
 		type = 2;
 
-	if(type)
+	if(type && m_iZoomLevel != iZoomMode)
 	{
-		if(iZoomMode > m_oldScopeZoomLevel)
+		if(iZoomMode > m_iZoomLevel)
 			g_pHUD->PlaySound((type==2)?ESound_SniperZoomIn:ESound_BinocularsZoomIn);
 		else
 			g_pHUD->PlaySound((type==2)?ESound_SniperZoomOut:ESound_BinocularsZoomOut);
 	}
 
-	m_oldScopeZoomLevel = iZoomMode;
+	m_iZoomLevel = iZoomMode;
 
-//	m_animAssaultScope.Invoke("setZoomMode", iZoomMode);
 	m_animSniperScope.Invoke("setZoomMode", iZoomMode);
 }
 
+//-----------------------------------------------------------------------------------------------------
+
 void CHUDScopes::OnToggleThirdPerson(bool thirdPerson)
 {
-	SFlashVarValue args[3] = {IsBinocularsShown(), 0, thirdPerson};
+	m_bThirdPerson = thirdPerson;
+
+	SFlashVarValue args[3] = {IsBinocularsShown(), 0, m_bThirdPerson};
 	m_animBinoculars.Invoke("setVisible", args, 3);
 
-	m_bThirdPerson = thirdPerson;
+	g_pHUD->m_pHUDSilhouettes->SetType((IsBinocularsShown() && !m_bThirdPerson) ? 1 : 0);
 
 	if(m_eShowScope==ESCOPE_NONE)
 	{
-		SFlashVarValue args[3] = {false, 0, thirdPerson};
-//		m_animAssaultScope.Invoke("setVisible", args, 3);
-		m_animSniperScope.Invoke("setVisible", args, 3);
-	}
-	else if(m_eShowScope==ESCOPE_ASSAULT)
-	{
-		SFlashVarValue args[3] = {true, 0, thirdPerson};
-//		m_animAssaultScope.Invoke("setVisible", args, 3);
-		args[0] = false;
+		SFlashVarValue args[3] = {false, 0, m_bThirdPerson};
 		m_animSniperScope.Invoke("setVisible", args, 3);
 	}
 	else if(m_eShowScope==ESCOPE_SNIPER)
 	{
-		SFlashVarValue args[3] = {false, 0, thirdPerson};
-//		m_animAssaultScope.Invoke("setVisible", args, 3);
+		SFlashVarValue args[3] = {false, 2, m_bThirdPerson};
 		args[0] = true;
 		m_animSniperScope.Invoke("setVisible",args, 3);
 	}
 }
+
+//-----------------------------------------------------------------------------------------------------
+
+void CHUDScopes::Serialize(TSerialize &ser)
+{
+	ser.Value("hudBinocular", m_bShowBinoculars);
+	ser.Value("hudBinocularZoom", m_iZoomLevel);
+	ser.Value("hudBinocularNoHUD", m_bShowBinocularsNoHUD);
+	ser.Value("hudBinocularDistance", m_fBinocularDistance);
+
+	ser.EnumValue("scopeMode", m_eShowScope, ESCOPE_NONE, ESCOPE_LAST);
+
+	if(ser.IsReading())
+	{
+		if(m_eShowScope == ESCOPE_SNIPER)
+			ShowScope(0); //will rezoom
+			
+		SetBinocularsDistance(m_fBinocularDistance);
+		if(m_bShowBinoculars)
+			ShowBinoculars(true);
+		if(m_eShowScope == CHUDScopes::ESCOPE_NONE)
+			SetBinocularsZoomMode(m_iZoomLevel);
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------

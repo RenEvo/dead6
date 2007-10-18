@@ -100,11 +100,11 @@ gMapOptions[] = {
 	{eMO_suddendeath_time,"UnhideTime"}
 };
 
-static const float  TOD_SPEED_MIN = 1.0f;
-static const float  TOD_SPEED_MAX = 5.0f;
+static const float  TOD_SPEED_MIN = 0.5f;
+static const float  TOD_SPEED_MAX = 6.0f;
 
 
-CMultiPlayerMenu::SCreateGame::SCreateGame(IFlashPlayer* plr):
+CMultiPlayerMenu::SCreateGame::SCreateGame(IFlashPlayer* plr, CMPHub* hub, bool lan):
 m_maxplayers(0),
 m_spectators(0),
 m_friendlyFire(false),
@@ -118,11 +118,13 @@ m_randomize(false),
 m_anticheat(false),
 m_dedicated(false),
 m_dx10(false),
-m_TOD(false),
+m_TOD(true),
 m_TODStart(0),
 m_TODSpeed(0),
 m_battleDust(false),
-m_player(plr)
+m_player(plr),
+m_hub(hub),
+m_lan(lan)
 {
 }
 
@@ -152,8 +154,8 @@ bool CMultiPlayerMenu::SCreateGame::HandleFSCommand(EGsUiCommand cmd, const char
 void CMultiPlayerMenu::SCreateGame::StartServer()
 {
   GetLevelRotation();
-
-  ILevelSystem *pLevelSystem = gEnv->pGame->GetIGameFramework()->GetILevelSystem();
+	
+	ILevelSystem *pLevelSystem = gEnv->pGame->GetIGameFramework()->GetILevelSystem();
   if(!pLevelSystem)
     return;
 
@@ -170,7 +172,7 @@ void CMultiPlayerMenu::SCreateGame::StartServer()
 
   if(ICVar* var = pConsole->GetCVar("sv_password"))
     var->Set(m_password);
-  
+
   if(ICVar* var = pConsole->GetCVar("sv_maxplayers"))
     var->Set(m_maxplayers);
 
@@ -180,14 +182,20 @@ void CMultiPlayerMenu::SCreateGame::StartServer()
   if(ICVar* var = pConsole->GetCVar("g_friendlyfireratio"))
     var->Set(m_friendlyFire?float(m_friendlyDamageRatio/100.0f):0.0f);
 
-  if(ICVar* var = pConsole->GetCVar("sv_timeofdayspeed"))
+	if(ICVar* var = pConsole->GetCVar("sv_timeofdayenable"))
+		var->Set(m_TOD?1:0);
+
+  if(ICVar* var = pConsole->GetCVar("sv_timeofdaylength"))
     var->Set(float(m_TODSpeed));
 
   if(ICVar* var = pConsole->GetCVar("sv_timeofdaystart"))
     var->Set(float(m_TODStart));
 
-  if(ICVar* var = pConsole->GetCVar("g_teamkillstokick"))
-    var->Set(m_enableKTK?m_numKTKKills:0);
+	if(ICVar* var = pConsole->GetCVar("g_tk_punish"))
+		var->Set(m_enableKTK?1:0);
+
+  if(ICVar* var = pConsole->GetCVar("g_tk_punish_limit"))
+    var->Set(m_numKTKKills);
 
   if(ICVar* var = pConsole->GetCVar("sv_requireinputdevice"))
     var->Set(m_controllersOnly?"gamepad":"dontcare");
@@ -201,20 +209,20 @@ void CMultiPlayerMenu::SCreateGame::StartServer()
   if(ICVar* var = pConsole->GetCVar("g_battledust_enable"))
     var->Set(m_battleDust?1:0);
 
-  if(ICVar* var = pConsole->GetCVar("e_time_of_day"))
-    var->Set(m_TOD?1:0);
+  if(ICVar* var = pConsole->GetCVar("sv_lanonly"))
+		var->Set(m_lan?1:0);
 
   if(m_anticheat)
-    pConsole->ExecuteString("pb_Sv_Enable");
+		pConsole->ExecuteString("net_pb_sv_enable true");
   else
-    pConsole->ExecuteString("pb_Sv_disable");
+    pConsole->ExecuteString("net_pb_sv_enable false");
 
   string command("sv_gamerules ");
   command.append(rotation->GetNextGameRules());
   gEnv->pConsole->ExecuteString(command.c_str()); 
 
-  command = "map ";
-  command.append(rotation->GetNextLevel());
+  command = "g_nextlevel"; //"map ";
+  //command.append(rotation->GetNextLevel());
   command.append(" s");
   if(m_dx10)
     command.append(" x");
@@ -242,15 +250,15 @@ void CMultiPlayerMenu::SCreateGame::StartServer()
 
   if(m_dedicated)
   {
-    command = "g_nextlevel +" + command;
+    //command = "g_nextlevel +" + command;
     if(m_anticheat)
-      command = "pb_Sv_enable +" + command;
+      command = "net_pb_sv_enable true +" + command;
     StartDedicated(command);
   } 
   else
   {
     pConsole->ExecuteString("disconnect");
-    pConsole->ExecuteString("g_nextlevel");
+    //pConsole->ExecuteString("g_nextlevel");
     gEnv->pGame->GetIGameFramework()->ExecuteCommandNextFrame(command.c_str());
   }
 }
@@ -259,7 +267,7 @@ void CMultiPlayerMenu::SCreateGame::GetLevelRotation()
 {
 	SFlashVarValue value(int(0));
 	m_player->GetVariable("m_backServersCount",&value);
-	int listSize = value.GetDouble();
+	int listSize = (int)value.GetDouble();
 	if(listSize<=0) return;
 
 	ILevelSystem *pLevelSystem = gEnv->pGame->GetIGameFramework()->GetILevelSystem();
@@ -463,7 +471,7 @@ void CMultiPlayerMenu::SCreateGame::SetGlobalSettings()
   {
     m_name = v->GetString();
 	  keyArray.push_back(VALUE_BY_KEY(eCGO_name,gCreateGameOptions));
-    valueArray.push_back(m_name.empty()?gEnv->pNetwork->GetHostName():m_name);
+		valueArray.push_back(m_name.empty()?gEnv->pNetwork->GetHostName():m_name.c_str());
   }
   if(ICVar* v = gEnv->pConsole->GetCVar("sv_password"))
   {
@@ -495,15 +503,21 @@ void CMultiPlayerMenu::SCreateGame::SetGlobalSettings()
     keyArray.push_back(VALUE_BY_KEY(eCGO_friendlyDamageRatio,gCreateGameOptions));
     valueArray.push_back(cache.back());
   }
-  if(ICVar* v = gEnv->pConsole->GetCVar("g_teamkillstokick"))
+
+	if(ICVar* v = gEnv->pConsole->GetCVar("g_tk_punish"))
+	{
+		m_enableKTK = v->GetIVal()!=0;
+		keyArray.push_back(VALUE_BY_KEY(eCGO_enableKTK,gCreateGameOptions));
+		valueArray.push_back(m_enableKTK?"1":"0");
+	}
+
+  if(ICVar* v = gEnv->pConsole->GetCVar("g_tk_punish_limit"))
   {
-    m_numKTKKills = v->GetIVal();
-    m_enableKTK = m_numKTKKills!=0;
-    keyArray.push_back(VALUE_BY_KEY(eCGO_enableKTK,gCreateGameOptions));
-    valueArray.push_back(m_enableKTK?"1":"0");
-    keyArray.push_back(VALUE_BY_KEY(eCGO_numKTKKills,gCreateGameOptions));
+		m_numKTKKills = v->GetIVal();
+		keyArray.push_back(VALUE_BY_KEY(eCGO_numKTKKills,gCreateGameOptions));
     valueArray.push_back(v->GetString());
   }
+
   if(ICVar* v = gEnv->pConsole->GetCVar("net_enable_voice_chat"))
   {
     m_VoIP = v->GetIVal()!=0;
@@ -536,13 +550,14 @@ void CMultiPlayerMenu::SCreateGame::SetGlobalSettings()
     valueArray.push_back(m_battleDust?"1":"0");
   }
 
-  if(ICVar* v = gEnv->pConsole->GetCVar("e_time_of_day"))
+  if(ICVar* v = gEnv->pConsole->GetCVar("sv_timeofdayenable"))
   {
     m_TOD = v->GetIVal()!=0;
     keyArray.push_back(VALUE_BY_KEY(eCGO_TOD,gCreateGameOptions));
     valueArray.push_back(m_TOD?"1":"0");
   }
-  if(ICVar* v = gEnv->pConsole->GetCVar("sv_timeofdayspeed"))
+
+  if(ICVar* v = gEnv->pConsole->GetCVar("sv_timeofdaylength"))
   {
     m_TODSpeed = min(TOD_SPEED_MAX,max(v->GetFVal(),TOD_SPEED_MIN));
     cache.push_back(string().Format("%.0f",100.0f*(m_TODSpeed-TOD_SPEED_MIN)/(TOD_SPEED_MAX-TOD_SPEED_MIN)).c_str());
@@ -557,9 +572,10 @@ void CMultiPlayerMenu::SCreateGame::SetGlobalSettings()
     keyArray.push_back(VALUE_BY_KEY(eCGO_TODStart,gCreateGameOptions));
     valueArray.push_back(cache.back());
   }
+
 	m_player->SetVariableArray(FVAT_ConstStrPtr, "m_backKeys", 0, &keyArray[0], keyArray.size());
 	m_player->SetVariableArray(FVAT_ConstStrPtr, "m_backValues", 0, &valueArray[0], keyArray.size());
-	m_player->Invoke0("_root.Root.MainMenu.CreateGame_M.CreateGame.CreateGame_Controls.retrieveGlobalSettings");
+	m_player->Invoke0("_root.Root.MainMenu.MultiPlayer.CreateGame_M.CreateGame.CreateGame_Controls.retrieveGlobalSettings");
 
 	//reset
 	m_player->Invoke0("resetRotationLevels");
@@ -663,7 +679,7 @@ void CMultiPlayerMenu::SCreateGame::UpdateLevels(const char* gamemode)
       if(pLevelInfo && pLevelInfo->SupportsGameType(gamemode))
 			{
         string disp(pLevelInfo->GetDisplayName());
-        SFlashVarValue args[2] = {pLevelInfo->GetName(),disp.empty()?pLevelInfo->GetName():disp};
+        SFlashVarValue args[2] = {pLevelInfo->GetName(),disp.empty()?pLevelInfo->GetName():disp.c_str()};
 				m_player->Invoke("addMultiplayerLevel", args, 2);
 			}
 
@@ -673,11 +689,15 @@ void CMultiPlayerMenu::SCreateGame::UpdateLevels(const char* gamemode)
 
 void CMultiPlayerMenu::SCreateGame::StartDedicated(const char* params)
 {
-  gEnv->pGame->GetIGameFramework()->SaveServerConfig("%USER%/config/server.cfg");
-  string cmd;
-  cmd.Format("Bin32/CrysisDedicatedServer.exe +exec %%USER%%/config/server.cfg +%s",params);
-  if(gEnv->pGame->GetIGameFramework()->StartProcess(cmd))
-  {
-    gEnv->pSystem->Quit();
-  }
+  if(gEnv->pGame->GetIGameFramework()->SaveServerConfig("%USER%/config/server.cfg"))
+	{
+		string cmd;
+		cmd.Format("Bin32/CrysisDedicatedServer.exe +exec %%USER%%/config/server.cfg +%s",params);
+		if(gEnv->pGame->GetIGameFramework()->StartProcess(cmd))
+		{
+			gEnv->pSystem->Quit();
+			return;
+		}
+	}
+	m_hub->ShowError("Dedicated server launch failed.");
 }

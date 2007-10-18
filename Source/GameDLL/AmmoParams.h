@@ -31,7 +31,10 @@ struct SCollisionParams
 
 struct SExplosionParams
 {
+	float minRadius;
 	float maxRadius;
+	float minPhysRadius;
+	float maxPhysRadius;
 	float pressure;
 	float holeSize;
 	float terrainHoleSize;
@@ -48,6 +51,8 @@ struct SExplosionParams
 struct SFlashbangParams
 {
 	float maxRadius;
+	float blindAmount;
+	float flashbangBaseTime;
 
 	SFlashbangParams(const IItemParamsNode* flashbang);
 };
@@ -56,6 +61,7 @@ struct STrailParams
 {
 	const char* sound;
 	const char*	effect;
+	const char* effect_fp;
 	float				scale;
 	bool				prime;
 
@@ -85,6 +91,9 @@ struct SAmmoParams
 	ushort aiType;
 	int		bulletType;
 	int		hitPoints;
+	bool   noBulletHits;
+	bool	quietRemoval;
+	float sleepTime;
 
 	// physics parameters
 	EPhysicalizationType	physicalizationType;
@@ -94,7 +103,6 @@ struct SAmmoParams
 	int		traceable;
 	Vec3	spin;
 	Vec3	spinRandom;
-	bool	sticky;
 
 	ISurfaceType*							pSurfaceType;
 	pe_params_particle*				pParticleParams;

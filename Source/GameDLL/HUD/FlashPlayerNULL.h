@@ -35,7 +35,9 @@ public:
 	virtual void GetScissorRect(int& x0, int& y0, int& width, int& height) {}
 	virtual void Advance( float deltaTime ) {}
 	virtual void Render() {}
+	virtual void SetCompositingDepth(float depth) {}
 	virtual void SetFSCommandHandler( IFSCommandHandler* pHandler ) {}
+	virtual void SetExternalInterfaceHandler(IExternalInterfaceHandler* pHandler) {};
 	virtual void SetLoadMovieHandler(IFlashLoadMovieHandler* pHandler) {}
 	virtual void SendCursorEvent( const SFlashCursorEvent& cursorEvent ) {}
 	virtual void SendKeyEvent( const SFlashKeyEvent& keyEvent ) {}

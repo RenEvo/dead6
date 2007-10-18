@@ -67,7 +67,7 @@ public:
 	// interface
 	virtual void mfPrepare();
 	virtual bool mfCullBox( Vec3& vmin, Vec3& vmax );
-	virtual float mfDistanceToCameraSquared( const CRenderObject& thisObject );
+	virtual float mfDistanceToCameraSquared( Matrix34& matInst );
 	virtual CRendElement* mfCopyConstruct();
 	virtual bool mfPreDraw(SShaderPass *sl);
 	virtual bool mfDraw(CShader *ef, SShaderPass *sl);

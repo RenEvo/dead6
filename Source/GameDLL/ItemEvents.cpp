@@ -15,6 +15,7 @@ History:
 #include "IActorSystem.h"
 #include "Actor.h"
 #include "Game.h"
+#include "OffHand.h"
 
 
 //------------------------------------------------------------------------
@@ -46,12 +47,15 @@ void CItem::OnEnterFirstPerson()
 	AttachToHand(false);
 	AttachArms(true, true);
 	RestoreLayers();
-	if (IsCloaked())
+
+/*
+	if(m_stats.mounted)
 	{
-		// restore cloaking material
-		Cloak(false);
-		Cloak(true, m_pLastCloakMat);
-	}
+		ICharacterInstance* pChar = GetOwnerActor()?GetOwnerActor()->GetEntity()->GetCharacter(0):NULL;
+		if(pChar)
+			pChar->HideMaster(1);
+	}*/
+
 }
 
 //------------------------------------------------------------------------
@@ -61,17 +65,29 @@ void CItem::OnEnterThirdPerson()
 	AttachToHand(true);
 	AttachArms(false, false);
 	SetViewMode(eIVM_ThirdPerson);
+/*
+	if(m_stats.mounted)
+	{
+		ICharacterInstance* pChar = GetOwnerActor()?GetOwnerActor()->GetEntity()->GetCharacter(0):NULL;
+		if(pChar)
+			pChar->HideMaster(0);
+	}*/
 }
 
 //------------------------------------------------------------------------
 void CItem::OnReset()
 {
-	GetEntity()->EnablePhysics(true);
+	//Hidden entities must have physics disabled
+	if(!GetEntity()->IsHidden())
+		GetEntity()->EnablePhysics(true);
 
 	DestroyedGeometry(false);  
 	m_stats.health = m_properties.hitpoints;
 
 	UpdateDamageLevel();
+
+	if(m_params.scopeAttachment)
+		DrawSlot(CItem::eIGS_Aux1,false); //Hide secondary FP scope
 
 	if (m_properties.mounted && m_params.mountable)
 	{
@@ -191,7 +207,8 @@ void CItem::OnDestroyed()
 
 	DestroyedGeometry(true);
 
-  PlayAction(g_pItemStrings->destroy);
+	if(!gEnv->pSystem->IsSerializingFile()) //don't replay destroy animations/effects
+		PlayAction(g_pItemStrings->destroy);
 
 	EnableUpdate(false);
 }
@@ -214,6 +231,7 @@ void CItem::OnRepaired()
 //------------------------------------------------------------------------
 void CItem::OnDropped(EntityId actorId)
 {
+	m_pItemSystem->RegisterForCollection(GetEntityId());
 }
 
 //------------------------------------------------------------------------
@@ -222,15 +240,21 @@ void CItem::OnPickedUp(EntityId actorId, bool destroyed)
 	if(GetISystem()->IsSerializingFile() == 1)
 		return;
 
-	if (!IsServer())
-		return;
-
 	CActor *pActor=GetActor(actorId);
 	if (!pActor)
 		return;
 
-	// Some accessories give extra ammo (only add to inventory if we had the accessory)
-	if (destroyed && m_params.unique)
+	if(gEnv->bMultiplayer && pActor->IsClient() && IsSelected())
+	{
+		COffHand* pOffHand = static_cast<COffHand*>(pActor->GetWeaponByClass(CItem::sOffHandClass));
+		if(pOffHand && pOffHand->GetOffHandState()==eOHS_HOLDING_GRENADE)
+			pOffHand->FinishAction(eOHA_RESET);
+	}
+
+	if (!IsServer())
+		return;
+
+	//if (destroyed && m_params.unique)
 	{
 		if (!m_bonusAccessoryAmmo.empty())
 		{
@@ -238,10 +262,13 @@ void CItem::OnPickedUp(EntityId actorId, bool destroyed)
 			{
 				int count=it->second;
 
-				AddAccessoryAmmoToInventory(it->first,count);
+				AddAccessoryAmmoToInventory(it->first,count,pActor);
 			}
 
 			m_bonusAccessoryAmmo.clear();
 		}
 	}
+
+	m_pItemSystem->UnregisterForCollection(GetEntityId());
+
 }

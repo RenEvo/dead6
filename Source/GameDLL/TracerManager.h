@@ -38,12 +38,13 @@ public:
 
 private:
 	float				m_speed;
-	float				m_length;
 	Vec3				m_pos;
 	Vec3				m_dest;
 	Vec3				m_startingpos;
 	float				m_age;
 	float				m_lifeTime;
+	bool        m_useGeometry;
+	int         m_geometrySlot;
 
 	EntityId		m_entityId;
 };
@@ -64,8 +65,6 @@ public:
 		Vec3				position;
 		Vec3				destination;
 		float				speed;
-		float				effectScale;
-		float				geometryScale;
 		float				lifetime;
 	};
 

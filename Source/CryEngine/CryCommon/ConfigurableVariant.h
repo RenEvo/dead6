@@ -337,7 +337,7 @@ namespace NConfigurableVariantHelpers
 	public:
 		static ILINE Vec3 ConstructedValue()
 		{
-			return Vec3(0,0,0);
+			return Vec3(ZERO);
 		}
 	};
 
@@ -703,8 +703,12 @@ public:
 //		ser.BeginGroup("Variant");
 		if (ser.IsWriting())
 		{
+			// serialize data type tag
 			int tag = GetTag();
 			ser.Value("tag", tag);
+			// serialize user data flag
+			bool bUserDataFlagSet = IsUserFlagSet();
+			ser.Value("ud", bUserDataFlagSet);
 		}
 		else
 		{
@@ -713,6 +717,10 @@ public:
 			CConfigurableVariant temp;
 			temp.SetDefaultForTag(tag);
 			SetValueWithConversion( temp );
+			// serialize user data flag
+			bool bUserDataFlagSet = false;
+			ser.Value("ud", bUserDataFlagSet);
+			SetUserFlag(bUserDataFlagSet);
 		}
 		NConfigurableVariantHelpers::CSerializeVisitor visitor(ser);
 		Visit( visitor );

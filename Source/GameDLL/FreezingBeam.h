@@ -52,7 +52,6 @@ public:
 
 	virtual void Hit(ray_hit &hit, const Vec3 &dir);
 	virtual void Tick(ray_hit &hit, const Vec3 &dir);
-  virtual void TickDamage(ray_hit &hit, const Vec3 &dir);
 
 	virtual void GetMemoryStatistics(ICrySizer * s);
 

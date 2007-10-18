@@ -34,6 +34,18 @@ U GetValueByKey(V key, TKeyValuePair<T,U> list[], size_t list_size)
 #define KEY_BY_VALUE(v,g) GetKeyByValue(v,g,sizeof(g)/sizeof(g[0]))
 #define VALUE_BY_KEY(v,g) GetValueByKey(v,g,sizeof(g)/sizeof(g[0]))
 
+
+static inline void StrToWstr(const char* str, wstring& dstr)
+{
+	dstr.resize(strlen(str));
+	wchar_t* dst = dstr.begin();
+	const char* src = str;
+	while (const wchar_t c=(wchar_t)(*src++))
+	{
+		*dst++ = c;
+	}
+}
+
 // commands coming from UI to logic
 enum EGsUiCommand
 {
@@ -45,6 +57,8 @@ enum EGsUiCommand
   eGUC_recordedGames,
   eGUC_login,
   eGUC_logoff,
+	eGUC_accountInfo,
+	eGUC_disableAutoLogin,
   eGUC_rememberPassword,
   eGUC_forgotPassword,
   eGUC_autoLogin,
@@ -52,6 +66,8 @@ enum EGsUiCommand
   eGUC_leavelobby,
   eGUC_enterLANlobby,
   eGUC_leaveLANlobby,
+	eGUC_enterLoginScreen,
+	eGUC_leaveLoginScreen,
   eGUC_update,
   eGUC_stop,
   eGUC_setVisibleServers,
@@ -74,6 +90,7 @@ enum EGsUiCommand
   eGUC_find,
   eGUC_addBuddy,
   eGUC_addIgnore,
+	eGUC_addBuddyFromFind,
   eGUC_addBuddyFromInfo,
   eGUC_addIgnoreFromInfo,
   eGUC_inviteBuddy,
@@ -94,7 +111,7 @@ enum EGsUiCommand
   eGUC_registerDateMM,
   eGUC_registerDateDD,
   eGUC_registerDateYY,
-  eGUC_registerParentEmail,
+	eGUC_registerCountry,
   eGUC_registerEnd,
   eGUC_quickGame,
   eGUC_createServerStart,
@@ -129,7 +146,7 @@ enum EUIEvent
   eUIE_none,
   eUIE_destroy,//when we are destroying, will be closed afterwards
   eUIE_connectFailed,//connecting failed
-  eUIE_disconnnect,
+  eUIE_disconnect,
 
   eUIE_login,
   eUIE_quickGame,
@@ -161,11 +178,11 @@ private:
   struct SRegisterInfo
   {
     string nick;
-    string password;
     string email;
     int    month;
     int    day;
     int    year;
+		string country;
   };
   struct SMPOptions
   {
@@ -196,22 +213,27 @@ public:
   bool HandleFSCommand(const char* pCmd, const char* pArgs);//Flash does it
   void OnUIEvent(const SUIEvent& event);//game does it
   void SetCurrentFlashScreen(IFlashPlayer* current_screen, bool ingame);
-  void ConnectFailed(EConnectionFailureCause cause, const char * description);
+  void ConnectFailed(EDisconnectionCause cause, const char * description);
   void OnLoginSuccess(const char* nick);
   void OnLoginFailed(const char* reason);
+	void TryLogin(bool lobby);
   void ShowLoginDlg();
   void CloseLoginDlg();
   
   void ShowLoadingDlg(const char* message);//will be localized
+	void ShowLoadingDlg(const char* message, const char* param);
   void SetLoadingDlgText(const char* text, bool localize);
+	void SetLoadingDlgText(const char* fmt, const char* param);//will be localized
   void CloseLoadingDlg();
 
   void OnQuickGame();
   
   void SwitchToLobby();
   void SetLoginInfo(const char* nick);
-  void ShowError(const char* msg);
+	void DisconnectError(EDisconnectionCause dc, bool connecting);
+  void ShowError(const char* msg, bool translate = false);
   void DoLogin(const char* nick, const char* pwd);
+	void DoLoginProfile(const char* email, const char* pwd, const char* profile);
   void DoLogoff();
   void AddGameModToList(const char* mod);
   void SwitchToMainScreen();
@@ -223,23 +245,27 @@ public:
   void OnShowIngameMenu();
   bool IsIngame()const;
   void ShowYesNoDialog(const char* str, const char* name);
-  void PlayVideo(const char* name);
-  void OnESC();
+	bool IsInLobby() const;
+	bool IsInLogin() const;
+	void SetIsInLogin(bool isInLogin);
 private:
   IFlashPlayer*                   m_currentScreen;
+	IFlashPlayer*                   m_currentStartScreen;
+	IFlashPlayer*                   m_currentIngameScreen;
   std::auto_ptr<CGameNetworkProfile> m_profile;
   std::auto_ptr<CMultiPlayerMenu> m_menu;
   std::auto_ptr<CQuickGame>       m_quickGame;
   SRegisterInfo                   m_reginfo;
-  SMPOptions                      m_options;
+	SMPOptions                      m_options;
   std::vector<CDialog*>           m_dialogs;
   bool                            m_loggingIn;
   bool                            m_enteringLobby;
+	bool														m_searchingQuickGame;
   bool                            m_menuOpened;
   string                          m_login;
   int                             m_lastMenu;
-  bool                            m_video;
   string                          m_errrorText;
+	bool                            m_isInLogin;
 };
 
 

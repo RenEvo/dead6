@@ -30,7 +30,7 @@ public:
   CDebugGun();
   void OnAction(EntityId actorId, const ActionId& actionId, int activationMode, float value);
   void Update(SEntityUpdateContext& ctx, int update);
-  void Shoot(EntityId shooterId, bool bPrimary);
+  void Shoot( bool bPrimary);
 	virtual void GetMemoryStatistics(ICrySizer * s) { s->Add(*this); CWeapon::GetMemoryStatistics(s); s->AddContainer(m_fireModes); }
 
   virtual void Select(bool select);

@@ -59,6 +59,7 @@ public:
 
 	//////////////////////////////////////////////////////////////////////////
 	PodArray() : m_nCount(0),m_pElements(0),m_nAllocatedCount(0) {}
+	PodArray( const PodArray<T> &from ) : m_nCount(0),m_pElements(0),m_nAllocatedCount(0) { AddList( from ); }
   ~PodArray() { Free(); }
 
   void Reset() { Free(); }
@@ -182,13 +183,10 @@ public:
   T & Last() const { assert(m_nCount); return m_pElements[m_nCount-1]; }
   ILINE void DeleteLast() { assert(m_nCount); m_nCount--; }
 
-  PodArray<T>& operator = (PodArray<T> & source_list)
+  PodArray<T>& operator = ( const PodArray<T> & source_list)
   {
     Free();
-    PreAllocate(source_list.Count()+2);
-
-    for(int i=0; i<source_list.Count(); i++)
-      Add(source_list[i]);
+		AddList( source_list );
     
     return *this;
   }

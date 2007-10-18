@@ -7,9 +7,12 @@
 #include "IVehicleSystem.h"
 #include "IWorldQuery.h"
 #include "Weapon.h"
-#include "HUDRadar.h"
 #include "HUDScopes.h"
+#include "HUDSilhouettes.h"
 
+//-----------------------------------------------------------------------------------------------------
+
+#undef HUD_CALL_LISTENERS
 #define HUD_CALL_LISTENERS(func) \
 { \
 	if (m_hudListeners.empty() == false) \
@@ -27,23 +30,38 @@ bool CHUD::IsAirStrikeAvailable()
 	return m_bAirStrikeAvailable;
 }
 
-void CHUD::SetAirStrikeEnabled(bool p_bEnabled)
-{
-	m_animAirStrike.Reload();
-	SetFlashColor(&m_animAirStrike);
+//-----------------------------------------------------------------------------------------------------
 
-	m_bAirStrikeAvailable = p_bEnabled;
-	m_animAirStrike.Invoke("enableAirStrike",p_bEnabled);
-	if(!p_bEnabled)
+void CHUD::SetAirStrikeEnabled(bool bEnabled)
+{
+	if(bEnabled)
+	{
+		if(!m_animAirStrike.IsLoaded())
+		{
+			m_animAirStrike.Load("Libs/UI/HUD_AirStrikeLocking_Text.gfx",eFD_Center,eFAF_Visible|eFAF_ManualRender);
+			SetFlashColor(&m_animAirStrike);
+		}
+		m_animAirStrike.Invoke("enableAirStrike",true);
+	}
+	else
+	{
+		m_animAirStrike.Unload();
 		ClearAirstrikeEntities();
+	}
+
+	m_bAirStrikeAvailable = bEnabled;
 	SetAirStrikeBinoculars(m_pHUDScopes->IsBinocularsShown());
 }
 
-void CHUD::AddAirstrikeEntity(EntityId p_iID)
+//-----------------------------------------------------------------------------------------------------
+
+void CHUD::AddAirstrikeEntity(EntityId uiEntityId)
 {
-	if(!stl::find(m_possibleAirStrikeTargets, p_iID))
-		m_possibleAirStrikeTargets.push_back(p_iID);
+	if(!stl::find(m_possibleAirStrikeTargets, uiEntityId))
+		m_possibleAirStrikeTargets.push_back(uiEntityId);
 }
+
+//-----------------------------------------------------------------------------------------------------
 
 void CHUD::ClearAirstrikeEntities()
 {
@@ -57,21 +75,35 @@ void CHUD::ClearAirstrikeEntities()
 	m_possibleAirStrikeTargets.clear();
 }
 
-void CHUD::NotifyAirstrikeSucceeded(bool p_bSucceeded)
+//-----------------------------------------------------------------------------------------------------
+
+void CHUD::NotifyAirstrikeSucceeded(bool bSucceeded)
 {
-	EntityId id = 0;
-	UpdateAirStrikeTarget(id);
-	SetAirStrikeEnabled(false);
-	m_animTargetAutoAim.SetVisible(false);
+	if(!bSucceeded)
+	{
+		m_animAirStrike.Invoke("stopCountdown");
+		m_fAirStrikeStarted = 0.0f;
+		SetAirStrikeEnabled(true);
+		EntityId id = 0;
+		UpdateAirStrikeTarget(id);
+	}
+	else
+	{
+		EntityId id = 0;
+		UpdateAirStrikeTarget(id);
+		SetAirStrikeEnabled(false);
+	}
 }
 
-void CHUD::SetAirStrikeBinoculars(bool p_bEnabled)
+//-----------------------------------------------------------------------------------------------------
+
+void CHUD::SetAirStrikeBinoculars(bool bEnabled)
 {
 	if(!m_animAirStrike.IsLoaded())
 		return;
-	m_animAirStrike.Invoke("setBinoculars",p_bEnabled);
+	m_animAirStrike.Invoke("setBinoculars",bEnabled);
 
-	if(p_bEnabled)
+	if(bEnabled)
 	{
 		std::vector<EntityId>::const_iterator it = m_possibleAirStrikeTargets.begin();
 		for(; it != m_possibleAirStrikeTargets.end(); ++it)
@@ -94,6 +126,8 @@ void CHUD::SetAirStrikeBinoculars(bool p_bEnabled)
 		UpdateAirStrikeTarget(id);
 	}
 }
+
+//-----------------------------------------------------------------------------------------------------
 
 bool CHUD::StartAirStrike()
 {
@@ -139,19 +173,21 @@ bool CHUD::StartAirStrike()
 	return false;
 }
 
-void CHUD::UpdateAirStrikeTarget(EntityId p_iTarget)
+//-----------------------------------------------------------------------------------------------------
+
+void CHUD::UpdateAirStrikeTarget(EntityId uiTargetEntityId)
 {
 	if(!m_animAirStrike.IsLoaded())
 		return;
-	if(stl::find(m_possibleAirStrikeTargets, p_iTarget))
+	if(stl::find(m_possibleAirStrikeTargets, uiTargetEntityId))
 	{
 		if(m_iAirStrikeTarget)
 		{
 			LockTarget(m_iAirStrikeTarget,eLT_Locked, false);
-			LockTarget(p_iTarget,eLT_Locking, false);
+			LockTarget(uiTargetEntityId,eLT_Locking, false);
 		}
-		m_iAirStrikeTarget = p_iTarget;
-		m_animAirStrike.Invoke("setTarget", (p_iTarget!=0));
+		m_iAirStrikeTarget = uiTargetEntityId;
+		m_animAirStrike.Invoke("setTarget", (uiTargetEntityId!=0));
 	}
 	else
 	{
@@ -159,46 +195,58 @@ void CHUD::UpdateAirStrikeTarget(EntityId p_iTarget)
 	}
 }
 
-void CHUD::LockTarget(EntityId p_iTarget, ELockingType p_iType, bool p_bShowText, bool p_bMultiple)
+//-----------------------------------------------------------------------------------------------------
+
+void CHUD::LockTarget(EntityId uiTargetEntityId, ELockingType eType, bool bShowText, bool bMultiple)
 {
-	if(!p_bMultiple)
+	if(!bMultiple)
 	{
-		if(m_entityTargetAutoaimId && p_iTarget!=m_entityTargetAutoaimId)
+		if(m_entityTargetAutoaimId && uiTargetEntityId!=m_entityTargetAutoaimId)
 		{
 			UnlockTarget(m_entityTargetAutoaimId);
 		}
 
-		m_entityTargetAutoaimId = p_iTarget;
+		m_entityTargetAutoaimId = uiTargetEntityId;
 	}
 
-	if(!p_bShowText)
-		m_animTargetAutoAim.Invoke("setTargetAutoaimHideText", (int)p_iTarget);
-
-	m_animTargetAutoAim.SetVisible(true);
-
-	if(p_iType == eLT_Locked)
+	if(eType == eLT_Locked)
 	{
-		m_animTargetAutoAim.Invoke("setTargetAutoaimLocked", (int)p_iTarget);
 		m_pHUDScopes->m_animSniperScope.Invoke("setLocking",2);
 	}
-	else if(p_iType == eLT_Locking)
+	else if(eType == eLT_Locking)
 	{
-		m_animTargetAutoAim.Invoke("setTargetAutoaimLocking", (int)p_iTarget);
 		m_pHUDScopes->m_animSniperScope.Invoke("setLocking",1);
 	}
 }
 
-void CHUD::UnlockTarget(EntityId p_iTarget)
-{
-	m_animTargetAutoAim.SetVisible(false);
+//-----------------------------------------------------------------------------------------------------
 
-	if(p_iTarget)
-		m_animTargetAutoAim.Invoke("setTargetAutoaimUnlock", (int)p_iTarget);
-	else
-		m_animTargetAutoAim.Invoke("setTargetAutoaimUnlock", (int)m_entityTargetAutoaimId);
+void CHUD::UnlockTarget(EntityId uiTargetEntityId)
+{
+	m_pHUDSilhouettes->ResetSilhouette(uiTargetEntityId);
+	m_pHUDSilhouettes->ResetSilhouette(m_entityTargetAutoaimId);
 
 	m_pHUDScopes->m_animSniperScope.Invoke("setLocking",3);
 	
 	m_entityTargetAutoaimId = 0;
 }
 
+//-----------------------------------------------------------------------------------------------------
+
+void CHUD::DrawAirstrikeTargetMarkers()
+{
+	if(!m_pHUDScopes->IsBinocularsShown() || !IsAirStrikeAvailable())
+		return;
+
+	float fCos = cosf(gEnv->pTimer->GetAsyncCurTime());
+	fCos = fabsf(fCos);
+
+	int amount = m_possibleAirStrikeTargets.size();
+	for(int i = 0; i < amount; ++i)
+	{
+		IEntity *pEntity = gEnv->pEntitySystem->GetEntity(m_possibleAirStrikeTargets[i]);
+		m_pHUDSilhouettes->SetSilhouette(pEntity, 1.0f-0.6f*fCos, 1.0f-0.4f*fCos, 1.0f-0.20f*fCos, 0.5f, 1.5f);
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------

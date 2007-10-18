@@ -67,6 +67,7 @@ public:
 	virtual int SimulateOnAction(IFunctionHandler *pH,const char *action,int mode,float value);
 	virtual int SetMovementTarget(IFunctionHandler *pH, Vec3 pos, Vec3 target, Vec3 up, float speed);
 	virtual int CameraShake(IFunctionHandler *pH,float amount,float duration,float frequency,Vec3 pos);
+	virtual int SetViewShake(IFunctionHandler *pH, Ang3 shakeAngle, Vec3 shakeShift, float duration, float frequency, float randomness);
 	virtual int VectorToLocal(IFunctionHandler *pH);
 	virtual int EnableAspect(IFunctionHandler *pH, const char *aspect, bool enable);
 	virtual int SetExtensionActivation(IFunctionHandler *pH, const char *extension, bool activation);
@@ -83,6 +84,8 @@ public:
 	virtual int SetMaxHealth(IFunctionHandler *pH, float health);
 	virtual int GetHealth(IFunctionHandler *pH);
   virtual int GetMaxHealth(IFunctionHandler *pH);
+	virtual int GetArmor(IFunctionHandler *pH);
+	virtual int GetMaxArmor(IFunctionHandler *pH);
   virtual int GetFrozenAmount(IFunctionHandler *pH);
   virtual int AddFrost(IFunctionHandler *pH, float frost);
 	virtual int DamageInfo(IFunctionHandler *pH, ScriptHandle shooter, ScriptHandle target, ScriptHandle weapon, float damage, const char *damageType);
@@ -93,6 +96,7 @@ public:
 	virtual int GetNanoSuitEnergy(IFunctionHandler *pH);
 	virtual int SetNanoSuitEnergy(IFunctionHandler *pH, int energy);
 	virtual int PlayNanoSuitSound(IFunctionHandler *pH, int sound);
+	virtual int NanoSuitHit(IFunctionHandler *pH, int damage);
 
 	virtual int SetPhysicalizationProfile(IFunctionHandler *pH, const char *profile);
 	virtual int GetPhysicalizationProfile(IFunctionHandler *pH);
@@ -106,9 +110,8 @@ public:
 	virtual int SetAnimationInput( IFunctionHandler *pH, const char * inputID, const char * value );
 	virtual int TrackViewControlled( IFunctionHandler *pH, int characterSlot );
 
-	virtual int SetSpectatorMode(IFunctionHandler *pH, int mode);
+	virtual int SetSpectatorMode(IFunctionHandler *pH, int mode, ScriptHandle targetId);
 	virtual int GetSpectatorMode(IFunctionHandler *pH);
-	virtual int SetSpectatorTarget(IFunctionHandler* pH,EntityId playerId);
 	virtual int GetSpectatorTarget(IFunctionHandler* pH);
 
 	virtual int Fall(IFunctionHandler *pH, Vec3 hitPos);
@@ -120,6 +123,7 @@ public:
 	// ITEM STUFF
 	//------------------------------------------------------------------------
 	virtual int CheckInventoryRestrictions(IFunctionHandler *pH, const char *itemClassName);
+	virtual int CheckVirtualInventoryRestrictions(IFunctionHandler *pH, SmartScriptTable inventory, const char *itemClassName);
 	virtual int HolsterItem(IFunctionHandler *pH, bool holster);
 	virtual int DropItem(IFunctionHandler *pH, ScriptHandle itemId);
 	virtual int PickUpItem(IFunctionHandler *pH, ScriptHandle itemId);
@@ -128,19 +132,18 @@ public:
 	virtual int SelectItem(IFunctionHandler *pH, ScriptHandle itemId);
 	virtual int SelectLastItem(IFunctionHandler *pH);
 
-	virtual int StartDisarmMine(IFunctionHandler *pH, ScriptHandle itemId);
-	virtual int EndDisarmMine(IFunctionHandler* pH, ScriptHandle itemId);
-
 	virtual int GetClosestAttachment(IFunctionHandler *pH, int characterSlot, Vec3 testPos, float maxDistance, const char* suffix);
 	virtual int AttachVulnerabilityEffect(IFunctionHandler *pH, int characterSlot, int partid, Vec3 hitPos, float radius, const char* effect, const char* attachmentIdentifier);
   virtual int ResetVulnerabilityEffects(IFunctionHandler *pH, int characterSlot);
   virtual int GetCloseColliderParts(IFunctionHandler *pH, int characterSlot, Vec3 hitPos, float radius);
 	virtual int CreateIKLimb( IFunctionHandler *pH, int slot, const char *limbName, const char *rootBone, const char *midBone, const char *endBone, int flags);
-
 	virtual int ResetScores(IFunctionHandler *pH);
 	virtual int RenderScore(IFunctionHandler *pH, ScriptHandle player, int kills, int deaths, int ping);
 
   virtual int SetSearchBeam(IFunctionHandler *pH, Vec3 dir);
+
+	//misc
+	//virtual int MeleeEffect(IFunctionHandler *pH);
 
 protected:
 	CActor *GetActor(IFunctionHandler *pH);

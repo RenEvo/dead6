@@ -20,6 +20,7 @@ IFlashPlayer*	CFlashAnimation::s_pFlashPlayerNull = 0;
 CFlashAnimation::CFlashAnimation()
 {
 	m_pFlashPlayer = 0;
+	m_dock = eFD_Stretch;
 }
 
 CFlashAnimation::~CFlashAnimation()
@@ -40,6 +41,11 @@ IFlashPlayer*	CFlashAnimation::GetFlashPlayer() const
 		}
 		return s_pFlashPlayerNull;
 	}
+}
+
+void CFlashAnimation::SetDock(uint32 eFDock)
+{
+	m_dock = eFDock;
 }
 
 bool CFlashAnimation::LoadAnimation(const char* name)
@@ -63,6 +69,38 @@ void CFlashAnimation::Unload()
 bool CFlashAnimation::IsLoaded() const
 {
 	return (m_pFlashPlayer != 0);
+}
+
+void CFlashAnimation::RepositionFlashAnimation()
+{
+	if(m_pFlashPlayer)
+	{
+		IRenderer *pRenderer = gEnv->pRenderer;
+
+		float fMovieRatio		=	((float)m_pFlashPlayer->GetWidth()) / ((float)m_pFlashPlayer->GetHeight());
+		float fRenderRatio	=	((float)pRenderer->GetWidth()) / ((float)pRenderer->GetHeight());
+
+		float fWidth				=	pRenderer->GetWidth();
+		float fHeight				=	pRenderer->GetHeight();
+		float fXPos = 0.0f;
+		float fYPos = 0.0f;
+
+		float fXOffset			= (fWidth - (fMovieRatio * fHeight));
+
+		if(fRenderRatio != fMovieRatio && !(m_dock & eFD_Stretch))
+		{
+			fWidth = fWidth-fXOffset;
+
+			if (m_dock & eFD_Left)
+				fXPos = 0;
+			else if (m_dock & eFD_Right)
+				fXPos = fXOffset;
+			else if (m_dock & eFD_Center)
+				fXPos = fXOffset * 0.5;
+		}
+
+		m_pFlashPlayer->SetViewport(int(fXPos),0,int(fWidth),int(fHeight));
+	}
 }
 
 void CFlashAnimation::SetVisible(bool visible)

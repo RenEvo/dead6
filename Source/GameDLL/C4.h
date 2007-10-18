@@ -71,6 +71,13 @@ public:
 
 	DECLARE_CLIENT_RMI_NOATTACH(ClSetProjectileId, SetProjectileIdParams, eNRT_ReliableUnordered);
 	DECLARE_SERVER_RMI_NOATTACH(SvRequestTime, RequestTimeParams, eNRT_ReliableUnordered);
+
+private:
+
+	static TActionHandler<CC4> s_actionHandler;
+
+	bool OnActionSelectDetonator(EntityId actorId, const ActionId& actionId, int activationMode, float value);
+	void SelectDetonator();
 };
 
 #endif // __C4_H__

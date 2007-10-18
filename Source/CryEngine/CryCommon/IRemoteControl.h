@@ -56,9 +56,6 @@ struct IRemoteControlServer
 	// stops the RCON_server
 	virtual void Stop() = 0;
 
-	// updates the RCON_server
-	virtual void Update() = 0;
-
 	// sends command result back to the command client
 	virtual void SendResult(uint32 commandId, const string& result) = 0;
 };
@@ -91,9 +88,6 @@ struct IRemoteControlClient
 
 	// disconnects from an RCON_server
 	virtual void Disconnect() = 0;
-
-	// updates the RCON_client
-	virtual void Update() = 0;
 
 	// sends RCON commands to the connected RCON_server; returns a unique command ID
 	virtual uint32 SendCommand(const string& command) = 0;

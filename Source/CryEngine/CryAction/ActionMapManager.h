@@ -18,8 +18,6 @@
 # pragma once
 #endif
 
-#define ACTION_MAP_VERSION 1
-
 #include "IActionMapManager.h"
 #include "IInput.h"
 class Crc32Gen;
@@ -45,7 +43,7 @@ public:
 	virtual void Reset();
 	virtual void Clear();
 
-	virtual void LoadFromXML(const XmlNodeRef& node);
+	virtual void LoadFromXML(const XmlNodeRef& node, bool bCheckVersion=false);
 	virtual void SaveToXML(const XmlNodeRef& node);
 
 	virtual IActionMap *CreateActionMap(const char *name);
@@ -61,10 +59,15 @@ public:
 	virtual bool IsFilterEnabled(const char *name);
 	// ~IActionMapManager
 
+	int GetVersion() const { return  m_version; }
+	void SetVersion(int version) { m_version = version; }
+
 	bool ActionFiltered(const ActionId& action);
 
 	void RemoveActionMap(CActionMap *pActionMap);
 	void RemoveActionFilter(CActionFilter *pActionFilter);
+
+	void ReleaseActionIfActive(const ActionId& actionId);
 
 	const Crc32Gen&	GetCrc32Gen() const;
 
@@ -95,11 +98,12 @@ private:
 
 	void DispatchEvent(const SInputEvent &inputEvent);
 
-	bool							m_enabled;
 	IInput*						m_pInput;
 	TActionMapMap			m_actionMaps;
 	TActionFilterMap	m_actionFilters;
 	TInputCRCToBind		m_inputCRCToBind;
+	int               m_version;
+	bool							m_enabled;
 };
 
 

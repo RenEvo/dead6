@@ -14,7 +14,6 @@ struct SSerializedPlayerInput
 	Vec3 lookDirection;
 	Vec3 bodyDirection;
 	bool sprint;
-	bool jump;
 	bool leanl;
 	bool leanr;
 
@@ -24,7 +23,6 @@ struct SSerializedPlayerInput
 		lookDirection(FORWARD_DIRECTION),
 		bodyDirection(FORWARD_DIRECTION),
 		sprint(false),
-		jump(false),
 		leanl(false),
 		leanr(false)
 	{
@@ -38,7 +36,6 @@ struct SSerializedPlayerInput
 		ser.Value( "deltaMovement", deltaMovement, 'pMov' );
 		ser.Value( "lookDirection", lookDirection, 'dir0' );
 		ser.Value( "sprint", sprint, 'bool' );
-		ser.Value( "jump", jump, 'bool' );
 		ser.Value( "leanl", leanl, 'bool' );
 		ser.Value( "leanr", leanr, 'bool' );
 		//ser.Value("ActionMap", actionMap, NSerPolicy::A_JumpyValue(0.0f, 127.0f, 7));
@@ -53,7 +50,7 @@ struct IPlayerInput
 	{
 		PLAYER_INPUT,
 		NETPLAYER_INPUT,
-		AIDEMO_INPUT
+		DEDICATED_INPUT,
 	};
 
 	virtual ~IPlayerInput() {};
@@ -73,6 +70,9 @@ struct IPlayerInput
 	virtual EInputType GetType() const = 0;
 
 	virtual void GetMemoryStatistics(ICrySizer * s) = 0;
+
+	virtual uint32 GetMoveButtonsState() const = 0;
+	virtual uint32 GetActions() const = 0;
 };
 
 #endif

@@ -113,6 +113,8 @@ public:
 	ILINE CTimeValue& operator+=( const CTimeValue& inRhs ) { m_lValue += inRhs.m_lValue; return *this; }
 	ILINE CTimeValue& operator-=( const CTimeValue& inRhs ) { m_lValue -= inRhs.m_lValue; return *this; }
 
+	ILINE CTimeValue& operator/=( int inRhs ) { m_lValue /= inRhs; return *this; }
+
 	// comparison -----------------------
 
 	ILINE bool operator<( const CTimeValue &inRhs ) const {	return m_lValue < inRhs.m_lValue; };

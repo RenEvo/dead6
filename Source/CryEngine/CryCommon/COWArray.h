@@ -280,11 +280,18 @@ protected:
 		else if (nCount > capacity())
 		{
 			// Grow if needed, to next power-of-two.
+#if defined(PS3)
+			const	size_type CurrentCap	=	capacity();
+			const	size_type nCap				=	CurrentCap+(CurrentCap>>3);
+			resize_raw(nCount, nCap>nCount?nCap:nCount);
+#else
+			// Grow if needed, to next power-of-two.
 			size_type nCap = 4;
 			nCap = 4;
 			while (nCap < nCount)
 				nCap <<= 1;
 			resize_raw(nCount, nCap);
+#endif
 		}
 		else
 		{

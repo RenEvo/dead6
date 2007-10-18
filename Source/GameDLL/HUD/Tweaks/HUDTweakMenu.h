@@ -38,7 +38,7 @@ public:
 
 	void Init( IScriptSystem *pScriptSystem );
 
-	virtual void OnUpdate(float fDeltaTime,float fFadeValue);
+	virtual void Update(float fDeltaTime);
 
 	void OnActionTweak(const char *actionName, int activationMode, float value);
 

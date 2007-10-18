@@ -23,8 +23,6 @@ History:
 #include <IViewSystem.h>
 #include "OffHand.h"
 
-#define TIMEOUT			6.0f
-
 typedef enum EFistAnimState
 {
 	eFAS_NOSTATE	= -1,
@@ -41,7 +39,7 @@ typedef enum EFistAnimState
 	eFAS_SWIM_FORWARD_S = 10
 };
 
-class CFists : public COffHand
+class CFists : public CWeapon
 {
 	struct EndRaiseWeaponAction;
 
@@ -64,14 +62,16 @@ public:
 	virtual void EnterWater(bool enter);
 	virtual void GetMemoryStatistics(ICrySizer * s) { s->Add(*this); CWeapon::GetMemoryStatistics(s); }
 	virtual void RaiseWeapon(bool raise, bool faster = false);
-	virtual void NetStartMeleeAttack(EntityId shooterId, bool weaponMelee);
+	virtual void NetStartMeleeAttack(bool weaponMelee);
 
-	virtual void MeleeAttack();
+	virtual void FullSerialize(TSerialize ser);
 
 	void	RequestAnimState(EFistAnimState eFAS, bool force=false);
 	int   GetCurrentAnimState() { return m_currentAnimState; }
 
 	void  EnterFreeFall(bool enter) { m_inFreeFall = enter;}
+
+	virtual void ForcePendingActions(){};
 
 protected:
 	void	UpdateAnimState(float frameTime);
@@ -81,7 +81,7 @@ private:
 	bool OnActionAttack(EntityId actorId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionSpecial(EntityId actorId, const ActionId& actionId, int activationMode, float value);
 
-	TActionHandler<CFists>	m_actionHandler;
+	static TActionHandler<CFists>	s_actionHandler;
 
 protected:
 	float		 m_timeOut;

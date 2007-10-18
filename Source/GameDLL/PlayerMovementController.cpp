@@ -54,20 +54,31 @@ static const float IDLE_CHECK_MOVEMENT_TIMEOUT = 3.0f;
 
 CPlayerMovementController::CPlayerMovementController( CPlayer * pPlayer ) : m_pPlayer(pPlayer), m_animTargetSpeed(-1.0f), m_animTargetSpeedCounter(0)
 {
-	m_lookTarget = m_aimTarget = m_fireTarget = m_pPlayer->GetEntity()->GetWorldPos();
+	m_lookTarget=Vec3(ZERO);
+	m_aimTarget=Vec3(ZERO);
+	m_fireTarget=Vec3(ZERO);
 	Reset();
+
+
 }
 
 void CPlayerMovementController::Reset()
 {
+	m_aimNextTarget = 0;
+	m_aimTargetsCount = 0;
+	m_aimTargetsIterator = 0;
+
 	m_state = CMovementRequest();
 	m_atTarget = false;
 	m_desiredSpeed = 0.0f;
 	m_usingAimIK = m_usingLookIK = false;
+	m_aimClamped = false;
+
 	m_aimInterpolator.Reset();
 	m_lookInterpolator.Reset();
 	m_updateFunc = &CPlayerMovementController::UpdateNormal;
 	m_targetStance = STANCE_NULL;
+	m_strengthJump = false;
 	m_idleChecker.Reset(this);
 
 	if(!GetISystem()->IsSerializingFile() == 1)
@@ -75,7 +86,16 @@ void CPlayerMovementController::Reset()
 
 	//
 	m_aimTargets.resize(1);
-	/*m_aimTargetsCount = m_aimTargetsIterator = m_aimNextTarget = 0;*/
+	uint32 numAimTargets = m_aimTargets.size();
+	for (uint32 i=0; i<numAimTargets; i++)
+	{
+		m_aimTargets[i]=Vec3(ZERO);
+	}
+
+	m_lookTarget=Vec3(ZERO);
+	m_aimTarget=Vec3(ZERO);
+	m_fireTarget=Vec3(ZERO);
+
 }
 
 bool CPlayerMovementController::RequestMovement( CMovementRequest& request )
@@ -168,7 +188,7 @@ bool CPlayerMovementController::RequestMovement( CMovementRequest& request )
 	if (request.HasFireTarget())
 	{
 		state.SetFireTarget( request.GetFireTarget() );
-		//forcing fire target here, can not wait for it to be set in the Update.
+		//forcing fire target here, can not wait for it to be set in the dateNormalate.
 		//if don't do it - first shot of the weapon might be in some undefined direction (ProsessShooting is done right after this 
 		//call in AIProxy). This is particularly problem for RPG shooting
 		m_currentMovementState.fireTarget = request.GetFireTarget();
@@ -271,9 +291,6 @@ bool CPlayerMovementController::RequestMovement( CMovementRequest& request )
 	{
 		const SActorTargetParams& p = request.GetActorTarget();
 
-		assert(p.locationRadius > 0.0f);
-		assert(p.directionRadius > 0.0f);
-
 		SAnimationTargetRequest req;
 		req.position = p.location;
 		req.positionRadius = std::max( p.locationRadius, DEG2RAD(0.05f) );
@@ -284,7 +301,8 @@ bool CPlayerMovementController::RequestMovement( CMovementRequest& request )
 		req.direction = p.direction;
 		req.directionRadius = std::max( p.directionRadius, DEG2RAD(0.05f) );
 		req.prepareRadius = 3.0f;
-
+		req.projectEnd = p.projectEnd;
+		req.navSO = p.navSO;
 
 		IAnimationSpacialTrigger * pTrigger = m_pPlayer->GetAnimationGraphState()->SetTrigger(req, p.triggerUser, p.pQueryStart, p.pQueryEnd);
 		if (pTrigger)
@@ -365,6 +383,7 @@ static float gain( float g, float t )
 		return 1.0f - bias( 1.0f-g, 2.0f-2.0f*t );
 }
 
+static float white[4] = {1,1,1,1};
 static float blue[4] = {0,0,1,1};
 static float red[4] = {1,0,0,1};
 static float yellow[4] = {1,1,0,1};
@@ -442,7 +461,8 @@ void CPlayerMovementController::CTargetInterpolator::TargetValue(
 
 static Vec3 ClampDirectionToCone( const Vec3& dir, const Vec3& forward, float maxAngle )
 {
-	float angle = cry_acosf( dir.Dot(forward) );
+//	float angle = cry_acosf( dir.Dot(forward) );
+	float angle = cry_acosf( clamp_tpl(dir.Dot(forward),-1.0f,1.0f) );
 	if (angle > maxAngle)
 	{
 		Quat fromForwardToDir = Quat::CreateRotationV0V1(forward, dir);
@@ -533,9 +553,89 @@ bool CPlayerMovementController::CTargetInterpolator::GetTarget(
 	return retVal;
 }
 
+static void DebugDrawWireFOVCone(IRenderer* pRend, const Vec3& pos, const Vec3& dir, float rad, float fov, ColorB col)
+{
+	const unsigned npts = 32;
+	const unsigned npts2 = 16;
+	Vec3	points[npts];
+	Vec3	pointsx[npts2];
+	Vec3	pointsy[npts2];
+
+	Matrix33	base;
+	base.SetRotationVDir(dir);
+
+	fov *= 0.5f;
+
+	float coneRadius = sinf(fov) * rad;
+	float coneHeight = cosf(fov) * rad;
+
+	for(unsigned i = 0; i < npts; i++)
+	{
+		float	a = ((float)i / (float)npts) * gf_PI2;
+		float rx = cosf(a) * coneRadius;
+		float ry = sinf(a) * coneRadius;
+		points[i] = pos + base.TransformVector(Vec3(rx, coneHeight, ry));
+	}
+
+	for(unsigned i = 0; i < npts2; i++)
+	{
+		float	a = -fov + ((float)i / (float)(npts2-1)) * (fov*2);
+		float rx = sinf(a) * rad;
+		float ry = cosf(a) * rad;
+		pointsx[i] = pos + base.TransformVector(Vec3(rx, ry, 0));
+		pointsy[i] = pos + base.TransformVector(Vec3(0, ry, rx));
+	}
+
+	pRend->GetIRenderAuxGeom()->DrawPolyline(points, npts, true, col);
+	pRend->GetIRenderAuxGeom()->DrawPolyline(pointsx, npts2, false, col);
+	pRend->GetIRenderAuxGeom()->DrawPolyline(pointsy, npts2, false, col);
+
+	pRend->GetIRenderAuxGeom()->DrawLine(points[0], col, pos, col);
+	pRend->GetIRenderAuxGeom()->DrawLine(points[npts/4], col, pos, col);
+	pRend->GetIRenderAuxGeom()->DrawLine(points[npts/2], col, pos, col);
+	pRend->GetIRenderAuxGeom()->DrawLine(points[npts/2+npts/4], col, pos, col);
+}
+
+
+static bool ClampTargetPointToCone(Vec3& target, const Vec3& pos, const Vec3& dir, float coneAngle)
+{
+	Vec3	reqDir = target - pos;
+	float dist = reqDir.NormalizeSafe();
+	if (dist < 0.01f)
+		return false;
+
+	// Slerp
+	float cosAngle = dir.Dot(reqDir);
+
+	coneAngle *= 0.5f;
+
+	const float eps = 1e-6f;
+	const float thr = cosf(coneAngle);
+
+	if (cosAngle > thr)
+		return false;
+
+	// Target is outside the cone
+	float targetAngle = acos_tpl(cosAngle);
+	float t = coneAngle / targetAngle;
+
+	Quat	cur;
+	cur.SetRotationVDir(dir);
+	Quat	req;
+	req.SetRotationVDir(reqDir);
+
+	Quat	view;
+	view.SetSlerp(cur, req, t);
+
+	target = pos + view.GetColumn1() * dist;
+
+	return true;
+}
+
+
 bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMovementParams& params )
 {
-	// TODO: Don't update all this crap when a character is dead.
+	// TODO: Don't update all this mess when a character is dead.
 
 	ITimer * pTimer = gEnv->pTimer;
 
@@ -563,7 +663,9 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 	params.aimIK = false;
 	params.deltaAngles = Ang3(0,0,0);
 
+	static bool forceStrafe = false;	// [mikko] For testing, should be 'false'.
 	bool allowStrafing = m_state.AllowStrafing();
+	params.allowStrafe = allowStrafing || forceStrafe;
 
 	if(gEnv->bMultiplayer && m_state.HasStance() && m_state.GetStance() == STANCE_PRONE)
 	{
@@ -613,7 +715,7 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 	if (!pCharacter)
 		return true;
 
-	ISkeleton * pSkeleton = pCharacter->GetISkeleton();
+	ISkeletonAnim* pSkeletonAnim = pCharacter->GetISkeletonAnim();
 
 	CTimeValue now = pTimer->GetFrameStartTime();
 
@@ -622,14 +724,13 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 	if (m_pPlayer->GetLastRequestedVelocity().len2() > 0.01f)
 		moveDirection = m_pPlayer->GetLastRequestedVelocity().GetNormalized();
 
-	// potentially override our normal targets due to a targetted animation request
+	// potentially override our normal targets due to a targeted animation request
 	bool hasMoveTarget = false;
 	bool hasBodyTarget = false;
 	Vec3 moveTarget;
 	Vec3 bodyTarget;
 
 	float viewFollowMovement = 0.0f;
-	float additionalViewFollowMovement = 0.0f; // for things that can't be multiplied out under any circumstances
 
 	const char * bodyTargetType = "none";
 	const char * moveTargetType = "none";
@@ -642,21 +743,40 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 	const SAnimationTarget * pAnimTarget = m_pPlayer->GetAnimationGraphState()->GetAnimationTarget();
 	if ((pAnimTarget != NULL) && pAnimTarget->preparing)
 	{
-		bodyTarget = pAnimTarget->position + 3.0f * (pAnimTarget->orientation * FORWARD_DIRECTION) + Vec3(0, 0, 1.5);
+		float distanceToTarget = (pAnimTarget->position - playerPos).GetLength2D();
+
+		Vec3 animTargetFwdDir = pAnimTarget->orientation.GetColumn1();
+
+		Vec3 moveDirection2d = hasMoveTarget ? moveDirection : (pAnimTarget->position - playerPos);
+		moveDirection2d.z = 0.0f;
+		moveDirection2d.NormalizeSafe(animTargetFwdDir);
+
+		float deltaAngleDot = animTargetFwdDir.Dot(moveDirection2d);
+		float fraction = (distanceToTarget - 0.2f) / 1.8f;
+		float blend = CLAMP(fraction, 0.0f, 1.0f);
+		animTargetFwdDir.SetSlerp(animTargetFwdDir, moveDirection2d, blend );
+
+		float animTargetFwdDepthFraction = max(0.0f, animTargetFwdDir.Dot(moveDirection2d));
+		float animTargetFwdDepth = LERP(1.0f, 3.0f, animTargetFwdDepthFraction);
+
+/*
+		Vec3 bump(0,0,0.1f);
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(pAnimTarget->position+bump, 0.05f, ColorB(255,255,255,255), true);
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(pAnimTarget->position+bump, ColorB(255,255,255,255), 
+			pAnimTarget->position+bump + animTargetFwdDepth * animTargetFwdDir, ColorB(255,255,255,255), 4.0f);
+*/
+
+		bodyTarget = pAnimTarget->position + animTargetFwdDepth * animTargetFwdDir;
 		bodyTargetType = "animation";
 		hasBodyTarget = true;
 		allowStrafing = true;
-		//additionalViewFollowMovement = 1.0f;
 
-/*
-		if ((pAnimTarget->position.GetDistance(playerPos) < 1.0f) || 
-			!m_state.HasDesiredSpeed() || 
-			(m_state.HasDesiredSpeed() && (m_state.GetDesiredSpeed() < 0.3f)))
-*/
+		if (!hasMoveTarget || pAnimTarget->notAiControlledAnymore || (distanceToTarget < 1.0f))
 		{
 			moveTarget = pAnimTarget->position;
 			moveTargetType = "animation";
 			hasMoveTarget = true;
+			pAnimTarget->notAiControlledAnymore = true;
 		}
 	}
 	if (pAnimTarget != NULL)
@@ -694,7 +814,22 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 			{
 				desiredSpeed = std::max(desiredSpeed, m_desiredSpeed);
 				desiredSpeed = std::max(1.0f, desiredSpeed);
-				desiredSpeed = std::min(desiredSpeed, distance / frameTime);
+
+				bool isNavigationalSO = (pAnimTarget->isNavigationalSO != 0);
+
+				float frameTimeHi = 0.025f;
+				float frameTimeLo = 0.1f;
+				float finalSpeedFraction = CLAMP((frameTime - frameTimeHi) / (frameTimeLo - frameTimeHi), 0.0f, 1.0f);
+				float finalSpeed = isNavigationalSO ? LERP(3.0f, 0.0f, finalSpeedFraction) : LERP(1.0f, 0.0f, finalSpeedFraction);
+				float antiOscilationSpeedFraction = 1.0f - CLAMP(distance / 1.0f, 0.0f, 1.0f);
+				float antiOscilationSpeed = LERP(desiredSpeed, finalSpeed, antiOscilationSpeedFraction);
+				float approachSpeed = iszero(frameTime) ? 0.0f : (distance / frameTime) * 0.4f;
+/*
+				if (isNavigationalSO)
+					approachSpeed = max(approachSpeed, 2.0f);
+*/
+				desiredSpeed = std::min(desiredSpeed, approachSpeed);
+				//desiredSpeed = antiOscilationSpeed;
 			}
 			if (pAnimTarget && (pAnimTarget->activated || m_animTargetSpeedCounter) && m_animTargetSpeed >= 0.0f)
 			{
@@ -713,16 +848,16 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 
 				//calculate the desired speed amount (0-1 length) in world space
 				params.desiredVelocity = desiredMovement * desiredSpeed / stanceSpeed;
-				viewFollowMovement = 5.0f * desiredSpeed / stanceSpeed;
+				viewFollowMovement = 1.0f; //5.0f * desiredSpeed / stanceSpeed;
 				//
 				//and now, after used it for the viewFollowMovement convert it to the Actor local space
 				moveDirection = params.desiredVelocity.GetNormalizedSafe(ZERO);
-				params.desiredVelocity = m_pPlayer->GetBaseQuat().GetInverted() * params.desiredVelocity;
+				params.desiredVelocity = m_pPlayer->GetEntity()->GetWorldRotation().GetInverted() * params.desiredVelocity;
 			}
 		}
 	}
 
-	if (m_state.HasAimTarget())
+/*	if (m_state.HasAimTarget())
 	{
 		float aimLength = (m_currentMovementState.weaponPosition - m_state.GetAimTarget()).GetLengthSquared();
 		float aimLimit = 9.0f * 9.0f;
@@ -731,9 +866,9 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 			float mult = aimLength / aimLimit;
 			viewFollowMovement *= mult * mult;
 		}
-	}
+	}*/
 	float distanceToEnd(m_state.GetDistanceToPathEnd()); // TODO: Warning, a comment above say this function returns incorrect values.
-	if (distanceToEnd>0.001f)
+/*	if (distanceToEnd>0.001f)
 	{
 		float lookOnPathLimit(7.0f);
 		if (distanceToEnd<lookOnPathLimit)
@@ -743,10 +878,10 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 			//gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere( playerPos, 0.5f, ColorF(1,1,1,1) );
 		}
 		//pRend->Draw2dLabel( 100, 100, 1.0f, yellow, false, "distance:%.1f", distanceToEnd);
-	}
+	}*/
+
 	if (allowStrafing)
 		viewFollowMovement = 0.0f;
-	viewFollowMovement = CLAMP(viewFollowMovement + additionalViewFollowMovement, 0, 1);
 
 	if (!hasBodyTarget)
 	{
@@ -754,6 +889,11 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 		{
 			bodyTarget = m_state.GetBodyTarget();
 			bodyTargetType = "requested";
+		}
+		else if (hasMoveTarget)
+		{
+			bodyTarget = playerPos + moveDirection;
+			bodyTargetType = "movement";
 		}
 		else
 		{
@@ -763,50 +903,49 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 	}
 
 	// look and aim direction
-	bool upd;
 	Vec3 tgt;
 
 	Vec3 eyePosition(playerPos.x, playerPos.y, m_currentMovementState.eyePosition.z);
 
-	upd = false;
-	tgt = eyePosition + 1.0f * currentBodyDirection;
+	bool hasLookTarget = false;
+	tgt = eyePosition + 5.0f * currentBodyDirection;
 	const char * lookType = "current";
 	if (pAnimTarget && pAnimTarget->preparing)
 	{
-		upd = false;
+		hasLookTarget = false;
 		tgt = pAnimTarget->position + 3.0f * (pAnimTarget->orientation * FORWARD_DIRECTION) + Vec3(0, 0, 1.5);
 		lookType = "exactpositioning";
 	}
 	else if (pAnimTarget && pAnimTarget->activated)
 	{
-		upd = false;
-		tgt = eyePosition + 1.0f * currentBodyDirection;
+		hasLookTarget = false;
+		tgt = eyePosition + 5.0f * currentBodyDirection;
 		lookType = "animation";
-	}
-	else if (m_state.HasAimTarget())
-	{
-		upd = true;
-		tgt = m_state.GetAimTarget();
-		lookType = "aim";
-
-/*		if (m_state.HasFireTarget() && m_state.GetFireTarget().Dot(m_state.GetAimTarget()) < cry_cosf(MAX_FIRE_TARGET_DELTA_ANGLE))
-		{
-			tgt = m_state.GetFireTarget();
-			lookType = "fire";
-		}*/
 	}
 	else if (m_state.HasLookTarget())
 	{
-		upd = true;
+		hasLookTarget = true;
 		tgt = m_state.GetLookTarget();
 		lookType = "look";
+	}
+	else if (m_state.HasAimTarget())
+	{
+		hasLookTarget = true;
+		tgt = m_state.GetAimTarget();
+		lookType = "aim";
+
+		/*		if (m_state.HasFireTarget() && m_state.GetFireTarget().Dot(m_state.GetAimTarget()) < cry_cosf(MAX_FIRE_TARGET_DELTA_ANGLE))
+		{
+		tgt = m_state.GetFireTarget();
+		lookType = "fire";
+		}*/
 	}
 	else if (hasMoveTarget)
 	{
 		Vec3 desiredMoveDir = (moveTarget - playerPos).GetNormalizedSafe(ZERO);
 		if (moveDirection.Dot(desiredMoveDir) < ANTICIPATION_COSINE_ANGLE)
 		{
-			upd = true;
+			hasLookTarget = true;
 			tgt = moveTarget;
 			lookType = "anticipate";
 		}
@@ -818,27 +957,31 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 	}
 //	AdjustForMovement( tgt, moveTarget, playerPos, viewFollowMovement );
 
-	// Not all of these arguments are used (stupid function).
-	m_lookInterpolator.TargetValue( tgt, now, LOOK_TIME, frameTime, upd, playerPos, MAX_LOOK_AT_ANGULAR_VELOCITY );
+	Vec3 lookTarget = tgt;
 
-	upd = false;
+	// Not all of these arguments are used (stupid function).
+	m_lookInterpolator.TargetValue( tgt, now, LOOK_TIME, frameTime, hasLookTarget, playerPos, MAX_LOOK_AT_ANGULAR_VELOCITY );
+
+	bool hasAimTarget = false;
 	const char * aimType = lookType;
 	if (pAnimTarget && pAnimTarget->preparing)
 	{
-		upd = true;
+		hasAimTarget = true;
 		tgt = pAnimTarget->position + 3.0f * (pAnimTarget->orientation * FORWARD_DIRECTION) + Vec3(0, 0, 1.5);
 		aimType = "animation";
 	}
 	else if (m_state.HasAimTarget())
 	{
-		upd = true;
+		hasAimTarget = true;
 		tgt = m_state.GetAimTarget();
 		aimType = "aim";
 //		AdjustForMovement( tgt, moveTarget, playerPos, viewFollowMovement );
 	}
 
+	Vec3 aimTarget = tgt;
+
 	//if ((pAnimTarget == NULL) || (!pAnimTarget->activated)) // (Dejan was not sure about this yet, for leaning and such stuff.)
-		m_aimInterpolator.TargetValue( tgt, now, AIM_TIME, frameTime, upd, playerPos, MAX_AIM_AT_ANGULAR_VELOCITY );
+		m_aimInterpolator.TargetValue( tgt, now, AIM_TIME, frameTime, hasAimTarget, playerPos, MAX_AIM_AT_ANGULAR_VELOCITY );
 
 	const char * ikType = "none";
 	ColorB dbgClr(0,255,0,255);
@@ -848,15 +991,128 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 	bool swimming = (m_pPlayer->GetStance() == STANCE_SWIM);
 
 	bool hasControl = !pAnimTarget || !pAnimTarget->activated && !pAnimTarget->preparing;
+	hasControl = hasControl && (!pEntity->GetAI() || pEntity->GetAI()->IsEnabled());
+
+	m_aimClamped = false;
+
 	if (!m_pPlayer->IsClient() && hasControl)
 	{
-		//changed by ivo: most likely this doesn't work any more
-	//	Vec3 animBodyDirection = pEntity->GetRotation() * pSkeleton->GetCurrentBodyDirection();
-		Vec3 animBodyDirection = pEntity->GetRotation() * Vec3(0,1,0);
+		if (((SPlayerStats*)m_pPlayer->GetActorStats())->mountedWeaponID)
+		{
 
+			if (hasAimTarget)
+				params.aimTarget = aimTarget;
+			else
+				params.aimTarget = lookTarget;
 
-		Vec3 entDirection = pEntity->GetRotation().GetColumn1();
-		if (!m_state.HasNoAiming() && m_aimInterpolator.HasTarget( now, AIM_TIME ) && (additionalViewFollowMovement < 0.01f) && !swimming)
+			// Luciano - prevent snapping of aim direction out of existing horizontal angle limits
+			float limitH = m_pPlayer->GetActorParams()->vLimitRangeH;
+			IEntity *pWeaponEntity = GetISystem()->GetIEntitySystem()->GetEntity(m_pPlayer->GetActorStats()->mountedWeaponID);
+
+			// m_currentMovementState.weaponPosition is offset to the real weapon position
+			Vec3 weaponPosition (pWeaponEntity ? pWeaponEntity->GetWorldPos() : m_currentMovementState.weaponPosition); 
+			
+			if(limitH > 0 && limitH < gf_PI)
+			{
+				Vec3 aimDirection(params.aimTarget - weaponPosition);//m_currentMovementState.weaponPosition);
+				Vec3 limitAxisY(m_pPlayer->GetActorParams()->vLimitDir);
+				limitAxisY.z = 0;
+				Vec3 limitAxisX(limitAxisY.y, -limitAxisY.x, 0);
+				limitAxisX.NormalizeSafe(Vec3Constants<float>::fVec3_OneX);
+				limitAxisY.NormalizeSafe(Vec3Constants<float>::fVec3_OneY);
+				float x = limitAxisX.Dot(aimDirection);
+				float y = limitAxisY.Dot(aimDirection);
+				float len = cry_sqrtf(sqr(x) + sqr(y));
+				len = max(len,2.f);// bring the aimTarget away for degenerated cases when it's between firepos and weaponpos
+				float angle = cry_atan2f(x, y);
+				if (angle < -limitH || angle > limitH)
+				{
+					Limit(angle, -limitH, limitH);
+					x = sinf(angle) * len;
+					y = cosf(angle) * len;
+					params.aimTarget = weaponPosition + x* limitAxisX + y * limitAxisY + Vec3(0,0, aimDirection.z);
+					m_aimClamped = true;
+				}
+
+			}
+
+			float limitUp = m_pPlayer->GetActorParams()->vLimitRangeVUp;
+			float limitDown = m_pPlayer->GetActorParams()->vLimitRangeVDown;
+			if(limitUp!=0 || limitDown != 0)
+			{
+				Vec3 aimDirection(params.aimTarget - weaponPosition);//m_currentMovementState.weaponPosition);
+				Vec3 limitAxisXY(aimDirection);
+				limitAxisXY.z = 0;
+				Vec3 limitAxisZ(Vec3Constants<float>::fVec3_OneZ);
+
+				limitAxisXY.NormalizeSafe(Vec3Constants<float>::fVec3_OneY);
+				float z = limitAxisZ.Dot(aimDirection);
+				float x = limitAxisXY.Dot(aimDirection);
+				float len = cry_sqrtf(sqr(z) + sqr(x));
+				len = max(len,2.f); // bring the aimTarget away for degenerated cases when it's between firepos and weaponpos
+				float angle = cry_atan2f(z, x);
+				if (angle < limitDown && limitDown!=0 || angle > limitUp && limitUp !=0)
+				{
+					Limit(angle, limitDown, limitUp);
+					z = sinf(angle) * len;
+					x = cosf(angle) * len;
+					params.aimTarget = weaponPosition + z* limitAxisZ + x * limitAxisXY;
+					m_aimClamped = true;
+				}
+			}
+			params.aimIK = true;
+			params.lookIK = true;
+
+			lookType = aimType = bodyTargetType = "mountedweapon";
+		}
+		else
+		{
+			Vec3 limitDirection = pEntity->GetRotation().GetColumn1();
+			Vec3 weaponPos(playerPos.x, playerPos.y, m_currentMovementState.weaponPosition.z);
+
+			const float LOOK_CONE_FOV = DEG2RAD(80.0f);
+			const float AIM_CONE_FOV = DEG2RAD(m_pPlayer->IsPlayer() ? 180.0f : 70.0f);
+
+			if (g_pGame->GetCVars()->g_debugaimlook)
+			{
+				DebugDrawWireFOVCone(gEnv->pRenderer, weaponPos, limitDirection, 2.0f, AIM_CONE_FOV, ColorB(255,255,255));
+				DebugDrawWireFOVCone(gEnv->pRenderer, eyePosition, limitDirection, 3.0f, LOOK_CONE_FOV, ColorB(0,196,255));
+			}
+
+			if (hasLookTarget)
+			{
+				params.lookTarget = lookTarget;
+				bool lookClamped = ClampTargetPointToCone(params.lookTarget, eyePosition, limitDirection, LOOK_CONE_FOV);
+				if (!lookClamped)
+				{
+					ikType = "look";
+					params.lookIK = true;
+				}
+				if (m_state.AllowStrafing() || !hasMoveTarget)
+				{
+					bodyTarget = params.lookTarget;
+					bodyTargetType = "look";
+				}
+			}
+
+			if (hasAimTarget && !swimming)
+			{
+				params.aimTarget = aimTarget;
+				m_aimClamped = ClampTargetPointToCone(params.aimTarget, weaponPos, limitDirection, AIM_CONE_FOV);
+				if (!m_aimClamped)
+				{
+					ikType = "aim";
+					params.aimIK = !m_aimClamped;
+				}
+				if (m_state.AllowStrafing() || !hasMoveTarget)
+				{
+					bodyTarget = params.aimTarget;
+					bodyTargetType = "aim";
+				}
+			}
+		
+/*
+		if (!m_state.HasNoAiming() && m_aimInterpolator.HasTarget( now, AIM_TIME ) && !swimming)
 		{
 			params.aimIK = m_aimInterpolator.GetTarget( 
 				params.aimTarget, 
@@ -872,7 +1128,7 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 				&bodyTargetType );
 			ikType = "aim";
 		}
-		else if (m_lookInterpolator.HasTarget( now, LOOK_TIME ) && (additionalViewFollowMovement < 0.01f))	// Look IK
+		else if (m_lookInterpolator.HasTarget( now, LOOK_TIME ))	// Look IK
 		{
 			params.lookIK = m_lookInterpolator.GetTarget( 
 				params.lookTarget, 
@@ -888,18 +1144,10 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 				&bodyTargetType );
 			ikType = "look";
 		}
-
-		if (((SPlayerStats*)m_pPlayer->GetActorStats())->mountedWeaponID && !m_pPlayer->IsClient())
-		{
-			params.lookIK = true;
-			params.lookTarget = m_aimInterpolator.GetTarget();
-			params.aimIK = false;
-			params.aimTarget = m_aimInterpolator.GetTarget();
-			bodyTarget = m_aimInterpolator.GetTarget();
-
-			lookType = aimType = bodyTargetType = "mountedweapon";
-		}
+*/
+		}	
 	}
+
 
 	Vec3 viewDir = ((bodyTarget - playerPos).GetNormalizedSafe(ZERO));
 	if (!m_pPlayer->IsClient() && viewDir.len2() > 0.01f)
@@ -932,8 +1180,10 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 			// Less clamping when approaching animation target.
 			if (pAnimTarget && pAnimTarget->preparing)
 			{
-				const float	u = CLAMP(1.0 - pAnimTarget->position.GetDistance(playerPos) / 2.5f, 0.0f, 1.0f);
-				maxDeltaAngleRate = maxDeltaAngleRate + u * (maxDeltaAngleRateAnimTarget - maxDeltaAngleRate);
+				float	distanceFraction = CLAMP(pAnimTarget->position.GetDistance(playerPos) / 0.5f, 0.0f, 1.0f);
+				float	animTargetTurnRateFraction = 1.0f - distanceFraction;
+				animTargetTurnRateFraction = 0.0f;
+				maxDeltaAngleRate = LERP(maxDeltaAngleRate, maxDeltaAngleRateAnimTarget, animTargetTurnRateFraction);
 			}
 		}
 
@@ -953,18 +1203,21 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 
 	if (g_pGame->GetCVars()->g_debugaimlook)
 	{
-		pRend->Draw2dLabel( 10, y, 1.0f, green, false, "%s: vfm:%f body:%s look:%s aim:%s ik:%s move:%s (%f,%f,%f)", pEntity->GetName(), viewFollowMovement, bodyTargetType, aimType, lookType, ikType, moveTargetType, params.deltaAngles.x, params.deltaAngles.y, params.deltaAngles.z );
-		y += 10;
+		pRend->Draw2dLabel( 10, y, 1.5f, white, false, 
+			"%s:  body=%s   look=%s   aim=%s   rotik=%s   move=%s   delta ang=(%3.2f, %3.2f, %3.2f)", 
+			pEntity->GetName(), bodyTargetType, aimType, lookType, ikType, moveTargetType, 
+			params.deltaAngles.x, params.deltaAngles.y, params.deltaAngles.z );
+		y += 15;
 		if (m_state.GetDistanceToPathEnd() >= 0.0f)
 		{
-			pRend->Draw2dLabel( 20, y, 1.0f, yellow, false, "distanceToEnd: %f (%f)", m_state.GetDistanceToPathEnd(), moveTarget.GetDistance(playerPos) );
-			y += 10;
+			pRend->Draw2dLabel( 10, y, 1.5f, yellow, false, "distanceToEnd: %f (%f)", m_state.GetDistanceToPathEnd(), moveTarget.GetDistance(playerPos) );
+			y += 15;
 		}
 
 		if (m_state.HasAimTarget())
 		{
-			pRend->GetIRenderAuxGeom()->DrawLine( m_currentMovementState.weaponPosition, ColorF(1,1,0,1), params.aimTarget+Vec3(0,0,0.05f), ColorF(0.3f,1,0,1) );
-			pRend->GetIRenderAuxGeom()->DrawLine( m_currentMovementState.weaponPosition, ColorF(1,1,0,1), m_state.GetAimTarget(), ColorF(1,0.3f,0,1) );
+			pRend->GetIRenderAuxGeom()->DrawLine( m_currentMovementState.weaponPosition, ColorF(1,1,1,1), params.aimTarget+Vec3(0,0,0.05f), ColorF(1,1,1,1), 3.0f);
+			pRend->GetIRenderAuxGeom()->DrawLine( m_currentMovementState.weaponPosition, ColorF(1,1,1,0.3f), m_state.GetAimTarget(), ColorF(1,1,1,0.3f));
 		}
 	}
 
@@ -993,6 +1246,9 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 
 	params.jump = m_state.ShouldJump();
 	m_state.ClearJump();
+
+	params.strengthJump=ShouldStrengthJump();
+	ClearStrengthJump();
 
 	// TODO: This should probably be calculate BEFORE it is used (above), or the previous frame's value is used.
 	m_desiredSpeed = params.desiredVelocity.GetLength() * m_pPlayer->GetStanceMaxSpeed( m_pPlayer->GetStance() );
@@ -1030,20 +1286,14 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 	m_aimInterpolator.Update(frameTime);
 	m_lookInterpolator.Update(frameTime);
 
-	if (pAnimTarget && pAnimTarget->preparing)
-	{
-		if (m_state.HasPseudoSpeed())
-			m_pPlayer->GetAnimationGraphState()->SetInput(m_inputPseudoSpeed, std::max(0.4f, m_state.GetPseudoSpeed()));
-		else
-			m_pPlayer->GetAnimationGraphState()->SetInput(m_inputPseudoSpeed, 0.4f);
-	}
-	else
-	{
-		if (m_state.HasPseudoSpeed())
-			m_pPlayer->GetAnimationGraphState()->SetInput(m_inputPseudoSpeed, m_state.GetPseudoSpeed());
-		else
-			m_pPlayer->GetAnimationGraphState()->SetInput(m_inputPseudoSpeed, 0.0f);
-	}
+	float pseudoSpeed = 0.0f;
+	if (m_state.HasPseudoSpeed())
+		pseudoSpeed = m_state.GetPseudoSpeed();
+	if (pAnimTarget && pAnimTarget->preparing && pseudoSpeed < 0.4f)
+		pseudoSpeed = 0.4f;
+	if (params.stance == STANCE_CROUCH && pseudoSpeed > 0.4f && m_pPlayer->IsPlayer())
+		pseudoSpeed = 0.4f;
+	m_pPlayer->GetAnimationGraphState()->SetInput(m_inputPseudoSpeed, pseudoSpeed);
 
 	static float PredictionDeltaTime = 0.4f;
 	bool hasPrediction = m_state.HasPrediction() && (m_state.GetPrediction().nStates > 0);
@@ -1055,11 +1305,25 @@ bool CPlayerMovementController::UpdateNormal( float frameTime, SActorFrameMoveme
 	else
 	{
     params.prediction.nStates = 0;
+	 }
+
+/*
+#ifdef USER_dejan
+	// Debug Render & Text
+	{
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(moveTarget, 0.2f, ColorB(128,255,0, 255), true);
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(playerPos, ColorB(255,255,255, 128), moveTarget, ColorB(128,255,0, 128), 0.4f);
+
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(bodyTarget, 0.2f, ColorB(255,128,0, 128), true);
+		//gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(moveTarget, ColorB(255,255,255, 128), bodyTarget, ColorB(255,128,0, 128), 0.2f);
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(playerPos, ColorB(255,255,255, 128), bodyTarget, ColorB(255,128,0, 128), 0.4f);
 	}
+#endif
+*/
 
 	NETINPUT_TRACE(m_pPlayer->GetEntityId(), params.desiredVelocity);
 	NETINPUT_TRACE(m_pPlayer->GetEntityId(), params.desiredLean);
-	NETINPUT_TRACE(m_pPlayer->GetEntityId(), params.deltaAngles);
+	NETINPUT_TRACE(m_pPlayer->GetEntityId(), Vec3(params.deltaAngles));
 	NETINPUT_TRACE(m_pPlayer->GetEntityId(), params.sprint);
 
 	return true;
@@ -1071,9 +1335,9 @@ void CPlayerMovementController::UpdateMovementState( SMovementState& state )
 	ICharacterInstance * pCharacter = pEntity->GetCharacter(0);
 	if (!pCharacter)
 		return;
-	ISkeleton * pSkeleton = pCharacter->GetISkeleton();
+	ISkeletonAnim* pSkeletonAnim = pCharacter->GetISkeletonAnim();
 	//FIXME:
-	if (!pSkeleton)
+	if (!pSkeletonAnim)
 		return;
 
 	int boneEyeL = m_pPlayer->GetBoneID(BONE_EYE_L);
@@ -1081,6 +1345,7 @@ void CPlayerMovementController::UpdateMovementState( SMovementState& state )
 	int boneHead = m_pPlayer->GetBoneID(BONE_HEAD);
 	int boneWeapon = m_pPlayer->GetBoneID(BONE_WEAPON);
 
+	Vec3	forward(1,0,0);
 	bool isCharacterVisible = pCharacter->IsCharacterVisible() != 0;
 
 	if (m_pPlayer->IsPlayer())
@@ -1094,23 +1359,27 @@ void CPlayerMovementController::UpdateMovementState( SMovementState& state )
 		if (((SPlayerStats *)m_pPlayer->GetActorStats())->mountedWeaponID)
 			state.eyePosition = GetISystem()->GetViewCamera().GetPosition();
 
-		state.eyeDirection = m_pPlayer->GetViewQuatFinal().GetColumn1();
 		if (!m_pPlayer->IsClient()) // marcio: fixes the eye direction for remote players
 			state.eyeDirection = (m_lookTarget-state.eyePosition).GetNormalizedSafe(state.eyeDirection);
+		else if(((SPlayerStats *)m_pPlayer->GetActorStats())->FPWeaponSwayOn) // Beni - Fixes aim direction when zoom sway applies
+			state.eyeDirection = GetISystem()->GetViewCamera().GetViewdir();
+		else
+			state.eyeDirection = m_pPlayer->GetViewQuatFinal().GetColumn1();
+
 
 		state.animationEyeDirection = state.eyeDirection;
 		state.weaponPosition = state.eyePosition;
 		state.fireDirection = state.aimDirection = state.eyeDirection;
 		state.fireTarget = m_fireTarget;
 	}
-//	else if (!pCharacter->IsCharacterVisible())
-	else		// for AI - get all the positions/dimensions from stance/player, not the animation
+	else
 	{
-		// AI/REMOTE CLIENT CHARACTER IS INVISIBLE: ONLY ROOT BONE UPDATED; NEED TO FAKE ANY VALUES IF THEY'RE NEEDED
+		// AI CHARACTER
 
-		Quat	orientation = m_pPlayer->GetBaseQuat(); //pEntity->GetWorldRotation();
-		Vec3	forward = orientation * Vec3Constants<float>::fVec3_OneY;
+		Quat	orientation = pEntity->GetWorldRotation();
+		forward = orientation.GetColumn1();
 		Vec3	entityPos = pEntity->GetWorldPos();
+		assert( entityPos.IsValid() );
 		Vec3	constrainedLookDir = m_lookTarget - entityPos;
 		Vec3	constrainedAimDir = m_aimTarget - entityPos;
 		constrainedLookDir.z = 0.0f;
@@ -1128,19 +1397,19 @@ void CPlayerMovementController::UpdateMovementState( SMovementState& state )
 		Matrix33	aimRot;
 		aimRot.SetRotationVDir(constrainedAimDir);
 		state.weaponPosition = entityPos + aimRot.TransformVector(m_pPlayer->GetWeaponOffset());
-
-		state.upDirection = m_pPlayer->GetBaseQuat().GetColumn2();
+			
+		state.upDirection = orientation.GetColumn2();
 
 		state.eyeDirection = (m_lookTarget - state.eyePosition).GetNormalizedSafe(forward); //(lEyePos - posHead).GetNormalizedSafe(FORWARD_DIRECTION);
 		state.animationEyeDirection = state.eyeDirection;
 		state.aimDirection = (m_aimTarget - state.weaponPosition).GetNormalizedSafe((m_lookTarget - state.weaponPosition).GetNormalizedSafe(forward)); //pEntity->GetRotation() * dirWeapon;
 		state.fireTarget = m_fireTarget;
-		state.fireDirection = (state.fireTarget - state.weaponPosition).GetNormalizedSafe();
+		state.fireDirection = (state.fireTarget - state.weaponPosition).GetNormalizedSafe(forward);
 	}
 
 	//changed by ivo: most likely this doesn't work any more
 	//state.movementDirection = pEntity->GetRotation() * pSkeleton->GetCurrentBodyDirection();
-	state.movementDirection = pEntity->GetRotation() * Vec3(0,1,0);
+	state.movementDirection = pEntity->GetRotation().GetColumn1();
 
 
 	if (m_pPlayer->GetLastRequestedVelocity().len2() > 0.01f)
@@ -1148,14 +1417,39 @@ void CPlayerMovementController::UpdateMovementState( SMovementState& state )
 
 	//changed by ivo: most likely this doesn't work any more
 	//state.bodyDirection = pEntity->GetRotation() * pSkeleton->GetCurrentBodyDirection();
-	state.bodyDirection = pEntity->GetRotation() * Vec3(0,1,0);
+	// [kirill] when AI at MG need to update body/movementDirection coz entity is not moved/rotated AND set AIPos/weaponPs to weapon
+	if (!m_pPlayer->IsPlayer() && m_pPlayer->GetActorStats() && m_pPlayer->GetActorStats()->mountedWeaponID)
+	{
+		
+		IEntity *pWeaponEntity = GetISystem()->GetIEntitySystem()->GetEntity(m_pPlayer->GetActorStats()->mountedWeaponID);
+		if(pWeaponEntity)
+		{
+			state.eyePosition.x = pWeaponEntity->GetWorldPos().x;
+			state.eyePosition.y = pWeaponEntity->GetWorldPos().y;
+			state.weaponPosition = state.eyePosition;
+			if(	m_pPlayer->GetEntity()->GetAI() &&
+					m_pPlayer->GetEntity()->GetAI()->GetProxy() &&
+					m_pPlayer->GetEntity()->GetAI()->GetProxy()->GetCurrentWeapon() )
+			{
+				IWeapon * pMG = m_pPlayer->GetEntity()->GetAI()->GetProxy()->GetCurrentWeapon();
+				state.weaponPosition = pMG->GetFiringPos( m_fireTarget ); //pWeaponEntity->GetWorldPos();
+			}
+			// need to recalculate aimDirection, since weaponPos is changed
+			state.aimDirection = (m_aimTarget - state.weaponPosition).GetNormalizedSafe((m_lookTarget - state.weaponPosition).GetNormalizedSafe(forward)); //pEntity->GetRotation() * dirWeapon;
+		}
+		
+		state.bodyDirection = state.aimDirection;
+		state.movementDirection = state.aimDirection;
+	}
+	else
+		state.bodyDirection = pEntity->GetWorldRotation().GetColumn1();
 
 	state.lean = m_pPlayer->GetActorStats() ? ((SPlayerStats*)m_pPlayer->GetActorStats())->leanAmount : 0.0f;
 
 	state.atMoveTarget = m_atTarget;
 	state.desiredSpeed = m_desiredSpeed;
 	state.stance = m_pPlayer->GetStance();
-	state.upDirection = m_pPlayer->GetBaseQuat().GetColumn2();
+	state.upDirection = pEntity->GetWorldRotation().GetColumn2();
 //	state.minSpeed = MIN_DESIRED_SPEED;
 //	state.normalSpeed = m_pPlayer->GetStanceNormalSpeed(state.stance);
 //	state.maxSpeed = m_pPlayer->GetStanceMaxSpeed(state.stance); 
@@ -1182,14 +1476,19 @@ void CPlayerMovementController::UpdateMovementState( SMovementState& state )
 	state.maxSpeed = -1.0f;
 	state.normalSpeed = -1.0f;
 
-	state.stanceSize = m_pPlayer->GetStanceInfo(state.stance)->GetStanceBounds();
+	state.m_StanceSize = m_pPlayer->GetStanceInfo(state.stance)->GetStanceBounds();
 
 	state.pos = pEntity->GetWorldPos();
 	//FIXME:some E3 work around
 	if (m_pPlayer->GetActorStats() && m_pPlayer->GetActorStats()->mountedWeaponID)
-		state.isAiming = true;
+	{
+		if (m_pPlayer->IsPlayer())
+			state.isAiming = true;
+		else
+			state.isAiming = !m_aimClamped; // AI
+	}
 	else if (isCharacterVisible)
-		state.isAiming = pCharacter->GetISkeleton()->GetAimIKBlend() > 0.99f;
+		state.isAiming = pCharacter->GetISkeletonPose()->GetAimIKBlend() > 0.99f;
 	else
 		state.isAiming = true;
 
@@ -1208,6 +1507,9 @@ void CPlayerMovementController::UpdateMovementState( SMovementState& state )
 		if (pVehicleMovementController)
 			pVehicleMovementController->GetMovementState(state);
 	}	
+
+	const IAnimatedCharacter* pAC = m_pPlayer->GetAnimatedCharacter();
+	state.slopeAngle = (pAC != NULL) ? pAC->GetGroundSlopeAngle() : 0.0f;
 }
 
 bool CPlayerMovementController::GetStanceState( EStance stance, float lean, bool defaultPose, SStanceState& state )
@@ -1217,19 +1519,19 @@ bool CPlayerMovementController::GetStanceState( EStance stance, float lean, bool
 	if(!stanceInfo)
 		return false;
 
-	Quat	orientation = m_pPlayer->GetBaseQuat(); // pEntity->GetWorldRotation();
-	Vec3	forward = orientation * FORWARD_DIRECTION;
+	Quat	orientation = pEntity->GetWorldRotation();
+	Vec3	forward = orientation.GetColumn1();
 	Vec3	entityPos = pEntity->GetWorldPos();
 
 	state.pos = entityPos;
-	state.stanceSize = stanceInfo->GetStanceBounds();
-	state.colliderSize = stanceInfo->GetColliderBounds();
+	state.m_StanceSize = stanceInfo->GetStanceBounds();
+	state.m_ColliderSize = stanceInfo->GetColliderBounds();
 	state.lean = lean;	// pass through
 
 	if(defaultPose)
 	{
 		state.eyePosition = entityPos + stanceInfo->GetViewOffsetWithLean(lean);
-		state.weaponPosition = entityPos + stanceInfo->GetWeaponOffsetWithLean(lean);
+		state.weaponPosition = entityPos + m_pPlayer->GetWeaponOffsetWithLean(stance, lean, m_pPlayer->GetEyeOffset());
 		state.upDirection.Set(0,0,1);
 		state.eyeDirection = FORWARD_DIRECTION;
 		state.aimDirection = FORWARD_DIRECTION;
@@ -1252,9 +1554,9 @@ bool CPlayerMovementController::GetStanceState( EStance stance, float lean, bool
 
 		Matrix33	aimRot;
 		aimRot.SetRotationVDir(constrainedAimDir);
-		state.weaponPosition = entityPos + aimRot.TransformVector(stanceInfo->GetWeaponOffsetWithLean(lean));
+		state.weaponPosition = entityPos + aimRot.TransformVector(m_pPlayer->GetWeaponOffsetWithLean(stance, lean, m_pPlayer->GetEyeOffset()));
 
-		state.upDirection = m_pPlayer->GetBaseQuat().GetColumn2();
+		state.upDirection = orientation.GetColumn2();
 
 		state.eyeDirection = (m_lookTarget - state.eyePosition).GetNormalizedSafe(forward);
 		state.aimDirection = (m_aimTarget - state.weaponPosition).GetNormalizedSafe((m_lookTarget - state.weaponPosition).GetNormalizedSafe(forward));
@@ -1482,6 +1784,7 @@ void CPlayerMovementController::Serialize(TSerialize &ser)
 		ser.Value("atTarget", m_atTarget);
 		ser.Value("m_usingLookIK", m_usingLookIK);
 		ser.Value("m_usingAimIK", m_usingAimIK);
+		ser.Value("m_aimClamped", m_aimClamped);
 		ser.Value("m_lookTarget", m_lookTarget);
 		ser.Value("m_aimTarget", m_aimTarget);
 		ser.Value("m_animTargetSpeed", m_animTargetSpeed);
@@ -1523,10 +1826,10 @@ void CPlayerMovementController::Serialize(TSerialize &ser)
 		ser.Value("minSpeed", m_currentMovementState.minSpeed);
 		ser.Value("normalSpeed", m_currentMovementState.normalSpeed);
 		ser.Value("maxSpeed", m_currentMovementState.maxSpeed);
-		ser.Value("stanceSize.Min", m_currentMovementState.stanceSize.min);
-		ser.Value("stanceSize.Max", m_currentMovementState.stanceSize.max);
-		ser.Value("colliderSize.Min", m_currentMovementState.colliderSize.min);
-		ser.Value("colliderSize.Max", m_currentMovementState.colliderSize.max);
+		ser.Value("stanceSize.Min", m_currentMovementState.m_StanceSize.min);
+		ser.Value("stanceSize.Max", m_currentMovementState.m_StanceSize.max);
+		ser.Value("colliderSize.Min", m_currentMovementState.m_ColliderSize.min);
+		ser.Value("colliderSize.Max", m_currentMovementState.m_ColliderSize.max);
 		ser.Value("atMoveTarget", m_currentMovementState.atMoveTarget);
 		ser.Value("isAlive", m_currentMovementState.isAlive);
 		ser.Value("isAiming", m_currentMovementState.isAiming);

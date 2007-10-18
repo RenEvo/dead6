@@ -27,10 +27,10 @@ History:
 #include "HomingMissile.h"
 #include "TacBullet.h"
 #include "TagBullet.h"
-#include "TacAlienBullet.h"
 #include "AVMine.h"
 #include "Claymore.h"
-#include "EMPField.h"
+//#include "EMPField.h"
+#include "C4Projectile.h"
 
 #include "Single.h"
 #include "Automatic.h"
@@ -42,17 +42,14 @@ History:
 #include "FreezingBeam.h"
 #include "Charge.h"
 #include "Shotgun.h"
-#include "Tactical.h"
 #include "Melee.h"
-#include "Heal.h"
-#include "Repair.h"
-#include "Energise.h"
+#include "WorkOnTarget.h"
 #include "Scan.h"
+#include "SingleTG.h"
 
 
 #include "IronSight.h"
 #include "Scope.h"
-
 
 template <typename T, typename R> R *CreateIt() { return new T(); };
 
@@ -71,7 +68,7 @@ struct C##name##Creator : public IGameObjectExtensionCreatorBase	\
 	} \
 }; \
 static C##name##Creator _##name##Creator; \
-RegisterProjectile(#name, &_##name##Creator); \
+RegisterProjectile(#name, &_##name##Creator);
 
 //------------------------------------------------------------------------
 CWeaponSystem::CWeaponSystem(CGame *pGame, ISystem *pSystem)
@@ -80,7 +77,9 @@ CWeaponSystem::CWeaponSystem(CGame *pGame, ISystem *pSystem)
 	m_pItemSystem(pGame->GetIGameFramework()->GetIItemSystem()),
 	m_pPrecache(0),
 	m_reloading(false),
-	m_recursing(false)
+	m_recursing(false),
+	m_frozenEnvironment(false),
+	m_wetEnvironment(false)
 {
 	// register fire modes here
 	RegisterFireMode("Single", &CreateIt<CSingle, IFireMode>);
@@ -92,13 +91,11 @@ CWeaponSystem::CWeaponSystem(CGame *pGame, ISystem *pSystem)
 	RegisterFireMode("Detonate", &CreateIt<CDetonate, IFireMode>);
 	RegisterFireMode("FreezingBeam", &CreateIt<CFreezingBeam, IFireMode>);
 	RegisterFireMode("Charge", &CreateIt<CCharge, IFireMode>);
-	RegisterFireMode("Shotgun", &CreateIt<CShotgun, IFireMode>);
-	//RegisterFireMode("Tactical", &CreateIt<CTactical, IFireMode>);		
+	RegisterFireMode("Shotgun", &CreateIt<CShotgun, IFireMode>);	
 	RegisterFireMode("Melee", &CreateIt<CMelee, IFireMode>);
-	RegisterFireMode("Heal", &CreateIt<CHeal, IFireMode>);
-	RegisterFireMode("Repair", &CreateIt<CRepair, IFireMode>);
-	RegisterFireMode("Energise", &CreateIt<CEnergise, IFireMode>);
+	RegisterFireMode("WorkOnTarget", &CreateIt<CWorkOnTarget, IFireMode>);
 	RegisterFireMode("Scan", &CreateIt<CScan, IFireMode>);
+	RegisterFireMode("SingleTG", &CreateIt<CSingleTG, IFireMode>);
   
 	// register zoom modes here
 	RegisterZoomMode("IronSight", &CreateIt<CIronSight, IZoomMode>);
@@ -112,17 +109,17 @@ CWeaponSystem::CWeaponSystem(CGame *pGame, ISystem *pSystem)
   REGISTER_PROJECTILE(HomingMissile, CHomingMissile);
 	REGISTER_PROJECTILE(TacBullet, CTacBullet);
 	REGISTER_PROJECTILE(TagBullet, CTagBullet);
-	//REGISTER_PROJECTILE(TacAlienBullet, CTacAlienBullet);
 	REGISTER_PROJECTILE(AVExplosive, CAVMine);
 	REGISTER_PROJECTILE(ClaymoreExplosive, CClaymore);
-	REGISTER_PROJECTILE(EMPField, CEMPField);
+	//REGISTER_PROJECTILE(EMPField, CEMPField);
+	REGISTER_PROJECTILE(C4Projectile, CC4Projectile); 
 
 	m_pPrecache = gEnv->pConsole->GetCVar("i_precache");
 
 	CBullet::EntityClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass("Bullet");
-	//Didn't find any better place ...
 	CBullet::SetWaterMaterialId();
 
+	RegisterGameTokens();
 	m_pGame->GetIGameFramework()->GetILevelSystem()->AddListener(this);
 }
 
@@ -135,8 +132,17 @@ CWeaponSystem::~CWeaponSystem()
 
 	for (TAmmoTypeParams::iterator it = m_ammoparams.begin(); it != m_ammoparams.end(); ++it)
 	{
-		delete it->second;
+		SAmmoTypeDesc &desc=it->second;
+		delete desc.params;
+
+		if (!desc.configurations.empty())
+		{
+			for (std::map<string, const SAmmoParams *>::iterator ait=desc.configurations.begin(); ait!=desc.configurations.end(); ait++)
+				delete ait->second;
+		}
 	}
+
+	UnregisterGameTokens();
 
 	m_pGame->GetIGameFramework()->GetILevelSystem()->RemoveListener(this);
 }
@@ -160,19 +166,26 @@ void CWeaponSystem::Reload()
 
 	// cleanup current projectiles
 	for (TProjectileMap::iterator pit = m_projectiles.begin(); pit != m_projectiles.end();)
-    {
-        //Bugfix: RemoveEntity removes projectile from map, thus invalidating iterator
-        TProjectileMap::iterator next = pit;        
-        next++;
-        gEnv->pEntitySystem->RemoveEntity(pit->first, true);
-        pit = next;
-    }
+	{
+		//Bugfix: RemoveEntity removes projectile from map, thus invalidating iterator
+		TProjectileMap::iterator next = pit;        
+		next++;
+		gEnv->pEntitySystem->RemoveEntity(pit->first, true);
+		pit = next;
+	}
 	m_projectiles.clear();
 
 	for (TAmmoTypeParams::iterator it = m_ammoparams.begin(); it != m_ammoparams.end(); ++it)
 	{
-		delete it->second;
+		SAmmoTypeDesc &desc=it->second;
+		delete desc.params;
+		if (!desc.configurations.empty())
+		{
+			for (std::map<string, const SAmmoParams *>::iterator ait=desc.configurations.begin(); ait!=desc.configurations.end(); ait++)
+				delete ait->second;
+		}
 	}
+
 	m_ammoparams.clear();
 
 	m_tracerManager.Reset();
@@ -184,6 +197,15 @@ void CWeaponSystem::Reload()
 }
 
 //------------------------------------------------------------------------
+void CWeaponSystem::OnLoadingStart(ILevelInfo *pLevel)
+{
+	if (gEnv->bMultiplayer)
+		SetConfiguration("mp");
+	else
+		SetConfiguration("");
+}
+
+//------------------------------------------------------------------------
 void CWeaponSystem::OnLoadingComplete(ILevel *pLevel)
 {
 	// marcio: precaching of items enabled by default for now
@@ -192,7 +214,8 @@ void CWeaponSystem::OnLoadingComplete(ILevel *pLevel)
 	{
 		for (TAmmoTypeParams::iterator it=m_ammoparams.begin(); it!=m_ammoparams.end(); ++it)
 		{
-			const IItemParamsNode *params = it->second->pItemParams;
+			const SAmmoParams *pParams=GetAmmoParams(it->first);
+			const IItemParamsNode *params = pParams->pItemParams;
 			const IItemParamsNode *geometry = params?params->GetChild("geometry"):0;
 
 			m_pItemSystem->CacheGeometry(geometry);
@@ -212,6 +235,9 @@ void CWeaponSystem::OnLoadingComplete(ILevel *pLevel)
 			}
 		}
 	}
+
+	m_frozenEnvironment = false;
+	m_wetEnvironment = false;
 }
 
 //------------------------------------------------------------------------
@@ -254,12 +280,20 @@ CProjectile *CWeaponSystem::SpawnAmmo(IEntityClass* pAmmoType, bool isRemote)
 		return 0;
 	}
 
-	const SAmmoParams* pAmmoParams = it->second;
+	const SAmmoParams* pAmmoParams = it->second.params;
+	if (!m_config.empty())
+	{
+		std::map<string, const SAmmoParams *>::const_iterator cit=it->second.configurations.find(m_config);
+		if (cit != it->second.configurations.end())
+			pAmmoParams=cit->second;
+		else
+			pAmmoParams=it->second.params;
+	}
 
 	bool isServer=gEnv->bServer;
 	bool isClient=gEnv->bClient;
 
-	if (pAmmoParams->serverSpawn && !isServer)
+	if ( pAmmoParams->serverSpawn && (!isServer || IsDemoPlayback()) )
 	{
 		if (!pAmmoParams->predictSpawn || isRemote)
 			return 0;
@@ -267,7 +301,7 @@ CProjectile *CWeaponSystem::SpawnAmmo(IEntityClass* pAmmoType, bool isRemote)
 
 	SEntitySpawnParams spawnParams;
 	spawnParams.pClass = pAmmoType;
-	spawnParams.sName = "";
+	spawnParams.sName = "ammo";
 	spawnParams.nFlags = pAmmoParams->flags | ENTITY_FLAG_NO_PROXIMITY; // No proximity for this entity.
 
 	IEntity *pEntity = gEnv->pEntitySystem->SpawnEntity(spawnParams);
@@ -291,11 +325,9 @@ bool CWeaponSystem::IsServerSpawn(IEntityClass* pAmmoType) const
 	if (!pAmmoType)
 		return false;
 
-	TAmmoTypeParams::const_iterator it = m_ammoparams.find(pAmmoType);
-	if (it == m_ammoparams.end())
-		return false;
-
-	return it->second->serverSpawn!=0;
+	if (const SAmmoParams *pAmmoParams=GetAmmoParams(pAmmoType))
+		return pAmmoParams->serverSpawn!=0;
+	return false;
 }
 
 //-------------------------------------------	-----------------------------
@@ -307,10 +339,18 @@ void CWeaponSystem::RegisterProjectile(const char *name, IGameObjectExtensionCre
 //------------------------------------------------------------------------
 const SAmmoParams* CWeaponSystem::GetAmmoParams(IEntityClass* pAmmoType) const
 {
-	TAmmoTypeParams::const_iterator it = m_ammoparams.find(pAmmoType);
-	if (it != m_ammoparams.end())
-		return it->second;
-	return 0;
+	TAmmoTypeParams::const_iterator it=m_ammoparams.find(pAmmoType);
+	if (it==m_ammoparams.end())
+		return 0;
+
+	if (m_config.empty())
+		return it->second.params;
+
+	std::map<string, const SAmmoParams *>::const_iterator cit=it->second.configurations.find(m_config);
+	if (cit != it->second.configurations.end())
+		return cit->second;
+
+	return it->second.params;
 }
 
 //------------------------------------------------------------------------
@@ -463,16 +503,40 @@ bool CWeaponSystem::ScanXML(XmlNodeRef &root, const char *xmlFile)
 	//classDesc.pUserProxyCreateFunc = &CreateProxy<CProjectile>;
 	classDesc.flags |= ECLF_INVISIBLE;
 
-	if (!m_reloading)
+	IEntityClass* pClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(name);
+
+	if (!m_reloading && !pClass)
+	{
 		m_pGame->GetIGameFramework()->GetIGameObjectSystem()->RegisterExtension(name, it->second, &classDesc);
+		pClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(name);
+		assert(pClass);
+	}
+
+
+	TAmmoTypeParams::iterator ait=m_ammoparams.find(pClass);
+	if (ait==m_ammoparams.end())
+	{
+		std::pair<TAmmoTypeParams::iterator, bool> result = m_ammoparams.insert(TAmmoTypeParams::value_type(pClass, SAmmoTypeDesc()));
+		ait=result.first;
+	}
+
+	const char *configName = root->getAttr("configuration");
 
 	IItemParamsNode *params = m_pItemSystem->CreateParams();
 	params->ConvertFromXML(root);
 
-	IEntityClass* pClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(name);
-	assert(pClass);
+	SAmmoParams *pAmmoParams=new SAmmoParams(params, pClass);
 
-	m_ammoparams.insert(TAmmoTypeParams::value_type(pClass, new SAmmoParams(params, pClass)));
+	SAmmoTypeDesc &desc=ait->second;
+
+	if (!configName || !configName[0])
+	{
+		if (desc.params)
+			delete desc.params;
+		desc.params=pAmmoParams;
+	}
+	else
+		desc.configurations.insert(std::make_pair<string, const SAmmoParams*>(configName, pAmmoParams));
 
 	return true;
 }
@@ -532,6 +596,97 @@ void CWeaponSystem::RefGun(IConsoleCmdArgs *args)
 
 }
 
+//---------------------------------------------------------------
+void CWeaponSystem::RegisterGameTokens()
+{
+	if(gEnv->bMultiplayer)
+		return;
+
+	IGameTokenSystem *pGameTokenSystem = gEnv->pGame->GetIGameFramework()->GetIGameTokenSystem();
+
+	if(pGameTokenSystem)
+	{
+		pGameTokenSystem->RegisterListener("weapon.effects.ice",this,true,true);
+		pGameTokenSystem->RegisterListener("weapon.effects.wet",this,true,true);
+	}
+}
+
+//--------------------------------------------------------------
+void CWeaponSystem::UnregisterGameTokens()
+{
+	if(gEnv->bMultiplayer)
+		return;
+
+	IGameTokenSystem *pGameTokenSystem = gEnv->pGame->GetIGameFramework()->GetIGameTokenSystem();
+
+	if(pGameTokenSystem)
+	{
+		pGameTokenSystem->UnregisterListener("weapon.effects.ice", this);
+		pGameTokenSystem->UnregisterListener("weapon.effects.wet",this);
+	}
+}
+
+//--------------------------------------------------------------
+void CWeaponSystem::OnGameTokenEvent( EGameTokenEvent event,IGameToken *pGameToken )
+{
+	assert(pGameToken);
+
+	if(EGAMETOKEN_EVENT_CHANGE == event)
+	{
+		bool handled = false;
+		if(!strcmp("weapon.effects.ice",pGameToken->GetName()))
+		{
+			pGameToken->GetValueAs(m_frozenEnvironment);
+			handled = true;
+		}
+		else if(!strcmp("weapon.effects.wet",pGameToken->GetName()))
+		{
+			pGameToken->GetValueAs(m_wetEnvironment);
+			handled = true;
+		}
+
+		if (handled)
+		{
+			IGameFramework* pGF = gEnv->pGame->GetIGameFramework();
+			IActorSystem* pAS = pGF->GetIActorSystem();
+
+			int count = pAS->GetActorCount();
+			if (count)
+			{
+				IActorIteratorPtr it = pAS->CreateActorIterator();
+				while (CActor* pActor = (CActor*)it->Next())
+				{
+					CPlayer *pPlayer = (pActor->GetActorClass() == CPlayer::GetActorClassType()) ? static_cast<CPlayer*>(pActor) : 0;
+					if (pPlayer && pPlayer->GetNanoSuit())
+					{
+						// go through all players and turn their ice effects on/off
+						IEntityRenderProxy* pRenderProxy = (IEntityRenderProxy*)pPlayer->GetEntity()->GetProxy(ENTITY_PROXY_RENDER);
+						if (pRenderProxy)
+						{
+							uint8 mask = pRenderProxy->GetMaterialLayersMask();
+							uint32 blend = pRenderProxy->GetMaterialLayersBlend();
+							mask = IsFrozenEnvironment() ? mask|MTL_LAYER_DYNAMICFROZEN : mask&~MTL_LAYER_DYNAMICFROZEN;
+							mask = IsWetEnvironment() ? mask|MTL_LAYER_WET : mask&~MTL_LAYER_WET;
+							pRenderProxy->SetMaterialLayersMask(mask);
+							pRenderProxy->SetMaterialLayersBlend(blend);
+							if (CItem* pItem = static_cast<CItem*>(pPlayer->GetCurrentItem(true)))
+							{
+								pItem->FrostSync(true);
+								pItem->WetSync(true);
+							}
+							if (COffHand* pOffHand = static_cast<COffHand*>(pPlayer->GetItemByClass(CItem::sOffHandClass)))
+							{
+								pOffHand->FrostSync(pOffHand->GetOffHandState() != eOHS_INIT_STATE);
+								pOffHand->WetSync(pOffHand->GetOffHandState() != eOHS_INIT_STATE);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 void CWeaponSystem::GetMemoryStatistics(ICrySizer * s)
 {
 	SIZER_SUBCOMPONENT_NAME(s, "WeaponSystem");
@@ -544,13 +699,21 @@ void CWeaponSystem::GetMemoryStatistics(ICrySizer * s)
 	s->AddContainer(m_projectileregistry);
 	s->AddContainer(m_folders);
 	s->AddContainer(m_queryResults);
+	s->AddContainer(m_config);
 
 	{
 		SIZER_SUBCOMPONENT_NAME(s, "AmmoParams");
 		int nSize = m_ammoparams.size() * sizeof(TAmmoTypeParams::value_type);
 		for (TAmmoTypeParams::iterator iter = m_ammoparams.begin(); iter != m_ammoparams.end(); ++iter)
 		{
-			nSize += iter->second->GetMemorySize();
+			nSize += iter->second.params->GetMemorySize();
+			nSize += iter->second.configurations.size()*sizeof(std::map<string, SAmmoTypeDesc>::value_type);
+
+			for (std::map<string, const SAmmoParams *>::iterator it=iter->second.configurations.begin(); it!=iter->second.configurations.end(); it++)
+			{
+				nSize+=it->first.size();
+				nSize+=it->second->GetMemorySize();
+			}
 		}
 		s->AddObject(&m_ammoparams,nSize);
 	}

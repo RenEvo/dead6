@@ -14,62 +14,14 @@
 		<Platform
 			Name="x64"
 		/>
-		<Platform
-			Name="Xbox 360"
-		/>
 	</Platforms>
 	<ToolFiles>
 	</ToolFiles>
 	<Configurations>
-		<Configuration
-			Name="Release|Win32"
-			OutputDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
-			ConfigurationType="10"
-			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops;..\..\UserDebugSettings.vsprops"
-			UseOfMFC="0"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-		</Configuration>
-		<Configuration
-			Name="Release|x64"
-			OutputDirectory="$(SolutionDir)..\..\Bin64"
-			IntermediateDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
-			ConfigurationType="10"
-			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops;..\..\UserDebugSettings.vsprops"
-			UseOfMFC="0"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-				TargetEnvironment="3"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-		</Configuration>
-		<Configuration
+						<Configuration
 			Name="Debug|Win32"
-			OutputDirectory="$(SolutionDir)..\..\Bin32"
-			IntermediateDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
+			OutputDirectory="$(SolutionDir)..\Bin32"
+			IntermediateDirectory="$(SolutionDir)BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
 			ConfigurationType="10"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops;..\..\UserDebugSettings.vsprops"
 			UseOfMFC="0"
@@ -90,8 +42,8 @@
 		</Configuration>
 		<Configuration
 			Name="Debug|x64"
-			OutputDirectory="$(SolutionDir)..\..\Bin64"
-			IntermediateDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
+			OutputDirectory="$(SolutionDir)..\Bin64"
+			IntermediateDirectory="$(SolutionDir)BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
 			ConfigurationType="10"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops"
 			UseOfMFC="0"
@@ -113,8 +65,8 @@
 		</Configuration>
 		<Configuration
 			Name="Profile|Win32"
-			OutputDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
+			OutputDirectory="$(SolutionDir)..\Bin32"
+			IntermediateDirectory="$(SolutionDir)BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
 			ConfigurationType="10"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops;..\..\UserDebugSettings.vsprops"
 			UseOfMFC="0"
@@ -134,8 +86,8 @@
 		</Configuration>
 		<Configuration
 			Name="Profile|x64"
-			OutputDirectory="$(SolutionDir)..\..\Bin64"
-			IntermediateDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
+			OutputDirectory="$(SolutionDir)..\Bin64"
+			IntermediateDirectory="$(SolutionDir)BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
 			ConfigurationType="10"
 			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops;..\..\UserDebugSettings.vsprops"
 			UseOfMFC="0"
@@ -154,189 +106,7 @@
 				Name="VCPostBuildEventTool"
 			/>
 		</Configuration>
-		<Configuration
-			Name="Release|Xbox 360"
-			OutputDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
-			ConfigurationType="4"
-			UseOfMFC="0"
-			UseOfATL="0"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLX360CompilerTool"
-				AdditionalIncludeDirectories="..\CryCommon"
-				EnableFunctionLevelLinking="true"
-				ForceConformanceInForLoopScope="true"
-				OpenMP="true"
-				UsePrecompiledHeader="0"
-				PrecompiledHeaderThrough="StdAfx.h"
-				WarningLevel="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLibrarianTool"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-			<DebuggerTool
-			/>
-		</Configuration>
-		<Configuration
-			Name="Debug|Xbox 360"
-			OutputDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
-			ConfigurationType="4"
-			UseOfMFC="0"
-			UseOfATL="0"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLX360CompilerTool"
-				Optimization="0"
-				AdditionalIncludeDirectories="..\CryCommon"
-				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
-				BufferSecurityCheck="true"
-				EnableFunctionLevelLinking="true"
-				ForceConformanceInForLoopScope="true"
-				OpenMP="true"
-				UsePrecompiledHeader="0"
-				PrecompiledHeaderThrough="StdAfx.h"
-				WarningLevel="3"
-				DebugInformationFormat="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLibrarianTool"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-			<DebuggerTool
-			/>
-		</Configuration>
-		<Configuration
-			Name="Profile|Xbox 360"
-			OutputDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)..\..\BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
-			ConfigurationType="4"
-			UseOfMFC="0"
-			UseOfATL="0"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLX360CompilerTool"
-				Optimization="3"
-				InlineFunctionExpansion="2"
-				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="2"
-				AdditionalIncludeDirectories="..\CryCommon"
-				BufferSecurityCheck="false"
-				EnableFunctionLevelLinking="true"
-				ForceConformanceInForLoopScope="true"
-				OpenMP="true"
-				UsePrecompiledHeader="0"
-				PrecompiledHeaderThrough="StdAfx.h"
-				WarningLevel="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLibrarianTool"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-			<DebuggerTool
-			/>
-		</Configuration>
-	</Configurations>
+															</Configurations>
 	<References>
 	</References>
 	<Files>
@@ -444,6 +214,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\IEntityRenderState.h"
+				>
+			</File>
+			<File
 				RelativePath=".\IEntitySerialize.h"
 				>
 			</File>
@@ -508,10 +282,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\IJobManSPU.h"
-				>
-			</File>
-			<File
 				RelativePath=".\IJoystick.h"
 				>
 			</File>
@@ -529,6 +299,10 @@
 			</File>
 			<File
 				RelativePath=".\IMaterial.h"
+				>
+			</File>
+			<File
+				RelativePath=".\IMaterialEffects.h"
 				>
 			</File>
 			<File
@@ -588,6 +362,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\IResourceCollector.h"
+				>
+			</File>
+			<File
 				RelativePath=".\IReverbManager.h"
 				>
 			</File>
@@ -617,6 +395,10 @@
 			</File>
 			<File
 				RelativePath=".\ISplines.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ISPULog.h"
 				>
 			</File>
 			<File
@@ -864,6 +646,10 @@
 				>
 			</File>
 			<File
+				RelativePath=".\MTPseudoRandom.cpp"
+				>
+			</File>
+			<File
 				RelativePath=".\MTPseudoRandom.h"
 				>
 			</File>
@@ -881,6 +667,10 @@
 			</File>
 			<File
 				RelativePath=".\ParticleParamsTypeInfo.cpp"
+				>
+			</File>
+			<File
+				RelativePath=".\Pipe.h"
 				>
 			</File>
 			<File
@@ -916,7 +706,15 @@
 				>
 			</File>
 			<File
+				RelativePath=".\ScreenPlotter.h"
+				>
+			</File>
+			<File
 				RelativePath=".\ScriptHelpers.h"
+				>
+			</File>
+			<File
+				RelativePath=".\SerializationTypes.h"
 				>
 			</File>
 			<File
@@ -957,6 +755,10 @@
 			</File>
 			<File
 				RelativePath=".\TArray.h"
+				>
+			</File>
+			<File
+				RelativePath=".\ThreadProfilerSupport.h"
 				>
 			</File>
 			<File
@@ -1015,6 +817,38 @@
 					/>
 				</FileConfiguration>
 				<FileConfiguration
+					Name="SP_DEMO|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="SP_DEMO|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="CRYSIS_BETA|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="CRYSIS_BETA|x64"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
 					Name="Release|Xbox 360"
 					ExcludedFromBuild="true"
 					>
@@ -1038,6 +872,14 @@
 						Name="VCCLX360CompilerTool"
 					/>
 				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\TypeInfo.h"
+				>
+			</File>
+			<File
+				RelativePath=".\TypeInfo_impl.h"
+				>
 			</File>
 			<File
 				RelativePath=".\Typelist.h"
@@ -1116,6 +958,10 @@
 				</File>
 				<File
 					RelativePath="CRETerrainSector.h"
+					>
+				</File>
+				<File
+					RelativePath=".\CREVolumeObject.h"
 					>
 				</File>
 				<File
@@ -1244,11 +1090,27 @@
 				>
 			</File>
 			<File
+				RelativePath=".\CryThread_ps3.h"
+				>
+			</File>
+			<File
 				RelativePath="CryThread_pthreads.h"
 				>
 			</File>
 			<File
+				RelativePath=".\CryThread_ptw32.h"
+				>
+			</File>
+			<File
 				RelativePath=".\CryThread_windows.h"
+				>
+			</File>
+			<File
+				RelativePath=".\CryThread_wingc.h"
+				>
+			</File>
+			<File
+				RelativePath=".\CryThread_winthread.h"
 				>
 			</File>
 			<File
@@ -1280,14 +1142,6 @@
 				>
 			</File>
 			<File
-				RelativePath=".\Makefile.include"
-				>
-			</File>
-			<File
-				RelativePath=".\Makefile_spu.mk"
-				>
-			</File>
-			<File
 				RelativePath=".\MSVCspecific.h"
 				>
 			</File>
@@ -1300,35 +1154,11 @@
 				>
 			</File>
 			<File
-				RelativePath=".\PS3_Win32Wrapper.h"
-				>
-			</File>
-			<File
-				RelativePath=".\PS3CryCache.h"
-				>
-			</File>
-			<File
-				RelativePath=".\PS3Specific.h"
-				>
-			</File>
-			<File
 				RelativePath="Win32specific.h"
 				>
 			</File>
 			<File
 				RelativePath="Win64specific.h"
-				>
-			</File>
-			<File
-				RelativePath=".\WinBase.cpp"
-				>
-			</File>
-			<File
-				RelativePath="XboxSpecific.h"
-				>
-			</File>
-			<File
-				RelativePath=".\XenonSpecific.h"
 				>
 			</File>
 		</Filter>

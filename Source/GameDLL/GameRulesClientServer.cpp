@@ -14,6 +14,7 @@ History:
 #include "ScriptBind_GameRules.h"
 #include "GameRules.h"
 #include "Game.h"
+#include "GameCVars.h"
 #include "Actor.h"
 #include "Player.h"
 #include "HUD/HUD.h"
@@ -26,8 +27,9 @@ History:
 #include "IMaterialEffects.h"
 
 #include "WeaponSystem.h"
-#include "TacticalAttachment.h"
 #include "Radio.h"
+#include "SoundMoods.h"
+#include "IWorldQuery.h"
 
 #include <StlUtils.h>
 
@@ -46,6 +48,8 @@ void CGameRules::ClientSimpleHit(const SimpleHitInfo &simpleHitInfo)
 //------------------------------------------------------------------------
 void CGameRules::ClientHit(const HitInfo &hitInfo)
 {
+	FUNCTION_PROFILER(GetISystem(), PROFILE_GAME);
+
 	IActor *pClientActor = g_pGame->GetIGameFramework()->GetClientActor();
 	IEntity *pTarget = m_pEntitySystem->GetEntity(hitInfo.targetId);
 	IEntity *pShooter =	m_pEntitySystem->GetEntity(hitInfo.shooterId);
@@ -60,7 +64,19 @@ void CGameRules::ClientHit(const HitInfo &hitInfo)
 	}
 
 	if(pActor == pClientActor)
-		gEnv->pInput->ForceFeedbackEvent( SFFOutputEvent(eDI_XI, eFF_Rumble_Basic, 0.5f * hitInfo.damage * 0.01f, hitInfo.damage * 0.02f, 0.0f));
+		if (gEnv->pInput) gEnv->pInput->ForceFeedbackEvent( SFFOutputEvent(eDI_XI, eFF_Rumble_Basic, 0.5f * hitInfo.damage * 0.01f, hitInfo.damage * 0.02f, 0.0f));
+
+/*	if (gEnv->pAISystem && !gEnv->bMultiplayer)
+	{
+		static int htMelee = GetHitTypeId("melee");
+		if (pShooter && hitInfo.type != htMelee)
+		{
+			ISurfaceType *pSurfaceType = GetHitMaterial(hitInfo.material);
+			const ISurfaceType::SSurfaceTypeAIParams* pParams = pSurfaceType ? pSurfaceType->GetAIParams() : 0;
+			const float radius = pParams ? pParams->fImpactRadius : 5.0f;
+			gEnv->pAISystem->BulletHitEvent(hitInfo.pos, radius, pShooter->GetAI());
+		}
+	}*/
 
 	CreateScriptHitInfo(m_scriptHitInfo, hitInfo);
 	CallScript(m_clientStateScript, "OnHit", m_scriptHitInfo);
@@ -85,7 +101,10 @@ void CGameRules::ServerSimpleHit(const SimpleHitInfo &simpleHitInfo)
 			if (!simpleHitInfo.targetId)
 				return;
 
-			AddTaggedEntity(simpleHitInfo.shooterId, simpleHitInfo.targetId, false);
+			// tagged entities are temporary in MP, not in SP.
+			bool temp = gEnv->bMultiplayer;
+
+			AddTaggedEntity(simpleHitInfo.shooterId, simpleHitInfo.targetId, temp);
 		}
 		break;
 	case 1: // tac
@@ -93,18 +112,55 @@ void CGameRules::ServerSimpleHit(const SimpleHitInfo &simpleHitInfo)
 			if (!simpleHitInfo.targetId)
 				return;
 
-			if (CItem *pWeapon=static_cast<CItem *>(m_pGameFramework->GetIItemSystem()->GetItem(simpleHitInfo.weaponId)))
-			{
-				if (CTacticalAttachment *pTactical=static_cast<CTacticalAttachment *>(pWeapon->GetAccessory("TacticalAttachment")))
-					pTactical->SleepTarget(simpleHitInfo.shooterId,simpleHitInfo.targetId);
-			}
+			CActor *pActor = (CActor *)gEnv->pGame->GetIGameFramework()->GetIActorSystem()->GetActor(simpleHitInfo.targetId);
+
+			if (pActor && pActor->CanSleep())
+				pActor->Fall(Vec3(0.0f,0.0f,0.0f),false,simpleHitInfo.value);
 		}
 		break;
 	case 0xe: // freeze
 		{
 			if (!simpleHitInfo.targetId)
 				return;
-			FreezeEntity(simpleHitInfo.targetId, true, true);
+
+			CActor *pActor=GetActorByEntityId(simpleHitInfo.targetId);
+
+			if (pActor && pActor->IsPlayer() && pActor->GetActorClass()==CPlayer::GetActorClassType())
+			{
+				CPlayer *pPlayer=static_cast<CPlayer *>(pActor);
+				if (CNanoSuit *pSuit=pPlayer->GetNanoSuit())
+					if (pSuit->IsInvulnerable())
+						return;
+			}
+
+			// call OnFreeze
+			bool allow=true;
+			if (m_serverStateScript.GetPtr() && m_serverStateScript->GetValueType("OnFreeze")==svtFunction)
+			{
+				HSCRIPTFUNCTION func=0;
+				m_serverStateScript->GetValue("OnFreeze", func);
+				Script::CallReturn(m_serverStateScript->GetScriptSystem(), func, m_script, ScriptHandle(simpleHitInfo.targetId), ScriptHandle(simpleHitInfo.shooterId), ScriptHandle(simpleHitInfo.weaponId), simpleHitInfo.value, allow);
+				gEnv->pScriptSystem->ReleaseFunc(func);
+			}
+
+			if (!allow)
+				return;
+
+			if (IEntity *pEntity=gEnv->pEntitySystem->GetEntity(simpleHitInfo.targetId))
+			{
+				IScriptTable *pScriptTable=pEntity->GetScriptTable();
+
+				// call OnFrost
+				if (pScriptTable && pScriptTable->GetValueType("OnFrost")==svtFunction)
+				{
+					HSCRIPTFUNCTION func=0;
+					pScriptTable->GetValue("OnFrost", func);
+					Script::Call(pScriptTable->GetScriptSystem(), func, pScriptTable, ScriptHandle(simpleHitInfo.shooterId), ScriptHandle(simpleHitInfo.weaponId), simpleHitInfo.value);
+					gEnv->pScriptSystem->ReleaseFunc(func);
+				}
+
+				FreezeEntity(simpleHitInfo.targetId, true, true, simpleHitInfo.value>0.999f);
+			}
 		}
 		break;
 	default:
@@ -114,6 +170,29 @@ void CGameRules::ServerSimpleHit(const SimpleHitInfo &simpleHitInfo)
 
 //------------------------------------------------------------------------
 void CGameRules::ServerHit(const HitInfo &hitInfo)
+{
+	if (m_processingHit)
+	{
+		m_queuedHits.push(hitInfo);
+		return;
+	}
+
+	++m_processingHit;
+
+	ProcessServerHit(hitInfo);
+
+	while (!m_queuedHits.empty())
+	{
+		HitInfo info(m_queuedHits.front());
+		ProcessServerHit(info);
+		m_queuedHits.pop();
+	}
+
+	--m_processingHit;
+}
+
+//------------------------------------------------------------------------
+void CGameRules::ProcessServerHit(const HitInfo &hitInfo)
 {
 	bool ok=true;
 	// check if shooter is alive
@@ -149,7 +228,12 @@ void CGameRules::ServerHit(const HitInfo &hitInfo)
 		}
 
 		if (pShooter && hitInfo.shooterId!=hitInfo.targetId && hitInfo.weaponId!=hitInfo.shooterId && hitInfo.weaponId!=hitInfo.targetId && hitInfo.damage>=0)
-			m_pGameplayRecorder->Event(pShooter->GetEntity(), GameplayEvent(eGE_WeaponHit, 0, 0, (void *)hitInfo.weaponId));
+		{
+			EntityId params[2];
+			params[0] = hitInfo.weaponId;
+			params[1] = hitInfo.targetId;
+			m_pGameplayRecorder->Event(pShooter->GetEntity(), GameplayEvent(eGE_WeaponHit, 0, 0, (void *)params));
+		}
 
 		if (pShooter)
 			m_pGameplayRecorder->Event(pShooter->GetEntity(), GameplayEvent(eGE_Hit, 0, 0, (void *)hitInfo.weaponId));
@@ -189,29 +273,174 @@ void CGameRules::ProcessQueuedExplosions()
 
 
 //------------------------------------------------------------------------
+void CGameRules::CullEntitiesInExplosion(const ExplosionInfo &explosionInfo)
+{
+	if (!g_pGameCVars->g_ec_enable || explosionInfo.damage <= 0.1f)
+		return;
+
+	IPhysicalEntity **pents;
+	float radiusScale = g_pGameCVars->g_ec_radiusScale;
+	float minVolume = g_pGameCVars->g_ec_volume;
+	float minExtent = g_pGameCVars->g_ec_extent;
+	int   removeThreshold = g_pGameCVars->g_ec_removeThreshold;
+
+	Vec3 radiusVec(radiusScale * explosionInfo.physRadius);
+	int i = gEnv->pPhysicalWorld->GetEntitiesInBox(explosionInfo.pos-radiusVec,explosionInfo.pos+radiusVec,pents, ent_rigid|ent_sleeping_rigid);
+	int removedCount = 0;
+
+	static IEntityClass* s_pInteractiveEntityClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass("InteractiveEntity");
+	static IEntityClass* s_pDeadBodyClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass("DeadBody");
+
+	if (i > removeThreshold)
+	{
+		for(--i;i>=0;i--)
+		{
+			IEntity * pEntity = (IEntity*) pents[i]->GetForeignData(PHYS_FOREIGN_ID_ENTITY);
+			if (pEntity)
+			{
+				// don't remove items/pickups
+				if (IItem* pItem = g_pGame->GetIGameFramework()->GetIItemSystem()->GetItem(pEntity->GetId()))
+				{
+					continue;
+				}
+				// don't remove enemies/ragdolls
+				if (IActor* pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEntity->GetId()))
+				{
+					continue;
+				}
+
+				// if there is a flowgraph attached, never remove!
+				if (pEntity->GetProxy(ENTITY_PROXY_FLOWGRAPH) != 0)
+					continue;
+
+				IEntityClass* pClass = pEntity->GetClass();
+				if (pClass == s_pInteractiveEntityClass || pClass == s_pDeadBodyClass)
+					continue;
+
+				// get bounding box
+				if (IEntityPhysicalProxy* pPhysProxy = (IEntityPhysicalProxy*)pEntity->GetProxy(ENTITY_PROXY_PHYSICS))
+				{
+					AABB aabb;
+					pPhysProxy->GetWorldBounds(aabb);
+
+					// don't remove objects which are larger than a predefined minimum volume
+					if (aabb.GetVolume() > minVolume)
+						continue;
+
+					// don't remove objects which are larger than a predefined minimum volume
+					Vec3 size(aabb.GetSize().abs());
+					if (size.x > minExtent || size.y > minExtent || size.z > minExtent)
+						continue;
+				}
+
+				// marcok: somehow editor doesn't handle deleting non-dynamic entities very well
+				// but craig says, hiding is not synchronized for DX10 breakable MP, so we remove entities only when playing pure game
+				// alexl: in SinglePlayer, we also currently only hide the object because it could be part of flowgraph logic
+				//        which would break if Entity was removed and could not propagate events anymore
+				if (gEnv->bMultiplayer == false || gEnv->pSystem->IsEditor())
+				{
+					pEntity->Hide(true);
+				}
+				else
+				{
+					gEnv->pEntitySystem->RemoveEntity(pEntity->GetId());
+				}
+				removedCount++;
+			}
+		}
+	}
+}
+
+//------------------------------------------------------------------------
 void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 {
-	gEnv->p3DEngine->OnExplosion(explosionInfo.pos, explosionInfo.dir, explosionInfo.hole_size, 0, 0, true);
+	// let 3D engine know about explosion (will create holes and remove vegetation)
+	//if (explosionInfo.hole_size > 0.0f)
+	//{
+		//gEnv->p3DEngine->OnExplosion(explosionInfo.pos, explosionInfo.hole_size, true);
+	//}
 
-	pe_explosion explosion;
-	explosion.epicenter = explosionInfo.pos;
-	explosion.holeSize = explosionInfo.hole_size;
-	explosion.r = 1.0f;
-	explosion.rmin = 1.0f;
-	explosion.rmax = explosionInfo.radius;
-	explosion.impulsivePressureAtR = explosionInfo.pressure;
-	explosion.epicenterImp = explosionInfo.pos;
-	explosion.explDir = explosionInfo.dir;
-	explosion.nGrow = 2;
-	explosion.rminOcc = 0.15f;
-	explosion.nOccRes = 32;
+	TExplosionAffectedEntities affectedEntities;
 
 	if (gEnv->bServer)
   {
-		gEnv->pPhysicalWorld->SimulateExplosion( &explosion, 0, 0, ent_rigid|ent_sleeping_rigid|ent_living|ent_independent|ent_static );
+		CullEntitiesInExplosion(explosionInfo);
+		pe_explosion explosion;
+		explosion.epicenter = explosionInfo.pos;
+		explosion.rmin = explosionInfo.minRadius;
+		explosion.rmax = explosionInfo.radius;
+		if (explosion.rmax==0)
+			explosion.rmax=0.0001f;
+		explosion.r = explosion.rmin;
+		explosion.impulsivePressureAtR = explosionInfo.pressure;
+		explosion.epicenterImp = explosionInfo.pos;
+		explosion.explDir = explosionInfo.dir;
+		explosion.nGrow = 2;
+		explosion.rminOcc = 0.07f;
 
-    CreateScriptExplosionInfo(m_scriptExplosionInfo, explosionInfo, &explosion);
-    CallScript(m_serverStateScript, "OnExplosion", m_scriptExplosionInfo);    
+		// we separate the calls to SimulateExplosion so that we can define different radii for AI and physics bodies
+		explosion.holeSize = 0.0f;
+		explosion.nOccRes = explosion.rmax>50.0f ? 0:32;
+		gEnv->pPhysicalWorld->SimulateExplosion( &explosion, 0, 0, ent_living);
+
+		CreateScriptExplosionInfo(m_scriptExplosionInfo, explosionInfo);
+		UpdateAffectedEntitiesSet(affectedEntities, &explosion);
+
+		// check vehicles
+		IVehicleSystem *pVehicleSystem = g_pGame->GetIGameFramework()->GetIVehicleSystem();
+		uint32 vcount = pVehicleSystem->GetVehicleCount();
+		if (vcount > 0)
+		{
+			IVehicleIteratorPtr iter = g_pGame->GetIGameFramework()->GetIVehicleSystem()->CreateVehicleIterator();
+			while (IVehicle* pVehicle = iter->Next())
+			{
+				if(IEntity *pEntity = pVehicle->GetEntity())
+				{
+					AABB aabb;
+					pEntity->GetWorldBounds(aabb);
+					IPhysicalEntity* pEnt = pEntity->GetPhysics();
+					if (pEnt && aabb.GetDistanceSqr(explosionInfo.pos) <= explosionInfo.radius*explosionInfo.radius)
+					{
+						float affected = gEnv->pPhysicalWorld->CalculateExplosionExposure(&explosion, pEnt);
+						AddOrUpdateAffectedEntity(affectedEntities, pEntity, affected);
+					}
+				}
+			}
+		}
+
+		explosion.rmin = explosionInfo.minPhysRadius;
+		explosion.rmax = explosionInfo.physRadius;
+		if (explosion.rmax==0)
+			explosion.rmax=0.0001f;
+		explosion.r = explosion.rmin;
+		explosion.holeSize = explosionInfo.hole_size;
+		explosion.nOccRes = -1;	// makes second call re-use occlusion info
+		gEnv->pPhysicalWorld->SimulateExplosion( &explosion, 0, 0, ent_rigid|ent_sleeping_rigid|ent_independent|ent_static );
+
+		UpdateAffectedEntitiesSet(affectedEntities, &explosion);
+		CommitAffectedEntitiesSet(m_scriptExplosionInfo, affectedEntities);
+
+		float fSuitEnergyBeforeExplosion = 0.0f;
+		float fHealthBeforeExplosion = 0.0f;
+		IActor *pClientActor = g_pGame->GetIGameFramework()->GetClientActor();
+		if(pClientActor)
+		{
+			fSuitEnergyBeforeExplosion = static_cast<CPlayer *>(pClientActor)->GetNanoSuit()->GetSuitEnergy();
+			fHealthBeforeExplosion = pClientActor->GetHealth();
+		}
+
+		CallScript(m_serverStateScript, "OnExplosion", m_scriptExplosionInfo);    
+
+		if(pClientActor)
+		{
+			float fDeltaSuitEnergy = fSuitEnergyBeforeExplosion - static_cast<CPlayer *>(pClientActor)->GetNanoSuit()->GetSuitEnergy();
+			float fDeltaHealth = fHealthBeforeExplosion - pClientActor->GetHealth();
+
+			if(fDeltaSuitEnergy >= 50.0f || fDeltaHealth >= 20.0f)
+			{
+				SAFE_SOUNDMOODS_FUNC(AddSoundMood(SOUNDMOOD_EXPLOSION,MIN(fDeltaSuitEnergy+fDeltaHealth,100.0f)));
+			}
+		}
 
 		// call hit listeners if any
 		if (m_hitListeners.empty() == false)
@@ -223,7 +452,6 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 				++iter;
 			}
 		}
-
   }
 
 	if (gEnv->bClient)
@@ -231,7 +459,15 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 		if (explosionInfo.pParticleEffect)
 			explosionInfo.pParticleEffect->Spawn(true, IParticleEffect::ParticleLoc(explosionInfo.pos, explosionInfo.dir, explosionInfo.effect_scale));
 
-		CreateScriptExplosionInfo(m_scriptExplosionInfo, explosionInfo, 0);
+		if (!gEnv->bServer)
+		{
+			CreateScriptExplosionInfo(m_scriptExplosionInfo, explosionInfo);
+		}
+		else
+		{
+			affectedEntities.clear();
+			CommitAffectedEntitiesSet(m_scriptExplosionInfo, affectedEntities);
+		}
 		CallScript(m_clientStateScript, "OnExplosion", m_scriptExplosionInfo);
 
 		// call hit listeners if any
@@ -246,6 +482,21 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 		}
 	}
 
+	ProcessClientExplosionScreenFX(explosionInfo);
+	ProcessExplosionMaterialFX(explosionInfo);
+
+	IEntity *pShooter =	m_pEntitySystem->GetEntity(explosionInfo.shooterId);
+	if (gEnv->pAISystem && !gEnv->bMultiplayer)
+	{
+		IAIObject	*pShooterAI(pShooter!=NULL ? pShooter->GetAI() : NULL);
+		gEnv->pAISystem->ExplosionEvent(explosionInfo.pos,explosionInfo.radius, pShooterAI);
+	}
+
+}
+
+//-------------------------------------------
+void CGameRules::ProcessClientExplosionScreenFX(const ExplosionInfo &explosionInfo)
+{
 	IActor *pClientActor = g_pGame->GetIGameFramework()->GetClientActor();
 	if (pClientActor)
 	{
@@ -263,12 +514,27 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 		Vec3 eyeToExplosion = explosionInfo.pos - state.eyePosition;
 		eyeToExplosion.Normalize();
 		bool inFOV = (state.eyeDirection.Dot(eyeToExplosion) > 0.68f);
+		
+		// if in a vehicle eyeDirection is wrong
+		if(pActor && pActor->GetLinkedVehicle())
+		{
+			Vec3 eyeDir = static_cast<CPlayer*>(pActor)->GetVehicleViewDir();
+			inFOV = (eyeDir.Dot(eyeToExplosion) > 0.68f);
+		}
 
-		if (explosionInfo.maxblurdistance>0.0f && gEnv->pConsole->GetCVar("g_radialBlur")->GetFVal()>0.0f)
+		//All explosions have radial blur (default 30m radius, to make Sean happy =))
+		float maxBlurDistance = (explosionInfo.maxblurdistance>0.0f)?explosionInfo.maxblurdistance:30.0f;
+		if (maxBlurDistance>0.0f && g_pGameCVars->g_radialBlur>0.0f && m_explosionScreenFX && explosionInfo.radius>0.5f)
 		{		
-				if (inFOV && dist < explosionInfo.maxblurdistance)
+			if (inFOV && dist < maxBlurDistance)
+			{
+				ray_hit hit;
+				int col = gEnv->pPhysicalWorld->RayWorldIntersection(explosionInfo.pos , -eyeToExplosion*dist, ent_static | ent_terrain, rwi_stop_at_pierceable|rwi_colltype_any, &hit, 1);
+
+				//If there was no obstacle between flashbang grenade and player
+				if(!col)
 				{
-					float blurRadius = (-1.0f/explosionInfo.maxblurdistance)*dist + 1.0f;
+					float blurRadius = (-1.0f/maxBlurDistance)*dist + 1.0f;
 
 					gEnv->p3DEngine->SetPostEffectParam("FilterRadialBlurring_Radius", blurRadius);
 					gEnv->p3DEngine->SetPostEffectParam("FilterRadialBlurring_Amount", 1.0f);
@@ -281,14 +547,15 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 						pActor->GetScreenEffects()->StartBlend(pBlur, pLinear, 1.0f, 98);
 						pActor->GetScreenEffects()->SetUpdateCoords("FilterRadialBlurring_ScreenPosX","FilterRadialBlurring_ScreenPosY", explosionInfo.pos);
 					}
-					float distAmp = 1.0f - (dist / explosionInfo.maxblurdistance);
-					gEnv->pInput->ForceFeedbackEvent( SFFOutputEvent(eDI_XI, eFF_Rumble_Basic, 0.5f, distAmp*3.0f, 0.0f));
+
+					float distAmp = 1.0f - (dist / maxBlurDistance);
+					if (gEnv->pInput) gEnv->pInput->ForceFeedbackEvent( SFFOutputEvent(eDI_XI, eFF_Rumble_Basic, 0.5f, distAmp*3.0f, 0.0f));
 				}
-							
+			}
 		}
 
 		//Flashbang effect 
-		if(dist<explosionInfo.radius &&
+		if(dist<explosionInfo.radius && inFOV &&
 			(!strcmp(explosionInfo.effect_class,"flashbang") || !strcmp(explosionInfo.effect_class,"FlashbangAI")))
 		{
 			ray_hit hit;
@@ -297,18 +564,34 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 			//If there was no obstacle between flashbang grenade and player
 			if(!col)
 			{
-				float power = 3.0f;
+				float power = explosionInfo.flashbangScale;
 				power *= max(0.0f, 1 - (dist/explosionInfo.radius));
 				float lookingAt = (eyeToExplosion.Dot(state.eyeDirection.normalize()) + 1)*0.5f;
 				power *= lookingAt;
 
+				SAFE_SOUNDMOODS_FUNC(AddSoundMood(SOUNDMOOD_EXPLOSION,MIN(power*40.0f,100.0f)));
+
 				gEnv->p3DEngine->SetPostEffectParam("Flashbang_Time", 1.0f + (power * 4));
+				gEnv->p3DEngine->SetPostEffectParam("FlashBang_BlindAmount",explosionInfo.blindAmount);
 				gEnv->p3DEngine->SetPostEffectParam("Flashbang_DifractionAmount", (power * 2));
 				gEnv->p3DEngine->SetPostEffectParam("Flashbang_Active", 1);
 			}
 		}
+		else if(inFOV && (dist < explosionInfo.radius))
+		{
+			if (explosionInfo.damage>10.0f || explosionInfo.pressure>100.0f)
+			{
+				//Add some angular impulse to the client actor depending on distance, direction...
+				float dt = (1.0f - dist/explosionInfo.radius);
+				dt = dt * dt;
+				float angleZ = g_PI*0.15f*dt;
+				float angleX = g_PI*0.15f*dt;
 
-		
+				pActor->AddAngularImpulse(Ang3(Random(-angleX*0.5f,angleX),0.0f,Random(-angleZ,angleZ)),0.0f,dt*2.0f);
+			}
+		}
+
+
 		float fDist2=(pClientActor->GetEntity()->GetWorldPos()-explosionInfo.pos).len2();
 		if (fDist2<250.0f*250.0f)
 		{		
@@ -318,19 +601,18 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 		}
 	}
 
-	IEntity *pShooter =	m_pEntitySystem->GetEntity(explosionInfo.shooterId);
-	if (gEnv->pAISystem)
-	{
-		IAIObject	*pShooterAI(pShooter!=NULL ? pShooter->GetAI() : NULL);
-		gEnv->pAISystem->ExplosionEvent(explosionInfo.pos,explosionInfo.radius, pShooterAI);
-	}
+}
 
+//---------------------------------------------------
+void CGameRules::ProcessExplosionMaterialFX(const ExplosionInfo &explosionInfo)
+{
 	// if an effect was specified, don't use MFX
 	if (explosionInfo.pParticleEffect)
 		return;
 
 	// impact stuff here
 	SMFXRunTimeEffectParams params;
+	params.soundSemantic = eSoundSemantic_Explosion;
 	params.pos = params.decalPos = explosionInfo.pos;
 	params.trg = 0;
 	params.trgRenderNode = 0;
@@ -338,7 +620,7 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 	Vec3 gravity;
 	pe_params_buoyancy buoyancy;
 	gEnv->pPhysicalWorld->CheckAreas(params.pos, gravity, &buoyancy);
-	
+
 	// 0 for water, 1 for air
 	Vec3 pos=params.pos;
 	params.inWater = (buoyancy.waterPlane.origin.z > params.pos.z) && (gEnv->p3DEngine->GetWaterLevel(&pos)>=params.pos.z);
@@ -380,6 +662,8 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 		effectClass = "generic";
 
 	string query = effectClass + "_explode";
+	if(gEnv->p3DEngine->GetWaterLevel(&explosionInfo.pos)>explosionInfo.pos.z)
+		query = query + "_underwater";
 
 	IMaterialEffects* pMaterialEffects = gEnv->pGame->GetIGameFramework()->GetIMaterialEffects();
 	TMFXEffectId effectId = pMaterialEffects->GetEffectId(query.c_str(), params.trgSurfaceId);
@@ -390,7 +674,6 @@ void CGameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 	if (effectId != InvalidEffectId)
 		pMaterialEffects->ExecuteEffect(effectId, params);
 }
-
 //------------------------------------------------------------------------
 // RMI
 //------------------------------------------------------------------------
@@ -415,6 +698,18 @@ IMPLEMENT_RMI(CGameRules, ClRenameEntity)
 		pEntity->SetName(params.name.c_str());
 
 		CryLogAlways("$8%s$o renamed to $8%s", old.c_str(), params.name.c_str());
+
+		// if this was a remote player, check we're not spectating them.
+		//	If we are, we need to trigger a spectator hud update for the new name
+		EntityId clientId = g_pGame->GetIGameFramework()->GetClientActorId();
+		if(gEnv->bMultiplayer && params.entityId != clientId)
+		{
+			CActor* pClientActor = static_cast<CActor *>(g_pGame->GetIGameFramework()->GetClientActor());
+			if(pClientActor && pClientActor->GetSpectatorMode() == CActor::eASM_Follow && pClientActor->GetSpectatorTarget() == params.entityId && g_pGame->GetHUD())
+			{
+				g_pGame->GetHUD()->RefreshSpectatorHUDText();
+			}
+		}
 	}
 
 	return true;
@@ -431,7 +726,7 @@ IMPLEMENT_RMI(CGameRules, SvRequestChatMessage)
 //------------------------------------------------------------------------
 IMPLEMENT_RMI(CGameRules, ClChatMessage)
 {
-	OnChatMessage((EChatMessageType)params.type, params.sourceId, params.targetId, params.msg.c_str());
+	OnChatMessage((EChatMessageType)params.type, params.sourceId, params.targetId, params.msg.c_str(), params.onlyTeam);
 
 	return true;
 }
@@ -481,7 +776,7 @@ IMPLEMENT_RMI(CGameRules, SvRequestSpectatorMode)
 	if (!pActor)
 		return true;
 
-	ChangeSpectatorMode(pActor, params.mode);
+	ChangeSpectatorMode(pActor, params.mode, params.targetId, params.resetAll);
 
 	return true;
 }
@@ -495,15 +790,16 @@ IMPLEMENT_RMI(CGameRules, ClSetTeam)
 	// [D6] Code is handled in team manager now
 	assert(g_D6Core->pTeamManager);
 	bool bResult = g_D6Core->pTeamManager->SetTeam(params.teamId, params.entityId);
-	/*int oldTeam = GetTeam(params.entityId);
+	int oldTeam = GetTeam(params.entityId);
 	if (oldTeam==params.teamId)
 		return true;
+	IActor *pActor=m_pActorSystem->GetActor(params.entityId);
+	bool isplayer=pActor!=0;
 
-	TEntityTeamIdMap::iterator it=m_entityteams.find(params.entityId);
+	/*TEntityTeamIdMap::iterator it=m_entityteams.find(params.entityId);
 	if (it!=m_entityteams.end())
 		m_entityteams.erase(it);
 
-	bool isplayer=m_pActorSystem->GetActor(params.entityId)!=0;
 	if (isplayer && oldTeam)
 	{
 		TPlayerTeamIdMap::iterator pit=m_playerteams.find(oldTeam);
@@ -523,17 +819,33 @@ IMPLEMENT_RMI(CGameRules, ClSetTeam)
 	}*/
 	// [/D6]
 
-	int oldTeam = GetTeam(params.entityId);
-	bool isplayer=m_pActorSystem->GetActor(params.entityId)!=0;
+	if(IActor *pClient = g_pGame->GetIGameFramework()->GetClientActor())
+	{
+		if(GetTeam(pClient->GetEntityId()) == params.teamId)
+		{
+			if(params.entityId == pClient->GetGameObject()->GetWorldQuery()->GetLookAtEntityId())
+			{
+				if(g_pGame->GetHUD())
+				{
+					g_pGame->GetHUD()->GetCrosshair()->SetUsability(0);
+					g_pGame->GetHUD()->GetCrosshair()->SetUsability(1);
+				}
+			}
+		}
+	}
+
 	if(isplayer)
+	{
 		ReconfigureVoiceGroups(params.entityId,oldTeam,params.teamId);
 
-	m_pRadio->SetTeam(GetTeamName(params.teamId));
+		if (pActor->IsClient())
+			m_pRadio->SetTeam(GetTeamName(params.teamId));
+	}
 
 	ScriptHandle handle(params.entityId);
 	CallScript(m_clientStateScript, "OnSetTeam", handle, params.teamId);
 
-	return bResult;
+	return true;
 }
 
 //------------------------------------------------------------------------
@@ -579,6 +891,10 @@ IMPLEMENT_RMI(CGameRules, ClExplosion)
 //------------------------------------------------------------------------
 IMPLEMENT_RMI(CGameRules, ClFreezeEntity)
 {
+	//IEntity *pEntity=gEnv->pEntitySystem->GetEntity(params.entityId);
+
+	//CryLogAlways("ClFreezeEntity: %s %s", pEntity?pEntity->GetName():"<<null>>", params.freeze?"true":"false");
+
 	FreezeEntity(params.entityId, params.freeze, 0);
 
 	return true;
@@ -617,6 +933,22 @@ IMPLEMENT_RMI(CGameRules, ClSetPreRoundTime)
 }
 
 //------------------------------------------------------------------------
+IMPLEMENT_RMI(CGameRules, ClSetReviveCycleTime)
+{
+	m_reviveCycleEndTime = params.endTime;
+
+	return true;
+}
+
+//------------------------------------------------------------------------
+IMPLEMENT_RMI(CGameRules, ClSetGameStartTimer)
+{
+	m_gameStartTime = params.endTime;
+
+	return true;
+}
+
+//------------------------------------------------------------------------
 IMPLEMENT_RMI(CGameRules, ClTaggedEntity)
 {
 	if (!params.entityId)
@@ -641,7 +973,7 @@ IMPLEMENT_RMI(CGameRules, ClTaggedEntity)
 //------------------------------------------------------------------------
 IMPLEMENT_RMI(CGameRules, ClTempRadarEntity)
 {
-	SAFE_HUD_FUNC(GetRadar()->AddEntityTemporarily(params.entityId));
+	SAFE_HUD_FUNC(GetRadar()->AddEntityTemporarily(params.entityId, 15.0f));
 
 	return true;
 }
@@ -729,7 +1061,7 @@ IMPLEMENT_RMI(CGameRules, ClResetObjectives)
 }
 
 //------------------------------------------------------------------------
-IMPLEMENT_RMI(CGameRules, ClRequestHitIndicator)
+IMPLEMENT_RMI(CGameRules, ClHitIndicator)
 {
 	SAFE_HUD_FUNC(IndicateHit());
 
@@ -737,10 +1069,24 @@ IMPLEMENT_RMI(CGameRules, ClRequestHitIndicator)
 }
 
 //------------------------------------------------------------------------
-IMPLEMENT_RMI(CGameRules, ClRequestDamageIndicator)
+IMPLEMENT_RMI(CGameRules, ClDamageIndicator)
 {
-	SAFE_HUD_FUNC(IndicateDamage(0, Vec3(0,0,0), false));
+	Vec3 dir(ZERO);
+	bool vehicle=false;
 
+	if (IEntity *pEntity=gEnv->pEntitySystem->GetEntity(params.shooterId))
+	{
+		if (IActor *pLocal=m_pGameFramework->GetClientActor())
+		{
+			dir=(pLocal->GetEntity()->GetWorldPos()-pEntity->GetWorldPos());
+			dir.NormalizeSafe();
+
+			vehicle=(pLocal->GetLinkedVehicle()!=0);
+		}
+	}
+
+	SAFE_HUD_FUNC(IndicateDamage(params.weaponId, dir, vehicle));
+	SAFE_HUD_FUNC(ShowTargettingAI(params.shooterId));
 	return true;
 }
 
@@ -748,10 +1094,18 @@ IMPLEMENT_RMI(CGameRules, ClRequestDamageIndicator)
 
 IMPLEMENT_RMI(CGameRules, SvVote)
 {
-  CActor* pActor = GetActorByChannelId(m_pGameFramework->GetGameChannelId(pNetChannel));
-  if(pActor)
-    Vote(pActor);
-  return true;
+	CActor* pActor = GetActorByChannelId(m_pGameFramework->GetGameChannelId(pNetChannel));
+	if(pActor)
+		Vote(pActor, true);
+	return true;
+}
+
+IMPLEMENT_RMI(CGameRules, SvVoteNo)
+{
+	CActor* pActor = GetActorByChannelId(m_pGameFramework->GetGameChannelId(pNetChannel));
+	if(pActor)
+		Vote(pActor, false);
+	return true;
 }
 
 IMPLEMENT_RMI(CGameRules, SvStartVoting)
@@ -766,4 +1120,21 @@ IMPLEMENT_RMI(CGameRules, ClVotingStatus)
 {
 	SAFE_HUD_FUNC(SetVotingState(params.state,params.timeout,params.entityId,params.description));
   return true;
+}
+
+
+IMPLEMENT_RMI(CGameRules, ClEnteredGame)
+{
+	if(!gEnv->bServer && m_pGameFramework->GetClientActor())
+	{
+		CActor* pActor = GetActorByChannelId(m_pGameFramework->GetClientActor()->GetChannelId());
+		if(pActor)
+		{
+			int status[2];
+			status[0] = GetTeam(pActor->GetEntityId());
+			status[1] = pActor->GetSpectatorMode();
+			m_pGameplayRecorder->Event(pActor->GetEntity(), GameplayEvent(eGE_Connected, 0, 0, (void*)status));
+		}
+	}
+	return true;
 }

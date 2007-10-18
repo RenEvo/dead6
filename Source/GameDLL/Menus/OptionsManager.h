@@ -20,8 +20,24 @@ History:
 #include "IGameFramework.h"
 #include "GameCVars.h"
 
+//-----------------------------------------------------------------------------------------------------
+
 class CGameFlashAnimation;
 class CFlashMenuScreen;
+
+//-----------------------------------------------------------------------------------------------------
+
+enum ECrysisProfileColor
+{
+	CrysisProfileColor_Amber,
+	CrysisProfileColor_Blue,
+	CrysisProfileColor_Green,
+	CrysisProfileColor_Red,
+	CrysisProfileColor_White,
+	CrysisProfileColor_Default = CrysisProfileColor_Green
+};
+
+//-----------------------------------------------------------------------------------------------------
 
 class COptionsManager : public ICVarDumpSink
 {
@@ -43,6 +59,9 @@ public :
 	}
 
 	ILINE IPlayerProfileManager *GetProfileManager() { return m_pPlayerProfileManager; }
+	ILINE bool IsFirstStart() { return m_firstStart; }
+
+	ECrysisProfileColor GetCrysisProfileColor();
 
 	//ICVarDumpSink
 	virtual void OnElementFound(ICVar *pCVar);
@@ -51,35 +70,67 @@ public :
 	//flash system
 	bool HandleFSCommand(const char *strCommand,const char *strArgs);
 	void UpdateFlashOptions();
-	void InitProfileOptions();
+	void InitProfileOptions(bool switchProfiles = false);
 	void UpdateToProfile();
-	void ResetDefaults();
+	void ResetDefaults(const char* option);
 	//flash system
 
 	//profile system
 	void SetProfileManager(IPlayerProfileManager* pProfileManager);
 	void SaveCVarToProfile(const char* key, const string& value);
+	bool GetProfileValue(const char* key, bool &value);
 	bool GetProfileValue(const char* key, int &value);
 	bool GetProfileValue(const char* key, float &value);
 	bool GetProfileValue(const char* key, string &value);
+	void SaveValueToProfile(const char* key, bool value);
 	void SaveValueToProfile(const char* key, int value);
 	void SaveValueToProfile(const char* key, float value);
 	void SaveValueToProfile(const char* key, const string& value);
+	void SaveProfile();
 	void CVarToProfile();
 	void ProfileToCVar();
 	bool IgnoreProfile();
+	bool WriteGameCfg();
+	void SetVideoMode(const char* params);
+	void AutoDetectHardware(const char* params);
+	void SystemConfigChanged(bool silent = false);
 	//~profile system
 
 private:
+	struct CCVarSink : public ICVarDumpSink
+	{
+		CCVarSink(COptionsManager* pMgr, FILE* pFile)
+		{
+			m_pOptionsManager = pMgr;
+			m_pFile = pFile;
+		}
+
+		void OnElementFound(ICVar *pCVar);
+		COptionsManager* m_pOptionsManager;
+		FILE* m_pFile;
+	};
+
 	COptionsManager();
 	IPlayerProfileManager* m_pPlayerProfileManager;
 
-	std::map<string, string> m_profileOptions;
+	struct SOptionEntry
+	{
+		string name;
+		bool   bWriteToConfig;
 
+		SOptionEntry() : bWriteToConfig(false) {}
+		SOptionEntry(const string& name, bool bWriteToConfig) : name(name), bWriteToConfig(bWriteToConfig) {}
+		SOptionEntry(const char* name, bool bWriteToConfig) : name(name), bWriteToConfig(bWriteToConfig) {}
+	};
+
+	std::map<string, SOptionEntry> m_profileOptions;
+
+	ECrysisProfileColor m_eCrysisProfileColor;
 
 	//************ OPTION FUNCTIONS ************
-	void AutoDetectHardware(const char* params);
-	void SetVideoMode(const char* params);
+	void SetAntiAliasingMode(const char* params);
+	void SetDifficulty(const char* params);
+	void PBClient(const char* params);
 	//initialize option-functions
 	void InitOpFuncMap();
 	//option-function mapper
@@ -88,7 +139,7 @@ private:
 	typedef TOpFuncMap::iterator TOpFuncMapIt;
 	//******************************************
 
-	void SystemConfigChanged();
+	void SetCrysisProfileColor(const char *szValue);
 	CFlashMenuScreen * GetCurrentMenu();
 
 	static COptionsManager* sp_optionsManager;
@@ -96,6 +147,13 @@ private:
 	const char *m_defaultColorLine;
 	const char *m_defaultColorOver;
 	const char *m_defaultColorText;
+	bool m_pbEnabled;
+	bool m_firstStart;
+
 };
 
+//-----------------------------------------------------------------------------------------------------
+
 #endif
+
+//-----------------------------------------------------------------------------------------------------

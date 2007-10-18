@@ -12,6 +12,12 @@ History:
 
 *************************************************************************/
 
+#ifndef HUD_VEHICLE_INTERFACE_H
+#define HUD_VEHICLE_INTERFACE_H
+
+# pragma once
+
+
 #include "HUDObject.h"
 #include "IFlashPlayer.h"
 #include "IVehicleSystem.h"
@@ -20,7 +26,7 @@ History:
 class CHUD;
 class CPlayer;
 
-class CHUDVehicleInterface : public CHUDObject, IVehicleEventListener
+class CHUDVehicleInterface : IVehicleEventListener
 {
 	friend class CHUD;
 
@@ -50,9 +56,10 @@ public:
 	CHUDVehicleInterface(CHUD *pHUD, CGameFlashAnimation *pAmmo);
 	~CHUDVehicleInterface();
 
-	void OnUpdate(float fDeltaTime,float fFadeValue);
+	void Update(float fDeltaTime);
 
-	void Serialize(TSerialize &ser);
+	void Serialize(TSerialize ser);
+	bool IsAbleToBuy();
 
 	// IVehicleEventListener
 	virtual void OnVehicleEvent(EVehicleEvent event, const SVehicleEventParams& params);
@@ -66,19 +73,22 @@ public:
 	ILINE bool IsParachute() { return m_bParachute; }
 	//aiming at friendly unit
 	ILINE void DisplayFriendlyFire( bool friendly ) { m_friendlyFire = friendly; }
-  ILINE bool GetFriendlyFire() { return m_friendlyFire; }
+	ILINE bool GetFriendlyFire() { return m_friendlyFire; }
+	ILINE void AmmoForceNextUpdate() { m_bAmmoForceNextUpdate = true; }
+
+	//select current interface
+	EVehicleHud ChooseVehicleHUD(IVehicle* pVehicle);
+	//update damaged parts in stats
+	float UpdateDamages(EVehicleHud eHud, IVehicle *pVehicle, bool updateFlash = true);
 
 private:
 
 	//player interaction - called by main hud
-	void OnEnterVehicle(IActor *pActor,const char *strVehicleClassName,const char *strSeatName,bool bThirdPerson);
+	void OnEnterVehicle(IActor *pActor,const char *strVehicleClassName,const char *strSeatName);
 	void OnExitVehicle(IActor *pActor);
 
 	//main enter function
-	void OnEnterVehicle(CPlayer *pPlayer,bool bThirdPerson);
-
-	//update damaged parts in stats
-	void UpdateDamages();
+	void OnEnterVehicle(CPlayer *pPlayer);
 	//update used seats
 	void UpdateSeats();
 	//display specific interface
@@ -89,8 +99,6 @@ private:
 	void HideVehicleInterface();
 	//unload flash movies
 	void UnloadVehicleHUD(bool remove);
-	//select current interface
-	void ChooseVehicleHUD();
 	//update all displays
 	void LoadVehicleHUDs(bool force=false);
 	void UpdateVehicleHUDDisplay();
@@ -98,8 +106,8 @@ private:
 	float GetVehicleSpeed();
 	float GetVehicleHeading();
 	float GetRelativeHeading();
-  
-  bool ForceCrosshair();
+
+	bool ForceCrosshair();
 
 	//****************************************** MEMBER VARIABLES ***********************************
 
@@ -112,12 +120,10 @@ private:
 	CGameFlashAnimation *g_pAmmo;
 	//the vehicle
 	IVehicle	*m_pVehicle; 
-  //seat occupied
-  TVehicleSeatId m_seatId;
+	//seat occupied
+	TVehicleSeatId m_seatId;
 	//special case parachute (no vehicle)
 	bool			m_bParachute;
-	//are we watching it FP or TP ?
-	bool			m_bThirdPerson;	
 	//which HUD animation is shown ?
 	EVehicleHud	m_eCurVehicleHUD;
 	//saves whether the specified hud has a main window
@@ -128,4 +134,11 @@ private:
 	int				m_statsSpeed, m_statsHeading;
 	//aim-at-friend state settings
 	bool			m_lastSetFriendly, m_friendlyFire;
+	//ammo values last send
+	int m_iSecondaryAmmoCount, m_iPrimaryAmmoCount, m_iSecondaryClipSize, m_iPrimaryClipSize/*, m_iHeat*/;
+	int m_iLastReloadBarValue, m_iLastReloadBarValue2;
+	//ammo Flash anim is shared and can be wrong when tokens set the values
+	bool			m_bAmmoForceNextUpdate;
 };
+
+#endif

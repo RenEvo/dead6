@@ -22,14 +22,6 @@ History:
 // Forward declarations
 class CGameFlashLogic;
 
-enum EGameFlashDock
-{
-	eGFD_Stretch	= (1 << 0),
-	eGFD_Center		= (1 << 1),
-	eGFD_Left			= (1 << 3),
-	eGFD_Right		= (1 << 4),
-};
-
 enum EFlashAnimFlags
 {
 	eFAF_ThisHandler	= (1 << 5),
@@ -44,12 +36,10 @@ public:
 	CGameFlashAnimation();
 	virtual ~	CGameFlashAnimation();
 
-	void Init(const char *strFileName, EGameFlashDock docking = eGFD_Center, uint32 flags = eFAF_Default);
-	bool Load(const char *strFileName, EGameFlashDock docking = eGFD_Center, uint32 flags = eFAF_Default);
+	void Init(const char *strFileName, EFlashDock docking = eFD_Center, uint32 flags = eFAF_Default);
+	bool Load(const char *strFileName, EFlashDock docking = eFD_Center, uint32 flags = eFAF_Default);
 	bool Reload(bool forceUnload=false);
 	virtual void Unload();
-	void SetDock(uint32 eGFDock);
-	uint32 GetDock() const;
 	uint32 GetFlags() const;
 	void AddVariable(const char *strControl,const char *strVariable,	const char *strToken,float fScale,float fOffset);
 	void ReInitVariables();
@@ -57,7 +47,6 @@ public:
 
 private:
 	string	m_fileName;
-	uint32	m_dock;
 	uint32	m_flags;
 
 	typedef DynArray<CGameFlashLogic *> TGameFlashLogicsList;

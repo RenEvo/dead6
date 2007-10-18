@@ -12,14 +12,21 @@ History:
 
 *************************************************************************/
 
+#ifndef HUD_SCOPES_H
+#define HUD_SCOPES_H
+
+# pragma once
+
+
 #include "HUDObject.h"
+#include "IActorSystem.h"
 #include "IFlashPlayer.h"
 #include "GameFlashAnimation.h"
 
 class CHUD;
 class CPlayer;
 
-class CHUDScopes : public CHUDObject
+class CHUDScopes
 {
 	friend class CHUD;
 public:
@@ -28,15 +35,16 @@ public:
 	{
 		ESCOPE_NONE,
 		ESCOPE_ASSAULT,
-		ESCOPE_SNIPER
+		ESCOPE_SNIPER,
+		ESCOPE_LAST
 	};
 
 	CHUDScopes(CHUD *pHUD);
 	~CHUDScopes();
 
-	virtual void OnUpdate(float fDeltaTime,float fFadeValue);
-	virtual void LoadFlashFiles(bool force=false);
-	void ShowBinoculars(bool bVisible, bool bShowIfNoHUD=false);
+	void Update(float fDeltaTime);
+	void LoadFlashFiles(bool force=false);
+	void ShowBinoculars(bool bVisible, bool bShowIfNoHUD=false, bool bNoFadeOutOnHide=false);
 	void SetBinocularsDistance(float fDistance);
 	void SetBinocularsZoomMode(int iZoomMode);
 	void ShowScope(int iVisible);
@@ -44,29 +52,33 @@ public:
 	void OnToggleThirdPerson(bool thirdPerson);
 	ILINE bool IsBinocularsShown() const { return m_bShowBinoculars; }
 	ILINE EScopeMode GetCurrentScope() const { return m_eShowScope; }
+	void Serialize(TSerialize &ser);
+	void DestroyBinocularsAtNextFrame() { m_bDestroyBinocularsAtNextFrame = true; }
 
 private:
 
 	void DisplayBinoculars(CPlayer* pPlayerActor);
 	void DisplayScope(CPlayer* pPlayerActor);
+	void SetSilhouette(IActor *pActor,IAIObject *pAIObject);
 
 	//the main HUD
 	CHUD			*g_pHUD;
 	//the scope flash movies
 	CGameFlashAnimation m_animBinoculars;
-	CGameFlashAnimation m_animBinocularsEnemyIndicator;
-//	CGameFlashAnimation m_animAssaultScope;
 	CGameFlashAnimation m_animSniperScope;
 	//binoculars visible
 	bool m_bShowBinoculars;
+	//zoom level
+	int m_iZoomLevel;
 	//scope visible
 	EScopeMode m_eShowScope;
 	// show binoculars without HUD being visible, e.g. cutscenes
 	bool m_bShowBinocularsNoHUD; 
 	// distance of binocs view
 	float m_fBinocularDistance;
-	// saving zoom level
-	int m_oldScopeZoomLevel;
 	// currently in third person ?
 	bool m_bThirdPerson;
+	bool m_bDestroyBinocularsAtNextFrame;
 };
+
+#endif

@@ -19,56 +19,63 @@
 #include "Player.h"
 #include "GameRules.h"
 
-void SGrabStats::Serialize(TSerialize ser, unsigned aspects)
+void SGrabStats::Serialize(TSerialize ser)
 {
-	if (ser.GetSerializationTarget() != eST_Network)
+	assert(ser.GetSerializationTarget() != eST_Network);
+
+	if (ser.BeginOptionalGroup("SGrabStats", true))
 	{
-		// NOTE Apr 10, 2007: <pvl> as of now, the second argument seems to be an unused dummy
-		if (ser.BeginOptionalGroup("SGrabStats", false))
+		//when reading, reset the structure first.
+		if (ser.IsReading())
+			Reset();
+
+		ser.Value("grabId", grabId);
+		ser.Value("dropId", dropId);
+		ser.Value("lHoldPos", lHoldPos);
+		ser.Value("throwVector", throwVector);
+		ser.Value("additionalRotation", additionalRotation);
+
+		ser.Value("limbNum", limbNum);
+		for (int i=0; i < limbNum; ++i)
 		{
-			//when reading, reset the structure first.
-			if (ser.IsReading())
-				Reset();
+			char limbName[64];
+			_snprintf (limbName, 64, "limbId%d", i);
 
-			ser.Value("grabId", grabId);
-			ser.Value("dropId", dropId);
-			ser.Value("lHoldPos", lHoldPos);
-			ser.Value("throwVector", throwVector);
-			ser.Value("additionalRotation", additionalRotation);
-
-			ser.Value("limbNum", limbNum);
-			for (int i=0; i < limbNum; ++i)
-			{
-				char limbName[64];
-				_snprintf (limbName, 64, "limbId%d", i);
-
-				ser.Value(limbName, limbId[i]);
-			}
-
-			ser.Value("resetFlagsDelay", resetFlagsDelay);
-			ser.Value("grabDelay", grabDelay);
-			ser.Value("throwDelay", throwDelay);
-			ser.Value("maxDelay", maxDelay);
-			ser.Value("followSpeed", followSpeed);
-			ser.Value("useIKRotation", useIKRotation);
-			ser.Value("collisionFlags", collisionFlags);
-			ser.Value("usingAnimation", usingAnimation);
-			ser.Value("usingAnimationForGrab", usingAnimationForGrab);
-			ser.Value("usingAnimationForDrop", usingAnimationForDrop);
-			ser.Value("carryAnimGraphInput", (char * )carryAnimGraphInput);
-			ser.Value("grabAnimGraphSignal", (char * )grabAnimGraphSignal);
-			ser.Value("dropAnimGraphSignal", (char * )dropAnimGraphSignal);
-
-
-			ser.Value("IKActive", IKActive);
-			ser.Value("releaseIKTime", releaseIKTime);
-			ser.Value("followBoneID", followBoneID);
-			ser.Value("followBoneWPos", followBoneWPos);
-			ser.Value("animationLimbOffset", animationLimbOffset);
-			ser.Value("animDummyOfs", animDummyOfs);
-
-			ser.EndGroup();
+			ser.Value(limbName, limbId[i]);
 		}
+
+		ser.Value("resetFlagsDelay", resetFlagsDelay);
+		ser.Value("grabDelay", grabDelay);
+		ser.Value("throwDelay", throwDelay);
+		ser.Value("maxDelay", maxDelay);
+		ser.Value("followSpeed", followSpeed);
+		ser.Value("useIKRotation", useIKRotation);
+		ser.Value("collisionFlags", collisionFlags);
+		ser.Value("usingAnimation", usingAnimation);
+		ser.Value("usingAnimationForGrab", usingAnimationForGrab);
+		ser.Value("usingAnimationForDrop", usingAnimationForDrop);
+		ser.ValueChar("carryAnimGraphInput", (char * )carryAnimGraphInput, s_maxAGInputNameLen);
+		ser.ValueChar("grabAnimGraphSignal", (char * )grabAnimGraphSignal, s_maxAGInputNameLen);
+		ser.ValueChar("dropAnimGraphSignal", (char * )dropAnimGraphSignal, s_maxAGInputNameLen);
+
+		ser.Value("IKActive", IKActive);
+		ser.Value("releaseIKTime", releaseIKTime);
+		ser.Value("followBoneID", followBoneID);
+		ser.Value("followBoneWPos", followBoneWPos);
+		ser.Value("grabbedObjOfs", grabbedObjOfs);
+
+		ser.Value("readIkInaccuracyCorrection", readIkInaccuracyCorrection);
+		ser.Value("ikInaccuracyCorrection", ikInaccuracyCorrection);
+
+		ser.Value("origRotation", origRotation);
+		ser.Value("origEndBoneWorldRotTrans", origEndBoneWorldRot.t);
+		ser.Value("origEndBoneWorldRotQuat", origEndBoneWorldRot.q);
+		ser.Value("origRotationsValid", origRotationsValid);
+
+		ser.Value("entityGrabSpot", entityGrabSpot);
+		ser.Value("boneGrabOffset", boneGrabOffset);
+
+		ser.EndGroup();
 	}
 }
 
@@ -102,6 +109,11 @@ bool CBaseGrabHandler::SetGrab(SmartScriptTable &rParams)
 	m_grabStats.throwDelay = 0.0f;
 	m_grabStats.maxDelay = m_grabStats.grabDelay;
 
+	m_grabStats.entityGrabSpot = Vec3 (0.0f, 0.0f, 0.0f);
+	rParams->GetValue("entityGrabSpot",m_grabStats.entityGrabSpot);
+
+	m_grabStats.boneGrabOffset = Vec3 (0.0f, 0.0f, 0.0f);
+	rParams->GetValue("boneGrabOffset",m_grabStats.boneGrabOffset);
 
 	// NOTE Dez 12, 2006: <pvl> the following code was formerly in CBaseGrabHandler::StartGrab().
 	if (m_grabStats.grabId<1)
@@ -197,7 +209,7 @@ void CBaseGrabHandler::IgnoreCollision(EntityId eID,unsigned int flags,bool igno
 		ac.pt[0].Set(0,0,0);
 
 		ICharacterInstance *pCharacter = pEnt->GetCharacter(0);
-		IPhysicalEntity *pPhysEnt = pCharacter?pCharacter->GetISkeleton()->GetCharacterPhysics(-1):NULL;
+		IPhysicalEntity *pPhysEnt = pCharacter?pCharacter->GetISkeletonPose()->GetCharacterPhysics(-1):NULL;
 
 		if (pPhysEnt)
 		{
@@ -258,6 +270,8 @@ bool CBaseGrabHandler::StartDrop()
 		m_grabStats.resetFlagsDelay = 1.0f;
 
 		m_pActor->CreateScriptEvent("droppedObject",m_grabStats.grabId);
+
+		if (pGrab) DisableGrabbedAnimatedCharacter (false);
 	}
 
 	m_grabStats.Reset();
@@ -335,10 +349,12 @@ void CBaseGrabHandler::UpdatePosVelRot(float frameTime)
 		
 		pGrab->GetPhysics()->Action(&asv);
 	}
+
 }
 
 void CBaseGrabHandler::Update(float frameTime)
 {
+
 	//we have to restore the grabbed object collision flag at some point after the throw.
 	if (m_grabStats.dropId>0)
 	{
@@ -385,7 +401,11 @@ void CBaseGrabHandler::Update(float frameTime)
 		}
 	}
 
-	if (m_grabStats.releaseIKTime>0.001f)
+	// TODO Sep 13, 2007: <pvl> I strongly suspect releaseIKTime is redundant now.
+	// NOTE Sep 13, 2007: <pvl> note that all timeouts are dodgy here since there's
+	// no guarantee that the grabbing/throwing animation starts playing immediately
+	// after the grabbing command is issued.
+	if (m_grabStats.releaseIKTime>0.001f && m_grabStats.grabDelay < 0.001f)
 		m_grabStats.releaseIKTime -= frameTime;
 }
 
@@ -394,26 +414,52 @@ Vec3 CBaseGrabHandler::GetGrabWPos()
 	return m_pActor->GetEntity()->GetSlotWorldTM(0) * m_grabStats.lHoldPos;
 }
 
-void CBaseGrabHandler::Serialize(TSerialize ser, unsigned aspects)
+void CBaseGrabHandler::Serialize(TSerialize ser)
 {
-	if (ser.GetSerializationTarget() != eST_Network)
-	{
-		// NOTE Apr 10, 2007: <pvl> as of now, the second argument seems to be an unused dummy
-		if (ser.BeginOptionalGroup("CBaseGrabHandler", false))
-		{
-			m_grabStats.Serialize(ser, aspects);
+	assert(ser.GetSerializationTarget() != eST_Network);
 
-			// NOTE Apr 11, 2007: <pvl> for reading, m_pActor has already been taken
-			// care of in the constructor.
-			
-			ser.EndGroup();
-		}
+	if (ser.BeginOptionalGroup("CBaseGrabHandler", true))
+	{
+		m_grabStats.Serialize(ser);
+
+		// NOTE Apr 11, 2007: <pvl> for reading, m_pActor has already been taken
+		// care of in the constructor.
+		
+		ser.EndGroup();
+	}
+}
+
+/**
+ * Turn the grabbed AnimatedCharacter on/off if necessary.  If the grabbed thing
+ * has an AC, it's necessary to turn it off during the grab to prevent it from
+ * interfering and messing with its Entity's transformation.
+ */
+void CBaseGrabHandler::DisableGrabbedAnimatedCharacter (bool enable) const
+{
+	CActor *pGrabbedActor = (CActor *)g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(m_grabStats.grabId);
+	if ( ! pGrabbedActor) return;
+
+	IAnimatedCharacter * pGrabbedAC = pGrabbedActor->GetAnimatedCharacter();
+	if (pGrabbedAC)
+		pGrabbedAC->SetNoMovementOverride (enable);
+
+//	SActorStats *stats = static_cast<SActorStats*>(pGrabbedActor->GetActorStats());
+//	stats->isGrabbed = enable;
+
+	if(pGrabbedActor->IsClient())
+	{
+		if(SActorStats *stats = static_cast<SActorStats*>(pGrabbedActor->GetActorStats()))
+			stats->isGrabbed = enable;
 	}
 }
 
 //
 bool CAnimatedGrabHandler::SetGrab(SmartScriptTable &rParams)
 {
+	// NOTE Aug 16, 2007: <pvl> if there's another grab action under way, this one fails
+	if (m_grabStats.grabId >= 1)
+		return false;
+
 	m_grabStats.useIKRotation = false;
 	rParams->GetValue("useIKRotation",m_grabStats.useIKRotation);
 
@@ -442,8 +488,9 @@ bool CAnimatedGrabHandler::SetGrab(SmartScriptTable &rParams)
 	const char * pCarryAnimGraphInput = 0;
 	if (rParams->GetValue("carryAnimGraphInput",pCarryAnimGraphInput))
 	{
-		strncpy(m_grabStats.carryAnimGraphInput,pCarryAnimGraphInput,64);
-		m_grabStats.carryAnimGraphInput[63] = 0;
+		const int maxNameLen = SGrabStats::s_maxAGInputNameLen;
+		strncpy(m_grabStats.carryAnimGraphInput,pCarryAnimGraphInput,maxNameLen);
+		m_grabStats.carryAnimGraphInput[maxNameLen-1] = 0;
 	}
 	
 	SmartScriptTable animationTable;
@@ -453,8 +500,9 @@ bool CAnimatedGrabHandler::SetGrab(SmartScriptTable &rParams)
 
 		if (animationTable->GetValue("animGraphSignal",pAnimGraphSignal))
 		{
-			strncpy(m_grabStats.grabAnimGraphSignal,pAnimGraphSignal,64);
-			m_grabStats.grabAnimGraphSignal[63] = 0;
+			const int maxNameLen = SGrabStats::s_maxAGInputNameLen;
+			strncpy(m_grabStats.grabAnimGraphSignal,pAnimGraphSignal,maxNameLen);
+			m_grabStats.grabAnimGraphSignal[maxNameLen-1] = 0;
 		}
 
 		// TODO Dez 15, 2006: <pvl> if there's no graph signal, consider
@@ -471,9 +519,9 @@ bool CAnimatedGrabHandler::SetGrab(SmartScriptTable &rParams)
 			//m_grabStats.grabDelay = 0.0f;
 			m_grabStats.maxDelay = m_grabStats.throwDelay;
 		}
-				
-		m_grabStats.animDummyOfs.zero();
-		animationTable->GetValue("dummyOfs",m_grabStats.animDummyOfs);
+
+		m_grabStats.grabbedObjOfs.zero();
+		animationTable->GetValue("grabbedObjOfs",m_grabStats.grabbedObjOfs);
 
 		m_grabStats.releaseIKTime = 0.0f;
 		animationTable->GetValue("releaseIKTime",m_grabStats.releaseIKTime);
@@ -485,14 +533,15 @@ bool CAnimatedGrabHandler::SetGrab(SmartScriptTable &rParams)
 			m_grabStats.releaseIKTime = 0.0f;
 			animationTable->GetValue("releaseIKTime",m_grabStats.releaseIKTime);
 
-			m_grabStats.animDummyOfs.zero();
-			animationTable->GetValue("dummyOfs",m_grabStats.animDummyOfs);
+			m_grabStats.grabbedObjOfs.zero();
+			animationTable->GetValue("grabbedObjOfs",m_grabStats.grabbedObjOfs);
 
 			const char *pAnimGraphSignal = NULL;
 			if (animationTable->GetValue("animGraphSignal",pAnimGraphSignal))
 			{
-				strncpy(m_grabStats.grabAnimGraphSignal,pAnimGraphSignal,64);
-				m_grabStats.grabAnimGraphSignal[63] = 0;
+				const int maxNameLen = SGrabStats::s_maxAGInputNameLen;
+				strncpy(m_grabStats.grabAnimGraphSignal,pAnimGraphSignal,maxNameLen);
+				m_grabStats.grabAnimGraphSignal[maxNameLen-1] = 0;
 			}
 		}
 		if (rParams->GetValue("dropAnim",animationTable))
@@ -510,8 +559,9 @@ bool CAnimatedGrabHandler::SetGrab(SmartScriptTable &rParams)
 			const char *pAnimGraphSignal = NULL;
 			if (animationTable->GetValue("animGraphSignal",pAnimGraphSignal))
 			{
-				strncpy(m_grabStats.dropAnimGraphSignal,pAnimGraphSignal,64);
-				m_grabStats.dropAnimGraphSignal[63] = 0;
+				const int maxNameLen = SGrabStats::s_maxAGInputNameLen;
+				strncpy(m_grabStats.dropAnimGraphSignal,pAnimGraphSignal,SGrabStats::s_maxAGInputNameLen);
+				m_grabStats.dropAnimGraphSignal[maxNameLen] = 0;
 			}
 		}
 		m_grabStats.usingAnimation = m_grabStats.usingAnimationForDrop || m_grabStats.usingAnimationForGrab;
@@ -524,26 +574,19 @@ bool CAnimatedGrabHandler::SetGrab(SmartScriptTable &rParams)
 	{
 		ICharacterInstance *pCharacter = m_pActor->GetEntity()->GetCharacter(0);
 		if (pCharacter)
-			m_grabStats.followBoneID = pCharacter->GetISkeleton()->GetIDByName(followBone);
+			m_grabStats.followBoneID = pCharacter->GetISkeletonPose()->GetJointIDByName(followBone);
 	}
 	// TODO Dez 15, 2006: <pvl> consider returning false if bone ID is -1
 	// at this point - it won't work anyway without bone ID
 	
-	// Luciano: adding offset
-	Vec3 grabOffset;
-	if (rParams->GetValue("grabOffset",grabOffset))
-	{
-			m_grabStats.grabOffset = grabOffset;
-	}
 
 	//FIXME:remove this garbage when the grabbing setup is refactored too
 	float savedThrowDelay(m_grabStats.throwDelay);
-	bool ret = CBaseGrabHandler::SetGrab(rParams);
-
-	// NOTE Dez 12, 2006: <pvl> formerly in CAnimatedGrabHandler::StartGrab()
-	IEntity *pGrab = gEnv->pEntitySystem->GetEntity(m_grabStats.grabId);
+	if ( ! CBaseGrabHandler::SetGrab(rParams))
+		return false;
 
 	m_grabStats.additionalRotation.SetIdentity();
+	m_grabStats.origRotation.SetIdentity();
 
 	if (m_grabStats.carryAnimGraphInput[0])
 	{
@@ -557,11 +600,6 @@ bool CAnimatedGrabHandler::SetGrab(SmartScriptTable &rParams)
 	{
 		StartGrab();
 	}
-	// 'animDummyOfs' is where the object to be grabbed should be for the animation to work correctly
-	assert (pGrab);
-	assert (m_pActor);
-	assert (m_pActor->GetEntity ());
-	m_grabStats.animationLimbOffset = pGrab->GetWorldPos() - m_pActor->GetEntity()->GetSlotWorldTM(0) * m_grabStats.animDummyOfs;
 
 	m_grabStats.maxDelay = m_grabStats.throwDelay = savedThrowDelay;
 
@@ -588,10 +626,35 @@ void CAnimatedGrabHandler::UpdatePosVelRot(float frameTime)
 
 	if (m_grabStats.grabDelay<0.001f)
 	{
-		Vec3 grabWPos(GetGrabWPos());
+		Vec3 grabWPos (GetGrabBoneWorldTM ().t);
+
+		// NOTE Aug 3, 2007: <pvl> the second part of this test means don't enable
+		// the correction if animation/ik wasn't used for grabbing in the first place
+		if (m_grabStats.readIkInaccuracyCorrection && m_grabStats.grabAnimGraphSignal[0])
+		{
+			// NOTE Aug 2, 2007: <pvl> executed the first time this function is called
+			// for a particular grabbing action
+			m_grabStats.ikInaccuracyCorrection = grabWPos - (pGrab->GetWorldTM().GetTranslation() + m_grabStats.entityGrabSpot);
+			m_grabStats.readIkInaccuracyCorrection = false;
+
+			// FIXME Sep 13, 2007: <pvl> only putting it here because it's called just
+			// once, at the instant when the object is grabbed - rename readIkInaccuracyCorrection
+			// to make this clearer, or put this somewhere else
+			DisableGrabbedAnimatedCharacter (true);
+		}
+		else
+		{
+			// NOTE Aug 2, 2007: <pvl> phase it out gradually
+			m_grabStats.ikInaccuracyCorrection *= 0.9f;
+			if (m_grabStats.ikInaccuracyCorrection.len2 () < 0.01f)
+				m_grabStats.ikInaccuracyCorrection = Vec3 (0.0f, 0.0f, 0.0f);
+		}
+		// NOTE Sep 13, 2007: <pvl> this should prevent us from calling SetWPos()
+		// later so that the IK "release" phase can take over
+		m_grabStats.IKActive = false;
 
 		Matrix34 tm(pGrab->GetWorldTM());
-		tm.SetTranslation(grabWPos);
+		tm.SetTranslation(grabWPos - (m_grabStats.ikInaccuracyCorrection + pGrab->GetRotation() * m_grabStats.entityGrabSpot));
 		pGrab->SetWorldTM(tm,ENTITY_XFORM_USER);
 	}
 
@@ -606,33 +669,49 @@ void CAnimatedGrabHandler::UpdatePosVelRot(float frameTime)
 		{
 			// NOTE Dez 15, 2006: <pvl> use IK to constantly offset the
 			// animation so that the difference between where the animation
-			// expects the object and where the object really is is taken
+			// expects the object to be and where the object really is is taken
 			// into account.
-			Vec3 bPos = pEnt->GetSlotWorldTM(0) * pLimb->lAnimPos;
-			pLimb->SetWPos(pEnt,bPos + m_grabStats.animationLimbOffset,ZERO,0.5f,2.0f,1000);
-			//gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(bPos, ColorB(0,255,0,100), bPos + m_grabStats.animationLimbOffset, ColorB(255,0,0,100));
+			Vec3 animPos = pEnt->GetSlotWorldTM(0) * pLimb->lAnimPos;
+			Vec3 assumedGrabPos = pEnt->GetSlotWorldTM(0) * m_grabStats.grabbedObjOfs;
+			Vec3 actualGrabPos = pGrab->GetWorldPos() + m_grabStats.entityGrabSpot;
+			Vec3 adjustment = actualGrabPos - assumedGrabPos;
+			pLimb->SetWPos(pEnt,animPos + adjustment,ZERO,0.5f,2.0f,1000);
+			//gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(pGrab->GetWorldPos() + m_grabStats.entityGrabSpot, 0.5f, ColorB(0,255,0,100));
 		}
 		
 		//if there are multiple limbs, only the first one sets the rotation of the object.
 		if (m_grabStats.useIKRotation && i == 0 && m_grabStats.grabDelay<0.001f)
 		{
-			ICharacterInstance *pCharacter = pEnt->GetCharacter(pLimb->characterSlot);
-			Quat boneRot = pCharacter->GetISkeleton()->GetAbsJQuatByID(pLimb->endBoneID).q;
+			// NOTE Aug 8, 2007: <pvl> the idea here is to store current world
+			// rotations of both the object being grabbed and the end bone of
+			// a grabbing limb.  Then track how the end bone rotates with respect
+			// to the stored original rotation and rotate the grabbed object
+			// the same way.  That way, the grabbed object rotates the same as
+			// the limb and appears to be "stabbed" by it.
+			QuatT endBoneWorldRot = GetGrabBoneWorldTM ();
+			endBoneWorldRot.q.Normalize();	// may not be necessary - just to be safe
 
-			if (m_grabStats.additionalRotation.IsIdentity())
-				m_grabStats.additionalRotation = pGrab->GetRotation() / boneRot;
+			if ( ! m_grabStats.origRotationsValid)
+			{
+				m_grabStats.origRotation = pGrab->GetRotation();
+				m_grabStats.origRotation.Normalize();			// may not be necessary - just to be safe
+				m_grabStats.origEndBoneWorldRot = endBoneWorldRot;
+				m_grabStats.origRotationsValid = true;
+			}
 
-			Quat grabQuat(boneRot * m_grabStats.additionalRotation);
+			Quat grabQuat( (endBoneWorldRot*m_grabStats.origEndBoneWorldRot.GetInverted()).q * m_grabStats.origRotation);
 			grabQuat.Normalize();
 
 			// NOTE Dez 14, 2006: <pvl> this code sets up and look vectors for the grabbed
 			// entity in case it's an Actor (the player, mostly) so that the player always
 			// looks roughly at the grabber.  The grabber is supposed to be the Hunter here
 			// so this code is somewhat Hunter-specific.
+			// UPDATE Aug 7, 2007: <pvl> do the above for the player only
+			// UPDATE Sep 13, 2007: <pvl> don't do it for anybody ATM, it doesn't seem useful
 			CActor *pGrabbedActor = (CActor *)g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(m_grabStats.grabId);
-			if (pGrabbedActor && pGrabbedActor->GetActorStats())
+			if (false && pGrabbedActor && pGrabbedActor->IsClient() && pGrabbedActor->GetActorStats())
 			{
-				Vec3 upVec(Quat(boneRot * m_grabStats.additionalRotation).GetColumn2());
+				Vec3 upVec(Quat(endBoneWorldRot.q * m_grabStats.additionalRotation).GetColumn2());
 				upVec.z = fabs_tpl(upVec.z) * 2.0f;
 				upVec.NormalizeSafe(Vec3(0,0,1));
 
@@ -652,6 +731,59 @@ void CAnimatedGrabHandler::UpdatePosVelRot(float frameTime)
 			}
 		}
 	}
+
+	if (m_grabStats.grabDelay<0.001f)
+	{
+		// NOTE Sep 16, 2007: <pvl> now that grabbed entity rotation coming from
+		// a grabbing bone (if any) is computed, bone-space offset can be applied
+		Matrix34 tm(pGrab->GetWorldTM());
+		tm.AddTranslation(GetGrabBoneWorldTM().q * m_grabStats.boneGrabOffset);
+		pGrab->SetWorldTM(tm,ENTITY_XFORM_USER);
+
+		/*
+		{
+			// debug draw for the grab bone
+			QuatT grabBoneWorldTM = GetGrabBoneWorldTM();
+			Vec3 start = grabBoneWorldTM.t;
+			Vec3 end = start + grabBoneWorldTM.q * Vec3 (1,0,0) * 3;
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine (start, ColorB (255,0,0), end, ColorB (0,0,255), 6.0f);
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere (start, 0.5f, ColorB (255,128,0));
+		}
+		*/
+		/*
+		{
+			// draw complete coord systems for both the end bone and the grabbed thing
+			QuatT grabBoneWorldTM = GetGrabBoneWorldTM();
+			Vec3 start = grabBoneWorldTM.t;
+			Vec3 end = start + grabBoneWorldTM.q * Vec3 (1,0,0) * 3;
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine (start, ColorB (128,0,0), end, ColorB (128,0,0), 6.0f);
+			end = start + grabBoneWorldTM.q * Vec3 (0,1,0) * 3;
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine (start, ColorB (0,128,0), end, ColorB (0,128,0), 6.0f);
+			end = start + grabBoneWorldTM.q * Vec3 (0,0,1) * 3;
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine (start, ColorB (0,0,128), end, ColorB (0,0,128), 6.0f);
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere (start, 0.2f, ColorB (255,255,255));
+
+			start = pGrab->GetWorldTM().GetTranslation();
+			end = start + pGrab->GetRotation() * Vec3 (1,0,0) * 3;
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine (start, ColorB (128,0,0), end, ColorB (128,0,0), 6.0f);
+			end = start + pGrab->GetRotation() * Vec3 (0,1,0) * 3;
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine (start, ColorB (0,128,0), end, ColorB (0,128,0), 6.0f);
+			end = start + pGrab->GetRotation() * Vec3 (0,0,1) * 3;
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine (start, ColorB (0,0,128), end, ColorB (0,0,128), 6.0f);
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere (start, 0.2f, ColorB (64,64,64));
+		}
+		*/
+	}
+
+/*
+	{
+		// debug draw for the grabbed object
+		Vec3 start = pGrab->GetWorldTM().GetTranslation();
+		Vec3 end = start + pGrab->GetRotation() * Vec3 (0,0,1) * 3;
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine (start, ColorB (255,0,0), end, ColorB (0,0,255), 6.0f);
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere (start, 0.2f, ColorB (255,128,0));
+	}
+*/
 }
 
 bool CAnimatedGrabHandler::SetDrop(SmartScriptTable &rParams)
@@ -685,6 +817,18 @@ Vec3 CAnimatedGrabHandler::GetGrabWPos()
 	return m_grabStats.followBoneWPos;
 }
 
+QuatT CAnimatedGrabHandler::GetGrabBoneWorldTM() const
+{
+	IEntity *pEnt = m_pActor->GetEntity();
+	SIKLimb *pLimb = m_pActor->GetIKLimb(m_grabStats.limbId[0]);
+	ICharacterInstance *pCharacter = pEnt->GetCharacter(pLimb->characterSlot);
+
+	QuatT followBoneLocalRot = pCharacter->GetISkeletonPose()->GetAbsJointByID(m_grabStats.followBoneID);
+	QuatT rootBoneWorldRot = m_pActor->GetAnimatedCharacter()->GetAnimLocation();
+	QuatT followBoneWorldRot = rootBoneWorldRot * followBoneLocalRot;
+	return followBoneWorldRot;
+}
+
 // NOTE Dez 15, 2006: <pvl> not called ATM. Should be moved to BaseGrabHandler.
 Vec3 CAnimatedGrabHandler::GetGrabIKPos(IEntity *pGrab,int limbIdx)
 {
@@ -708,7 +852,7 @@ Vec3 CAnimatedGrabHandler::GetGrabIKPos(IEntity *pGrab,int limbIdx)
 			posPool[0].x = bbox.min.x;
 			posPool[1].x = bbox.max.x;
 
-			Vec3 limbPosInLocal(pGrab->GetWorldTM().GetInverted()*(pEnt->GetSlotWorldTM(pLimb->characterSlot) * pCharacter->GetISkeleton()->GetAbsJQuatByID(pLimb->rootBoneID).t ));
+			Vec3 limbPosInLocal(pGrab->GetWorldTM().GetInverted()*(pEnt->GetSlotWorldTM(pLimb->characterSlot) * pCharacter->GetISkeletonPose()->GetAbsJointByID(pLimb->rootBoneID).t ));
 
 			float minDist(9999.9f);
 			for (int i=0;i<2;++i)
@@ -732,19 +876,13 @@ void CAnimatedGrabHandler::ProcessIKLimbs (ICharacterInstance * pCharacter)
 	if (m_grabStats.grabId>0 && pCharacter && m_grabStats.followBoneID>-1)
 	{
 		Matrix34 entMtx(m_pActor->GetEntity()->GetSlotWorldTM(0));
-		//entMtx.NoScale();
 
-		QuatT boneQ(pCharacter->GetISkeleton()->GetAbsJQuatByID(m_grabStats.followBoneID));
-//		Matrix34 boneMtx(pCharacter->GetISkeleton()->GetRelJQuatByID(m_grabStats.followBoneID));
-//		boneMtx.OrthonormalizeFast();
+		QuatT boneQ(pCharacter->GetISkeletonPose()->GetAbsJointByID(m_grabStats.followBoneID));
 		Vec3 bonePos(boneQ.t );
 
 		//static float color[] = {1,1,1,1};
 		//gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(entMtx* bonePos,ColorB(255,255,0,100),entMtx * (bonePos +boneMtx * m_grabStats.grabOffset),ColorB(255,255,0,100) );
-		// temporary, didnt manage to make the bone matrix work correctly
-		QuatT actMtx(pCharacter->GetISkeleton()->GetRelJQuatByID(0));
-		Vec3 offset = actMtx * m_grabStats.grabOffset;
-		m_grabStats.followBoneWPos = entMtx * (bonePos) + offset;
+		m_grabStats.followBoneWPos = entMtx * bonePos;
 	}
 	else
 		m_grabStats.followBoneWPos.zero();
@@ -872,7 +1010,7 @@ void CMultipleGrabHandler::Reset()
 	m_handlers.erase (m_handlers.begin (), m_handlers.end ());
 }
 
-void CMultipleGrabHandler::Serialize(TSerialize ser, unsigned aspects)
+void CMultipleGrabHandler::Serialize(TSerialize ser)
 {
 	int numHandlers;
 	if (ser.IsWriting())
@@ -891,7 +1029,7 @@ void CMultipleGrabHandler::Serialize(TSerialize ser, unsigned aspects)
 	std::vector <CAnimatedGrabHandler*>::iterator it = m_handlers.begin();
 	std::vector <CAnimatedGrabHandler*>::iterator end = m_handlers.end();
 	for ( ; it != end; ++it)
-		(*it)->Serialize (ser, aspects);
+		(*it)->Serialize (ser);
 }
 
 void CMultipleGrabHandler::ProcessIKLimbs(ICharacterInstance * pCharacter)

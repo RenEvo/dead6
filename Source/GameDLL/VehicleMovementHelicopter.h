@@ -48,6 +48,7 @@ public:
 
 private:
 	float m_hoveringPower;
+	float m_forwardAction;
 	float m_actionPitch;
 	float m_actionYaw;
 	float m_actionRoll;
@@ -70,9 +71,10 @@ public:
 	void Init(CVehicleMovementHelicopter* pHelicopterMovement);
 
 	void RegisterValue(float* pValue, bool isAccumulator, float perUpdateMult, const string& name);
-	void RegisterAction(TVehicleActionId actionId, EValueModif valueModif, float* pValue);
+	void RegisterAction(TVehicleActionId actionId, EValueModif valueModif, float* pValue, ICVar* pSensivityCVar = NULL);
 
 	void SetValueUpdateMult(float* pValue, float perUpdateMult);
+	void SetActionMult(TVehicleActionId actionId, float mult);
 
 	void Reset();
 	void OnAction(const TVehicleActionId actionId, int activationMode, float value);
@@ -103,6 +105,9 @@ protected:
 
 		int movementValueId;
 		EValueModif valueModif;
+		
+		float mult;
+		ICVar* pSensivityCVar;
 	};
 
 	CVehicleMovementHelicopter* m_pHelicopterMovement;
@@ -133,7 +138,7 @@ public:
 	virtual void Physicalize();
 
   virtual EVehicleMovementType GetMovementType() { return eVMT_Air; }
-	virtual float GetDamageRatio() { return min(1.0f, m_damage + m_steeringDamage); }
+	virtual float GetDamageRatio() { return min(1.0f, max(m_damage, m_steeringDamage/3.0f ) ); }
 
 	virtual bool StartEngine(EntityId driverId);
 	virtual void StopEngine();
@@ -169,12 +174,16 @@ public:
 	virtual void UpdateDamages(float deltaTime);
 	virtual void UpdateEngine(float deltaTime);
 	virtual void ProcessActions_AdjustActions(float deltaTime) {}
+	virtual void SetSoundMasterVolume(float vol);
 
 	virtual void GetMemoryStatistics(ICrySizer * s);
+
+	virtual void ProcessActionsLift(float deltaTime);
 
 protected:
 
 	float GetEnginePower();
+	float GetDamageMult();
 
 	pe_action_impulse m_control;
 	pe_action_impulse m_controlDamages;
@@ -193,8 +202,8 @@ protected:
   // heli abilities
 	float m_altitudeMax;
   float m_rotationDamping;
-	float m_liftForce;
 	float m_strafeForce;
+
   /// Adjustment to the rotor up direction with control input. 1 means direction changes by 45degrees
   /// at full control input
   float m_rotorDiskTiltScale; 
@@ -212,6 +221,7 @@ protected:
   float m_tiltPerVelDifference;
   float m_maxTiltAngle;
   float m_extraRollForTurn;
+	float m_rollForTurnForce;
   float m_yawPerRoll;
   float m_pitchActionPerTilt;
   // power control
@@ -221,12 +231,20 @@ protected:
   float m_yawInputConst;
   float m_yawInputDamping;
   float m_lastDir;
+	float m_maxRollAngle;
+
+	float m_turbulenceMultMax;
+	
+	float m_pitchInputConst;
 
 	float m_playerDampingBase;
 	float m_playerDampingRotation;
 	float m_playerDimLowInput;
 	Vec3 m_playerRotationMult;
-	float m_playerYawStopSpeed;
+
+	float m_relaxForce;
+
+	float m_maxPitchAngleMov;
 
   // ramps from 0 to m_enginePowerMax during idle-up
 	float m_enginePower;
@@ -236,7 +254,6 @@ protected:
 
 	float m_damageActual;
 	float m_steeringDamage;
-	float m_timeUntilNextDamageImpulse;
 	float m_turbulence;
 
 	// movement actions (to be modified by AI and player actions) and correspond 
@@ -271,6 +288,8 @@ protected:
 	float m_playerAcceleration;
 	float m_noHoveringTimer;
 	float m_xyHelp;
+	float m_liftPitchAngle;
+	float m_relaxTimer;
 
 	// ai
 	CMovementRequest m_aiRequest;
@@ -294,14 +313,19 @@ protected:
 	float m_engineForce;
 	float m_mass;
 
+	float m_velDamp;
+
 	float m_boostMult;
+	float m_vehicleVolume;
 
 	ICVar* m_pInvertPitchVar;
 	ICVar* m_pAltitudeLimitVar;
 	ICVar* m_pAltitudeLimitLowerOffsetVar;
 	ICVar* m_pAirControlSensivity;
+	ICVar* m_pStabilizeVTOL;
 
 	friend class CNetworkMovementHelicopter;
+
 };
 
 #endif

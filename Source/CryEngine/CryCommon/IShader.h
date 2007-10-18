@@ -25,12 +25,9 @@ struct STexAnim;
 struct SShaderPass;
 struct CRenderMesh;
 struct SShaderItem;
-class CTexture;
 class ITexture;
 struct SParam;
-class  CHWShader;
 class CMaterial;
-struct SHWSkinBatch;
 
 
 //================================================================
@@ -58,83 +55,6 @@ enum ESrcPointer
   eSrcPointer_Max,
 };
 
-class COrthoNormalBasis  
-{
-public:
-  COrthoNormalBasis()
-  {
-    m_vForward = Vec3(1,0,0);
-    m_vUp = Vec3(0,0,1);
-    m_vRight = Vec3(0,1,0);
-  }
-  COrthoNormalBasis(const COrthoNormalBasis& basis)
-  {
-    m_vForward = basis.m_vForward;
-    m_vUp = basis.m_vUp;
-    m_vRight = basis.m_vRight;
-  }
-  COrthoNormalBasis(const Vec3& vForward, const Vec3& vUp, const Vec3& vRight)
-  {
-    m_vForward = vForward;
-    m_vUp = vUp;
-    m_vRight = vRight;
-  }
-
-  ~COrthoNormalBasis()
-  {
-  }
-  COrthoNormalBasis& operator=(const COrthoNormalBasis& basis)
-  {
-    m_vForward = basis.m_vForward;
-    m_vUp = basis.m_vUp;
-    m_vRight = basis.m_vRight;
-    return *this;
-  };
-
-  Matrix44 matrixBasisToXYZ() const
-  {
-    Matrix44 mat;
-    mat.SetIdentity();
-
-    mat(0,0) = m_vForward.x;   mat(0,1) = m_vForward.y;   mat(0,2) = m_vForward.z; 
-    mat(1,0) = m_vUp.x;        mat(1,1) = m_vUp.y;        mat(1,2) = m_vUp.z; 
-    mat(2,0) = m_vRight.x;     mat(2,1) = m_vRight.y;     mat(2,2) = m_vRight.z; 
-
-    return mat;
-  }
-  Matrix44 matrixXYZToBasis() const
-  {
-    Matrix44 mat;
-    mat.SetIdentity();
-
-    mat(0,0)  = m_vForward.x;   mat(0,1) = m_vUp.x;       mat(0,2) = m_vRight.x; 
-    mat(1,0)  = m_vForward.y;   mat(1,1) = m_vUp.y;       mat(1,2) = m_vRight.y; 
-    mat(2,0)  = m_vForward.z;   mat(2,1) = m_vUp.z;       mat(2,2) = m_vRight.z; 
-
-    return mat;
-  }
-  Matrix44 matrixBasisToDestBasis(const COrthoNormalBasis& dest) const
-  {
-    return (dest.matrixXYZToBasis() * this->matrixBasisToXYZ());
-  }
-
-  COrthoNormalBasis& rotate(const Vec3& axis, const float degrees)
-  {
-    Matrix33 m;
-    m.SetRotationAA(DEG2RAD(degrees),axis.GetNormalized());
-    m_vForward = m * m_vForward;
-    m_vRight = m * m_vRight;
-    m_vUp = m * m_vUp;
-
-    return *this;
-  };
-
-  Vec3 m_vForward; //tangent
-  Vec3 m_vUp;      //binormal
-  Vec3 m_vRight;   //normal
-};
-
-
 //////////////////////////////////////////////////////////////////////
 // CRenderObject::m_ObjFlags: Flags used by shader pipeline
 #define FOB_TRANS_ROTATE    (1<<0)      // 1
@@ -142,46 +62,46 @@ public:
 #define FOB_TRANS_TRANSLATE (1<<2)      // 4
 #define FOB_TRANS_MASK (FOB_TRANS_ROTATE | FOB_TRANS_SCALE | FOB_TRANS_TRANSLATE)
 
-#define FOB_RENDER_INTO_SHADOWMAP (1<<3) // 8
-#define FOB_DRSUN           (1<<4)       // 0x10
-#define FOB_NO_FOG (1<<5)      // 0x20
+#define FOB_RENDER_INTO_SHADOWMAP (1<<3)	// 8
+#define FOB_OWNER_GEOMETRY  (1<<4)				// 0x10
+#define FOB_NO_FOG					(1<<5)				// 0x20
 #define FOB_NO_Z_PASS       (1<<6)       // 0x40
 #define FOB_DETAILPASS      (1<<7)       // 0x80
+
 #define FOB_FOGPASS         (1<<8)       // 0x100
 #define FOB_SELECTED        (1<<9)       // 0x200
-#define FOB_VEGETATION      (1<<30)      // 0x400
+#define FOB_CAMERA_SPACE		(1<<10)      // 0x400
 #define FOB_ONLY_Z_PASS			(1<<11)      // 0x800
-#define FOB_BLEND_WITH_TERRAIN_COLOR (1<<12) // 0x1000
-#define FOB_REMOVED         (1<<13)      // 0x2000
-#define FOB_SOFT_PARTICLE   (1<<14)      // 0x4000
-#define FOB_SORTPOLYS				(1<<15)      // 0x8000
+
+#define FOB_BLEND_WITH_TERRAIN_COLOR (1<<12)	// 0x1000
+#define FOB_REMOVED         (1<<13)						// 0x2000
+#define FOB_SOFT_PARTICLE   (1<<14)						// 0x4000
+#define FOB_OCEAN_PARTICLE				(1<<15)						// 0x8000
+
 #define FOB_CUSTOM_CAMERA   (1<<16)      // 0x10000
 #define FOB_AMBIENT_OCCLUSION (1<<17)    // 0x20000
-
 #define FOB_BENDED          (1<<18)      // 0x40000
-#define FOB_ALPHABLENDED    (1<<19)      // 0x80000
-#define FOB_INSHADOW        (1<<20)      // 0x100000
+#define FOB_MTLLAYERS_OBJSPACE  (1<<19)      // 0x80000
 
-#define FOB_DISSOLVE       (1<<21)      // 0x200000
+#define FOB_INSHADOW        (1<<20)      // 0x100000
+#define FOB_DISSOLVE       (1<<21)       // 0x200000
 #define FOB_RAE_GEOMTERM		(1<<22)      // 0x400000
 #define FOB_NEAREST         (1<<23)      // 0x800000
 
-
 #define FOB_CHARACTER       (1<<24)      // 0x1000000
-//#define FOB_INDIR_LIGHT			(1<<25)      // 0x2000000
+#define FOB_MTLLAYERS_BLEND (1<<25)      // 0x2000000
+#define FOB_PARTICLE_MASK		(FOB_SOFT_PARTICLE | FOB_NO_FOG | FOB_OCEAN_PARTICLE)
 
-#define FOB_NO_GENERAL_PASS (1<<25)       // 0x8000000
-#define FOB_PARTICLE_MASK		(FOB_SOFT_PARTICLE | FOB_NO_FOG)
+#define FOB_HIGHPRECISION   (1<<26)      // 0x4000000
 
-#define FOB_HIGHPRECISION   (1<<26)      // 0x10000000
-
-#define FOB_DECAL           (1<<27)      // 0x20000000
-#define FOB_DECAL_TEXGEN_2D (1<<28)      // 0x40000000
-#define FOB_DECAL_TEXGEN_3D (1<<29)      // 0x80000000
+#define FOB_DECAL           (1<<27)      // 0x8000000
+#define FOB_DECAL_TEXGEN_2D (1<<28)      // 0x10000000
+#define FOB_DECAL_TEXGEN_3D (1<<29)      // 0x20000000
+#define FOB_VEGETATION      (1<<30)      // 0x40000000
 #define FOB_DECAL_MASK		  (FOB_DECAL | FOB_DECAL_TEXGEN_2D | FOB_DECAL_TEXGEN_3D)
 
 // WARNING: FOB_MASK_AFFECTS_MERGING must start from 0x10000 (important for instancing)
-#define FOB_MASK_AFFECTS_MERGING  (FOB_VEGETATION | FOB_CHARACTER | FOB_BENDED | FOB_RAE_GEOMTERM | FOB_INSHADOW | FOB_ALPHABLENDED | FOB_HIGHPRECISION | FOB_AMBIENT_OCCLUSION | FOB_CUSTOM_CAMERA | FOB_NO_GENERAL_PASS | FOB_DISSOLVE)
+#define FOB_MASK_AFFECTS_MERGING  (FOB_VEGETATION | FOB_CHARACTER | FOB_BENDED | FOB_RAE_GEOMTERM | FOB_INSHADOW | FOB_MTLLAYERS_OBJSPACE | FOB_HIGHPRECISION | FOB_AMBIENT_OCCLUSION | FOB_CUSTOM_CAMERA | FOB_MTLLAYERS_BLEND | FOB_DISSOLVE | FOB_NEAREST)
 
 struct SWaveForm;
 struct SWaveForm2;
@@ -285,47 +205,6 @@ struct SShaderParam
         continue;
       if (!stricmp(sp->m_Name, name))
       {
-#if defined(PS3)
-				//COMPILER_BUG (03/2007): the current ps3 compiler puts the switch statement into the 
-				//	linkonce section but jump tables > 8 entries use a toc so this is not linkable for different modules
-				if(sp->m_Type == eType_FLOAT)
-				{
-					sp->m_Value.m_Float = pr.m_Float;
-				}
-				else
-				if(sp->m_Type == eType_SHORT)
-				{
-					sp->m_Value.m_Short = pr.m_Short;
-				}
-				else
-				if(sp->m_Type == eType_INT || sp->m_Type == eType_TEXTURE_HANDLE)
-				{
-					sp->m_Value.m_Int = pr.m_Int;
-				}
-				else
-				if(sp->m_Type == eType_VECTOR)
-				{
-					sp->m_Value.m_Vector[0] = pr.m_Vector[0];
-					sp->m_Value.m_Vector[1] = pr.m_Vector[1];
-					sp->m_Value.m_Vector[2] = pr.m_Vector[2];
-				}
-				else
-				if(sp->m_Type == eType_FCOLOR)
-				{
-					sp->m_Value.m_Color[0] = pr.m_Color[0];
-					sp->m_Value.m_Color[1] = pr.m_Color[1];
-					sp->m_Value.m_Color[2] = pr.m_Color[2];
-					sp->m_Value.m_Color[3] = pr.m_Color[3];
-				}
-				else
-				if(sp->m_Type == eType_STRING)
-				{
-					char *str = pr.m_String;
-					size_t len = strlen(str)+1;
-					sp->m_Value.m_String = new char [len];
-					strcpy(sp->m_Value.m_String, str);
-				}
-#else
         switch (sp->m_Type)
         {          
           case eType_FLOAT:
@@ -361,7 +240,6 @@ struct SShaderParam
             }
             break;
         }
-#endif
         break;
       }
     }
@@ -424,15 +302,22 @@ struct IShaderPublicParams
 
 struct SInstanceInfo
 {
-  Matrix34 instMat;
-  ColorF instColor;
+  Matrix34 m_Matrix;
+  ColorF m_AmbColor;
 };
 
 struct SRenderObjData
 {
   struct IRenderMesh *				m_pLMTCBufferO;
   uint32											m_nRAEPortalMask;												// mask of the lights with portal
-  PodArray<SInstanceInfo> *   m_pInstancingInfo;
+  DynArray16<SInstanceInfo>  *m_pInstancingInfo;
+  DynArray<Vec4>              m_Constants;
+  SRenderObjData()
+  {
+    m_pLMTCBufferO = NULL;
+    m_nRAEPortalMask = 0;
+    m_pInstancingInfo = NULL;
+  }
 };
 
 
@@ -446,7 +331,7 @@ struct ISkinnable
   virtual void Release() = 0;
 
   //! Renderer calls this function to allow update the video vertex buffers right before the rendering
-  virtual void GetSkeletonPose(int nLod, const Matrix34& RenderMat34, QuatTS*& pBoneQuatsL, QuatTS*& pBoneQuatsS, QuatTS*& pMBBoneQuatsL, QuatTS*& pMBBoneQuatsS, Vec4 shapeDeformationData[], uint32 &DoWeNeedMorphtargets ) = 0;
+  virtual uint32 GetSkeletonPose(int nLod, const Matrix34& RenderMat34, QuatTS*& pBoneQuatsL, QuatTS*& pBoneQuatsS, QuatTS*& pMBBoneQuatsL, QuatTS*& pMBBoneQuatsS, Vec4 shapeDeformationData[], uint32 &DoWeNeedMorphtargets ) = 0;
 };
 
 //same as in the 3dEngine
@@ -471,6 +356,7 @@ public:
 
     m_nMotionBlurAmount = 0;
     m_nMaterialLayers = 0;
+    m_nVisionParams = 0;
     m_pCurrMaterial = 0;
 
     m_vBending.zero();
@@ -485,39 +371,38 @@ public:
 
   uint m_ObjFlags;
 
-  Matrix34 m_Matrix;
+  SInstanceInfo m_II;
   Matrix34 m_prevMatrix;
 
+  uint32                      m_nMaterialLayers;          // which mtl layers active and how much to blend them
   uint8												m_nLod;	           
   uint8                       m_nMotionBlurAmount;        // per object motion blur scale
-  uint8                       m_nMaterialLayers;
   uint8												m_AlphaRef;								//
 
   uint                        m_DynLMMask;
 
   // Different useful vars (ObjVal component in shaders)
   // [0] - used for blending trees sun-rabbits on distance (0-1)
-  float                       m_fTempVars[5]; 
+  float                       m_fTempVars[6]; 
 
   CRendElement *							m_pRE;										//
-  struct IRenderMesh *				m_pWeights;								//
+  IRenderMesh *               m_pWeights;								//
   void *											m_CustomData;							//  
   uint												m_RState;									//
 
   float												m_fSort;									// Custom sort value
 
-  uint32											m_nRAEColdDataIdx;				// index of the cold datas
+  uint32                      m_nMDV; 	            		// Vertex modificator flags
 
   short                       m_nRAEId;                 // This 2 parameters must be paired (see EF_TryToMerge function)
-	short												m_nTextureID;             // Custom texture id
+  short												m_nTextureID;             // Custom texture id
 
-	short												m_nTextureID1;            // Custom texture id
+  short												m_nTextureID1;            // Custom texture id
   short                       m_nWaveID;    
   short                       m_nFrameLight;
   short                       m_nLightStyle;
 
   short                       m_nScissorX1, m_nScissorY1, m_nScissorX2, m_nScissorY2;
-  uint8												m_cGBufferValue;
   
   float												m_fDistance;								// distance to the object
   float												m_fRenderQuality;						// 1.0f - full quality, 0.0f - lowest quality, used by CStatObj
@@ -525,7 +410,6 @@ public:
   PodArray<ShadowMapFrustum*> *	m_pShadowCasters;						// list of shadow casters 
   void *											m_pID;											// will define instance id, e.g. pointer to CStatObj, CTerrainNode, COcean
 
-  ColorF											m_AmbColor;								  // .rgb=color, .a=brightness
   float                       m_fAlpha;                   // object alpha
 
   Vec2												m_vBending;									// 2D bending direction and magnitude.
@@ -534,9 +418,8 @@ public:
 
   struct ISkinnable *					m_pCharInstance;
 
-	uint32											m_HMAData;
-	IVisArea*										m_pVisArea;									//	VisArea that contains this object, used for RAM-ambientcube query 
-	struct IRenderMesh *				m_pRenderMesh;							//	Needed for AABBox query
+  uint32											m_HMAData;
+  IVisArea*										m_pVisArea;									//	VisArea that contains this object, used for RAM-ambientcube query 
 
   union
   {
@@ -544,21 +427,22 @@ public:
     CDLight *m_pLight;
     CCamera *m_pCustomCamera;    //
     float m_fBendScale;
+    uint32 m_nVisionParams; // Vision modes stuff
  };
 
 //=========================================================================================================
 
   _inline Vec3 GetTranslation() const
   {
-    return m_Matrix.GetTranslation();
+    return m_II.m_Matrix.GetTranslation();
   }
   _inline float GetScaleX() const
   {
-    return cry_sqrtf(m_Matrix(0,0)*m_Matrix(0,0) + m_Matrix(0,1)*m_Matrix(0,1) + m_Matrix(0,2)*m_Matrix(0,2));
+    return cry_sqrtf(m_II.m_Matrix(0,0)*m_II.m_Matrix(0,0) + m_II.m_Matrix(0,1)*m_II.m_Matrix(0,1) + m_II.m_Matrix(0,2)*m_II.m_Matrix(0,2));
   }
   _inline float GetScaleZ() const
   {
-    return cry_sqrtf(m_Matrix(2,0)*m_Matrix(2,0) + m_Matrix(2,1)*m_Matrix(2,1) + m_Matrix(2,2)*m_Matrix(2,2));
+    return cry_sqrtf(m_II.m_Matrix(2,0)*m_II.m_Matrix(2,0) + m_II.m_Matrix(2,1)*m_II.m_Matrix(2,1) + m_II.m_Matrix(2,2)*m_II.m_Matrix(2,2));
   }
   _inline bool IsMergable()
   {
@@ -572,7 +456,7 @@ public:
   }
 
   static TArray<SWaveForm2> m_Waves;
-  static TArray<SRenderObjData> m_ObjData;
+  static DynArray<SRenderObjData> m_ObjData;
 
   void Init();
 
@@ -585,18 +469,22 @@ public:
     m_VisId = VisId;
   }
 
-  Matrix34 &GetMatrix()
+  ILINE Matrix34 &GetMatrix()
   {
-    return m_Matrix;
+    return m_II.m_Matrix;
   }
 
-  IRenderMesh *GetWeights() { return m_pWeights; }
+  ILINE IRenderMesh *GetWeights() { return m_pWeights; }
 
   virtual void AddWaves(SWaveForm2 **wf);
   virtual SRenderObjData *GetObjData(bool bCreate=false);
   virtual void RemovePermanent();
   //virtual void SetShaderFloat(const char *Name, float Val);
 
+  ILINE DynArray16<SInstanceInfo> *GetInstanceInfo()
+  {
+    return m_nObjDataId>=0 ? m_ObjData[m_nObjDataId].m_pInstancingInfo : NULL;
+  }
   // Sergiy: it's enough to allocate 16 bytes more, even on 64-bit machine
   // - and we need to store only the offset, not the actual pointer
   void* operator new( size_t Size )
@@ -641,49 +529,6 @@ public:
 
 
 //=================================================================================
-
-// Light Materials
-
-#define LMF_IGNORELIGHTS 1
-#define LMF_BUMPMATERIAL 2
-#define LMF_NOAMBIENT    4
-#define LMF_COLMAT_AMB   8
-#define LMF_POLYOFFSET   0x10
-#define LMF_NOALPHA      0x20
-#define LMF_IGNOREPROJLIGHTS 0x40
-#define LMF_NOBUMP       0x80
-#define LMF_DISABLE      0x100
-#define LMF_NOSPECULAR   0x200
-#define LMF_NOADDSPECULAR 0x400
-#define LMF_HASPSHADER   0x800
-#define LMF_DIVIDEAMB4   0x1000
-#define LMF_DIVIDEAMB2   0x2000
-#define LMF_DIVIDEDIFF4  0x4000
-#define LMF_DIVIDEDIFF2  0x8000
-
-#define LMF_LIGHT0       0x10000
-#define LMF_LIGHT1       0x20000
-#define LMF_LIGHT2       0x30000
-#define LMF_LIGHT3       0x40000
-#define LMF_LIGHT4       0x50000
-#define LMF_LIGHT5       0x60000
-#define LMF_LIGHT6       0x70000
-#define LMF_LIGHT7       0x80000
-
-#define LMF_LIGHT_MASK   0xf0000
-
-#define LMF_1SAMPLES     0x100000
-#define LMF_2SAMPLES     0x200000
-#define LMF_3SAMPLES     0x400000
-#define LMF_4SAMPLES     0x800000
-#define LMF_SAMPLES      0xf00000
-
-#define LMF_LIGHT_SHIFT  16
-
-#define LMF_ONLYMATERIALAMBIENT 0x1000000
-#define LMF_USEOCCLUSIONMAP     0x2000000
-#define LMF_HASAMBIENT          0x4000000
-#define LMF_HASDOT3LM           0x8000000
 
 class CInputLightMaterial
 {
@@ -777,7 +622,7 @@ enum ETEX_Format
 #define FT_TEX_SKY          0x4
 #define FT_USAGE_DEPTHSTENCIL 0x8
 #define FT_TEX_LM           0x10
-#define FT_NOATTACHEDALPHA  0x20				// supress loading of attached alpha
+#define FT_FILESINGLE			  0x20				// supress loading of attached alpha
 #define FT_TEX_FONT         0x40
 #define FT_HAS_ATTACHED_ALPHA 0x80
 #define FT_DONTSYNCMULTIGPU 0x100				// through NVAPI we tell driver not to sync
@@ -814,6 +659,7 @@ enum ETEX_Format
 
 //////////////////////////////////////////////////////////////////////
 // Texture object interface
+class CTexture;
 class ITexture
 {
 public:
@@ -846,7 +692,7 @@ public:
   // Used for debugging/profiling.
   virtual const char* GetFormatName() = 0;
   virtual const char* GetTypeName() = 0;
-	virtual bool IsShared() const = 0;
+  virtual bool IsShared() const = 0;
 };
 
 //=========================================================================================
@@ -856,10 +702,7 @@ struct IDynTextureSource
   virtual void AddRef() = 0;
   virtual void Release() = 0;
 
-	virtual IDynTextureSource* Clone() = 0;
-
-  virtual void CalcSize(int& width, int& height) const = 0;
-  virtual bool Update() = 0;
+  virtual bool Update(float distToCamera) = 0;
   virtual bool Apply(int nTUnit, int nTS = -1) = 0;	
   virtual void GetTexGenInfo(float& offsX, float& offsY, float& scaleX, float& scaleY) const = 0;
 
@@ -895,6 +738,37 @@ public:
   virtual void ResetUpdateMask()=0;
   virtual bool IsSecondFrame()=0;
 };
+
+
+//==============================================================================
+// Vertex modificators definitions 
+
+#define MDV_BENDING            0x100
+#define MDV_DET_BENDING        0x200
+#define MDV_DET_BENDING_GRASS  0x400
+#define MDV_WIND               0x800
+#define MDV_TERRAIN_ADAPT      0x1000
+#define MDV_DEPTH_OFFSET       0x2000
+
+//==============================================================================
+// Deformations / Morphing types
+enum EDeformType
+{
+  eDT_Unknown = 0,
+  eDT_SinWave = 1,
+  eDT_VerticalWave = 2,
+  eDT_Bulge = 3,
+  eDT_Squeeze = 4,
+  eDT_Perlin2D = 5,
+  eDT_Perlin3D = 6,
+  eDT_FromCenter = 7,
+  eDT_Bending = 8,  
+  eDT_ProcFlare = 9,
+  eDT_AutoSprite = 10,
+  eDT_Beam = 11,
+  eDT_FixedOffset = 12,
+};
+
 
 // Wave form evaluators
 enum EWaveForm
@@ -1010,29 +884,6 @@ struct SWaveForm2
   }
 };
 
-//==============================================================================
-// Vertex modificators definitions 
-
-//==============================================================================
-// Deformations / Morphing types
-enum EDeformType
-{
-  eDT_Unknown = 0,
-  eDT_SinWave = 1,
-  eDT_VerticalWave = 2,
-  eDT_Bulge = 3,
-  eDT_Squeeze = 4,
-  eDT_Perlin2D = 5,
-  eDT_Perlin3D = 6,
-  eDT_FromCenter = 7,
-  eDT_Bending = 8,  
-  eDT_ProcFlare = 9,
-  eDT_AutoSprite = 10,
-  eDT_Beam = 11,
-  eDT_FixedOffset = 12,
-  eDT_DepthOffset = 13,
-};
-
 struct SDeformInfo
 {
   EDeformType m_eType;
@@ -1067,24 +918,6 @@ struct SDeformInfo
 };
 
 //==============================================================================
-
-struct SSkyInfo
-{
-  CTexture *m_SkyBox[3];
-  float m_fSkyLayerHeight;
-
-  int Size()
-  {
-    int nSize = sizeof(SSkyInfo);
-    return nSize;
-  }
-  SSkyInfo()
-  {
-    memset(this, 0, sizeof(SSkyInfo));
-  }
-  ~SSkyInfo();
-};
-
 
 // Color operations
 enum EColorOp
@@ -1126,19 +959,6 @@ enum EColorArg
 
 #define DEF_TEXARG0 (eCA_Texture|(eCA_Diffuse<<3))
 #define DEF_TEXARG1 (eCA_Texture|(eCA_Previous<<3))
-
-enum eCompareFunc
-{
-  eCF_Disable,
-  eCF_Never,
-  eCF_Less,
-  eCF_Equal,
-  eCF_LEqual,
-  eCF_Greater,
-  eCF_NotEqual,
-  eCF_GEqual,
-  eCF_Always
-};
 
 // Animating Texture sequence definition
 struct STexAnim
@@ -1415,6 +1235,15 @@ struct STexState
     m_bActive = false;
     m_bComparison = false;
   }
+	STexState(int nFilter, int nAddressU, int nAddressV, int nAddressW, unsigned int borderColor)
+	{
+		m_pDeviceState = NULL;
+		SetFilterMode(nFilter);
+		SetClampMode(nAddressU, nAddressV, nAddressW);
+		SetBorderColor(borderColor);
+		m_bActive = false;
+		m_bComparison = false;
+	}
 #ifdef _RENDERER
   ~STexState();
   STexState (const STexState& src);
@@ -1518,18 +1347,9 @@ struct STexSampler
     if (m_pITex)
       m_pITex->AddRef();
 
-		IDynTextureSource* pClonedDynTexSrc(0);
-		if (src.m_pDynTexSource)
-			pClonedDynTexSrc = src.m_pDynTexSource->Clone();
-
-		if (!pClonedDynTexSrc)
-		{
-			m_pDynTexSource = src.m_pDynTexSource;
-			if (m_pDynTexSource)
-				m_pDynTexSource->AddRef();
-		}
-		else
-			m_pDynTexSource = pClonedDynTexSrc;
+		m_pDynTexSource = src.m_pDynTexSource;
+		if (m_pDynTexSource)
+			m_pDynTexSource->AddRef();
 
     m_Name = src.m_Name;
     m_Texture = src.m_Texture;
@@ -1541,7 +1361,7 @@ struct STexSampler
     m_nTexFlags = src.m_nTexFlags;
     m_pAnimInfo = src.m_pAnimInfo;
     m_nTexState = src.m_nTexState;
-		m_nSamplerSlot = src.m_nSamplerSlot;
+    m_nSamplerSlot = src.m_nSamplerSlot;
   }
   STexSampler& operator = (const STexSampler& src)
   {
@@ -1714,111 +1534,40 @@ struct SBaseShaderResources
   {
     m_ShaderParams.clear();
   }
-  ~SBaseShaderResources()
+  virtual ~SBaseShaderResources()
   {
     ReleaseParams();
   }
 };
 
-#define PS_DIFFUSE_COL    0
-#define PS_SPECULAR_COL   1
-#define PS_EMISSIVE_COL   2
-
-struct SRenderShaderResources : SBaseShaderResources
+struct IRenderShaderResources
 {
-  int m_Id;
-  int m_nRefCounter;
-  SEfResTexture *m_Textures[EFTT_MAX];
-  TArray<struct SHRenderTarget *> m_RTargets;
-  CCamera *m_pCamera;
-  SSkyInfo *m_pSky;
-  SDeformInfo *m_pDeformInfo;  
-  DynArray<Vec4> m_Constants[2];
-  void *m_pCB[2];                 // PM Constant Buffers (DX10 only)
-  
-  int m_nLastTexture;
-  int m_nFrameLoad;
-  float m_fMinDistanceLoad;
+  virtual void AddRef() = 0;
+  virtual void UpdateConstants(IShader *pSH) = 0;
+  virtual void CloneConstants(const IRenderShaderResources* pSrc) = 0;
+  virtual void ExportModificators(IRenderShaderResources* pTrg, CRenderObject *pObj) = 0;
+  virtual void SetInputLM(const CInputLightMaterial& lm) = 0;
+  virtual void ToInputLM(CInputLightMaterial& lm) = 0;
+  virtual ColorF& GetDiffuseColor() = 0;
+  virtual ColorF& GetSpecularColor() = 0;
+  virtual ColorF& GetEmissiveColor() = 0;
+  virtual float& GetSpecularShininess() = 0;
+  virtual int GetResFlags() = 0;
+  virtual void SetMtlLayerNoDrawFlags( uint8 nFlags ) = 0;
+  virtual uint8 GetMtlLayerNoDrawFlags() const = 0;
+  virtual CCamera *GetCamera() = 0;
+  virtual void SetCamera(CCamera *pCam) = 0;
+  virtual void SetMaterialName(const char *szName) = 0;
+  virtual float& GetGlow() = 0;
+  virtual float& GetAlphaRef() = 0;
+  virtual float& GetOpacity() = 0;
+  virtual SEfResTexture *GetTexture(int nSlot) const = 0;
+  virtual DynArray<SShaderParam>& GetParameters() = 0;
 
-  void AddTextureMap(int Id)
-  {
-    assert (Id >=0 && Id < EFTT_MAX);
-    m_Textures[Id] = new SEfResTexture;
-  }
-  int Size()
-  {
-    int nSize = sizeof(SRenderShaderResources);
-    for (int i=0; i<EFTT_MAX; i++)
-    {
-      if (m_Textures[i])
-        nSize += m_Textures[i]->Size();
-    }
-    nSize += m_Constants[0].get_alloc_size();
-    nSize += m_Constants[1].get_alloc_size();
-    nSize += m_RTargets.GetMemoryUsage();
-    if (m_pDeformInfo)
-      nSize += m_pDeformInfo->Size();
-    return nSize;
-  }
-  SRenderShaderResources& operator=(const SRenderShaderResources& src);
-  SRenderShaderResources(struct SInputShaderResources *pSrc);
-
-  void PostLoad(CShader *pSH);
-  virtual void UpdateConstants(CShader *pSH);
-  void ReleaseConstants();
-  inline float& GetOpacity()
-  {
-    return m_Constants[1][0][3];
-  }
-  inline float& GetGlow()
-  {
-    return m_Constants[1][2][3];
-  }
-
-  void Reset()
-  {
-    for (int i=0; i<EFTT_MAX; i++)
-    {
-      m_Textures[i] = NULL;
-    }
-    m_Id = 0;
-    m_nLastTexture = 0;
-    m_pDeformInfo = NULL;    
-    m_pCamera = NULL;
-    m_pSky = NULL;
-    m_pCB[0] = m_pCB[1] = NULL;
-  }
-  SRenderShaderResources()
-  {
-    Reset();
-  }
-  bool IsEmpty(int nTSlot) const
-  {
-    if (!m_Textures[nTSlot])
-      return true;
-    return false;
-  }
-  virtual void SetInputLM(const CInputLightMaterial& lm);
-  virtual void ToInputLM(CInputLightMaterial& lm);
-  virtual ColorF& GetDiffuseColor();
-  virtual ColorF& GetSpecularColor();
-  virtual ColorF& GetEmissiveColor();
-  virtual float& GetSpecularShininess();
-
-  ~SRenderShaderResources();
-  virtual void Release()
-  {
-#ifdef NULL_RENDERER
-    return;
-#endif
-    m_nRefCounter--;
-    if (!m_nRefCounter)
-      delete this;
-  }
-  void AddRef() { m_nRefCounter++; }
-  virtual void ConvertToInputResource(SInputShaderResources *pDst);
-  virtual SRenderShaderResources *Clone();
-  virtual void SetShaderParams(SInputShaderResources *pDst, IShader *pSH);
+  virtual void Release() = 0;
+  virtual void ConvertToInputResource(struct SInputShaderResources *pDst) = 0;
+  virtual IRenderShaderResources *Clone() = 0;
+  virtual void SetShaderParams(struct SInputShaderResources *pDst, IShader *pSH) = 0;
 };
 
 
@@ -1866,27 +1615,13 @@ struct SInputShaderResources : public SBaseShaderResources
     m_GlowAmount = 0.0f;
   }
 
-  SInputShaderResources(SRenderShaderResources *pSrc)
+  SInputShaderResources(struct IRenderShaderResources *pSrc)
   {
     pSrc->ConvertToInputResource(this);
-    m_TexturePath = pSrc->m_TexturePath;
-    m_ShaderParams = pSrc->m_ShaderParams;
-    if (pSrc->m_pDeformInfo)
-      m_DeformInfo = *pSrc->m_pDeformInfo;
-    for (int i=0; i<EFTT_MAX; i++)
-    {
-      if (pSrc->m_Textures[i])
-      {
-        m_Textures[i] = *pSrc->m_Textures[i];
-      }
-      else
-      {
-        m_Textures[i].Reset();
-      }
-    }
+    m_ShaderParams = pSrc->GetParameters();
   }
 
-  ~SInputShaderResources()
+  virtual ~SInputShaderResources()
   {
   }
   bool IsEmpty(int nTSlot) const
@@ -1918,7 +1653,9 @@ struct SInputShaderResources : public SBaseShaderResources
 #define SHGD_TEX_CUSTOM 0x1000
 #define SHGD_TEX_CUSTOM_SECONDARY 0x2000
 #define SHGD_TEX_DECAL 0x4000
-#define SHGD_HW_SM_2_0 0x8000
+#define SHGD_HW_DYN_BRANCHING_POSTPROCESS 0x8000
+#define SHGD_HW_ALLOW_POM 0x10000
+#define SHGD_HW_SM30 0x20000
 
 struct SShaderGenBit
 {
@@ -1939,8 +1676,8 @@ struct SShaderGenBit
   std::vector<uint32> m_PrecacheNames;
   std::vector<string> m_DependSets;
   std::vector<string> m_DependResets;
-  ushort m_nDependencySet;
-  ushort m_nDependencyReset;
+  uint32 m_nDependencySet;
+  uint32 m_nDependencyReset;
 };
 
 struct SShaderGen
@@ -1987,6 +1724,7 @@ enum EShaderType
   eST_PostProcess,
   eST_HDR,
   eST_Sky,
+  eST_Particle,
   eST_Max						// to define array size
 };
 
@@ -2020,7 +1758,7 @@ struct SShaderProfile
 
   EShaderQuality GetShaderQuality() const 
   { 
-    return (EShaderQuality)CLAMP(m_iShaderProfileQuality,0,eSQ_High);
+    return (EShaderQuality)CLAMP(m_iShaderProfileQuality,0,eSQ_VeryHigh);
   }
 
   void SetShaderQuality( const EShaderQuality &rValue ) 
@@ -2051,8 +1789,10 @@ struct SShaderProfile
 #define TTYPE_GLOWPASS   6
 #define TTYPE_MOTIONBLURPASS 7
 #define TTYPE_SCATTERPASS 8
+#define TTYPE_CUSTOMRENDERPASS 9
+#define TTYPE_RAINPASS 10
 
-#define TTYPE_MAX        9
+#define TTYPE_MAX        11
 
 //====================================================================================
 
@@ -2063,12 +1803,14 @@ struct SShaderProfile
 #define EFSLIST_WATER_VOLUMES  5       // after decals
 #define EFSLIST_TRANSP         6       // sorted by distance under-water render items
 #define EFSLIST_WATER          7       // water-ocean render items
-#define EFSLIST_POSTPROCESS    8       // post-processing screen effects
-#define EFSLIST_AFTER_POSTPROCESS 9   // after post-processing screen effects
-#define EFSLIST_SHADOW_GEN    10  
-#define EFSLIST_SHADOW_PASS   11   
-#define EFSLIST_REFRACTPASS   12
-#define EFSLIST_NUM           13
+#define EFSLIST_HDRPOSTPROCESS    8       // hdr post-processing screen effects
+#define EFSLIST_AFTER_HDRPOSTPROCESS 9   // after hdr post-processing screen effects
+#define EFSLIST_POSTPROCESS    10       // post-processing screen effects
+#define EFSLIST_AFTER_POSTPROCESS 11   // after post-processing screen effects
+#define EFSLIST_SHADOW_GEN    12  
+#define EFSLIST_SHADOW_PASS   13   
+#define EFSLIST_REFRACTPASS   14
+#define EFSLIST_NUM           15
 
 //================================================================
 // Different preprocess flags for shaders that require preprocessing (like recursive render to texture, screen effects, visibility check, ...)
@@ -2114,7 +1856,6 @@ struct SShaderProfile
 #define EF_ENVLIGHTING   8
 #define EF_HASCULL       0x10
 #define EF_CANTBEINSTANCED 0x20
-#define EF_OVERLAY       0x40
 #define EF_DECAL         0x80
 #define EF_MATERIAL      0x100
 #define EF_LOCALCONSTANTS 0x200
@@ -2131,8 +1872,6 @@ struct SShaderProfile
 #define EF_ALLOW3DC      0x100000
 #define EF_FOGSHADER     0x200000
 #define EF_USEPROJLIGHTS 0x400000
-#define EF_POLYGONOFFSET 0x800000
-#define EF_NOMIPMAPS     0x1000000
 #define EF_SUPPORTSINSTANCING_CONST 0x2000000
 #define EF_SUPPORTSINSTANCING_ATTR  0x4000000
 #define EF_SUPPORTSINSTANCING (EF_SUPPORTSINSTANCING_CONST | EF_SUPPORTSINSTANCING_ATTR)
@@ -2142,24 +1881,22 @@ struct SShaderProfile
 #define EF_REFRACTIVE    0x40000000
 #define EF_NOPREVIEW     0x80000000
 
+#define EF_PARSE_MASK    (EF_SUPPORTSINSTANCING | EF_SKY | EF_SKY_HDR | EF_HASCULL | EF_USELIGHTS | EF_REFRACTIVE)
+
 // SShader::Flags2
 // Additional Different useful flags
 #define EF2_PREPR_GENSPRITES 0x1
 #define EF2_PREPR_OUTSPACE 0x2
 #define EF2_NOCASTSHADOWS  0x4
-#define EF2_FOGOVERLAY1    0x8
-#define EF2_FOGOVERLAY2    0x10
-#define EF2_FOGOVERLAY     0x18
-#define EF2_TESSSIZE       0x20
+#define EF2_NODRAW         0x8
 #define EF2_HASOPAQUE      0x40
-#define EF2_CUSTOMANIMTEX  0x80
+#define EF2_AFTERHDRPOSTPROCESS  0x80
 #define EF2_DONTSORTBYDIST 0x100
-#define EF2_HASSUNFLARE    0x200
-#define EF2_OPAQUE         0x400
-#define EF2_TEMPLATE       0x800
+#define EF2_FORCE_WATERPASS    0x200
+#define EF2_FORCE_GENERALPASS   0x400
 #define EF2_IGNORERESOURCESTATES  0x1000
 #define EF2_USELIGHTMATERIAL  0x2000
-#define EF2_REDEPEND       0x4000
+#define EF2_FORCE_TRANSPASS       0x4000
 #define EF2_DEFAULTVERTEXFORMAT 0x8000
 #define EF2_FORCE_ZPASS 0x10000
 #define EF2_FORCE_DRAWLAST 0x20000
@@ -2168,42 +1905,10 @@ struct SShaderProfile
 #define EF2_SUPPORTS_REPLACEBASEPASS 0x100000
 #define EF2_SINGLELIGHTPASS 0x200000
 #define EF2_SKIPGENERALPASS 0x400000
-#define EF2_FORCE_DRAWFIRST 0x80000
-
-// SShader::Flags3
-// Additional Different useful flags
-#define EF3_NODRAW            1
-#define EF3_NEEDSYSBUF        2
-#define EF3_HASLM             4
-#define EF3_HASRGBGEN         8
-#define EF3_HASALPHAGEN       0x10
-#define EF3_CLIPPLANE_BACK    0x20
-#define EF3_CLIPPLANE_FRONT   0x40
-#define EF3_CLIPPLANE_WATER_FRONT 0x80
-#define EF3_CLIPPLANE_WATER_BACK  0x100
-#define EF3_CLIPPLANE         (EF3_CLIPPLANE_BACK | EF3_CLIPPLANE_FRONT | EF3_CLIPPLANE_WATER_BACK | EF3_CLIPPLANE_WATER_FRONT)
-#define EF3_SCREENTEXTURE       0x200
-#define EF3_IGNOREDIRECTIONALLIGHT  0x400
-#define EF3_HASVCOLORS        0x1000
-#define EF3_HASALPHATEST      0x2000
-#define EF3_HASALPHABLEND     0x4000
-#define EF3_USEPARENTSORT     0x8000
-#define EF3_REFLECTION        0x20000
-#define EF3_REBUILD           0x40000
-#define EF3_NODETAIL          0x80000
-#define EF3_DEPTHWRITE        0x100000
-#define EF3_NOTEMPLATE        0x200000
-#define EF3_HASRCOMBINER      0x400000
-#define EF3_HASPSHADER        0x800000
-#define EF3_HASAMBPASSES      0x1000000
-#define EF3_TESSSIZE          0x2000000
-#define EF3_SHAREVERTS        0x4000000
-
-#define EF3_PREPARELV      0x10000000
-#define EF3_PREPAREHAV     0x20000000
-#define EF3_PREPARELAS0    0x40000000
-#define EF3_PREPARELAS1    0x80000000
-#define EF3_PREPARE_MASK   (EF3_PREPARELV | EF3_PREPAREHAV | EF3_PREPARELAS0 | EF3_PREPARELAS1)
+#define EF2_HAIR            0x800000
+#define EF2_DETAILBUMPMAPPING 0x1000000
+#define EF2_HASALPHATEST      0x2000000
+#define EF2_HASALPHABLEND     0x4000000
 
 struct IShader
 {
@@ -2217,11 +1922,7 @@ public:
   virtual const char *GetName() const =0;
   virtual int GetFlags() = 0;
   virtual int GetFlags2() = 0;
-  virtual int GetFlags3() = 0;
-  virtual void SetFlags3(int Flags) = 0;
-  virtual int GetRenderFlags() = 0;
-  virtual void SetRenderFlags(int nFlags) = 0;
-  virtual int GetLFlags() = 0;
+  virtual void SetFlags2(int Flags) = 0;
   virtual bool Reload(int nFlags, const char *szShaderName) = 0;
   virtual TArray<CRendElement *> *GetREs (int nTech) = 0;
   virtual DynArray<SShaderParam>& GetPublicParams() = 0;
@@ -2236,12 +1937,13 @@ public:
   virtual int GetTechniqueID(int nTechnique, int nRegisteredTechnique) = 0;
 
   virtual EShaderType GetShaderType() = 0;
+  virtual uint32      GetVertexModificator() = 0;
 };
 
 struct SShaderItem
 {
   IShader *m_pShader;
-  SRenderShaderResources *m_pShaderResources;
+  IRenderShaderResources *m_pShaderResources;
   int m_nTechnique;
   uint m_nPreprocessFlags;
 
@@ -2261,7 +1963,7 @@ struct SShaderItem
     if (pSH && (pSH->GetFlags2() & EF2_PREPR_GENSPRITES))
       m_nPreprocessFlags |= FSPR_GENSPRITES;
   }
-  SShaderItem(IShader *pSH, SRenderShaderResources *pRS)
+  SShaderItem(IShader *pSH, IRenderShaderResources *pRS)
   {
     m_pShader = pSH;
     m_pShaderResources = pRS;
@@ -2273,7 +1975,7 @@ struct SShaderItem
         m_nPreprocessFlags |= FSPR_GENSPRITES;
     }
   }
-  SShaderItem(IShader *pSH, SRenderShaderResources *pRS, int nTechnique)
+  SShaderItem(IShader *pSH, IRenderShaderResources *pRS, int nTechnique)
   {
     m_pShader = pSH;
     m_pShaderResources = pRS;
@@ -2289,14 +1991,18 @@ struct SShaderItem
   _inline bool IsZWrite() const
   { // note: if you change this function please check bTransparent variable in CRenderMesh::Render()
     IShader *pSH = m_pShader;
-    if (pSH->GetFlags3() & EF3_NODRAW)
+    if (pSH->GetFlags2() & EF2_NODRAW)
       return false;
     if (pSH->GetFlags2() & EF2_FORCE_ZPASS)
       return true;
     if (pSH->GetFlags() & EF_DECAL)
       return false;
-    if (m_pShaderResources && m_pShaderResources->m_Constants[1].size() && m_pShaderResources->m_Constants[1][0][3] != 1.0f)
-      return false;
+    if (m_pShaderResources)
+    {
+      ColorF& cDif = m_pShaderResources->GetDiffuseColor();
+      if (cDif[3] != 1.0f)
+        return false;
+    }
     return true;
   }
   struct SShaderTechnique *GetTechnique() const;
@@ -2316,7 +2022,7 @@ struct CRenderChunk
   int m_nMatFlags;       // Material flags from originally assigned material @see EMaterialFlags.
   int m_nMatID;          // Material Sub-object id.
   ushort m_dwNumSections;
-  std::vector<uint16> m_arrChunkBoneIDs;
+  PodArray<uint16> m_arrChunkBoneIDs;
 
   //////////////////////////////////////////////////////////////////////////
   CRenderChunk()
@@ -2394,10 +2100,11 @@ class CDLight
 public:
 
   //! constructor
-	CDLight( void )
-	{
+  CDLight( void )
+  {
     memset(this, 0, sizeof(CDLight));
     m_fLightFrustumAngle = 45.0f;
+    m_fProjectorNearPlane = 0.0f;
     m_fRadius = 4.0f;
     m_fDirectFactor = 1.0f;
     m_SpecMult = 1.0f;
@@ -2501,6 +2208,7 @@ public:
   //the light image
   ITexture*                       m_pLightImage;
   float                           m_fLightFrustumAngle;
+  float                           m_fProjectorNearPlane;
   float                           m_fBaseLightFrustumAngle;
   float                           m_fAnimSpeed;
 

@@ -8,17 +8,16 @@ Description:  Anti-Suit field
 -------------------------------------------------------------------------
 History:
 - 10:04:2007   14:39 : Created by Marco Koegler
+- 21:08:2007   Benito G.R. - Not used (not registered in WeaponSytem)
 
 *************************************************************************/
 #include "StdAfx.h"
 #include "EMPField.h"
 #include "Player.h"
 #include "HUD/HUD.h"
+#include "GameCVars.h"
 
 #include "IEntityProxy.h"
-
-int g_empStyle = -1;
-float g_empNanosuitDowntime;
 
 //------------------------------------------------------------------------
 CEMPField::CEMPField()
@@ -27,11 +26,6 @@ CEMPField::CEMPField()
 , m_charging(false)
 , m_empEffectId(-1)
 {
-	if (g_empStyle == -1)
-	{
-		gEnv->pConsole->Register("g_emp_style", &g_empStyle, 0, VF_CHEAT, "");
-		gEnv->pConsole->Register("g_emp_nanosuit_downtime", &g_empNanosuitDowntime, 10.0f, VF_CHEAT, "Time that the nanosuit is deactivated after leaving the EMP field.");
-	}
 }
 
 CEMPField::~CEMPField()
@@ -46,11 +40,6 @@ bool CEMPField::Init(IGameObject *pGameObject)
 	{
 		m_activationTime = GetParam("activationTime", m_activationTime);
 		m_radius = GetParam("radius", m_radius);
-
-		if (g_empStyle == 1)
-		{
-
-		}
 
 		GetEntity()->SetTimer(ePTIMER_ACTIVATION, (int)(m_activationTime*1000.0f));
 
@@ -83,7 +72,7 @@ void CEMPField::ProcessEvent(SEntityEvent &event)
 			if(pEntity)
 			{
 				CActor* pActor = static_cast<CActor*>(g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEntity->GetId()));
-				if (pActor && pActor->GetActorClass() == CPlayer::GetActorClassType())
+				if (pActor && pActor->GetSpectatorMode() == 0 && pActor->GetActorClass() == CPlayer::GetActorClassType())
 				{
 					OnPlayerEnter(static_cast<CPlayer*>(pActor));
 				}
@@ -96,7 +85,7 @@ void CEMPField::ProcessEvent(SEntityEvent &event)
 			if(pEntity)
 			{
 				CActor* pActor = static_cast<CActor*>(g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEntity->GetId()));
-				if (pActor && pActor->GetActorClass() == CPlayer::GetActorClassType())
+				if (pActor && pActor->GetSpectatorMode() == 0 && pActor->GetActorClass() == CPlayer::GetActorClassType())
 				{
 					OnPlayerLeave(static_cast<CPlayer*>(pActor));
 					RemoveEntity(event.nParam[0]);
@@ -140,7 +129,7 @@ void CEMPField::OnEMPActivate()
 	effect = GetParam("effect", effect);
 	scale = GetParam("scale", scale);
 	prime = GetParam("prime", prime);
-	if (g_empStyle == 0 && effect && effect[0])
+	if (g_pGame->GetCVars()->g_empStyle == 0 && effect && effect[0])
 	{
 		m_empEffectId = AttachEffect(true, 0, effect, Vec3(0,0,0), Vec3(0,1,0), scale, prime);
 	}
@@ -150,12 +139,27 @@ void CEMPField::OnPlayerEnter(CPlayer* pPlayer)
 {
 	m_players.push_back(pPlayer->GetEntity()->GetId());
 
-	pPlayer->GetGameObject()->InvokeRMI(CPlayer::ClEMP(), CPlayer::EMPParams(true), eRMI_ToClientChannel, pPlayer->GetChannelId());
+	if (CNanoSuit* pSuit = pPlayer->GetNanoSuit())
+	{
+		pSuit->Activate(false);
+		pSuit->SetSuitEnergy(0.0f);
+	}
+
+	pPlayer->GetGameObject()->InvokeRMI(CPlayer::ClEMP(), CPlayer::EMPParams(1.0f), eRMI_ToClientChannel, pPlayer->GetChannelId());
 }
 
 void CEMPField::OnPlayerLeave(CPlayer* pPlayer)
 {
-	pPlayer->GetGameObject()->InvokeRMI(CPlayer::ClEMP(), CPlayer::EMPParams(false), eRMI_ToClientChannel, pPlayer->GetChannelId());
+	if (pPlayer->GetHealth()<=0)
+		return;
+
+	if (CNanoSuit* pSuit = pPlayer->GetNanoSuit())
+	{
+		if(!pSuit->IsActive())
+			pSuit->Activate(true, 10.0f);
+	}
+	
+	pPlayer->GetGameObject()->InvokeRMI(CPlayer::ClEMP(), CPlayer::EMPParams(0.0f), eRMI_ToClientChannel, pPlayer->GetChannelId());
 }
 
 void CEMPField::RemoveEntity(EntityId id)

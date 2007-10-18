@@ -145,7 +145,7 @@ public:
 	void SetGlobalName( const char *sGlobalName )
 	{
 		assert( strlen(sGlobalName) < sizeof(m_sGlobalName) );
-		strcpy( m_sGlobalName,sGlobalName );
+		strcpy_s( m_sGlobalName,sGlobalName );
 		if (m_pMethodsTable)
 			m_pSS->SetGlobalValue( sGlobalName,m_pMethodsTable );
 	}

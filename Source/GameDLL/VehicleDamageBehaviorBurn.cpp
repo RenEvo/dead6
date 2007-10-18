@@ -20,7 +20,8 @@ History:
 //------------------------------------------------------------------------
 CVehicleDamageBehaviorBurn::~CVehicleDamageBehaviorBurn()
 {
-  gEnv->pAISystem->RegisterDamageRegion(this, Sphere(ZERO, -1.0f)); // disable
+	if (gEnv->pAISystem)
+	  gEnv->pAISystem->RegisterDamageRegion(this, Sphere(ZERO, -1.0f)); // disable
 }
 
 
@@ -74,12 +75,12 @@ void CVehicleDamageBehaviorBurn::Activate(bool activate)
   {
     m_timeCounter = m_interval;
     m_pVehicle->SetObjectUpdate(this, IVehicle::eVOU_AlwaysUpdate);
-    m_timerId = m_pVehicle->SetTimer(-1, 60000, this); // total burn of 60 secs
+    m_timerId = m_pVehicle->SetTimer(-1, 20000, this); // total burn of 60 secs
 
-    if (!m_pVehicle->IsDestroyed())
+    if (!m_pVehicle->IsDestroyed() && !m_pVehicle->IsFlipped() && gEnv->pAISystem )
       gEnv->pAISystem->SetSmartObjectState(m_pVehicle->GetEntity(), "Exploding");        
 
-    m_pVehicle->NeedsUpdate(IVehicle::eVUF_AwakePhysics);
+	m_pVehicle->NeedsUpdate(IVehicle::eVUF_AwakePhysics);
   }
   else if (!activate && m_isActive)
   {
@@ -87,7 +88,8 @@ void CVehicleDamageBehaviorBurn::Activate(bool activate)
     m_pVehicle->KillTimer(m_timerId);
     m_timerId = -1;
 
-    gEnv->pAISystem->RegisterDamageRegion(this, Sphere(ZERO, -1.0f)); // disable
+		if (gEnv->pAISystem)
+	    gEnv->pAISystem->RegisterDamageRegion(this, Sphere(ZERO, -1.0f)); // disable
   }
 
   m_isActive = activate;
@@ -151,23 +153,29 @@ void CVehicleDamageBehaviorBurn::Update(const float deltaTime)
 				if ((pEntity = query.pEntities[i]) && pEntity->GetPhysics())
 				{
           float damage = (pEntity->GetId() == m_pVehicle->GetEntityId()) ? m_selfDamage : m_damage;
-					
-          if (damage > 0.f)
-          {
-            HitInfo hitInfo;
-            hitInfo.damage = damage;
-            hitInfo.pos = worldPos;
-            hitInfo.radius = m_radius;
-            hitInfo.targetId = pEntity->GetId();
-            hitInfo.shooterId = m_shooterId;
-            hitInfo.weaponId = m_pVehicle->GetEntityId();
-            hitInfo.type = pGameRules->GetHitTypeId("fire");
-            pGameRules->ServerHit(hitInfo);
-          }          
+
+					// SNH: need to check vertical distance here as the QueryProximity() call seems to work in 2d only
+					Vec3 pos = pEntity->GetWorldPos();
+					if(abs(pos.z - worldPos.z) < m_radius)
+					{
+						if (damage > 0.f)
+						{
+							HitInfo hitInfo;
+							hitInfo.damage = damage;
+							hitInfo.pos = worldPos;
+							hitInfo.radius = m_radius;
+							hitInfo.targetId = pEntity->GetId();
+							hitInfo.shooterId = m_shooterId;
+							hitInfo.weaponId = m_pVehicle->GetEntityId();
+							hitInfo.type = pGameRules->GetHitTypeId("fire");
+							pGameRules->ServerHit(hitInfo);
+						}   
+					}
 				}
 			}
 			
-      gEnv->pAISystem->RegisterDamageRegion(this, Sphere(worldPos, m_radius));
+			if (gEnv->pAISystem)
+	      gEnv->pAISystem->RegisterDamageRegion(this, Sphere(worldPos, m_radius));
 		}
 
 		m_timeCounter = m_interval;

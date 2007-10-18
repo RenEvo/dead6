@@ -35,26 +35,42 @@ struct IStringItVec
 // MusicSystem
 
 // Different layers
-	#define MUSICLAYER_MAIN 0
-	#define MUSICLAYER_RHYTHMIC 1
-	#define MUSICLAYER_INCIDENTAL 2
-	#define MUSICLAYER_STINGER 3
-	#define MUSICLAYER_START 4
-	#define MUSICLAYER_END 5
-	#define MUSICLAYER_ANY 6
-	#define MUSICLAYER_MAX 7
+#define MUSICLAYER_NONE							0x00000000
+#define MUSICLAYER_MAIN							0x00000001
+#define MUSICLAYER_RHYTHMIC					0x00000002
+#define MUSICLAYER_INCIDENTAL				0x00000004
+#define MUSICLAYER_STINGER					0x00000008
+#define MUSICLAYER_START						0x00000010
+#define MUSICLAYER_END							0x00000020
+#define MUSICLAYER_MAIN_ANY					0x000000FF    
+#define MUSICLAYER_PATTERN_BY_NAME	0x00000100
+//#define MUSICLAYER_STINGER					0x00000200
+#define MUSICLAYER_ANY              0xFFFFFFFF                      
 
 // Type of blending
 enum EBlendingType
 {
+	EBlend_None,
+	EBlend_PlayOnFadePoint,
+	EBlend_EndOnFadePoint,
 	EBlend_FadeIn,
+	EBlend_FadeInOnFadePoint,
 	EBlend_FadeOut,
-	EBlend_Loop,
-	EBlend_Once,
-	EBlend_Trigger_Next,
-	EBlend_Stop,
+	EBlend_FadeOutOnFadePoint,
+	EBlend_FadeOutOnMainEnd,
 	EBlend_Any,
 	EBlend_MAX,
+};
+
+// Type of playing
+enum EPlayingType
+{
+	EPlaying_Loop,
+	EPlaying_Once,
+	EPlaying_Trigger_Next,
+	EPlaying_Stop,
+	EPlaying_Any,
+	EPlaying_MAX,
 };
 
 // Type of ThemeFading
@@ -63,6 +79,7 @@ enum EThemeFadeType
 	EThemeFade_StopAtOnce,
 	EThemeFade_FadeOut,
 	EThemeFade_PlayEnd,
+	EThemeFade_PlayEndAtFadePoint,
 	EThemeFade_KeepMood,
 	EThemeFade_MAX,
 };
@@ -89,6 +106,7 @@ typedef TThemeBridgeMap::iterator							TThemeBridgeMapIt;
 
 typedef std::map<string,SMusicMood*,stl::less_stricmp<string> > TMoodMap;
 typedef TMoodMap::iterator										TMoodMapIt;
+typedef TMoodMap::const_iterator							TMoodMapItConst;
 
 typedef std::vector<SMusicPatternSet*>				TPatternSetVec;
 typedef TPatternSetVec::iterator							TPatternSetVecIt;
@@ -312,6 +330,7 @@ struct SPlayingPatternsStatus
 	float fVolume;
 	float fPhase;
 	EBlendingType		eBlendType; 
+	EPlayingType		ePlayingType; 
 };
 
 typedef std::vector<SPlayingPatternsStatus>		TPatternStatusVec;
@@ -343,15 +362,14 @@ struct IMusicSystem
 	virtual void EnableEventProcessing(bool bEnable) = 0;
 	
 	// theme stuff
-	virtual bool ResetThemeOverride() = 0;
-	virtual bool SetTheme(const char *pszTheme, bool bOverride=false, bool bForceChange=true, bool bKeepMood=true, int nDelayInSec=-1) = 0;
-	virtual bool EndTheme(EThemeFadeType ThemeFade=EThemeFade_FadeOut, int nForceEndLimitInSec=10) = 0;
+	virtual bool SetTheme(const char *pszTheme, bool bForceChange=true, bool bKeepMood=true, int nDelayInSec=-1) = 0;
+	virtual bool EndTheme(EThemeFadeType ThemeFade=EThemeFade_FadeOut, int nForceEndLimitInSec=10, bool bEndEverything=true) = 0;
 	virtual const char* GetTheme() const = 0;
 	virtual IStringItVec* GetThemes() const = 0;
 	virtual CTimeValue GetThemeTime() const = 0;
 
 	// Mood stuff
-	virtual bool SetMood(const char *pszMood, const bool bPlayFromStart=true, const bool bForceChance=true ) = 0;
+	virtual bool SetMood(const char *pszMood, const bool bPlayFromStart=true, const bool bForceChance=false ) = 0;
 	virtual bool SetDefaultMood(const char *pszMood) = 0;
 	virtual const char* GetMood() const = 0;
 	virtual IStringItVec* GetMoods(const char *pszTheme) const = 0;
@@ -367,7 +385,7 @@ struct IMusicSystem
 	//////////////////////////////////////////////////////////////////////////
 	//! Load music data from XML.
 	//! @param bAddAdata if true data from XML will be added to currently loaded music data.
-	virtual bool LoadFromXML( const char *sFilename,bool bAddData ) = 0;
+	virtual bool LoadFromXML( const char *sFilename, bool bAddData, bool bReplaceData) = 0;
 
 	//////////////////////////////////////////////////////////////////////////
 	// Editing support.
@@ -385,6 +403,7 @@ struct IMusicSystem
 
 	// for serialization
 	virtual void Serialize(TSerialize ser) = 0;
+	virtual bool SerializeInternal(bool bSave) = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -395,5 +414,82 @@ struct IMusicSystemSink
 {
 	virtual void ReleaseData(struct SMusicData *pData) = 0;
 };
+
+
+#define UPDATE_MUSICLOGIC_IN_MS 200
+
+enum EMusicLogicEvents
+{
+	eMUSICLOGICEVENT_SET_MULTIPLIER = 0,
+	eMUSICLOGICEVENT_SET_AI_MULTIPLIER,
+	eMUSICLOGICEVENT_SET_AI,
+	eMUSICLOGICEVENT_CHANGE_AI,
+	eMUSICLOGICEVENT_SET_PLAYER,
+	eMUSICLOGICEVENT_CHANGE_PLAYER,
+	eMUSICLOGICEVENT_SET_GAME,
+	eMUSICLOGICEVENT_CHANGE_GAME,
+	eMUSICLOGICEVENT_SET_ALLOWCHANGE,
+	eMUSICLOGICEVENT_CHANGE_ALLOWCHANGE,
+	eMUSICLOGICEVENT_VEHICLE_ENTER,
+	eMUSICLOGICEVENT_VEHICLE_LEAVE,
+	eMUSICLOGICEVENT_WEAPON_MOUNT,
+	eMUSICLOGICEVENT_WEAPON_UNMOUNT,
+	eMUSICLOGICEVENT_SNIPERMODE_ENTER,
+	eMUSICLOGICEVENT_SNIPERMODE_LEAVE,
+	eMUSICLOGICEVENT_CLOAKMODE_ENTER,
+	eMUSICLOGICEVENT_CLOAKMODE_LEAVE,
+	eMUSICLOGICEVENT_ENEMY_SPOTTED,
+	eMUSICLOGICEVENT_ENEMY_KILLED,
+	eMUSICLOGICEVENT_ENEMY_HEADSHOT,
+	eMUSICLOGICEVENT_ENEMY_OVERRUN,
+	eMUSICLOGICEVENT_PLAYER_WOUNDED,
+	eMUSICLOGICEVENT_PLAYER_KILLED,
+	eMUSICLOGICEVENT_PLAYER_SPOTTED,
+	eMUSICLOGICEVENT_PLAYER_TURRET_ATTACK,
+	eMUSICLOGICEVENT_PLAYER_SWIM_ENTER,
+	eMUSICLOGICEVENT_PLAYER_SWIM_LEAVE,
+	eMUSICLOGICEVENT_EXPLOSION,
+	eMUSICLOGICEVENT_FACTORY_CAPTURED,
+	eMUSICLOGICEVENT_FACTORY_LOST,
+	eMUSICLOGICEVENT_FACTORY_RECAPTURED,
+	eMUSICLOGICEVENT_VEHICLE_CREATED,
+	eMUSICLOGICEVENT_MAX
+};
+
+
+#define MUSICLOGIC_FILENAME	"Libs/MusicLogic/MusicLogic.xml"
+
+struct IMusicLogic
+{
+public:
+
+	//////////////////////////////////////////////////////////////////////////
+	// Initialization
+	//////////////////////////////////////////////////////////////////////////
+
+	virtual bool Init() = 0;
+
+	virtual bool Start() = 0;
+	virtual bool Stop() = 0;
+
+	virtual void Update() = 0;
+
+	// incoming events
+	virtual void SetEvent(EMusicLogicEvents MusicEvent, const float fValue=0.0f)  = 0;
+
+	//IHitListener
+	//virtual void OnHit(const HitInfo&);
+	//virtual void OnExplosion(const ExplosionInfo&);
+	//virtual void OnServerExplosion(const ExplosionInfo&);
+
+	virtual void GetMemoryStatistics( ICrySizer * ) = 0;
+	virtual void Serialize(TSerialize ser) = 0;
+
+	// writes output to screen in debug
+	virtual void DrawInformation(IRenderer* pRenderer, float xpos, float ypos, int nSoundInfo) = 0;
+
+};
+
+
 
 #endif // CRYSOUND_IMUSICSYSTEM_H

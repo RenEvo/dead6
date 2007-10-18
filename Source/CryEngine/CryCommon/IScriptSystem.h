@@ -92,7 +92,8 @@ enum ScriptAnyType
 	ANY_TTABLE,
 	ANY_TFUNCTION,
 	ANY_TUSERDATA,
-	ANY_TVECTOR
+	ANY_TVECTOR,
+	ANY_COUNT,
 };
 
 struct ScriptAnyValue
@@ -182,27 +183,6 @@ struct ScriptAnyValue
 
 	ScriptVarType GetVarType() const
 	{
-#if defined(PS3)
-		//COMPILER_BUG (03/2007): the current ps3 compiler puts the switch statement into the 
-		//	linkonce section but jump tables > 8 entries use a toc so this is not linkable for different modules
-		if(type == ANY_TBOOLEAN)
-			return svtBool;
-		if(type == ANY_THANDLE)
-			return svtPointer;
-		if(type == ANY_TNUMBER)
-			return svtNumber;
-		if(type == ANY_TSTRING)
-			return svtString;
-		if(type == ANY_TTABLE)
-			return svtObject;
-		if(type == ANY_TFUNCTION)
-			return svtFunction;
-		if(type == ANY_TUSERDATA)
-			return svtUserData;
-		if(type == ANY_TVECTOR)
-			return svtObject;
-		return svtNull;
-#else
 		switch (type)
 		{
 		case ANY_ANY: return svtNull;
@@ -217,7 +197,6 @@ struct ScriptAnyValue
 		case ANY_TVECTOR: return svtObject;
 		default: return svtNull;
 		}
-#endif
 	}
 };
 
@@ -446,7 +425,7 @@ struct IScriptSystem
 	virtual BreakState GetBreakState() = 0;
 	//##@}
 	virtual void GetMemoryStatistics(ICrySizer *pSizer) = 0;
-	//! Is not recusive but combines the hash values of the whole table when the specifies variable is a table
+	//! Is not recursive but combines the hash values of the whole table when the specifies variable is a table
 	//! otherwise is has to be a lua function
 	//!	@param sPath zero terminated path to the variable (e.g. _localplayer.cnt), max 255 characters
 	//!	@param szKey zero terminated name of the variable (e.g. luaFunc), max 255 characters
@@ -466,6 +445,10 @@ struct IScriptSystem
 	//////////////////////////////////////////////////////////////////////////
 	// Serializes script timers.
 	virtual void SerializeTimers( struct ISerialize *pSer ) = 0;
+
+	//////////////////////////////////////////////////////////////////////////
+	// Resetting all the script timers.
+	virtual void ResetTimers(  ) = 0;
 
 	virtual int GetStackSize() = 0;
 	
@@ -921,8 +904,8 @@ public:
 	~CScriptSetGetChain() { m_pTable->EndSetGetChain(); }
 
 	void SetToNull( const char *sKey ) { m_pTable->SetToNull(sKey); }
-	template <class T> void SetValue( const char *sKey, const T &value ) { m_pTable->SetValueChain(sKey,value); }
-	template <class T> bool GetValue( const char *sKey, T &value ) { return m_pTable->GetValueChain(sKey,value); }
+	template <class T> ILINE void SetValue( const char *sKey, const T &value ) const { m_pTable->SetValueChain(sKey,value); }
+	template <class T> ILINE bool GetValue( const char *sKey, T &value ) const { return m_pTable->GetValueChain(sKey,value); }
 
 private:
 	IScriptTable *m_pTable;
@@ -990,56 +973,6 @@ inline ScriptAnyValue::~ScriptAnyValue() {
 inline ScriptAnyValue::ScriptAnyValue( const ScriptAnyValue& rhs )
 {
 	type = rhs.type;
-#if defined(PS3)
-	//COMPILER_BUG (03/2007): the current ps3 compiler puts the switch statement into the 
-	//	linkonce section but jump tables > 8 entries use a toc so this is not linkable for different modules
-	if(type == ANY_ANY)
-		table = 0;
-	else
-	if(type == ANY_TBOOLEAN)
-	{
-		b = rhs.b;
-	}
-	else
-	if(type == ANY_THANDLE)
-	{
-		ptr = rhs.ptr;
-	}
-	else
-	if(type == ANY_TNUMBER)
-	{
-		number = rhs.number;
-	}
-	else
-	if(type == ANY_TSTRING)
-	{
-		str = rhs.str;
-	}
-	else
-	if(type == ANY_TTABLE)
-	{
-		table = rhs.table;
-		if (table)
-			table->AddRef();
-	}
-	else
-	if(type == ANY_TFUNCTION)
-	{
-		function = rhs.function;
-	}
-	else
-	if(type == ANY_TVECTOR)
-	{
-		vec3.x = rhs.vec3.x;
-		vec3.y = rhs.vec3.y;
-		vec3.z = rhs.vec3.z;
-	}
-	else
-	if(type == ANY_TNIL)
-	{
-		table = 0;
-	}
-#else
 	switch (type)
 	{
 	case ANY_ANY:
@@ -1076,7 +1009,6 @@ inline ScriptAnyValue::ScriptAnyValue( const ScriptAnyValue& rhs )
 		vec3.z = rhs.vec3.z;
 		break;
 	}
-#endif
 }
 inline void ScriptAnyValue::Swap( ScriptAnyValue& value )
 {

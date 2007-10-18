@@ -9,84 +9,126 @@ void CHUD::PlaySound(ESound eSound, bool play)
 	if(!gEnv->pSoundSystem)
 		return;
 
-	const char* strSound;
+	const char *szSound = NULL;
 
 	switch(eSound)
 	{
 	case ESound_GenericBeep:
-		strSound = "Sounds/interface:suit:generic_beep";
+		szSound = "Sounds/interface:suit:generic_beep";
 		break;
 	case ESound_PresetNavigationBeep:
-		strSound = "Sounds/interface:suit:preset_navigation_beep";
+		szSound = "Sounds/interface:suit:preset_navigation_beep";
 		break;
 	case ESound_TemperatureBeep:
-		strSound = "Sounds/interface:suit:temperature_beep";
+		szSound = "Sounds/interface:suit:temperature_beep";
 		break;
 	case ESound_SuitMenuAppear:
-		strSound = "sounds/interface:suit:modification_menu_appear";
+		szSound = "sounds/interface:suit:modification_menu_appear";
 		break;
 	case ESound_SuitMenuDisappear:
-		strSound = "Sounds/interface:suit:modification_menu_disappear";
+		szSound = "Sounds/interface:suit:modification_menu_disappear";
 		break;
 	case ESound_WeaponModification:
-		strSound = "Sounds/interface:suit:weapon_modification_beep";
+		szSound = "Sounds/interface:suit:weapon_modification_beep";
 		break;
 	case ESound_BinocularsZoomIn:
-		strSound = "Sounds/interface:suit:binocular_zoom_in";
+		szSound = "Sounds/interface:suit:binocular_zoom_in";
 		break;
 	case ESound_BinocularsZoomOut:
-		strSound = "Sounds/interface:suit:binocular_zoom_out";
+		szSound = "Sounds/interface:suit:binocular_zoom_out";
 		break;
 	case ESound_BinocularsSelect:
-		strSound = "Sounds/interface:suit:binocular_select";
+		szSound = "Sounds/interface:suit:binocular_select";
 		break;
 	case ESound_BinocularsDeselect:
-		strSound = "Sounds/interface:suit:binocular_deselect";
+		szSound = "Sounds/interface:suit:binocular_deselect";
 		break;
 	case ESound_BinocularsAmbience:
-		strSound = "Sounds/interface:suit:binocular_ambience";
+		szSound = "Sounds/interface:suit:binocular_ambience";
 		break;
 	case ESound_NightVisionSelect:
-		strSound = "Sounds/interface:suit:night_vision_select";
+		szSound = "Sounds/interface:suit:night_vision_select";
 		break;
 	case ESound_NightVisionDeselect:
-		strSound = "Sounds/interface:suit:night_vision_deselect";
+		szSound = "Sounds/interface:suit:night_vision_deselect";
 		break;
 	case ESound_NightVisionAmbience:
-		strSound = "Sounds/interface:suit:night_vision_ambience";
+		szSound = "Sounds/interface:suit:night_vision_ambience";
 		break;
 	case ESound_BinocularsLock:
-		strSound = "Sounds/interface:suit:binocular_target_locked";
+		szSound = "Sounds/interface:suit:binocular_target_locked";
 		break;
 	case ESound_OpenPopup:
-		strSound = "Sounds/interface:menu:pop_up";
+		szSound = "Sounds/interface:menu:pop_up";
 		break;
 	case ESound_ClosePopup:
-		strSound = "Sounds/interface:menu:close";
+		szSound = "Sounds/interface:menu:close";
+		break;
+	case ESound_MapOpen:
+		szSound = "Sounds/interface:hud:hud_map_open";
+		break;
+	case ESound_MapClose:
+		szSound = "Sounds/interface:hud:hud_map_close";
 		break;
 	case ESound_TabChanged:
-		strSound = "Sounds/interface:menu:screen_change";
+		szSound = "Sounds/interface:menu:screen_change";
 		break;
 	case ESound_WaterDroplets:
-		strSound = "Sounds/interface:hud:hud_water";
+		szSound = "Sounds/interface:hud:hud_water";
 		break;
 	case ESound_BuyBeep:
-		strSound = "Sounds/interface:menu:buy_beep";
+		szSound = "Sounds/interface:menu:buy_beep";
 		break;
 	case ESound_BuyError:
-		strSound = "Sounds/interface:menu:buy_error";
+		szSound = "Sounds/interface:menu:buy_error";
 		break;
 	case ESound_SniperZoomIn:
-		strSound = "Sounds/interface:hud:sniper_scope_zoom_in";
+		szSound = "Sounds/interface:hud:sniper_scope_zoom_in";
 		break;
 	case ESound_SniperZoomOut:
-		strSound = "Sounds/interface:hud:sniper_scope_zoom_out";
+		szSound = "Sounds/interface:hud:sniper_scope_zoom_out";
 		break;
 	case ESound_Highlight:
-		strSound = "sounds/interface:menu:rollover";
+		szSound = "sounds/interface:menu:rollover";
 		break;
 	case ESound_Select:
-		strSound = "sounds/interface:menu:click1";
+		szSound = "sounds/interface:menu:click1";
+		break;
+	case ESound_ObjectiveUpdate:
+		szSound = "sounds/interface:hud:pda_update";
+		break;
+	case ESound_ObjectiveComplete:
+		szSound = "sounds/interface:hud:objective_completed";
+		break;
+	case ESound_GameSaved:
+		szSound = "sounds/interface:menu:confirm";
+		break;
+	case ESound_Target_Lock:
+		szSound = "sounds/interface:hud:vehicle_target_lock";
+		break;
+	case ESound_Malfunction:
+		szSound = "sounds/interface:hud:hud_malfunction";
+		break;
+	case ESound_Reboot:
+		szSound = "sounds/interface:hud:hud_reboot";
+		break;
+	case ESound_ReActivate:
+		szSound = "sounds/interface:hud:hud_activate";
+		break;
+	case ESound_VehicleIn:
+		szSound = "sounds/interface:hud:hud_vehicle_in";
+		break;
+	case ESound_LawLocking:
+		szSound = "sounds/interface:hud:hud_law_locking";
+		break;
+	case ESound_DownloadStart:
+		szSound = "sounds/interface:hud:hud_download_start";
+		break;
+	case ESound_DownloadLoop:
+		szSound = "sounds/interface:hud:hud_download_loop";
+		break;
+	case ESound_DownloadStop:
+		szSound = "sounds/interface:hud:hud_download_stop";
 		break;
 	default:
 		assert(0);
@@ -95,20 +137,33 @@ void CHUD::PlaySound(ESound eSound, bool play)
 
 	if(play)
 	{
-		_smart_ptr<ISound> pSound = gEnv->pSoundSystem->CreateSound(strSound,0);
-		if ( pSound )
+		_smart_ptr<ISound> pSound = gEnv->pSoundSystem->CreateSound(szSound,0);
+		if(pSound)
 		{
+			if(m_soundIDs[eSound])
+			{
+				ISound *pOldSound = gEnv->pSoundSystem->GetSound(m_soundIDs[eSound]);
+
+				if(pOldSound)
+					pOldSound->Stop(ESoundStopMode_AtOnce);
+
+				m_soundIDs[eSound] = 0;
+			}
+
+			pSound->SetSemantic(eSoundSemantic_HUD);
 			pSound->Play();
 			m_soundIDs[eSound] = pSound->GetId();
 		}
 	}
-	else if(m_soundIDs[eSound])
+	else if(m_soundIDs[eSound] != INVALID_SOUNDID)
 	{
 		ISound *pSound = gEnv->pSoundSystem->GetSound(m_soundIDs[eSound]);
 		if(pSound)
+		{
 			pSound->Stop();
+			m_soundIDs[eSound] = INVALID_SOUNDID;
+		}
 	}
-
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -134,13 +189,13 @@ void CHUD::PlayStatusSound(const char* name, bool forceSuitSound)
 
 	switch(m_iVoiceMode)
 	{
-	case 0: //male
+	case 1: //male
 		strSound.append("suit/male/suit_");
 		break;
-	case 1: //female
+	case 2: //female
 		strSound.append("suit/female/suit_");
 		break;
-	case 2: //michaelR
+	case 3: //michaelR
 		strSound.append("suit/mr/suit_");
 		break;
 	default:
@@ -159,6 +214,7 @@ void CHUD::PlayStatusSound(const char* name, bool forceSuitSound)
 	_smart_ptr<ISound> pSound = gEnv->pSoundSystem->CreateSound(strSound,FLAG_SOUND_3D|FLAG_SOUND_VOICE);
 	if ( pSound )
 	{
+		pSound->SetSemantic(eSoundSemantic_NanoSuit);
 		pSound->SetPosition(g_pGame->GetIGameFramework()->GetClientActor()->GetEntity()->GetWorldPos());
 		pSound->Play();
 	}

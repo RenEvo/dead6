@@ -113,7 +113,21 @@ enum E3DEngineParameter
 
   EPARAM_SUN_SHAFTS_VISIBILITY,
 
-	E3DPARAM_SKYBOX_MULTIPLIER
+	E3DPARAM_SKYBOX_MULTIPLIER,
+
+	E3DPARAM_DAY_NIGHT_INDICATOR,
+
+	// --------------------------------------
+
+	E3DPARAM_EYEADAPTIONCLAMP,
+
+  // --------------------------------------
+
+  E3DPARAM_COLORGRADING_COLOR_SATURATION,
+  E3DPARAM_COLORGRADING_FILTERS_PHOTOFILTER_COLOR,
+  E3DPARAM_COLORGRADING_FILTERS_PHOTOFILTER_DENSITY,
+  E3DPARAM_COLORGRADING_FILTERS_GRAIN
+
 };
 
 //! Particle Blend Type
@@ -496,6 +510,13 @@ enum EPhysForeignFlags
 	PFF_OUTDOOR_AREA							= 64,
 };
 
+// ocean data flags
+enum EOceanRenderFlags
+{
+  OCR_NO_DRAW     =   1<<0,
+  OCR_OCEANVOLUME_VISIBLE  =   1<<1,
+};
+
 //! structure to pass vegetation group properties
 struct IStatInstGroup
 {
@@ -529,7 +550,7 @@ struct IStatInstGroup
 		fSlopeMin=0 ;
 		bRandomRotation = false;
     nMaterialLayers = 0;
-		bUseTerrainColor = bAlignToTerrain = false;
+		bAffectedByVoxels = bUseTerrainColor = bAlignToTerrain = false;
 		minConfigSpec = (ESystemConfigSpec)0;
 	}
 
@@ -551,7 +572,8 @@ struct IStatInstGroup
   bool  bUseSprites;
 	bool  bRandomRotation;
 	bool  bAlignToTerrain;
-	bool  bUseTerrainColor;
+  bool  bUseTerrainColor;
+	bool  bAffectedByVoxels;
 
 	float fDensity;
 	float fElevationMax;
@@ -662,7 +684,7 @@ struct IVisArea
 	//     true if the VisArea was found.
 	// Summary:
 	//     Search for a specified VisArea
-	virtual bool FindVisArea(IVisArea * pAnotherArea, int& nMaxRecursion, bool bSkipDisabledPortals, PodArray<IVisArea*> * pVisitedAreas = NULL, int nMaxVisitedAreas = 0, int nDeepness = 0) = 0;
+	virtual bool FindVisArea(IVisArea * pAnotherArea, int nMaxRecursion, bool bSkipDisabledPortals) = 0;
 
 	// Description: 
 	//     Search for the surrounding VisAreas which connected to the current 
@@ -691,6 +713,12 @@ struct IVisArea
 	//     false will be returned.
 	virtual bool IsSphereInsideVisArea(const Vec3 & vPos, const f32 fRadius) = 0;
 
+	// Summary:
+	//     Clips geometry inside or outside a vis area.
+	// Return Value:
+	//     Whether geom was clipped.
+	virtual bool ClipToVisArea(bool bInside, Sphere& sphere, Vec3 const& vNormal) = 0;
+	
 	// Summary:
 	//     Give back the axis aligned bounding box of VisArea
 	// Return Value:
@@ -726,6 +754,7 @@ struct IVisArea
 
 // water level unknown
 #define WATER_LEVEL_UNKNOWN -1000000
+#define BOTTOM_LEVEL_UNKNOWN -1000000
 
 
 // float m_SortId		: offseted by +WATER_LEVEL_SORTID_OFFSET if the camera object line is crossing the water surface
@@ -892,7 +921,10 @@ struct ITerrain
 	virtual int GetTerrainLightmapTexId( Vec4 & vTexGenInfo ) = 0;
 
 	//! Updates part of hight map (in terrain units, by default update only elevation)
-	virtual void SetTerrainElevation(int x1, int y1, int nSizeX, int nSizeY, float * pTerrainBlock, unsigned char * pSurfaceData) = 0;
+	virtual void SetTerrainElevation(int x1, int y1, int nSizeX, int nSizeY, float * pTerrainBlock, unsigned char * pSurfaceData, uint32 * pResolMap, int nResolMapSizeX, int nResolMapSizeY) = 0;
+
+  //! Return current amount of terrain textures requests for streaming, if more than 0 = there is streaming in progress
+  virtual int GetNotReadyTextureNodesCount() = 0;
 };
 
 struct IVisAreaCallback
@@ -960,6 +992,9 @@ struct ITimeOfDay
 	virtual void SetTime( float fHour,bool bForceUpdate=false ) = 0;
 	virtual float GetTime() = 0;
 
+	// update the current tod
+	virtual void Tick() = 0;
+
 	virtual void SetPaused(bool paused) = 0;
 
 	virtual void SetAdvancedInfo( const SAdvancedInfo &advInfo ) = 0;
@@ -972,9 +1007,15 @@ struct ITimeOfDay
 	virtual void EndEditMode() = 0;
 
 	virtual void Serialize( XmlNodeRef &node,bool bLoading ) = 0;
-	virtual void Serialize( TSerialize &ser ) = 0;
+	virtual void Serialize( TSerialize ser ) = 0;
 
 	virtual void SetTimer( ITimer * pTimer ) = 0;
+
+	// MP serialization
+	static const int NETSER_FORCESET = BIT(0);
+	static const int NETSER_COMPENSATELAG = BIT(1);
+	static const int NETSER_STATICPROPS = BIT(2);
+	virtual void NetSerialize( TSerialize ser, float lag, uint32 flags ) = 0;
 };
 
 
@@ -984,16 +1025,14 @@ struct IFoliage : ISkinnable
 	virtual int Serialize(TSerialize ser) = 0;
 	virtual void SetFlags(int flags) = 0;
 	virtual int GetFlags() = 0;
+	virtual IRenderNode* GetIRenderNode() = 0;
 };
 
 
 struct SSkyLightRenderParams
 {
 	SSkyLightRenderParams()
-	: m_pSkyDomeVB( 0 )
-	, m_numSkyDomeVertices( 0 )
-	, m_pSkyDomeIB( 0 )
-	, m_numSkyDomeIndices( 0 )
+	: m_pSkyDomeMesh( 0 )
 	, m_skyDomeTextureWidth( 0 )
 	, m_skyDomeTextureHeight( 0 )
 	, m_pSkyDomeTextureDataMie( 0 )
@@ -1016,10 +1055,7 @@ struct SSkyLightRenderParams
 	}
 
 	// sky dome mesh
-	CVertexBuffer* m_pSkyDomeVB;
-	uint32 m_numSkyDomeVertices;
-	SVertexStream* m_pSkyDomeIB;
-	uint32 m_numSkyDomeIndices;
+	IRenderMesh* m_pSkyDomeMesh;
 
 	// sky dome texture data
 	uint32 m_skyDomeTextureWidth;
@@ -1057,6 +1093,7 @@ struct SVisAreaInfo
   float fHeight;
   Vec3 vAmbientColor;
   bool bAffectedByOutLights;
+  bool bIgnoreSkyColor;
   bool bSkyOnly;
   float fViewDistRatio;
   bool bDoubleSide;
@@ -1065,6 +1102,14 @@ struct SVisAreaInfo
   bool bMergeBrushes;
   bool bOceanIsVisible;
 };
+
+struct SDebugFPSInfo
+{
+	float fAverageFPS;
+	float fMinFPS;
+	float fMaxFPS;
+};
+
 
 // Summary:
 //     Interface to the 3d Engine
@@ -1178,7 +1223,7 @@ struct I3DEngine : public IProcess
 	// See Also:
 	//     IStatObj
 	// Arguments:
-	//     szFileName - CGF Filename
+	//     szFileName - CGF Filename - should not be 0 or ""
 	//     szGeomName - Optional name of geometry inside CGF.
 	//     ppSubObject - [Out]Optional Out parameter,Pointer to the
 
@@ -1219,7 +1264,30 @@ struct I3DEngine : public IProcess
 	virtual bool IsUnderWater( const Vec3& vPos) const = 0;
   
   /*! Return whether ocean volume is visible or not */
-  virtual bool IsOceanVolumeVisible() const = 0;
+  virtual void SetOceanRenderFlags( uint8 nFlags ) = 0;
+  virtual uint8 GetOceanRenderFlags() const = 0;
+  virtual uint32 GetOceanVisiblePixelsCount() const = 0;
+
+	/*! Get water level in specified point (taking into account global water level and water volumes)
+	Function returns WATER_LEVEL_UNKNOWN if in specified position water was not found */
+
+	// Summary:
+	//     Gets the closest walkable bottom z straight beneath the given reference position.
+	// Note:
+	//     This function will take into account both the global terrain elevation and local voxel (or other solid walkable object).
+	// Arguments:
+	//     referencePos - Position from where to start searchning downwards.
+	//     maxRelevantDepth - Max depth caller is interested in relative to referencePos (for ray casting performance reasons).
+	//     objtypes - expects physics entity flags.  Use this to specify what object types make a valid bottom for you.
+	// Return Value:
+	//     A float value which indicate the global world z of the bottom level beneath the referencePos.
+	//     If the referencePos is below terrain but not inside any voxel area BOTTOM_LEVEL_UNKNOWN is returned.
+	virtual float GetBottomLevel(const Vec3 & referencePos, float maxRelevantDepth, int objtypes) = 0;
+	// A set of overloads for enabling users to use different sets of input params.  Basically, only
+	// referencePos is mandatory.  The overloads as such don't need to be virtual but this seems to be
+	// a purely virtual interface.
+	virtual float GetBottomLevel(const Vec3 & referencePos, float maxRelevantDepth = 10.0f) = 0;
+	virtual float GetBottomLevel(const Vec3 & referencePos, int objflags) = 0;
 
 	/*! Get water level in specified point (taking into account global water level and water volumes)
 			Function returns WATER_LEVEL_UNKNOWN if in specified position water was not found */
@@ -1329,8 +1397,8 @@ struct I3DEngine : public IProcess
 	// Arguments:
 	//     vBoxMin - Specify the range in which the decals will be removed
 	//     vBoxMax - Specify the range in which the decals will be removed
-	//     bDeleteBigTerrainDecals - Not used
-	virtual void DeleteDecalsInRange( Vec3 vBoxMin, Vec3 vBoxMax, bool bDeleteBigTerrainDecals = true)=0;
+	//     pEntity - if not NULL will only delete decals attached to this entity
+	virtual void DeleteDecalsInRange( AABB * pAreaBox, IRenderNode * pEntity ) = 0;
 
 //DOC-IGNORE-BEGIN
   /*! Call back for renderer.
@@ -1371,7 +1439,7 @@ struct I3DEngine : public IProcess
 	//     Set the view distance
 	// Arguments:
 	//     fMaxViewDistance - Maximum view distance
-	virtual void SetMaxViewDistance(float fMaxViewDistance)=0;
+//	virtual void SetMaxViewDistance(float fMaxViewDistance)=0;
 
 	// Summary:
 	//     Gets the view distance
@@ -1391,7 +1459,7 @@ struct I3DEngine : public IProcess
 	
 	// Summary:
 	//   Gets volumetric fog settings
-	virtual void GetVolumetricFogSettings( float& globalDensity, float& atmosphereHeight, float& artistTweakDensityOffset ) = 0;
+	virtual void GetVolumetricFogSettings( float& globalDensity, float& atmosphereHeight, float& artistTweakDensityOffset, float& globalDensityMultiplierLDR ) = 0;
 	
 	// Summary:
 	//   Sets volumetric fog settings
@@ -1547,7 +1615,7 @@ struct I3DEngine : public IProcess
 	//   texOrMatName - name of texture or material
 	//	 nameIsMaterial - specifies whether "texOrMatName" is a texture or material name
 	//   bDeformTerrain - Allow to deform the terrain
-	virtual void OnExplosion(Vec3 vPos, Vec3 vHitDir, float fRadius, const char *texOrMatName, bool nameIsMaterial, bool bDeformTerrain = true) = 0;
+	virtual void OnExplosion(Vec3 vPos, float fRadius, bool bDeformTerrain = true) = 0;
 
 //DOC-IGNORE-BEGIN
     // Not used anymore
@@ -1648,6 +1716,13 @@ struct I3DEngine : public IProcess
 	// Return Value:
 	//   scalar value
 	virtual float GetSkyBrightness() = 0;
+
+  // Summary:
+  //   retrieves the current SSAO multiplier
+  // Note:
+  // Return Value:
+  //   scalar value
+  virtual float GetSSAOAmount() = 0;
 
 	// Returns:
 	//   0..1, 0=no shadow, 1=full shadow
@@ -1780,7 +1855,31 @@ struct I3DEngine : public IProcess
 
 	// Description:
 	//   Gets the VisArea which is present at a specified point.
+	// Arguments:
+	//	 bIgnorePortsl: If true, skip portal VisAreas in check.
+	//	 pDist: If not 0: If point inside VisArea: set to the distance inside the VisArea, else distance outside nearest VisArea.
+	// Return Value:
+	//	 VisArea containing point, if any. 0 otherwise.
 	virtual	IVisArea * GetVisAreaFromPos(const Vec3 &vPos) = 0;	
+
+	//! collide, clip particle against vis areas.
+
+	// Description:
+	//   Tests for intersection against Vis Areas.
+	// Arguments:
+	//   box: Volume to test for intersection.
+	//   pNodeCache (out, optional): Set to a cached pointer, for quicker calls to ClipToVisAreas.
+	// Return Value:
+	//	 Whether box intersects any vis areas.
+	virtual	bool IntersectsVisAreas(const AABB& box, void** pNodeCache = 0) = 0;	
+
+	// Description:
+	//   Clips geometry against the boundaries of VisAreas.
+	// Arguments:
+	//   pInside: Vis Area to clip inside of. If 0, clip outside all Vis Areas.
+	// Return Value:
+	//	 Whether it was clipped
+	virtual	bool ClipToVisAreas(IVisArea* pInside, Sphere& sphere, Vec3 const& vNormal, void* pNodeCache = 0) = 0;	
 
 	//! enable/disable ocean rendering
 
@@ -1799,12 +1898,6 @@ struct I3DEngine : public IProcess
 	//! \brief Create an instance of a lightmap serialization manager
 	virtual struct ILMSerializationManager * CreateLMSerializationManager() = 0;
 //DOC-IGNORE-END
-
-	//DOC-IGNORE-BEGIN
-	//Internal for the the 3Dsampler
-	//! \brief Create an instance of a 3DSampler
-	virtual I3DSampler* Get3DSampler() = 0;
-		//DOC-IGNORE-END
 
 	//! create new static lsource, returns source id or -1 if it fails
 
@@ -1954,12 +2047,15 @@ struct I3DEngine : public IProcess
 	//! save/load state of engine objects
 	virtual void SerializeState( TSerialize ser ) = 0;
 
+	//! cleanup after save/load	
+	virtual void PostSerialize( bool bReading ) = 0;
+
 	//////////////////////////////////////////////////////////////////////////
 	// CGF Loader.
 	//////////////////////////////////////////////////////////////////////////
 	// Description:
 	//    Releases a CGF Content data allocated by LoadChunkFileContent.
-	virtual CContentCGF* LoadChunkFileContent( const char *filename ) = 0;
+	virtual CContentCGF* LoadChunkFileContent( const char *filename,bool bNoWarningMode=false ) = 0;
 	// Description:
 	//    Releases a CGF Content data allocated by LoadChunkFileContent.
 	virtual void ReleaseChunkFileContent( CContentCGF *pCGF ) = 0;
@@ -1985,10 +2081,7 @@ struct I3DEngine : public IProcess
 
 	//! return array of voxel render meshes, nCount will get number of elements writed
 	virtual void GetVoxelRenderNodes(struct IRenderNode**pRenderNodes, int & nCount) = 0;
-
-	//! return interface to indirect lighting engine
-	virtual IIndirectLighting * GetIIndirectLighting() = 0;
-    
+   
   //! Return amount of light affecting a point in space inside a specific range (0 means no light affecting,
   // 1 is completely affected by light). Use accurate parameter for a more expensive but with higher accuracy computation
   virtual float GetLightAmountInRange(const Vec3 &pPos, float fRange, bool bAccurate = 0) = 0;
@@ -1996,6 +2089,10 @@ struct I3DEngine : public IProcess
 	//! Places camera into every visarea or every manually set pre-cache points and render the scenes
 	virtual void PrecacheLevel(bool bPrecacheAllVisAreas, Vec3 * pPrecachePoints, int nPrecachePointsNum) = 0;
 
+  //! Propose 3dengine to load on next frame all shaders and textures synchronously
+  virtual void ProposeContentPrecache() = 0;
+
+  //! Return TOD interface
 	virtual ITimeOfDay* GetTimeOfDay() = 0;
 
 	// Description:
@@ -2045,6 +2142,14 @@ struct I3DEngine : public IProcess
 	// Returns
 	//   returned count
 	virtual uint32 GetObjectsByType( EERType objType, IRenderNode **pObjects=0 )=0;
+
+  virtual struct CLoadingTimeContainer * StartLoadingSectionProfiling(struct CLoadingTimeProfiler * pProfiler, const char * szFuncName) = 0;
+  virtual void EndLoadingSectionProfiling(struct CLoadingTimeProfiler * pProfiler) = 0;
+
+  // Print loading time stats into log
+  virtual void OutputLoadingTimeStats() = 0;
+
+	virtual void FillDebugFPSInfo(SDebugFPSInfo&) = 0;
 };
 
 
@@ -2114,6 +2219,29 @@ struct STerrainTextureLayerFileHeader
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+struct CLoadingTimeProfiler
+{
+  CLoadingTimeProfiler (ISystem * pSystem, const char * szFuncName) : m_pSystem (pSystem)
+  {
+    m_pSystem = pSystem;
+    if(I3DEngine * pEng = m_pSystem->GetI3DEngine())
+      m_pTimeContainer = pEng->StartLoadingSectionProfiling(this, szFuncName);
+  }
+
+  ~CLoadingTimeProfiler ()
+  {
+    if(I3DEngine * pEng = m_pSystem->GetI3DEngine())
+      pEng->EndLoadingSectionProfiling(this);
+  }
+
+  struct CLoadingTimeContainer * m_pTimeContainer;
+  double m_fConstructorTime;
+  double m_fConstructorMemUsage;
+  ISystem* m_pSystem;
+};
+
+#define LOADING_TIME_PROFILE_SECTION(pSystem) CLoadingTimeProfiler __section_loading_time_auto_profiler(pSystem, __FUNCTION__);
 
 // experimental way to track interface version 
 // this value will be compared with value passed from system module

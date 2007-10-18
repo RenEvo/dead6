@@ -7,6 +7,7 @@
 #include "GameActions.h"
 #include "NetInputChainDebug.h"
 
+#undef CALL_PLAYER_EVENT_LISTENERS
 #define CALL_PLAYER_EVENT_LISTENERS(func) \
 { \
 	if (m_player.m_playerEventListeners.empty() == false) \
@@ -22,9 +23,10 @@
 	} \
 }
 
+#define LADDER_TOP_DISTANCE 2.41f
 //-----------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------
-CPlayerMovement::CPlayerMovement( const CPlayer& player, const SActorFrameMovementParams& movement, float m_frameTime ) : 
+CPlayerMovement::CPlayerMovement(CPlayer& player, const SActorFrameMovementParams& movement, float m_frameTime ) : 
 	m_frameTime(m_frameTime),
 	m_params(player.m_params),
 	m_stats(player.m_stats),
@@ -38,11 +40,14 @@ CPlayerMovement::CPlayerMovement( const CPlayer& player, const SActorFrameMoveme
 	m_onGroundWBoots(player.m_stats.onGroundWBoots),
 	m_jumped(player.m_stats.jumped),
 	m_actions(player.m_actions),
-	m_thrusters(0.0f),
 	m_turnTarget(player.m_turnTarget),
-	m_thrusterSprint(player.m_stats.thrusterSprint),
+	m_thrusters(player.m_stats.thrusters),
+	m_zgDashTimer(player.m_stats.zgDashTimer),
+	m_zgDashWorldDir(player.m_stats.zgDashWorldDir),
 	m_hasJumped(false),
-	m_waveRandomMult(1.0f)
+	m_swimJumping(player.m_stats.swimJumping),
+	m_waveRandomMult(1.0f),
+	m_stickySurfaceTimer(player.m_stickySurfaceTimer)
 {
 	// derive some values that will be useful later
 	m_worldPos = player.GetEntity()->GetWorldPos();
@@ -58,7 +63,7 @@ void CPlayerMovement::Process(CPlayer& player)
 		ProcessFlyMode();
 	else if (m_stats.isOnLadder)
 			ProcessMovementOnLadder(player);
-	else if (m_stats.inAir && m_stats.inZeroG)
+	else if (/*m_stats.inAir &&*/ m_stats.inZeroG)
 		ProcessFlyingZeroG();
 	else if (m_stats.inFreefall.Value()==1)
 	{
@@ -81,44 +86,58 @@ void CPlayerMovement::Commit( CPlayer& player )
 {
 	if (player.m_pAnimatedCharacter)
 	{
-    if (m_movement.prediction.nStates > 0)
-    {
-      m_request.prediction = m_movement.prediction;
-    }
-    else
-    {
-      m_request.prediction.nStates = 1;
-      m_request.prediction.states[0].deltatime = 0.0f;
-      m_request.prediction.states[0].velocity = m_request.velocity;
-      m_request.prediction.states[0].position = player.GetEntity()->GetWorldPos();
-      m_request.prediction.states[0].orientation = player.GetEntity()->GetWorldRotation();
-    }
+		m_request.allowStrafe = m_movement.allowStrafe;
+    m_request.prediction = m_movement.prediction;
 
 		NETINPUT_TRACE(m_player.GetEntityId(), m_request.rotation * FORWARD_DIRECTION);
 		NETINPUT_TRACE(m_player.GetEntityId(), m_request.velocity);
+
+		m_request.jumping = m_stats.jumped;
+
+		m_player.DebugGraph_AddValue("ReqVelo", m_request.velocity.GetLength());
+		m_player.DebugGraph_AddValue("ReqVeloX", m_request.velocity.x);
+		m_player.DebugGraph_AddValue("ReqVeloY", m_request.velocity.y);
+		m_player.DebugGraph_AddValue("ReqVeloZ", m_request.velocity.z);
+		m_player.DebugGraph_AddValue("ReqRotZ", RAD2DEG(m_request.rotation.GetRotZ()));
 
 		player.m_pAnimatedCharacter->AddMovement( m_request );
 	}
 
 	if (m_detachLadder)
 		player.CreateScriptEvent("detachLadder",0);
+
+/*
 	if (m_thrusters > .1f && m_stats.onGroundWBoots>-0.01f)
 		player.CreateScriptEvent("thrusters",(m_actions & ACTION_SPRINT)?1:0);
+/**/
+
 	if (m_hasJumped)
 		player.CreateScriptEvent("jumped",0);
 
 	NETINPUT_TRACE(m_player.GetEntityId(), m_velocity);
 	NETINPUT_TRACE(m_player.GetEntityId(), m_jumped);
 
+	// Reset ground timer to prevent ground time before the jump to be inherited
+	// and incorrectly/prematurely used to identify landing in mid air in MP.
+	if (m_jumped && !player.m_stats.jumped)
+		player.m_stats.onGround = 0.0f;
+
 	player.m_velocity = m_velocity;
 	player.m_stats.jumped = m_jumped;
 	player.m_stats.onGroundWBoots = m_onGroundWBoots;
 	player.m_turnTarget = m_turnTarget;
 	player.m_lastRequestedVelocity = m_request.velocity; 
-	player.m_stats.thrusterSprint = m_thrusterSprint;
+	player.m_stats.thrusters = m_thrusters;
+	player.m_stats.zgDashTimer = m_zgDashTimer;
+	player.m_stats.zgDashWorldDir = m_zgDashWorldDir;
+	player.m_stats.swimJumping = m_swimJumping;
+
+	player.m_stickySurfaceTimer = m_stickySurfaceTimer;
 	
-	if(!player.m_stats.isOnLadder)
-		player.m_stats.bSprinting = ((m_stats.onGround>0.1f || (m_stats.inWater > 0.0f)) && m_stats.inMovement>0.1f && m_actions & ACTION_SPRINT);
+	if(!player.m_stats.bIgnoreSprinting)
+		player.m_stats.bSprinting = ((m_stats.onGround>0.1f || (m_stats.inWaterTimer > 0.0f)) && m_stats.inMovement>0.1f && m_actions & ACTION_SPRINT);
+	if(player.m_stats.isOnLadder)
+		player.m_stats.bSprinting = ((m_actions&ACTION_SPRINT) && (m_movement.desiredVelocity.len2()>0.0f));
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -152,7 +171,7 @@ void CPlayerMovement::ProcessFlyMode()
 	if (moveModule > 1.0f)
  		move /= moveModule;
 
-	move *= m_params.speedMultiplier;  // respect speed multiplier as well
+	move *= m_params.speedMultiplier*m_player.GetZoomSpeedMultiplier();  // respect speed multiplier as well
 	move *= 30.0f;
 
 	if (m_actions & ACTION_SPRINT)
@@ -163,8 +182,281 @@ void CPlayerMovement::ProcessFlyMode()
 }
 
 //-----------------------------------------------------------------------------------------------
-//-----------------------------------------------------------------------------------------------
 void CPlayerMovement::ProcessFlyingZeroG()
+{
+	bool debug = false;
+	Vec3 entityPos = m_player.GetEntity()->GetWorldPos();
+	Vec3 vRight(m_baseQuat.GetColumn0());
+	Vec3 vFwd(m_baseQuat.GetColumn1());
+
+	bool trail = (g_pGameCVars->pl_zeroGParticleTrail != 0);
+	if (trail)
+		m_player.SpawnParticleEffect("alien_special.human_thruster_zerog.human", entityPos, vFwd);
+
+	IPhysicalEntity* pPhysEnt = m_player.GetEntity()->GetPhysics();
+	if (pPhysEnt != NULL)
+	{
+		pe_status_dynamics sd;
+		if (pPhysEnt->GetStatus(&sd) != 0)
+			m_velocity = sd.v;
+
+		pe_player_dynamics pd;
+		pd.kAirControl = 1.0f;
+		pd.kAirResistance = 0.0f;
+		pd.gravity.zero();
+		pPhysEnt->SetParams(&pd);
+	}
+
+	//--------------------
+
+	float dashSpeedBoost = 40.0f;
+	float dashDuration = 0.4f;
+	float dashRechargeDuration = 0.5f;
+	float dashEnergyConsumption = g_pGameCVars->pl_zeroGDashEnergyConsumption * NANOSUIT_ENERGY;
+
+	Vec3 acceleration(ZERO);
+
+	// Apply desired movement
+	Vec3 desiredLocalNormalizedVelocity(ZERO);
+	Vec3 desiredLocalVelocity(ZERO);
+	Vec3 desiredWorldVelocity(ZERO);
+
+	// Calculate desired acceleration (user input)		
+	{
+		CNanoSuit* pSuit = m_player.GetNanoSuit();
+
+		desiredLocalNormalizedVelocity.x = m_movement.desiredVelocity.x;
+		desiredLocalNormalizedVelocity.y = m_movement.desiredVelocity.y;
+		if ((m_actions & ACTION_JUMP))
+			desiredLocalNormalizedVelocity.z += 1.0f;
+		else if (m_actions & ACTION_CROUCH)
+			desiredLocalNormalizedVelocity.z -= 1.0f;
+
+		desiredLocalNormalizedVelocity.NormalizeSafe(ZERO);
+
+		float backwardMultiplier = (m_movement.desiredVelocity.y < 0.0f) ? m_params.backwardMultiplier : 1.0f;
+		desiredLocalNormalizedVelocity.x *= m_params.strafeMultiplier;
+		desiredLocalNormalizedVelocity.y *= backwardMultiplier;
+		desiredLocalNormalizedVelocity.z *= g_pGameCVars->pl_zeroGUpDown;
+
+		float maxSpeed = g_pGameCVars->pl_zeroGBaseSpeed;
+		if ((pSuit != NULL) && (pSuit->GetMode() == NANOMODE_SPEED))
+		{
+			if ((m_actions & ACTION_SPRINT) && (m_actions & ACTION_MOVE) &&
+					(pSuit->GetSuitEnergy() > NANOSUIT_ENERGY * 0.01f))
+			{
+				maxSpeed *= g_pGameCVars->pl_zeroGSpeedMultSpeedSprint;
+
+				float energy = pSuit->GetSuitEnergy();
+				energy -= g_pGameCVars->pl_zeroGSpeedModeEnergyConsumption * NANOSUIT_ENERGY * m_frameTime;
+				pSuit->SetSuitEnergy(energy);
+			}				
+			else
+			{
+				maxSpeed *= g_pGameCVars->pl_zeroGSpeedMultSpeed;
+			}
+		}
+		else
+		{
+			if (m_actions & ACTION_SPRINT)
+			{
+				maxSpeed *= g_pGameCVars->pl_zeroGSpeedMultNormalSprint;
+			}				
+			else
+			{
+				maxSpeed *= g_pGameCVars->pl_zeroGSpeedMultNormal;
+			}
+		}
+
+		if (debug)
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.4f), 1.5f, "MoveN[%1.3f, %1.3f, %1.3f]", desiredLocalNormalizedVelocity.x, desiredLocalNormalizedVelocity.y, desiredLocalNormalizedVelocity.z);
+
+/*
+		if (debug)
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.8f), 1.5f, "SprintMul %1.2f", sprintMultiplier);
+*/
+/*
+		float stanceMaxSpeed = m_player.GetStanceMaxSpeed(STANCE_ZEROG);
+		if (debug)
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.6f), 1.5f, "StanceMax %1.3f", stanceMaxSpeed);
+*/
+
+		if (debug)
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.6f), 1.5f, "StanceMax %1.3f", maxSpeed);
+
+		desiredLocalVelocity.x = desiredLocalNormalizedVelocity.x * maxSpeed;
+		desiredLocalVelocity.y = desiredLocalNormalizedVelocity.y * maxSpeed;
+		desiredLocalVelocity.z = desiredLocalNormalizedVelocity.z * maxSpeed;
+
+		// The desired movement is applied in viewspace, not in entityspace, since entity does not nessecarily pitch while swimming.
+		desiredWorldVelocity += m_viewQuat.GetColumn0() * desiredLocalVelocity.x;
+		desiredWorldVelocity += m_viewQuat.GetColumn1() * desiredLocalVelocity.y;
+		desiredWorldVelocity += m_viewQuat.GetColumn2() * desiredLocalVelocity.z;
+
+		if (debug)
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.2f), 1.5f, "Move[%1.3f, %1.3f, %1.3f]", desiredWorldVelocity.x, desiredWorldVelocity.y, desiredWorldVelocity.z);
+
+		float desiredAlignment = m_velocity.GetNormalizedSafe(ZERO) * desiredWorldVelocity.GetNormalizedSafe(ZERO);
+
+		int sound = 0;
+		float thrusters = desiredWorldVelocity.GetLength();
+		if ((thrusters > 0.0f) && (m_thrusters == 0.0f))
+			sound = 1;
+		if ((m_thrusters > 0.0f) && (thrusters == 0.0f))
+			sound = -1;
+		m_thrusters = thrusters;
+
+		{
+			float energy = (pSuit != NULL) ? pSuit->GetSuitEnergy() : 0.0f;
+
+			if ((m_zgDashTimer <= 0.0f) && m_zgDashWorldDir.IsZero() && 
+					(m_actions & ACTION_SPRINT) && /*!desiredWorldVelocity.IsZero() && */
+					(fabs(desiredLocalNormalizedVelocity.x) > 0.9f))
+			{
+				if (energy >= dashEnergyConsumption)
+				{
+					m_zgDashTimer = 0.0f;
+					m_zgDashWorldDir = desiredWorldVelocity.GetNormalized();
+					m_player.PlaySound(CPlayer::ESound_ThrustersDash, true);
+					//m_player.PlaySound(CPlayer::ESound_ThrustersDash02, true);
+
+					if (pSuit != NULL)
+					{
+						energy -= dashEnergyConsumption;
+						pSuit->SetSuitEnergy(energy, true);
+					}
+				}
+				else
+				{
+					if (m_zgDashTimer == 0.0f)
+					{
+						m_zgDashTimer -= 0.3f;
+						m_player.PlaySound(CPlayer::ESound_ThrustersDashFail, true);
+					}
+					else
+					{
+						m_zgDashTimer += m_frameTime;
+						if (m_zgDashTimer > 0.0f)
+							m_zgDashTimer = 0.0f;
+					}
+				}
+			}
+
+			if (m_zgDashTimer >= dashDuration)
+			{
+				if (!m_zgDashWorldDir.IsZero())
+				{
+					m_zgDashWorldDir.zero();
+					//m_player.PlaySound(CPlayer::ESound_ThrustersDash, false);
+					m_player.PlaySound(CPlayer::ESound_ThrustersDashRecharged, true);
+					//m_player.PlaySound(CPlayer::ESound_ThrustersDashRecharged02, true);
+				}
+
+				if ((m_zgDashTimer >= (dashDuration + dashRechargeDuration)) && 
+						(!(m_actions & ACTION_SPRINT) || /*desiredWorldVelocity.IsZero()*/
+						(fabs(desiredLocalNormalizedVelocity.x) < 0.7f)))
+				{
+					m_zgDashTimer = 0.0f;
+				}
+			}
+
+			if (!m_zgDashWorldDir.IsZero() || (m_zgDashTimer > dashDuration))
+			{
+				float dashTimeFraction = sqr(1.0f - CLAMP(m_zgDashTimer / dashDuration, 0.0f, 1.0f));
+				acceleration += dashSpeedBoost * dashTimeFraction * m_zgDashWorldDir;
+				m_zgDashTimer += m_frameTime;
+			}
+
+			if (!m_zgDashWorldDir.IsZero())
+				desiredWorldVelocity *= 0.5f;
+		}
+
+		acceleration += desiredWorldVelocity;
+
+		if ((pSuit != NULL) && (sound != 0))
+		{
+			if (sound > 0)
+				m_player.PlaySound(CPlayer::ESound_Thrusters, true);
+			else
+				m_player.PlaySound(CPlayer::ESound_Thrusters, false);
+		}
+	}
+
+	Vec3 gravityStream;
+	pe_params_buoyancy buoyancy;
+	if (gEnv->pPhysicalWorld->CheckAreas(entityPos, gravityStream, &buoyancy))
+		acceleration += gravityStream;
+
+	//--------------------
+
+	// Apply velocity dampening (framerate independent)
+	Vec3 damping(ZERO);
+	{
+		damping.x = abs(m_velocity.x);
+		damping.y = abs(m_velocity.y);
+		damping.z = abs(m_velocity.z);
+
+//*
+		if (!m_zgDashWorldDir.IsZero())
+		{
+			float dashFraction = CLAMP(m_zgDashTimer / dashDuration, 0.0f, 1.0f);
+			damping *= 1.0f + 1.0f * CLAMP((dashFraction - 0.5f) / 0.5f, 0.0f, 1.0f);
+		}
+/**/
+
+		float stopDelay = g_pGameCVars->pl_zeroGFloatDuration;
+		if (!desiredWorldVelocity.IsZero())
+			stopDelay = g_pGameCVars->pl_zeroGThrusterResponsiveness;
+		else if (!m_zgDashWorldDir.IsZero())
+			stopDelay = g_pGameCVars->pl_zeroGFloatDuration * 0.5f;
+
+		damping *= (m_frameTime / stopDelay);
+		m_velocity.x = (abs(m_velocity.x) > damping.x) ? (m_velocity.x - sgn(m_velocity.x) * damping.x) : 0.0f;
+		m_velocity.y = (abs(m_velocity.y) > damping.y) ? (m_velocity.y - sgn(m_velocity.y) * damping.y) : 0.0f;
+		m_velocity.z = (abs(m_velocity.z) > damping.z) ? (m_velocity.z - sgn(m_velocity.z) * damping.z) : 0.0f;
+	}
+
+	// Apply acceleration (framerate independent)
+	float accelerateDelay = g_pGameCVars->pl_zeroGThrusterResponsiveness;
+	m_velocity += acceleration * (m_frameTime / accelerateDelay);
+
+	//--------------------
+
+	// Set request type and velocity
+	m_request.type = eCMT_Fly;
+	m_request.velocity = m_velocity;
+
+	// DEBUG VELOCITY
+	if (debug)
+	{
+		gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f - Vec3(0,0,0.0f), 1.5f, "Velo[%1.3f, %1.3f, %1.3f] (%1.3f)", m_velocity.x, m_velocity.y, m_velocity.z, m_velocity.len());
+		gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f - Vec3(0,0,0.2f), 1.5f, " Axx[%1.3f, %1.3f, %1.3f]", acceleration.x, acceleration.y, acceleration.z);
+		//gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f - Vec3(0,0,0.4f), 1.5f, "Damp[%1.3f, %1.3f, %1.3f]", damping.x, damping.y, damping.z);
+		gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f - Vec3(0,0,0.6f), 1.5f, "FrameTime %1.4f", m_frameTime);
+	}
+
+/*
+	m_player.DebugGraph_AddValue("Velo", m_velocity.len());
+	m_player.DebugGraph_AddValue("VeloX", m_velocity.x);
+	m_player.DebugGraph_AddValue("VeloY", m_velocity.y);
+	m_player.DebugGraph_AddValue("VeloZ", m_velocity.z);
+/**/
+/*
+	m_player.DebugGraph_AddValue("Axx", acceleration.len());
+	m_player.DebugGraph_AddValue("AxxX", acceleration.x);
+	m_player.DebugGraph_AddValue("AxxY", acceleration.y);
+	m_player.DebugGraph_AddValue("AxxZ", acceleration.z);
+/**/
+
+	//m_player.DebugGraph_AddValue("ZGDashTimer", m_zgDashTimer);
+	
+
+	//	CryLogAlways("speed: %.2f", m_velocity.len());
+}
+
+//-----------------------------------------------------------------------------------------------
+/*
+void CPlayerMovement::ProcessFlyingZeroGOLD()
 {
 	CNanoSuit* pSuit = m_player.GetNanoSuit();
 	assert(pSuit);
@@ -178,8 +470,9 @@ void CPlayerMovement::ProcessFlyingZeroG()
 
 	if((m_actions & ACTION_SPRINT) && (m_player.GetNanoSuit()->GetMode() == NANOMODE_SPEED))
 	{
-		move = m_viewQuat.GetColumn1() * desiredVelocity.len() * ((m_actions & ACTION_ZEROGBACK)?(-1.0f):(1.0f));
-		CryLogAlways("%i", m_actions & ACTION_ZEROGBACK);
+		move = m_viewQuat.GetColumn1() * desiredVelocity.len();
+		if(m_actions & ACTION_ZEROGBACK)
+			move *= -1.0f;
 	}
 	else
 	{
@@ -214,12 +507,12 @@ void CPlayerMovement::ProcessFlyingZeroG()
 		{
 			if(pSuit->GetSuitEnergy() >= NANOSUIT_ENERGY * 0.2f)
 			{
-				mult *= 2.0f;
+				mult *= 3.0f;
 				pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-100.0f*g_pGameCVars->v_zeroGSpeedModeEnergyConsumption*m_frameTime);
 			}
 			else if(pSuit->GetSuitEnergy() < NANOSUIT_ENERGY * 0.2f)
 			{
-				mult *= 1.3f;
+				mult *= 0.8f;
 				pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-25.0f*g_pGameCVars->v_zeroGSpeedModeEnergyConsumption*m_frameTime);
 			}
 		}
@@ -227,7 +520,7 @@ void CPlayerMovement::ProcessFlyingZeroG()
 		move *= mult;
 	}
 
-	AdjustMovementForEnvironment( move );
+	AdjustMovementForEnvironment( move, (m_actions&ACTION_SPRINT)!=0 );
 
 	m_thrusters = moveModule;
 
@@ -292,11 +585,6 @@ void CPlayerMovement::ProcessFlyingZeroG()
 			float lenMult(min(1.0f,len/rayLen));
 			lenMult = 1.0f - lenMult*lenMult;
 
-			/*Vec3 goalPos = hit.pt + hit.n * (len-rayLen*lenMult);
-			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(hit.pt, ColorB(255,255,0,100), goalPos, ColorB(255,0,255,100));
-			delta = goalPos - ppos;
-			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(ppos, ColorB(0,255,0,100), ppos + delta, ColorB(255,0,0,100));*/
-
 			delta /= max(0.001f,len);
 
 			move += delta * (10.0f * lenMult * m_frameTime);
@@ -350,99 +638,115 @@ void CPlayerMovement::ProcessFlyingZeroG()
 				m_request.velocity.SetLength(g_pGameCVars->v_zeroGMaxSpeed);
 	}
 }
+*/
 
 //-----------------------------------------------------------------------------------------------
 //-----------------------------------------------------------------------------------------------
 void CPlayerMovement::ProcessSwimming()
 {
-	bool debug = (g_pGameCVars->cl_debugSwimming != 0);
+ 	bool debug = (g_pGameCVars->cl_debugSwimming != 0);
 	Vec3 entityPos = m_player.GetEntity()->GetWorldPos();
 	Vec3 vRight(m_baseQuat.GetColumn0());
 
+	// Don't enable sticky surface directly when entering water.
+	if (m_stats.inWaterTimer < 0.5f)
+	{
+		m_stickySurfaceTimer = 0.0f;
+	}
+
+	CNanoSuit* pSuit = m_player.GetNanoSuit();
+
 	IPhysicalEntity* pPhysEnt = m_player.GetEntity()->GetPhysics();
-	pe_status_dynamics sd;
-	if (pPhysEnt->GetStatus(&sd) != 0)
-		m_velocity = sd.v;
+	if (pPhysEnt != NULL) // entity might have been shattered on be unphysicalized
+	{
+		pe_status_dynamics sd;
+		if (pPhysEnt->GetStatus(&sd) != 0)
+			m_velocity = sd.v;
 
-/*
-	if (m_velocity.z < -10.0f)
-		m_velocity.z = -10.0f;
-	if (m_velocity.z > +10.0f)
-		m_velocity.z = +10.0f;
-*/
+		pe_player_dynamics pd;
+		pd.kAirControl = 1.0f;
+		pd.kAirResistance = 0.0f;
+		pPhysEnt->SetParams(&pd);
+	}
 
-	// Normalize DENormalized values (NOTE: If these trigger something outside this function denormalized the velocity).
-	if (((FloatU32(m_velocity.x) & FloatU32ExpMask) == 0) && ((FloatU32(m_velocity.x) & FloatU32FracMask) != 0))
-   		m_velocity.x = 0.0f;
-	if (((FloatU32(m_velocity.y) & FloatU32ExpMask) == 0) && ((FloatU32(m_velocity.y) & FloatU32FracMask) != 0))
-		m_velocity.y = 0.0f;
+	{
+		// Apply water flow velocity to the player
+		Vec3 gravity;
+		pe_params_buoyancy buoyancy;
+		if (gEnv->pPhysicalWorld->CheckAreas(entityPos, gravity, &buoyancy))
+			m_velocity += buoyancy.waterFlow*m_frameTime;
+	}
 
 	Vec3 acceleration(ZERO);
 
 	//--------------------
 
 	// Apply gravity when above the surface.
- 	if (m_stats.waterLevel > 0.0f)
+ 	if (m_swimJumping || (m_stats.relativeWaterLevel > 0.2f))
 	{
-		// Apply it gradually when close to surface, to prevent gravity to pull character down to fast.
-		float fraction = CLAMP(m_stats.waterLevel / 0.2f, 0.0f, 1.0f);
+		float gravityScaling = 0.5f;
 		if (!m_stats.gravity.IsZero())
-			acceleration += m_stats.gravity * 0.01f * fraction;
+			acceleration += m_stats.gravity * gravityScaling;
 		else
-			acceleration.z += -9.8f * 0.01f * fraction;
+			acceleration.z += -9.8f * gravityScaling;
 	}
 
 	//--------------------
+
+	if ((m_velocity.z < -0.5f) && (m_stats.relativeWaterLevel < -0.2f))
+	{
+		m_swimJumping = false;
+	}
 
 	// Apply jump impulse when below but close to the surface (if in water for long enough).
-	bool jump = false;
-	if ((m_actions & ACTION_JUMP) && (m_velocity.z >= -0.2f) && (m_stats.waterLevel > -0.1f) && (m_stats.waterLevel < 0.1f))
+	if (!m_swimJumping && (m_actions & ACTION_JUMP) && (m_velocity.z >= -0.2f) && (m_stats.relativeWaterLevel > -0.1f) && (m_stats.relativeWaterLevel < 0.1f))
 	{
-		jump = true;
-		m_velocity.z = 6.0f;
+ 		float jumpMul = 1.0f;
+		if (pSuit != NULL)
+		{
+			float jumpEnergyCost = 0.0f;
+			float jumpBaseMul = 1.0f;
+			float jumpSprintMul = 1.0f;
+			if (pSuit->GetMode() == NANOMODE_STRENGTH)
+			{
+				jumpEnergyCost = 50.0f; // g_pGameCVars->pl_swimJumpStrengthCost
+				jumpSprintMul = 2.5; // g_pGameCVars->pl_swimJumpStrengthSprintMul
+				jumpBaseMul = 1.0; // g_pGameCVars->pl_swimJumpStrengthBaseMul
+			}
+			else if (pSuit->GetMode() == NANOMODE_SPEED)
+			{
+				jumpEnergyCost = 50.0f; // g_pGameCVars->pl_swimJumpStrengthCost
+				jumpSprintMul = 2.5; // g_pGameCVars->pl_swimJumpStrengthSprintMul
+				jumpBaseMul = 1.0; // g_pGameCVars->pl_swimJumpStrengthBaseMul
+			}
+
+			if ((m_actions & ACTION_SPRINT) && (pSuit->GetSuitEnergy() >= jumpEnergyCost))
+			{
+				pSuit->SetSuitEnergy(pSuit->GetSuitEnergy() - jumpEnergyCost);
+				jumpMul = jumpSprintMul;
+			}
+			else
+			{
+				jumpMul = jumpBaseMul;
+			}
+		}
+
+		m_velocity.z = max(m_velocity.z, 6.0f + 2.0f * jumpMul);
+		m_swimJumping = true;
+	}
+
+	if ((m_velocity.z > 5.0f) && (m_stats.relativeWaterLevel > 0.2f))
+	{
+		m_swimJumping = true;
 	}
 
 	//--------------------
 
-	// Apply ocean wave impulse when below but close to the surface.
-	if ((m_stats.waterLevel > -0.5f) && (m_stats.waterLevel < 0.1f))
-	{
-		// some wave code stolen from boats
-		float waveFreq = 4.f;
-
-		float waveTimerPrev = m_waveTimer;
-		m_waveTimer += m_frameTime*waveFreq;
-
-		// new randomized amount for this oscillation
-		if (m_waveTimer >= gf_PI && waveTimerPrev < gf_PI) 
-			m_waveRandomMult = Random();  
-
-		if (m_waveTimer >= 2*gf_PI)  
-			m_waveTimer -= 2*gf_PI;    
-
-		float kx = 12.0f * (m_waveRandomMult+0.3f) + /*m_waveSpeedMult**/m_stats.speed;
-		float ky = 20.0f * (1.f - 0.5f*m_stats.speed - 0.5f);
-
-		pe_action_impulse waveImp;
-		waveImp.angImpulse.x = sin(m_waveTimer) * m_frameTime * kx;
-
-		if (isneg(waveImp.angImpulse.x))
-			waveImp.angImpulse.x *= (1.f - min(1.f, 2.f*m_stats.speed)); // less amplitude for negative impulse      
-
-		waveImp.angImpulse.y = sin(m_waveTimer-0.5f*gf_PI) * m_frameTime * ky;  
-		waveImp.angImpulse.z = (waveImp.angImpulse.x + waveImp.angImpulse.y) * 0.2f;
-		Vec3 imp = m_player.GetEntity()->GetWorldTM().TransformVector(waveImp.angImpulse);
-
-		// Currently not used, since swimming is WIP, and the waviness is merely decorative cream on top.
-		// Also, there might be problems with using client specific (not synced beween clients) calculations to move the entity like this.
-		//acceleration += imp;
-	}
-
-	//--------------------
-
+/*
 	// Apply automatic float up towards surface when not in conflict with desired movement (if in water for long enough).
-	if ((m_velocity.z > -0.1f) && (m_velocity.z < 0.2f) && (m_stats.waterLevel < -0.1f) && (m_stats.inWater > 0.5f))
-		acceleration.z += (1.0f - sqr(1.0f - CLAMP(-m_stats.waterLevel, 0.0f, 1.0f))) * 0.08f;
+	if ((m_velocity.z > -0.1f) && (m_velocity.z < 0.2f) && (m_stats.relativeWaterLevel < -0.1f) && (m_stats.inWaterTimer > 0.5f))
+		acceleration.z += (1.0f - sqr(1.0f - CLAMP(-m_stats.relativeWaterLevel, 0.0f, 1.0f))) * 0.08f;
+*/
 
 	//--------------------
 
@@ -453,82 +757,68 @@ void CPlayerMovement::ProcessSwimming()
 
 	// Less control when jumping or otherwise above surface
 	// (where bottom ray miss geometry that still keeps the collider up).
-	float userControlFraction = 1.0f;
-	if (m_stats.waterLevel > 0.1f)
-		userControlFraction = 0.2f;
+	float userControlFraction = m_swimJumping ? 0.1f : 1.0f;
 
 	// Calculate desired acceleration (user input)		
 	{
 		// Apply up/down control when well below surface (if in water for long enough).
-		if (m_stats.inWater > 0.5f)
+		if ((m_stats.inWaterTimer > 0.5f) && !m_swimJumping)
 		{
-			if ((m_actions & ACTION_JUMP) && (m_velocity.z > -1.5f) && (m_stats.waterLevel < -0.1f))
+			if (m_actions & ACTION_JUMP)
 				desiredLocalNormalizedVelocity.z += 1.0f;
-			else if ((m_actions & ACTION_CROUCH) && (m_stats.waterLevel < 0.1f))
+			else if (m_actions & ACTION_CROUCH)
 				desiredLocalNormalizedVelocity.z -= 1.0f;
 		}
 
-		float backwardMultiplier = (m_movement.desiredVelocity.y < 0.0f) ? m_params.backwardMultiplier : 1.0f;
-		desiredLocalNormalizedVelocity.x = m_movement.desiredVelocity.x * m_params.strafeMultiplier;
+		float backwardMultiplier = (m_movement.desiredVelocity.y < 0.0f) ? g_pGameCVars->pl_swimBackSpeedMul : 1.0f;
+		desiredLocalNormalizedVelocity.x = m_movement.desiredVelocity.x * g_pGameCVars->pl_swimSideSpeedMul;
 		desiredLocalNormalizedVelocity.y = m_movement.desiredVelocity.y * backwardMultiplier;
-		if (debug)
-			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.4f), 1.5f, "MoveN[%1.3f, %1.3f, %1.3f]", desiredLocalNormalizedVelocity.x, desiredLocalNormalizedVelocity.y, desiredLocalNormalizedVelocity.z);
 
 		// AI can set a custom sprint value, so don't cap the movement vector
 		float sprintMultiplier = 1.0f;
-		if (m_movement.sprint <= 0.0f)
+		if ((m_actions & ACTION_SPRINT) && (m_stats.relativeWaterLevel < 0.2f))
 		{
-			//cap the movement vector to max 1
-			float len(desiredLocalNormalizedVelocity.len());
-			if (len > 1.0f)
-				desiredLocalNormalizedVelocity /= len;
+			sprintMultiplier = g_pGameCVars->pl_swimNormalSprintSpeedMul;
 
-			if (m_actions & ACTION_SPRINT)
-			{
-				sprintMultiplier = m_params.sprintMultiplier;
+			if ((pSuit != NULL) && (pSuit->GetMode() == NANOMODE_SPEED) && (pSuit->GetSprintMultiplier(false) > 1.0f))
+				sprintMultiplier = g_pGameCVars->pl_swimSpeedSprintSpeedMul;
 
-				CNanoSuit* pSuit = m_player.GetNanoSuit();
-				if (pSuit != NULL)
-					sprintMultiplier = pSuit->GetSprintMultiplier();
-			}
-
-			// Higher speed multiplier when looking up, to get higher dolphin jumps.
-			sprintMultiplier *= LERP(1.0f, 2.5f, CLAMP(m_viewQuat.GetFwdZ(), 0.0f, 1.0f)); //swimming speed bonus to adjust dolphin jump
+			// Higher speed multiplier when sprinting while looking up, to get higher dolphin jumps.
+			float upFraction = CLAMP(m_viewQuat.GetFwdZ(), 0.0f, 1.0f);
+			sprintMultiplier *= LERP(1.0f, g_pGameCVars->pl_swimUpSprintSpeedMul, upFraction);
 		}
 
 		if (debug)
-			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.8f), 1.5f, "SprintMul %1.2f", sprintMultiplier);
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,1.0f), 1.5f, "SprintMul %1.2f", sprintMultiplier);
 
-		float stanceMaxSpeed = m_player.GetStanceMaxSpeed(STANCE_SWIM);
+		//float baseSpeed = m_player.GetStanceMaxSpeed(STANCE_SWIM);
+		float baseSpeed = g_pGameCVars->pl_swimBaseSpeed;
 		if (debug)
-			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.6f), 1.5f, "StanceMax %1.3f", stanceMaxSpeed);
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.8f), 1.5f, "BaseSpeed %1.3f", baseSpeed);
 
-		desiredLocalVelocity.x = desiredLocalNormalizedVelocity.x * sprintMultiplier * stanceMaxSpeed;
-		desiredLocalVelocity.y = desiredLocalNormalizedVelocity.y * sprintMultiplier * stanceMaxSpeed;
-		desiredLocalVelocity.z = desiredLocalNormalizedVelocity.z * stanceMaxSpeed;
+		desiredLocalVelocity.x = desiredLocalNormalizedVelocity.x * sprintMultiplier * baseSpeed;
+		desiredLocalVelocity.y = desiredLocalNormalizedVelocity.y * sprintMultiplier * baseSpeed;
+		desiredLocalVelocity.z = desiredLocalNormalizedVelocity.z * g_pGameCVars->pl_swimVertSpeedMul * baseSpeed;
 
-		AdjustMovementForEnvironment(desiredLocalVelocity);
+		// The desired movement is applied in viewspace, not in entityspace, since entity does not necessarily pitch while swimming.
+		desiredWorldVelocity += m_viewQuat.GetColumn0() * desiredLocalVelocity.x;
+		desiredWorldVelocity += m_viewQuat.GetColumn1() * desiredLocalVelocity.y;
+		
+		// though, apply up/down in world space.
+		desiredWorldVelocity.z += desiredLocalVelocity.z;
 
-		// The desired movement is applied in viewspace, not in entityspace, since entity does not nessecarily pitch while swimming.
-		desiredWorldVelocity += m_viewQuat.GetColumn0() * desiredLocalVelocity.x * 0.1f;
-		desiredWorldVelocity += m_viewQuat.GetColumn1() * desiredLocalVelocity.y * 0.1f;
-		//desiredVelocity += m_viewQuat.GetColumn2() * desiredMovement.z * 0.1f;
-		desiredWorldVelocity.z += desiredLocalVelocity.z * 0.1f;
+		if (debug)
+		{
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.6f), 1.5f, "MoveN[%1.3f, %1.3f, %1.3f]", desiredLocalNormalizedVelocity.x, desiredLocalNormalizedVelocity.y, desiredLocalNormalizedVelocity.z);
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.5f), 1.5f, "VeloL[%1.3f, %1.3f, %1.3f]", desiredLocalVelocity.x, desiredLocalVelocity.y, desiredLocalVelocity.z);
+			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.4f), 1.5f, "VeloW[%1.3f, %1.3f, %1.3f]", desiredWorldVelocity.x, desiredWorldVelocity.y, desiredWorldVelocity.z);
+		}
 
 /*
-		Ang3 view(m_viewQuat);
-		if (debug)
-		{
-			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.8f), 1.5f, "View[%1.3f, %1.3f, %1.3f]", view.x, view.y, view.z);
-			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(entityPos+Vec3(0,0,1), ColorF(1,0,0,1), entityPos+Vec3(0,0,1)+m_viewQuat.GetColumn0(), ColorF(1,0,0,1), 5.0f);
-			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(entityPos+Vec3(0,0,1), ColorF(0,1,0,1), entityPos+Vec3(0,0,1)+m_viewQuat.GetColumn1(), ColorF(0,1,0,1), 5.0f);
-			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(entityPos+Vec3(0,0,1), ColorF(0,0,1,1), entityPos+Vec3(0,0,1)+m_viewQuat.GetColumn2(), ColorF(0,0,1,1), 5.0f);
-		}
-*/
-
 		//if ((m_stats.waterLevel > 0.2f) && (desiredWorldVelocity.z > 0.0f)) // WIP: related to jumping out of water
-		if ((m_stats.waterLevel > -0.1f) && (desiredWorldVelocity.z > 0.0f))
+		if ((m_stats.relativeWaterLevel > -0.1f) && (desiredWorldVelocity.z > 0.0f))
 			desiredWorldVelocity.z = 0.0f;
+*/
 
 		if (debug)
 			gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f + Vec3(0,0,0.2f), 1.5f, "Move[%1.3f, %1.3f, %1.3f]", desiredWorldVelocity.x, desiredWorldVelocity.y, desiredWorldVelocity.z);
@@ -538,30 +828,39 @@ void CPlayerMovement::ProcessSwimming()
 
 	//--------------------
 
+	float stickySurfaceRadius = 1.0f;
+	float surfaceDistanceFraction = CLAMP(abs(m_stats.relativeWaterLevel) / stickySurfaceRadius, 0.0f, 1.0f);
+	float surfaceProximityInfluence = 1.0f - surfaceDistanceFraction;
+	float verticalVelocityFraction = CLAMP((abs(desiredWorldVelocity.z) - 0.3f) / 0.4f, 0.0f, 1.0f);
+	surfaceProximityInfluence *= 1.0f - verticalVelocityFraction;
+	if (m_swimJumping)
+		surfaceProximityInfluence = 0.0f;
+
+	//--------------------
+
 	// Apply acceleration (framerate independent)
-	float accelerateDelay = 0.05f;
+	float accelerateDelay = 0.3f;
 	m_velocity += acceleration * (m_frameTime / accelerateDelay);
 
 	// Apply velocity dampening (framerate independent)
 	Vec3 damping(ZERO);
 	{
-		if (m_stats.waterLevel <= 0.0f)
+		if (!m_swimJumping)
 		{
 			damping.x = abs(m_velocity.x);
 			damping.y = abs(m_velocity.y);
 		}
 
-		static float zDampWLLo = -2.0f;
-		static float zDampWLHi = -1.0f;
-		static float zDampWLSpan = (zDampWLHi - zDampWLLo);
-		static float zDampWLSpanInv = 1.0f / zDampWLSpan;
-		float zDampDepthFraction = CLAMP((m_stats.waterLevel - zDampWLLo) * zDampWLSpanInv, 0.0f, 1.0f);
-		float zDampSpeedFraction = CLAMP(m_velocity.z / 2.0f, 0.0f, 1.0f);
-		float zDampFraction = min(zDampSpeedFraction, zDampDepthFraction);
-		float zDamp = LERP(1.0f, 0.0f, zDampFraction);
+		// Vertical damping is special, to allow jumping out of water with higher speed, 
+		// and also not sink too deep when falling down ito the water after jump or such.
+		float zDamp = 1.0f;
+		zDamp += 6.0f * CLAMP((-m_velocity.z - 1.0f) / 3.0f, 0.0f, 1.0f);
+		zDamp *= 1.0f - surfaceProximityInfluence;
+		if (m_swimJumping)
+			zDamp = 0.0f;
 		damping.z = abs(m_velocity.z) * zDamp;
 
-		float stopDelay = 0.5f;
+		float stopDelay = 0.3f;
 		damping *= (m_frameTime / stopDelay);
 		m_velocity.x = (abs(m_velocity.x) > damping.x) ? (m_velocity.x - sgn(m_velocity.x) * damping.x) : 0.0f;
 		m_velocity.y = (abs(m_velocity.y) > damping.y) ? (m_velocity.y - sgn(m_velocity.y) * damping.y) : 0.0f;
@@ -570,11 +869,20 @@ void CPlayerMovement::ProcessSwimming()
 
 	//--------------------
 
-	// Normalize DENormalized values (TODO: find out where they come from, might be a bug).
-	if (((FloatU32(m_velocity.x) & FloatU32ExpMask) == 0) && ((FloatU32(m_velocity.x) & FloatU32FracMask) != 0))
-		m_velocity.x = 0.0f;
-	if (((FloatU32(m_velocity.y) & FloatU32ExpMask) == 0) && ((FloatU32(m_velocity.y) & FloatU32FracMask) != 0))
-		m_velocity.y = 0.0f;
+	if (surfaceProximityInfluence > 0.0f)
+	{
+		m_stickySurfaceTimer += m_frameTime * surfaceProximityInfluence;
+		float stickyFraction = CLAMP(m_stickySurfaceTimer / 1.0f, 0.0f, 1.0f);
+
+		float desiredVeloZ = m_frameTime > 0.0f ? (m_stats.worldWaterLevelDelta / m_frameTime * surfaceProximityInfluence) : 0.0f;
+		m_velocity.z = LERP(m_velocity.z, desiredVeloZ, stickyFraction);
+
+		m_velocity.z += stickyFraction * 1.0f * -sgn(m_stats.relativeWaterLevel) * pow(surfaceDistanceFraction, 1.0f);
+	}
+	else
+	{
+		m_stickySurfaceTimer = 0.0f;
+	}
 
 	//--------------------
 
@@ -589,7 +897,7 @@ void CPlayerMovement::ProcessSwimming()
 		gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f - Vec3(0,0,0.2f), 1.5f, " Axx[%1.3f, %1.3f, %1.3f]", acceleration.x, acceleration.y, acceleration.z);
 		gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f - Vec3(0,0,0.4f), 1.5f, "Damp[%1.3f, %1.3f, %1.3f]", damping.x, damping.y, damping.z);
 		gEnv->pRenderer->DrawLabel(entityPos - vRight * 1.5f - Vec3(0,0,0.6f), 1.5f, "FrameTime %1.4f", m_frameTime);
-		if (jump)
+		if (m_swimJumping)
 			gEnv->pRenderer->DrawLabel(entityPos - vRight * 0.15f + Vec3(0,0,0.6f), 2.0f, "JUMP");
 	}
 
@@ -608,120 +916,6 @@ void CPlayerMovement::ProcessSwimming()
 	}
 
 	return;
-
-
-
-
-
-
-	// Filippos old version of the swimming movement control.
-
-	//process movement
-	/*Vec3 move(0,0,0);
-	float upDown(0);
-
-	if (m_actions & ACTION_JUMP && m_stats.inWater>0.1f)
-		upDown += 1.0f;
-	if (m_actions & ACTION_CROUCH)
-		upDown -= 1.0f;
-
-	if (m_movement.desiredVelocity.x || m_movement.desiredVelocity.y || upDown)
-	{	
-		//FIXME: strafe and backward multipler dont work for AIs since they use the m_input.movementVector
-		float strafeMul(m_params.strafeMultiplier);
-		float backwardMul(1.0f);
-
-		//going back?
-		if (m_movement.desiredVelocity.y<0.0f)
-			backwardMul = m_params.backwardMultiplier;
-
-		move += m_viewQuat.GetColumn0() * m_movement.desiredVelocity.x * strafeMul;
-		move += m_viewQuat.GetColumn1() * m_movement.desiredVelocity.y * backwardMul;
-		move += m_viewQuat.GetColumn2() * upDown;
-	}
-
-	if (m_stats.waterLevel > -0.01f)
-	{
-		move.z = min(move.z,-0.01f);
-	}
-	if(m_stats.waterLevel>-0.15f)
-	{
-		move += m_stats.gravity * 0.01f; //sink to a certain degree
-
-		// some wave code stolen from boats
-		float waveFreq = 4.f;
-
-		float waveTimerPrev = m_waveTimer;
-		m_waveTimer += m_frameTime*waveFreq;
-
-		// new randomized amount for this oscillation
-		if (m_waveTimer >= gf_PI && waveTimerPrev < gf_PI) 
-			m_waveRandomMult = Random();  
-
-		if (m_waveTimer >= 2*gf_PI)  
-			m_waveTimer -= 2*gf_PI;    
-
-		float kx = 12.0f * (m_waveRandomMult+0.3f) + m_stats.speed;
-		float ky = 20.0f * (1.f - 0.5f*m_stats.speed - 0.5f);
-
-		pe_action_impulse waveImp;
-		waveImp.angImpulse.x = sin(m_waveTimer) * m_frameTime * kx;
-
-		if (isneg(waveImp.angImpulse.x))
-			waveImp.angImpulse.x *= (1.f - min(1.f, 2.f*m_stats.speed)); // less amplitude for negative impulse      
-
-		waveImp.angImpulse.y = sin(m_waveTimer-0.5f*gf_PI) * m_frameTime * ky;  
-		waveImp.angImpulse.z = (waveImp.angImpulse.x + waveImp.angImpulse.y) * 0.2f;
-		Vec3 imp = m_player.GetEntity()->GetWorldTM().TransformVector(waveImp.angImpulse);
-
-		move += imp;
-	}
-
-	//ai can set a custom sprint value, so dont cap the movement vector
-	if (m_movement.sprint<=0.0f)
-	{
-		//cap the movement vector to max 1
-		float moveModule(move.len());
-
-		if (moveModule > 1.0f)
-		{
-			move /= moveModule;
-		}
-
-		float sprintMult = 1.0f;
-
-		CNanoSuit *pSuit = m_player.GetNanoSuit();
-		if(pSuit)
-			sprintMult = pSuit->GetSprintMultiplier();
-
-		if (m_actions & ACTION_SPRINT)
-			move *= m_params.sprintMultiplier * sprintMult;
-	}
-
-	move *= m_player.GetStanceMaxSpeed(STANCE_SWIM);
-
-	//apply movement
-	Vec3 desiredVel(move);
-
-	//float up if no movement requested
-	if (move.z>-0.1f)
-		desiredVel.z += min(1.0f,-m_stats.waterLevel*0.1f);
-
-	if (m_velocity.len2()<=0.0f)
-		m_velocity = desiredVel;
-
-	if (m_stats.inWater < 0.15f)
-		m_velocity.z = m_stats.velocityUnconstrained.z * 0.9f;
-
-	if (m_actions & ACTION_JUMP && m_stats.inWater > 0.5f && m_stats.waterLevel>-0.1f)
-	{
- 		m_velocity.z += 1.5f;
-	}	
-
-	Interpolate(m_velocity,desiredVel,3.0f,m_frameTime);
-
-	m_request.type = eCMT_Fly;
-	m_request.velocity = m_velocity;*/
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -733,12 +927,12 @@ void CPlayerMovement::ProcessParachute()
 	//desiredVelocity.z += (desiredZ - desiredVelocity.z)*min(1.0f,m_frameTime*1.5f);
 	
 	m_request.type = eCMT_Impulse;//eCMT_Fly;
-	m_request.velocity = (Vec3(0,0,desiredZ)-m_stats.velocity) * m_stats.mass * m_frameTime;//desiredVelocity;
+	m_request.velocity = (Vec3(0,0,desiredZ)-m_stats.velocity) * m_stats.mass/* * m_frameTime*/;//desiredVelocity;
 
 	Vec3 forwardComp(m_baseQuat.GetColumn1() * 10.0f);
 	forwardComp.z = 0.0f;
 
-	m_request.velocity += forwardComp * m_stats.mass * m_frameTime;//desiredVelocity;
+	m_request.velocity += forwardComp * m_stats.mass;// * m_frameTime;//desiredVelocity;
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -750,24 +944,45 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
 
 	CNanoSuit *pSuit = m_player.GetNanoSuit();
 
+/*
+	m_player.DebugGraph_AddValue("InputMoveX", m_movement.desiredVelocity.x);
+	m_player.DebugGraph_AddValue("InputMoveY", m_movement.desiredVelocity.y);
+/**/
+
+	IPhysicalEntity* pPhysEnt = m_player.GetEntity()->GetPhysics();
+	if (pPhysEnt != NULL)
+	{
+		pe_player_dynamics pd;
+		pd.kAirControl = m_player.GetAirControl();
+		pd.kAirResistance = m_player.GetAirResistance();
+		pPhysEnt->SetParams(&pd);
+	}
+
 	if (m_movement.desiredVelocity.x || m_movement.desiredVelocity.y)
 	{	
+		Vec3 desiredVelocityClamped = m_movement.desiredVelocity;
+		float desiredVelocityMag = desiredVelocityClamped.GetLength();
+		if (desiredVelocityMag > 1.0f)
+			desiredVelocityClamped /= desiredVelocityMag;
+
 		float strafeMul = m_params.strafeMultiplier;
 		float backwardMul = 1.0f;
 
 		//going back?
 		if (m_player.IsPlayer())	//[Mikko] Do not limit backwards movement when controlling AI.
     {
-			if (m_movement.desiredVelocity.y < -0.01f)
-				backwardMul = m_params.backwardMultiplier;
+			if (desiredVelocityClamped.y < 0.0f)
+				backwardMul = LERP(backwardMul, m_params.backwardMultiplier, -desiredVelocityClamped.y);
 		}
 
 		NETINPUT_TRACE(m_player.GetEntityId(), backwardMul);
 		NETINPUT_TRACE(m_player.GetEntityId(), strafeMul);
 
-		move += m_baseQuat.GetColumn0() * m_movement.desiredVelocity.x * strafeMul * backwardMul;
-		move += m_baseQuat.GetColumn1() * m_movement.desiredVelocity.y * backwardMul;
+		move += m_baseQuat.GetColumn0() * desiredVelocityClamped.x * strafeMul * backwardMul;
+		move += m_baseQuat.GetColumn1() * desiredVelocityClamped.y * backwardMul;
 	}
+
+	float sprintMult = 1.0f;
 
 	//ai can set a custom sprint value, so dont cap the movement vector
 	if (m_movement.sprint<=0.0f)
@@ -785,29 +1000,35 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
 		NETINPUT_TRACE(m_player.GetEntityId(), moveModule);
 
 		//move *= m_animParams.runSpeed/GetStanceMaxSpeed(m_stance);
-		float sprintMult = 1.0f;
 		bool speedMode = false;
 
 		if(pSuit)
 		{
-			sprintMult = pSuit->GetSprintMultiplier();
+			sprintMult = pSuit->GetSprintMultiplier(cry_fabsf(m_movement.desiredVelocity.x)>0.01f);
 			speedMode = (pSuit->GetMode() == NANOMODE_SPEED)?true:false;
 		}
 
 		NETINPUT_TRACE(m_player.GetEntityId(), sprintMult);
 
-		if (m_actions & ACTION_SPRINT && (!speedMode || sprintMult > 1.0f))// && m_player.GetStance() == STANCE_STAND)
-			move *= m_params.sprintMultiplier * sprintMult ;
-
+		if (gEnv->bMultiplayer)
+		{
+			if ((m_actions & ACTION_SPRINT) && !m_player.m_stats.bIgnoreSprinting)
+				move *= m_params.sprintMultiplier * sprintMult ;
+		}
+		else
+		{
+			if (m_actions & ACTION_SPRINT && (!speedMode || sprintMult > 1.0f) && !m_player.m_stats.bIgnoreSprinting)// && m_player.GetStance() == STANCE_STAND)
+				move *= m_params.sprintMultiplier * sprintMult ;
+		}
 	}
 
 	//player movement dont need the m_frameTime, its handled already in the physics
-  float scale = m_player.GetStanceMaxSpeed(m_player.GetStance());
-  //gEnv->pRenderer->Draw2dLabel(10, 25, 2.0f, (float*)&ColorF(1,1,1,1), false, "Pocess scale %.4f",scale);
-
+	float scale = m_player.GetStanceMaxSpeed(m_player.GetStance());
+	if (m_player.IsClient() && !gEnv->bMultiplayer)
+		move *= scale*0.75f;
+	else
+		move *= scale;
 	NETINPUT_TRACE(m_player.GetEntityId(), scale);
-
-	move *= scale;
 
 	//when using gravity boots speed can be slowed down
 	if (m_player.GravityBootsOn())
@@ -818,8 +1039,8 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
   // If the movement request gets modified then it invalidates the prediciton made by AI, and thus
   // the choice of animation/parameters.
 		//-> please adjust the prediction
-  //if (m_player.IsPlayer())
-    AdjustMovementForEnvironment( move );
+  if (m_player.IsPlayer())
+    AdjustMovementForEnvironment( move, (m_actions&ACTION_SPRINT)!=0 );
 
 	//adjust prone movement for slopes
 	if (m_player.GetStance()==STANCE_PRONE && move.len2()>0.01f)
@@ -842,7 +1063,6 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
 			//
 			move += terrainTangent * slopeRatio * m_player.GetStanceMaxSpeed(m_player.GetStance());
 		}
-
 	}
 	
 	//only the Z component of the basematrix, handy with flat speeds,jump and gravity
@@ -854,14 +1074,32 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
 	//jump?
 	//FIXME: I think in zeroG should be possible to jump to detach from the ground, for now its like this since its the easiest fix
 
-	bool allowJump = (strcmp(player.GetAnimationGraphState()->QueryOutput("AllowJump"), "1") == 0);
-	
-	if (player.IsPlayer())
-		allowJump = true;
+	bool allowJump = !m_jumped || m_movement.strengthJump;
+	bool dt_jumpCondition = m_movement.strengthJump;
+
+	if (g_pGameCVars->dt_enable)
+	{
+		if (pSuit && pSuit->GetMode() == NANOMODE_STRENGTH && pSuit->PendingAction() == eNA_Jump && m_stats.inAir < 0.25)
+		{
+			dt_jumpCondition = true;
+			allowJump = true;
+			pSuit->ConsumeAction();
+		}
+	}
+
+	bool isRemoteClient=!gEnv->bServer && !m_player.IsClient();
+/*
+		// TODO: Graph has broken, appearantly, so we can't use this atm.
+		// Also, there's already a delay between jumps.
+		const char* AGAllowJump = player.GetAnimationGraphState()->QueryOutput("AllowJump");
+		if (strcmp(AGAllowJump, "1") != 0)
+			allowJump = false;
+*/
+	bool debugJumping = (g_pGameCVars->pl_debug_jumping != 0);
 
 	if (m_movement.jump && allowJump)
 	{
- 		if (m_stats.jumpLock < 0.001f && m_stats.onGround>0.5f && (m_player.GetStance() != STANCE_PRONE))
+ 		if ((m_stats.onGround > 0.2f || dt_jumpCondition) && m_player.GetStance() != STANCE_PRONE)
 		{
 			//float verticalMult(max(0.75f,1.0f-min(1.0f,m_stats.flatSpeed / GetStanceMaxSpeed(STANCE_STAND) * m_params.sprintMultiplier)));
 			//mul * gravity * jump height
@@ -869,42 +1107,50 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
 			//this is used to easily find steep ground
 			float slopeDelta = (m_stats.inZeroG)? 0.0f : (m_stats.upVector - m_stats.groundNormal).len();
 
-			if (pSuit && pSuit->GetSuitEnergy() > (0.20f * NANOSUIT_ENERGY))
+			if (pSuit && (pSuit->GetSuitEnergy()>=70.0f || isRemoteClient))
 			{
 				ENanoMode mode = pSuit->GetMode();
 				if(m_stats.inZeroG)
 				{
 					if(mode == NANOMODE_SPEED)
 						jumpVec += m_viewQuat.GetColumn1() * 15.0f * m_stats.mass;
-					else if(mode == (ENanoMode)NANOSLOT_STRENGTH)
+					else if(mode == NANOMODE_STRENGTH)
 						jumpVec += m_viewQuat.GetColumn1() * 25.0f * m_stats.mass;
 					else
 						jumpVec += m_viewQuat.GetColumn1() * 10.0f * m_stats.mass;
 				}
-				//else if(mode == NANOSLOT_STRENGTH)
-				//	mult = MAX(1.0f,(1.5f*MIN(1.0f, pSuit->GetSuitEnergy()/30.0f)))+((m_actions & ACTION_SPRINT)?3.3f:0.0f);
-				else if((int)mode == (int)NANOSLOT_STRENGTH /*&& m_stats.speedFlat > 0.5f*/ && slopeDelta < 0.7f)
-					mult = (2.7f*MIN(1.0f, pSuit->GetSuitEnergy()/30.0f))+((m_actions & ACTION_SPRINT)?2.0f:0.0f);
+				else if(mode == NANOMODE_STRENGTH)
+				{
+					// marcok: always perform strength jump
+					mult = 4.7f;
+			}
 			}
 			
+/*
 			if(m_stats.inZeroG)
 				m_request.type = eCMT_Impulse;//eCMT_JumpAccumulate;
 			else
+*/
 			{
-				m_request.type = eCMT_JumpAccumulate;//eCMT_Fly;
-				jumpVec += m_baseQuat.GetColumn2() * cry_sqrtf( 2.0f * m_stats.gravity.len() * m_params.jumpHeight * mult);// * verticalMult;
+ 				m_request.type = eCMT_JumpAccumulate;//eCMT_Fly;
+				float g = m_stats.gravity.len();
+				float t = 0.0f;
+				if (g > 0.0f)
+				{
+					t = cry_sqrtf( 2.0f * g * m_params.jumpHeight * mult)/g - m_stats.inAir*0.5f;
+				}
+ 				jumpVec += m_baseQuat.GetColumn2() * g * t;// * verticalMult;
 
-				//
-				//float slopeAngle((gf_PI*0.5f - asin(m_stats.groundNormal.z))/(gf_PI/180.0f));
-				float slopeRatio(1.0f - m_stats.groundNormal.z*m_stats.groundNormal.z);
-				float jumpMod(jumpVec.len());
-
- 				slopeRatio *= slopeRatio;
-				slopeRatio *= 7.0f;
-				jumpVec = (jumpVec + m_stats.groundNormal * jumpMod * slopeRatio).GetNormalizedSafe(ZERO) * jumpMod;
+				if (m_stats.groundNormal.len2() > 0.0f)
+				{
+					float vertical = CLAMP((m_stats.groundNormal.z - 0.25f) / 0.5f, 0.0f, 1.0f);
+					Vec3 modifiedJumpDirection = LERP(m_stats.groundNormal, Vec3(0,0,1), vertical);
+					jumpVec = modifiedJumpDirection * jumpVec.len();
+				}
 			}
 
-			move = m_stats.velocityUnconstrained * 1.3f;
+			// Don't speed up...
+			//move = m_stats.velocityUnconstrained * 1.0f;
 			move -= move * baseMtxZ;
 
 			//with gravity boots on, jumping will disable them for a bit.
@@ -917,20 +1163,28 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
 				m_jumped = true;
 
 			// Set ag action 'jumpMP' cleared in CPlayer::UpdateStats()
-			player.GetAnimationGraphState()->SetInput(player.GetAnimationGraphState()->GetInputId("Action"), (pSuit->GetMode() == NANOMODE_STRENGTH && (m_actions & ACTION_SPRINT))?"jumpMPStrength":"jumpMP");
+			player.GetAnimationGraphState()->SetInput(player.GetAnimationGraphState()->GetInputId("Action"), 
+				((pSuit->GetMode() == NANOMODE_STRENGTH) && !m_player.m_stats.bIgnoreSprinting && (mult > 1.0f)) ? 
+				"jumpMPStrength" : "jumpMP");
 
 			bool bNormalJump = true;
 			CPlayer* pPlayer = const_cast<CPlayer*>(&m_player);
 			CNanoSuit *pSuit = m_player.GetNanoSuit();
 			if(pSuit && pSuit->GetMode() == NANOMODE_STRENGTH)
 			{
-				if(pSuit->GetSuitEnergy() > (0.20f * NANOSUIT_ENERGY))
+				if (pSuit->GetSuitEnergy() >= 70.0f)
 				{
 					if(m_stats.inZeroG)
 						pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-10.0f);
-					else if(m_actions & ACTION_SPRINT /*&& m_stats.speedFlat > 0.5f*/ && slopeDelta < 0.7f)
+ 					else 
 					{
-						pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-50.0f);
+						if (g_pGameCVars->dt_enable)
+						{
+							// cancel a potential double jump
+							pSuit->Tap(eNA_None);
+						}
+
+						pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-70.0f);
 						pSuit->PlaySound(STRENGTH_JUMP_SOUND, (pSuit->GetSlotValue(NANOSLOT_STRENGTH))*0.01f);
 
 						// Report super jump to AI system.
@@ -941,11 +1195,14 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
 						// mark as 'un-normal' jump, so normal sound is NOT played and listeners are NOT called below
 						bNormalJump = false;
 					}
-					else //if(slopeDelta < 0.5f)
-					{
-						//pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-20.0f);
-						(const_cast<CPlayer*>(&m_player))->PlaySound(CPlayer::ESound_Jump);
-					}
+				}
+			}
+
+			if(pSuit && pSuit->GetMode() == NANOMODE_SPEED)
+			{
+				if((m_actions & ACTION_SPRINT) && !m_player.m_stats.bIgnoreSprinting /*&& m_stats.speedFlat > 0.5f*//* && slopeDelta < 0.7f*/)
+				{
+					pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-10.0f);
 				}
 			}
 
@@ -957,26 +1214,59 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
 
 			if (m_jumped)
 				m_hasJumped = true;
+
+			if (m_player.IsClient())
+				m_player.GetGameObject()->InvokeRMI(CPlayer::SvRequestJump(), CPlayer::JumpParams(!bNormalJump), eRMI_ToServer);
 		}
 	}
+
+	if(m_player.IsClient() && !gEnv->bMultiplayer)
+		move *= g_pGameCVars->g_walkMultiplier; //global speed adjuster used by level design
+
+	//CryLogAlways("%s speed: %.1f  stanceMaxSpeed: %.1f  sprintMult: %.1f  suitSprintMult: %.1f", m_player.GetEntity()->GetName(), move.len(), scale, m_params.sprintMultiplier, sprintMult);
 
 	//apply movement
 	Vec3 desiredVel(0,0,0);
 
-	if (m_stats.onGround)
+	Vec3 entityPos = m_player.GetEntity()->GetWorldPos();
+	Vec3 entityRight(m_baseQuat.GetColumn0());
+
+	if (m_stats.onGround || dt_jumpCondition)
 	{
 		desiredVel = move;
 
+/*
+		// This was causing the vertical jumping speed to be much slower.
 		if (m_stats.jumpLock>0.001f)
 			desiredVel *= 0.3f;
+/**/
+
+		{ // Shallow water speed slowdown
+			float shallowWaterMultiplier = 1.0f;
+			if (player.IsPlayer())
+				shallowWaterMultiplier = g_pGameCVars->cl_shallowWaterSpeedMulPlayer;
+			else
+				shallowWaterMultiplier = g_pGameCVars->cl_shallowWaterSpeedMulAI;
+			shallowWaterMultiplier = CLAMP(shallowWaterMultiplier, 0.1f, 1.0f);
+
+			if ((shallowWaterMultiplier < 1.0f) && (m_stats.relativeBottomDepth > 0.0f))
+			{
+				float shallowWaterDepthSpan = (g_pGameCVars->cl_shallowWaterDepthHi - g_pGameCVars->cl_shallowWaterDepthLo);
+				shallowWaterDepthSpan = max(0.1f, shallowWaterDepthSpan);
+				float slowdownFraction = (m_stats.relativeBottomDepth - g_pGameCVars->cl_shallowWaterDepthLo) / shallowWaterDepthSpan;
+				slowdownFraction = CLAMP(slowdownFraction, 0.0f, 1.0f);
+				shallowWaterMultiplier = LERP(1.0f, shallowWaterMultiplier, slowdownFraction);
+				desiredVel *= shallowWaterMultiplier;
+			}
+		}
 	}
 	else if (move.len2()>0.01f)//"passive" air control, the player can air control as long as it is to decelerate
 	{	
  		Vec3 currVelFlat(m_stats.velocity - m_stats.velocity * baseMtxZ);
 		Vec3 moveFlat(move - move * baseMtxZ);
-
+ 
 		float dot(currVelFlat.GetNormalizedSafe(ZERO) * moveFlat.GetNormalizedSafe(ZERO));
-	
+
 		if (dot<-0.001f)
 		{
 			desiredVel = (moveFlat-currVelFlat)*max(abs(dot)*0.3f,0.1f);
@@ -998,29 +1288,126 @@ void CPlayerMovement::ProcessOnGroundOrJumping(CPlayer& player)
 
 	//be sure desired velocity is flat to the ground
 	desiredVel -= desiredVel * baseMtxZ;
+	
+	Vec3 modifiedSlopeNormal = m_stats.groundNormal;
+	if (m_player.IsPlayer())
+	{
+		float h = Vec2(modifiedSlopeNormal.x, modifiedSlopeNormal.y).GetLength(); // TODO: OPT: sqrt(x*x+y*y)
+		float v = modifiedSlopeNormal.z;
+		float slopeAngleCur = RAD2DEG(cry_atan2f(h, v));
+		
+		float slopeAngleHor = 10.0f;
+		float slopeAngleVer = 50.0f;
+		float slopeAngleFraction = CLAMP((slopeAngleCur - slopeAngleHor) / (slopeAngleVer - slopeAngleHor), 0.0f, 1.0f);
+		slopeAngleFraction = cry_powf(slopeAngleFraction, 3.0f); // TODO: OPT: x*x*x
+		float slopeAngleMod = LERP(0.0f, 90.0f, slopeAngleFraction);
+
+		float c = cry_cosf(DEG2RAD(slopeAngleMod)); // TODO: OPT: sincos?
+		float s = cry_sinf(DEG2RAD(slopeAngleMod));
+		if (h > 0.0f)
+		{
+			modifiedSlopeNormal.x *= s / h;
+			modifiedSlopeNormal.y *= s / h;
+		}
+		if (v > 0.0f)
+		{
+			modifiedSlopeNormal.z *= c / v;
+		}
+
+		modifiedSlopeNormal.Normalize();
+		float alignment = modifiedSlopeNormal * desiredVel;
+		alignment = min(0.0f, alignment);
+
+		// Also affect air control (but not as much), to prevent jumping up against steep slopes.
+		if (m_stats.onGround == 0.0f)
+		{
+			float noControlBlend = 1.0f - CLAMP(modifiedSlopeNormal.z / 0.01f, 0.0f, 1.0f);
+			alignment *= LERP(0.7f, 1.0f, noControlBlend);
+		}
+
+		desiredVel -= modifiedSlopeNormal * alignment;
+
+/*
+		float unconstrainedFallBlend = 1.0f - CLAMP(modifiedSlopeNormal.z / 0.05f, 0.0f, 1.0f);
+		desiredVel = LERP(desiredVel, m_stats.velocityUnconstrained, unconstrainedFallBlend);
+/**/
+
+		if (debugJumping)
+		{
+			m_player.DebugGraph_AddValue("GroundSlope", slopeAngleCur);
+			m_player.DebugGraph_AddValue("GroundSlopeMod", slopeAngleMod);
+		}
+	}
+
+/*
+	{
+		Vec3 slideDirection = m_stats.groundNormal;
+		slideDirection.z = 0.0f;
+
+		ISurfaceType* pSurface = gEnv->p3DEngine->GetMaterialManager()->GetSurfaceTypeManager()->GetSurfaceType(m_stats.groundMaterialIdx);
+		const ISurfaceType::SPhysicalParams& params = pSurface->GetPhyscalParams();
+
+		float slideScale = 4.0f * (1.0f - CLAMP((params.friction - 0.1f) / 0.3f, 0.0f, 1.0f));
+		desiredVel += slideScale * slideDirection;
+	}
+*/
 
 	NETINPUT_TRACE(m_player.GetEntityId(), jumpVec);
 
 	m_request.velocity = desiredVel + jumpVec;
-	if(!m_stats.inZeroG && m_movement.jump && m_request.velocity.len() > 22.0f)	//cap maximum velocity when jumping (limits speed jump length)
+	if(!m_stats.inZeroG && (m_movement.jump && (g_pGameCVars->dt_enable && m_stats.inAir > 0.3f)) && m_request.velocity.len() > 22.0f)	//cap maximum velocity when jumping (limits speed jump length)
 		m_request.velocity = m_request.velocity.normalized() * 22.0f;
+
+	if (debugJumping)
+	{
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(entityPos, ColorB(255,255,255,255), entityPos + modifiedSlopeNormal, ColorB(255,255,0,255), 2.0f);
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(entityPos+Vec3(0,0,2), ColorB(255,255,255,255), entityPos+Vec3(0,0,2) + desiredVel, ColorB(0,255,0,255), 2.0f);
+	}
+
+	if (debugJumping)
+	{
+		gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(entityPos, ColorB(255,255,255,255), entityPos + jumpVec, ColorB(0,255,255,255), 2.0f);
+	}
+
+	if (debugJumping)
+	{
+		gEnv->pRenderer->DrawLabel(entityPos - entityRight * 1.0f + Vec3(0,0,3.0f), 1.5f, "Velo[%2.3f = %2.3f, %2.3f, %2.3f]", m_request.velocity.len(), m_request.velocity.x, m_request.velocity.y, m_request.velocity.z);
+	}
+
 	m_velocity.Set(0,0,0);
 }
 
-void CPlayerMovement::AdjustMovementForEnvironment( Vec3& move )
+void CPlayerMovement::AdjustMovementForEnvironment( Vec3& move, bool sprinting )
 {
 	//nanoSuit
 	if(CNanoSuit *pSuit = m_player.GetNanoSuit())
 	{
-		float nanoSpeed = pSuit->GetSlotValue(NANOSLOT_SPEED);
-		float nanoSpeedMul = 1.0f+nanoSpeed*0.01f;
-		if(pSuit->GetMode() == NANOMODE_SPEED)
-			nanoSpeedMul *= 1.1f;
-		move *= nanoSpeedMul;
-		NETINPUT_TRACE(m_player.GetEntityId(), nanoSpeedMul);
+		if (gEnv->bMultiplayer)
+		{
+			if(pSuit->GetMode() == NANOMODE_SPEED)
+			{
+				if (sprinting)
+				{
+					float nanoSpeed = pSuit->GetSlotValue(NANOSLOT_SPEED);
+					float nanoSpeedMul = 1.0f+nanoSpeed*0.01f*0.5f;
+					move *= nanoSpeedMul;
+
+					NETINPUT_TRACE(m_player.GetEntityId(), nanoSpeedMul);
+				}
+				else //confirmed with CJ : also in MP the suit is a bit faster in speed mode walking
+					move *= 1.3f;
+			}
+		}
+		else
+		{
+			float nanoSpeed = pSuit->GetSlotValue(NANOSLOT_SPEED);
+			float nanoSpeedMul = 1.0f+nanoSpeed*0.01f;
+			move *= nanoSpeedMul;
+			NETINPUT_TRACE(m_player.GetEntityId(), nanoSpeedMul);
+		}
 	}
 
-	//player is slowed down by carrying heavy objects (max. 25%)
+	//player is slowed down by carrying heavy objects (max. 33%)
 	float massFactor = m_player.GetMassFactor();
 	NETINPUT_TRACE(m_player.GetEntityId(), massFactor);
 	move *= massFactor;
@@ -1096,6 +1483,30 @@ void CPlayerMovement::ProcessTurning()
 		else
 			m_request.rotation = inverseEntityRot * Quat::CreateRotationZ(gf_PI);
 	}
+
+	if (m_player.IsPlayer() && (g_pGameCVars->ca_GameControlledStrafingPtr->GetIVal() != 0) && (g_pGameCVars->ac_enableProceduralLeaning == 0.0f))
+	{
+		float turningSpeed = m_frameTime > 0.0f ? (fabs(RAD2DEG(m_request.rotation.GetRotZ())) / m_frameTime) : 0.0f;
+		float turningSpeedMin = 30.0f;
+		float turningSpeedMax = 180.0f;
+		float turningSpeedFraction = CLAMP((turningSpeed - turningSpeedMin) / (turningSpeedMax - turningSpeedMin), 0.0f, 1.0f);
+		float travelSpeedScale = LERP(1.0f, CLAMP(g_pGameCVars->pl_curvingSlowdownSpeedScale, 0.0f, 1.0f), turningSpeedFraction);
+		m_request.velocity *= travelSpeedScale;
+	}
+
+	m_request.proceduralLeaning = (g_pGameCVars->ac_enableProceduralLeaning > 0.0f);
+
+/*
+	Vec3 pos = m_player.GetEntity()->GetWorldPos();
+	Vec3 curDir = entityRot.GetColumn1();
+	Vec3 wantDir = m_baseQuat.GetColumn1();
+	Vec3 lftDir = entityRot.GetColumn0();
+	float rot = m_request.rotation.GetRotZ();
+	gEnv->pRenderer->GetIRenderAuxGeom()->SetRenderFlags( e_Def3DPublicRenderflags );
+	gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(pos, ColorB(255,255,0,255), pos+curDir, ColorB(255,255,0,255), 2.0f);
+	gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(pos, ColorB(255,0,255,255), pos+wantDir, ColorB(255,0,255,255), 2.0f);
+	gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(pos+curDir, ColorB(0,255,255,255), pos+curDir+lftDir*rot, ColorB(0,255,255,255), 2.0f);
+*/
 }
 
 //-----------------------------------------------------------------------------------------------
@@ -1103,6 +1514,21 @@ void CPlayerMovement::ProcessTurning()
 
 void CPlayerMovement::ProcessMovementOnLadder(CPlayer &player)
 {
+
+	if(m_stats.isExitingLadder)
+	{
+		if(gEnv->bClient)
+		{
+			IAnimatedCharacter* pAC = m_player.GetAnimatedCharacter();
+			IAnimationGraphState* pAGState = pAC ? pAC->GetAnimationGraphState() : NULL;
+			const char* agOutputOnLadder = pAGState ? pAGState->QueryOutput("OnLadder") : NULL;
+			bool onLadder = agOutputOnLadder && agOutputOnLadder[0] == '1';
+			if(!onLadder)
+				player.RequestLeaveLadder(CPlayer::eLAT_ReachedEnd);
+		}
+		return;
+	}
+
  	Vec3 mypos = m_worldPos;
 	Vec3 move(m_stats.ladderTop - m_stats.ladderBottom);
 	move.NormalizeSafe();
@@ -1115,41 +1541,61 @@ void CPlayerMovement::ProcessMovementOnLadder(CPlayer &player)
 		AdjustPlayerPositionOnLadder(player);
 		bottomDist +=0.012f;   //Offset to make the anim match better...		(depends on animation and ladder, they should be all exactly the same)
 		float animTime = bottomDist - cry_floorf(bottomDist);
-		player.EvaluateMovementOnLadder(m_movement.desiredVelocity.y,animTime);
 		CPlayer::ELadderDirection eLDir = (m_movement.desiredVelocity.y >= 0.0f ? CPlayer::eLDIR_Up : CPlayer::eLDIR_Down);
-		if(!player.UpdateLadderAnimGraph(CPlayer::eLS_Climb,eLDir,animTime))
+		if(!player.UpdateLadderAnimation(CPlayer::eLS_Climb,eLDir,animTime))
 		{
 			return;
 		}
 	}
 
-	if (player.IsClient() && ((topDist < 1.85f && m_movement.desiredVelocity.y > 0.01f) || (bottomDist < 0.1f && m_movement.desiredVelocity.y < -0.01f)))
+	//Just another check
+	if(player.IsClient() && m_movement.desiredVelocity.y<-0.01f)
+	{
+		// check collision with terrain/static objects when moving down, some ladders are very badly placed ;(
+		// player will need to detach
+		ray_hit hit;
+		static const int obj_types = ent_static|ent_terrain;
+		static const unsigned int flags = rwi_stop_at_pierceable|rwi_colltype_any;
+		Vec3 currentPos = player.GetEntity()->GetWorldPos();
+		currentPos.z +=0.15f;
+	
+		int rayHits = gEnv->pPhysicalWorld->RayWorldIntersection( currentPos, m_stats.ladderUpDir*-0.3f, obj_types, flags, &hit, 1, player.GetEntity()->GetPhysics() );
+
+		if(rayHits!=0)
+		{
+			player.RequestLeaveLadder(CPlayer::eLAT_None);
+			return;
+		}
+	}
+
+	if (player.IsClient() && ((topDist < LADDER_TOP_DISTANCE && m_movement.desiredVelocity.y > 0.01f) || (bottomDist < 0.1f && m_movement.desiredVelocity.y < -0.01f)))
 	{
 		if(m_movement.desiredVelocity.y>0.01f)
 		{
  			// check if player can move forward from top of ladder before getting off. If they can't,
  			//	they'll need to strafe / jump off.
  			ray_hit hit;
- 			static const int obj_types = ent_static|ent_terrain;
+			static const int obj_types = ent_static|ent_terrain|ent_rigid|ent_sleeping_rigid;
  			static const unsigned int flags = rwi_stop_at_pierceable|rwi_colltype_any;
- 			Vec3 currentPos = player.m_stats.ladderTop;
+			static float backDist = 0.15f;
+ 			Vec3 currentPos = player.m_stats.ladderTop + backDist * player.m_stats.ladderOrientation;
  			Vec3 newPos = player.m_stats.ladderTop-player.m_stats.ladderOrientation;
- 			currentPos.z += 0.5f;
- 			newPos.z += 0.5f;
-			if(g_pGameCVars->i_debug_ladders !=0)
+			currentPos.z += 0.35f;
+			newPos.z +=0.35f;
+			if(g_pGameCVars->pl_debug_ladders !=0)
 			{
  				gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(currentPos, ColorF(1,1,1,1), newPos, ColorF(1,1,1,1));
 			}
  			bool rayHitAny = 0 != gEnv->pPhysicalWorld->RayWorldIntersection( currentPos, newPos-currentPos, obj_types, flags, &hit, 1, player.GetEntity()->GetPhysics() );
-  		if (!rayHitAny || abs(hit.n.z) > 0.1f)
+  		if (!rayHitAny /*|| abs(hit.n.z) > 0.1f*/)
 			{
-				player.RequestLeaveLadder(CPlayer::eLAT_ReachedEnd);
+				player.RequestLeaveLadder(CPlayer::eLAT_ExitTop);
 				return;
 			}
  			else
 			{
  				m_movement.desiredVelocity.y = 0.0f;
-				if(g_pGameCVars->i_debug_ladders !=0)
+				if(g_pGameCVars->pl_debug_ladders !=0)
 				{
 					float white[] = {1,1,1,1};
 					gEnv->pRenderer->Draw2dLabel(50,125,2.0f,white,false,"CLAMPING");
@@ -1169,7 +1615,7 @@ void CPlayerMovement::ProcessMovementOnLadder(CPlayer &player)
 		return;
 	}
 
-	if(g_pGameCVars->i_debug_ladders !=0)
+	if(g_pGameCVars->pl_debug_ladders !=0)
 	{
 		gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(m_stats.ladderBottom,0.12f,ColorB(0,255,0,100) );
 		gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(m_stats.ladderTop,0.12f,ColorB(0,255,0,100) );
@@ -1189,13 +1635,15 @@ void CPlayerMovement::ProcessMovementOnLadder(CPlayer &player)
 
 	move *= m_player.GetStanceMaxSpeed(STANCE_STAND)*0.5f;
 
-	player.m_stats.bSprinting = false;		//Manual update here (if not suit doensn't decrease energy and so on...)
+	//player.m_stats.bSprinting = false;		//Manual update here (if not suit doensn't decrease energy and so on...)
 	if (m_actions & ACTION_SPRINT)
 	{
-		if(move.len2()>0.1f)
+		if((move.len2()>0.1f))
 		{
-			move *= m_params.sprintMultiplier;
-			player.m_stats.bSprinting = true;
+			move *= 1.2f;
+			if(player.GetNanoSuit() && (player.GetNanoSuit()->GetMode()==NANOMODE_SPEED))
+				move *= (max(1.2f,player.GetNanoSuit()->GetSprintMultiplier(cry_fabsf(m_movement.desiredVelocity.x)>0.01f)*0.5f));
+			//player.m_stats.bSprinting = true;
 		}
 	}
 	if(m_actions & ACTION_JUMP)
@@ -1204,7 +1652,7 @@ void CPlayerMovement::ProcessMovementOnLadder(CPlayer &player)
 		move += Vec3(0.0f,0.0f,3.0f);
 	}
 
-	if(g_pGameCVars->i_debug_ladders !=0)
+	if(g_pGameCVars->pl_debug_ladders !=0)
 	{
 		float white[] = {1,1,1,1};
 		gEnv->pRenderer->Draw2dLabel(50,100,2.0f,white,false, "Move (%.2f, %.2f, %.2f)", move.x, move.y, move.z);

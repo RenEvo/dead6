@@ -20,10 +20,8 @@ template<>
 _PthreadLockAttr<PTHREAD_MUTEX_RECURSIVE>
 	_PthreadLockBase<PTHREAD_MUTEX_RECURSIVE>::m_Attr = 0;
 
-#if defined(LINUX)
-	THREADLOCAL CrySimpleThreadSelf
-		*CrySimpleThreadSelf::m_Self = NULL;
-#endif
+THREADLOCAL CrySimpleThreadSelf
+	*CrySimpleThreadSelf::m_Self = NULL;
 
 // vim:ts=2
 

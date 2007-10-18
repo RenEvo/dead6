@@ -111,6 +111,24 @@ void CD6GameRules::SetTeam(int teamId, EntityId entityId)
 	// Delegate to team manager
 	assert(g_D6Core->pTeamManager);
 	g_D6Core->pTeamManager->SetTeam(teamId, entityId);
+
+	// Notify script
+	ScriptHandle handle(entityId);
+	CallScript(GetServerStateScript(), "OnSetTeam", handle, teamId);
+	if (gEnv->bClient)
+	{
+		ScriptHandle handle(entityId);
+		CallScript(GetClientStateScript(), "OnSetTeam", handle, teamId);
+	}
+
+	//if this is a spawn group, update it's validity
+	if (m_spawnGroups.find(entityId)!=m_spawnGroups.end())
+		CheckSpawnGroupValidity(entityId);
+
+	GetGameObject()->InvokeRMIWithDependentObject(ClSetTeam(), SetTeamParams(entityId, teamId), eRMI_ToRemoteClients, entityId);
+
+	if (IEntity *pEntity=m_pEntitySystem->GetEntity(entityId))
+		m_pGameplayRecorder->Event(pEntity, GameplayEvent(eGE_ChangedTeam, 0, (float)teamId));
 }
 
 ////////////////////////////////////////////////////
@@ -135,4 +153,19 @@ EntityId CD6GameRules::GetTeamDefaultSpawnGroup(int teamId)
 	// Delegate to team manager
 	assert(g_D6Core->pTeamManager);
 	return g_D6Core->pTeamManager->GetTeamDefaultSpawnGroup(teamId);
+}
+
+////////////////////////////////////////////////////
+int CD6GameRules::GetChannelTeam(int channelId) const
+{
+	// Delegate to team manager
+	assert(g_D6Core->pTeamManager);
+	return g_D6Core->pTeamManager->GetChannelTeam(channelId);
+}
+
+int CD6GameRules::GetTeamChannelCount(int teamId, bool inGame) const
+{
+	// Delegate to team manager
+	assert(g_D6Core->pTeamManager);
+	return g_D6Core->pTeamManager->GetTeamChannelCount(teamId, inGame);
 }

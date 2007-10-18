@@ -13,6 +13,7 @@ History:
 #include "StdAfx.h"
 #include "Item.h"
 #include "ItemSharedParams.h"
+#include "Actor.h"
 
 
 //------------------------------------------------------------------------
@@ -123,16 +124,35 @@ void CItem::SetDualWieldSlave(EntityId slaveId)
 		pSlave->SetHand(eIH_Right);
 	else
 		pSlave->SetHand(eIH_Left);
+}
 
-	//Detach current accessories of the slave
-	while (pSlave->m_accessories.empty() == false)
+//------------------------------------------------------------------------
+void CItem::SetDualSlaveAccessory(bool noNetwork)
+{
+	if(!gEnv->bMultiplayer || (GetOwnerActor() && GetOwnerActor()->IsClient()))
 	{
-		TAccessoryMap::const_iterator sit = pSlave->m_accessories.begin();
-		pSlave->AttachAccessory( sit->first, false, true);
-	}
+		CItem *pSlave = static_cast<CItem *>(GetDualWieldSlave());
+		if (!pSlave)
+			return;
 
-	//Attach on the slave same accessories as "parent"
-	for (TAccessoryMap::const_iterator it=m_accessories.begin(); it!=m_accessories.end(); ++it)
-		pSlave->SwitchAccessory(it->first.c_str());
-		//pSlave->AttachAccessory( it->first.c_str(), true, false);
+		//Detach current accessories of the slave
+		TAccessoryMap temp = pSlave->m_accessories;
+		for (TAccessoryMap::const_iterator it=temp.begin(); it!=temp.end(); ++it)
+		{
+			if(m_accessories.find(it->first)==m_accessories.end())
+				pSlave->SwitchAccessory(it->first.c_str()); //Only remove if not in the master
+		}
+
+		//Attach on the slave same accessories as "parent"
+		for (TAccessoryMap::const_iterator it=m_accessories.begin(); it!=m_accessories.end(); ++it)
+		{
+			if(pSlave->m_accessories.find(it->first)==pSlave->m_accessories.end())
+			{
+				if(noNetwork)
+					pSlave->AttachAccessory(it->first.c_str(), true, true, true);
+				else
+					pSlave->SwitchAccessory(it->first.c_str()); //Only add if not already attached
+			}
+		}
+	}
 }

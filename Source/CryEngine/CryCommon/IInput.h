@@ -57,6 +57,7 @@ enum EInputState
 	eIS_Released	= (1 << 1),
 	eIS_Down			= (1 << 2),
 	eIS_Changed		= (1 << 3),
+	eIS_UI				= (1 << 4),
 };
 
 enum EInputDeviceType
@@ -271,6 +272,13 @@ enum EKeyId
 	eKI_PS3_StickLY,
 	eKI_PS3_StickRX,
 	eKI_PS3_StickRY,
+	eKI_PS3_RotX,
+	eKI_PS3_RotY,
+	eKI_PS3_RotZ,
+	eKI_PS3_ROTX_KeyL,
+	eKI_PS3_ROTX_KeyR,
+	eKI_PS3_ROTZ_KeyD,
+	eKI_PS3_ROTZ_KeyU,
 
 	eKI_SYS_Commit = KI_SYS_BASE,
 	// terminator
@@ -397,6 +405,7 @@ struct IInputEventListener
 	//! @return if return True then broadcasting of this event should be aborted and the rest of input 
 	//! listeners should not receive this event.
 	virtual bool OnInputEvent( const SInputEvent &event ) = 0;
+	virtual bool OnInputEventUI( const SInputEvent &event ) {	return false;	}
 };
 
 /*! Interface to the Input system.
@@ -423,10 +432,12 @@ struct IInput
 	virtual void SetExclusiveListener( IInputEventListener *pListener ) = 0;
 	virtual IInputEventListener *GetExclusiveListener() = 0;
 
+	//! Register an exclusive listener which has the ability to filter out events before they arrive at the normal
+	//! listeners
 	virtual void EnableEventPosting ( bool bEnable ) = 0;
 	virtual void PostInputEvent( const SInputEvent &event ) = 0;
 
-	//post a force feedback / rumble output event
+	//! post a force feedback / rumble output event
 	virtual void ForceFeedbackEvent( const SFFOutputEvent &event ) = 0;
 
 	//////////////////////////////////////////////////////////////////////////
@@ -451,16 +462,27 @@ struct IInput
 	// Lookup a symbol for a given symbol and key ids.
 	virtual SInputSymbol* LookupSymbol( EDeviceId deviceId, EKeyId keyId ) = 0;
 
-	//virtual bool GetOSKeyName(int nKey, wchar_t *szwKeyName, int iBufSize) = 0;
+	//! Get OS Keyname 
+	//! @param event input event to translate into a name
+	virtual const wchar_t* GetOSKeyName(const SInputEvent& event) = 0;
 
 	//! clear key states of all devices
 	virtual void ClearKeyState() = 0;
+
+	//! retriggers pressed keys (used for transitioning action maps)
+	virtual void RetriggerKeyState() = 0;
+
+	//! are we currently retriggering (needed to filter out actions)
+	virtual bool Retriggering() = 0;
 
 	// query to see if this machine has some kind of input device connected
 	virtual bool HasInputDeviceOfType( EInputDeviceType type ) = 0;
 
 	// get the currently pressed modifiers 
 	virtual int GetModifiers() const = 0;
+
+	//! tell devices whether to report input or not
+	virtual void EnableDevice( EDeviceId deviceId, bool enable) = 0;
 };
 
 

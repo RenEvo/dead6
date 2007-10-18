@@ -27,7 +27,7 @@
 #define SIZEOF_PTR 8
 
 #ifndef _WIN32_WINNT
-# define _WIN32_WINNT 0x500
+# define _WIN32_WINNT 0x501
 #endif
 
 #pragma warning( disable : 4267 ) //warning C4267: 'initializing' : conversion from 'size_t' to 'unsigned int', possible loss of data

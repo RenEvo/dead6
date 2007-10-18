@@ -24,7 +24,9 @@ History:
 CBeam::CBeam()
 :	m_effectId(0),
 	m_fireLoopId(INVALID_SOUNDID),
-	m_hitSoundId(INVALID_SOUNDID)
+	m_hitSoundId(INVALID_SOUNDID),
+	m_remote(false),
+	m_viewFP(true)
 {
 }
 
@@ -59,8 +61,12 @@ void CBeam::Update(float frameTime, uint frameId)
 		if (m_spinUpTimer>0.0f)
 		{
 			m_spinUpTimer -= frameTime;
+
 			if (m_spinUpTimer>0.0f)
+			{
+				m_pWeapon->RequireUpdate(eIUS_FireMode);
 				return;
+			}
 
 			m_spinUpTimer = 0.0f;
 
@@ -77,6 +83,7 @@ void CBeam::Update(float frameTime, uint frameId)
 				m_effectparams.helper[id].c_str());
 		}
 
+		IEntityClass* ammo = NULL;
 		if(m_spinUpTimer==0.0f)
 		{
 			if (m_fireparams.ammo_type_class && m_fireparams.clip_size>=0)
@@ -89,7 +96,7 @@ void CBeam::Update(float frameTime, uint frameId)
 						m_ammoTimer = m_beamparams.ammo_tick;
 
 						//Decrease ammo count
-						IEntityClass* ammo = m_fireparams.ammo_type_class;
+						ammo = m_fireparams.ammo_type_class;
 						int ammoCount = m_pWeapon->GetAmmoCount(ammo);
 
 						if (m_fireparams.clip_size==0)
@@ -105,10 +112,11 @@ void CBeam::Update(float frameTime, uint frameId)
 								else
 									m_pWeapon->SetInventoryAmmoCount(ammo, ammoCount);
 							}
+
 						}
 						else
 						{
-							StopFire(m_shooterId);
+							StopFire();
 						
 							if (m_pWeapon->IsServer())
 								m_pWeapon->GetGameObject()->InvokeRMI(CWeapon::ClStopFire(), CWeapon::EmptyParams(), eRMI_ToRemoteClients);
@@ -132,33 +140,59 @@ void CBeam::Update(float frameTime, uint frameId)
 		Vec3 pos = GetFiringPos(hit);
 		Vec3 dir = GetFiringDir(hit, pos);
 
+		m_pWeapon->OnShoot(m_pWeapon->GetOwnerId(), 0, ammo, pos, dir, Vec3(0,0,0));
+
 		if (m_effectId)
 		{
-			Vec3 epos(m_pWeapon->GetEffectWorldTM(m_effectId).GetTranslation());
-			Matrix34 etm(Matrix33::CreateRotationVDir(dir));
-			etm.AddTranslation(epos);
+			int id = m_pWeapon->GetStats().fp?0:1;
 
-			m_pWeapon->SetEffectWorldTM(m_effectId, etm);
-
-      /*
-			IParticleEmitter *pEmitter = m_pWeapon->GetEffectEmitter(m_effectId);
-			if (pEmitter)
+			bool currentView = m_pWeapon->IsOwnerFP();
+			//Check view changes and re-attach effect if needed (for vehicles)
+			if(m_viewFP!=currentView)
 			{
-				ParticleTarget targetOptions;
-	
-				targetOptions.bTarget = true;
-				targetOptions.bExtendCount = true;
-				targetOptions.bExtendLife = false;
-				targetOptions.bExtendSpeed = true;
-				targetOptions.bPriority = true;
-				targetOptions.vTarget = hit;
-	
-				pEmitter->SetTarget(targetOptions);
+				m_viewFP = currentView;
+				m_pWeapon->AttachEffect(m_viewFP?CItem::eIGS_ThirdPerson:CItem::eIGS_FirstPerson, m_effectId, false);
+				m_effectId = m_pWeapon->AttachEffect(m_viewFP?CItem::eIGS_FirstPerson:CItem::eIGS_ThirdPerson,
+					0, true, m_effectparams.effect[id].c_str(),	m_effectparams.helper[id].c_str());
+				if(m_viewFP)
+					m_pWeapon->PlayAction(g_pItemStrings->fire,0,false,CItem::eIPAF_Default|CItem::eIPAF_RepeatLastFrame);
+			}
 
-        gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(hit, 0.5f, ColorB(0,0,255,255));
-			}			
-      */
+			Vec3 epos(m_pWeapon->GetEffectWorldTM(m_effectId).GetTranslation());
+			
+			if(m_effectparams.scale[id]<1.0f)
+			{
+				Quat rot(Quat::CreateRotationVDir(dir));
+				rot.Normalize();
+
+				float scaleFX = (((hit-pos).len())*m_effectparams.scale[id]);	
+				if(scaleFX>1.0f)
+					scaleFX = 1.0f;
+
+				Matrix34 etm;
+				etm.Set(Vec3(scaleFX,scaleFX,scaleFX),rot,epos);
+
+				if(m_pWeapon->GetStats().fp)
+					etm.OrthonormalizeFast();
+
+				m_pWeapon->SetEffectWorldTM(m_effectId, etm);
+			}
+			else
+			{
+				Matrix34 etm(Matrix33::CreateRotationVDir(dir));
+				etm.AddTranslation(epos);
+				m_pWeapon->SetEffectWorldTM(m_effectId, etm);
+			}
+
+   
 		}
+
+    if (m_fireLoopId != INVALID_SOUNDID)
+    {
+      ISound *pSound = m_pWeapon->GetSoundProxy()->GetSound(m_fireLoopId);
+      if (pSound)
+        pSound->SetLineSpec(pos, hit);
+    }    
 
 		if (hitValid)
 		{
@@ -185,16 +219,19 @@ void CBeam::Update(float frameTime, uint frameId)
 				ISound *pSound = m_pWeapon->GetISound(m_hitSoundId);
 				if (pSound)
 				{
-					pSound->SetParam("angle", RAD2DEG(acosf(rayhit.n.Dot(dir))), false);
-					pSound->SetLineSpec(hit, pos);
+          float angle = RAD2DEG(acos_tpl(rayhit.n.Dot(dir)));
+					pSound->SetParam("angle", angle, false);				          
 					pSound->SetPosition(hit);					
+
+          //float color[] = {1,1,1,1};
+          //gEnv->pRenderer->Draw2dLabel(200,300,1.5f,color,false,"angle: %.2f", angle);
 				}
 			}
 
 			if (!m_beamparams.hit_decal.empty())
 			{
 				//if (!m_lastHitValid)
-				if (!rayhit.pCollider || !gEnv->pEntitySystem->GetEntityFromPhysics(rayhit.pCollider))
+				//if (!rayhit.pCollider || !gEnv->pEntitySystem->GetEntityFromPhysics(rayhit.pCollider))
 					Decal(rayhit, dir);
 				//else
 				//{
@@ -249,7 +286,7 @@ void CBeam::Update(float frameTime, uint frameId)
 		if (m_hitSoundId != INVALID_SOUNDID)
 		{
 			m_pWeapon->StopSound(m_hitSoundId);
-			m_hitSoundId = INVALID_SOUNDID;
+			m_hitSoundId = INVALID_SOUNDID;      
 		}
 
 		// stop the effect here too
@@ -297,6 +334,7 @@ void CBeam::Activate(bool activate)
 	CSingle::Activate(activate);
 
 	m_firing = false;
+	m_remote = false;
 
 	if (m_fireLoopId != INVALID_SOUNDID)
 	{
@@ -337,7 +375,7 @@ bool CBeam::CanFire(bool considerAmmo) const
 }
 
 //------------------------------------------------------------------------
-void CBeam::StartFire(EntityId shooterId)
+void CBeam::StartFire()
 {
 	if (!CanFire(true))
 		return;
@@ -355,10 +393,12 @@ void CBeam::StartFire(EntityId shooterId)
 	m_pWeapon->RequireUpdate(eIUS_FireMode);
 
 	m_pWeapon->RequestStartFire();
+
+	m_viewFP = m_pWeapon->IsOwnerFP();
 }
 
 //------------------------------------------------------------------------
-void CBeam::StopFire(EntityId shooterId)
+void CBeam::StopFire()
 {
 	//Prevent being stopped if it is not firing
 	if(!m_firing)
@@ -388,23 +428,14 @@ void CBeam::StopFire(EntityId shooterId)
 }
 
 //------------------------------------------------------------------------
-void NetShoot(const Vec3 &hit)
-{
-}
-
-//------------------------------------------------------------------------
-void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit)
-{
-}
-
-//------------------------------------------------------------------------
-void CBeam::NetStartFire(EntityId shooterId)
+void CBeam::NetStartFire()
 {
 	m_lastHitValid = false;
 	m_firing = true;
 	m_spinUpTimer = m_fireparams.spin_up_time;
 	m_tickTimer = m_beamparams.tick;
 	m_ammoTimer = m_beamparams.ammo_tick;
+	m_remote = true;
 
 	m_fired = true;
 
@@ -414,7 +445,7 @@ void CBeam::NetStartFire(EntityId shooterId)
 }
 
 //------------------------------------------------------------------------
-void CBeam::NetStopFire(EntityId shooterId)
+void CBeam::NetStopFire()
 {
 	//Prevent being stopped if it is not firing
 	if(!m_firing)
@@ -422,6 +453,7 @@ void CBeam::NetStopFire(EntityId shooterId)
 
 	m_firing = false;
 	m_fired  = false;
+	m_remote = false;
 
 	SpinUpEffect(false);
 
@@ -514,24 +546,19 @@ void CBeam::Decal(const ray_hit &rayhit, const Vec3 &dir)
 
 	strcpy(decal.szMaterialName, m_beamparams.hit_decal.c_str());
 
-	decal.fAngle = RAD2DEG(acosf(rayhit.n.Dot(dir)));
+	decal.fAngle = RAD2DEG(acos_tpl(rayhit.n.Dot(dir)));
 	decal.vHitDirection = dir;
 
 	if (rayhit.pCollider)
 	{
-		/* MR: hit decals on entities were disabled (long ago), i just commented out those lines
-    IEntity *pEntity = gEnv->pEntitySystem->GetEntityFromPhysics(rayhit.pCollider);
-		if (pEntity)
+		if (IRenderNode* pRenderNode = (IRenderNode*)rayhit.pCollider->GetForeignData(PHYS_FOREIGN_ID_STATIC))
+			decal.ownerInfo.pRenderNode = pRenderNode;
+		else if (IEntity *pEntity = gEnv->pEntitySystem->GetEntityFromPhysics(rayhit.pCollider))
 		{
 			IEntityRenderProxy *pRenderProxy = (IEntityRenderProxy*)pEntity->GetProxy(ENTITY_PROXY_RENDER);;
 			if (pRenderProxy)
 				decal.ownerInfo.pRenderNode = pRenderProxy->GetRenderNode();
-		}*/
-
-    if (IRenderNode* pRenderNode = (IRenderNode*)rayhit.pCollider->GetForeignData(PHYS_FOREIGN_ID_STATIC))
-      decal.ownerInfo.pRenderNode = pRenderNode;
-
-		//decal.ownerInfo.nPartID = rayhit.partid;
+		}
 	}
 
 	gEnv->p3DEngine->CreateDecal(decal);
@@ -550,6 +577,9 @@ void CBeam::Tick(ray_hit &hit, const Vec3 &dir)
 //------------------------------------------------------------------------
 void CBeam::TickDamage(ray_hit &hit, const Vec3 &dir)
 {	
+	if (m_fireparams.damage==0)
+		return;
+
 	IEntity *pEntity = gEnv->pEntitySystem->GetEntityFromPhysics(hit.pCollider);
 
 	if (pEntity)
@@ -562,6 +592,8 @@ void CBeam::TickDamage(ray_hit &hit, const Vec3 &dir)
 
 		if (m_pWeapon->GetForcedHitMaterial() != -1)
 			info.material=pGameRules->GetHitMaterialIdFromSurfaceId(m_pWeapon->GetForcedHitMaterial());
+
+		info.remote=m_remote;
 
 		pGameRules->ClientHit(info);
 	}

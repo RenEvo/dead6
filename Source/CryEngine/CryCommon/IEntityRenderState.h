@@ -15,7 +15,7 @@ enum EERType
 	eERType_Unknown,
 	eERType_Brush,
 	eERType_Vegetation,
-	eERType_Voxel_NOT_USED, // not used
+	eERType_VoxelMesh,
 	eERType_Light,
 	eERType_Cloud,
 	eERType_VoxelObject,
@@ -27,6 +27,7 @@ enum EERType
 	eERType_WaterWave,
 	eERType_RoadObject_NEW,
 	eERType_DistanceCloud,
+	eERType_VolumeObject,
 	eERType_AutoCubeMap,
 	eERType_Rope,
 	eERType_Last,
@@ -34,12 +35,9 @@ enum EERType
 
 struct OcclusionTestClient
 {
-	OcclusionTestClient() 
-	{
-		nLastOccludedMainFrameID = nLastVisibleMainFrameID = 0;
-	}
-
+	OcclusionTestClient() {	nLastOccludedMainFrameID = nLastVisibleMainFrameID = 0; vLastVisPoint.Set(0,0,0); }
 	int nLastVisibleMainFrameID, nLastOccludedMainFrameID;
+  Vec3 vLastVisPoint;
 };
 
 //! RenderNode flags
@@ -47,7 +45,7 @@ struct OcclusionTestClient
 #define ERF_PROCEDURAL									0x2
 #define ERF_USE_TERRAIN_COLOR           0x4
 #define ERF_CASTSHADOWMAPS							0x8
-//#define ERF_DONOTCHECKVIS         			0x10
+#define ERF_RENDER_ALWAYS				        0x10
 #define ERF_CASTSHADOWINTORAMMAP				0x20
 #define ERF_HIDABLE											0x40
 #define ERF_HIDABLE_SECONDARY						0x80
@@ -57,6 +55,7 @@ struct OcclusionTestClient
 #define ERF_OUTDOORONLY									0x800
 #define ERF_UPDATE_IF_PV								0x1000
 #define ERF_EXCLUDE_FROM_TRIANGULATION	0x2000
+#define ERF_REGISTER_BY_BBOX            0x4000
 #define ERF_PICKABLE				            0x8000
 #define ERF_FROOZEN											0x10000
 #define ERF_MERGE_RESULT  							0x20000
@@ -64,7 +63,9 @@ struct OcclusionTestClient
 #define ERF_REGISTER_BY_POSITION				0x80000
 #define ERF_SUBSURFSCATTER              0x100000
 #define ERF_RECVWIND                    0x200000
-
+#define ERF_COLLISION_PROXY             0x400000    // Collision proxy is a special object that is only visible in editor
+                                                    // and used for physical collisions with player and vehicles
+#define ERF_AFFECTED_BY_VOXELS          0x800000
 #define ERF_SPEC_BIT0                   0x1000000   // Bit0 of min config spec.
 #define ERF_SPEC_BIT1                   0x2000000   // Bit1 of min config spec.
 #define ERF_SPEC_BIT2                   0x4000000   // Bit2 of min config spec.
@@ -83,7 +84,7 @@ struct IShadowCaster
 	virtual bool HasOcclusionmap(int nLod, IRenderNode *pLightOwner ) { return false;}
 	virtual bool Render(const SRendParams &RendParams) = 0;
 	virtual const AABB GetBBoxVirtual() = 0;
-  virtual struct ICharacterInstance* GetEntityCharacter( unsigned int nSlot, Matrix34 * pMatrix = NULL ) = 0;
+  virtual struct ICharacterInstance* GetEntityCharacter( unsigned int nSlot, Matrix34 * pMatrix = NULL, bool bReturnOnlyVisible = false ) = 0;
 };
 
 struct IOctreeNode 
@@ -108,20 +109,18 @@ struct SLightInfo
   bool bAffecting;
 };
 
-#define LOD_TRANSITION_MAX_OBJ_STATES_NUM 16
-#define LIGHTS_CULL_INFO_CACHE_SIZE 16
-
 struct IRenderNode : public IShadowCaster
 {
 	enum EInternalFlags
 	{
-		DECAL_OWNER     = 0x0001, // Owns some decals.
-		PARTICLES_OWNER = 0x0002, // Owns particles.
-		UPDATE_DECALS   = 0x0004, // The node changed geometry - decals must be updated
-		PER_OBJECT_SHADOW_PASS_NEEDED = 0x0008,  // special shadow processing needed
-		WAS_INVISIBLE   = 0x0010, // was invisible last frame 
-		WAS_IN_VISAREA  = 0x0020, // was inside visares last frame
-		WAS_FARAWAY			= 0x0040  // was considered 'far away' for the purposes of physics deactivation
+		DECAL_OWNER     = BIT(0), // Owns some decals.
+		PARTICLES_OWNER = BIT(1), // Owns particles.
+		UPDATE_DECALS   = BIT(2), // The node changed geometry - decals must be updated
+		PER_OBJECT_SHADOW_PASS_NEEDED = BIT(3),  // special shadow processing needed
+		WAS_INVISIBLE   = BIT(4), // was invisible last frame 
+		WAS_IN_VISAREA  = BIT(5), // was inside vis-ares last frame
+		WAS_FARAWAY			= BIT(6),// was considered 'far away' for the purposes of physics deactivation
+		HAS_OCCLUSION_PROXY = BIT(7) // This node has occlusion proxy
 	};
 
 	IRenderNode()
@@ -153,19 +152,25 @@ struct IRenderNode : public IShadowCaster
 
 	// Description:
 	//    Get local bounds of the render node.
-  virtual void GetLocalBounds( AABB &bbox ) { bbox = GetBBox();}
+  virtual void GetLocalBounds( AABB &bbox ) { AABB WSBBox(GetBBox()); bbox = AABB(WSBBox.min - GetPos(true), WSBBox.max - GetPos(true)); }
 
-	virtual const Vec3 & GetPos(bool bWorldOnly = true) const = 0;
+	virtual Vec3 GetPos(bool bWorldOnly = true) const = 0;
 	virtual const AABB GetBBox() const = 0;
 	virtual void SetBBox( const AABB& WSBBox ) = 0;
 
 	// render node geometry
 	virtual bool Render(const struct SRendParams & EntDrawParams) = 0;
 
+	// hide/disable node in renderer
+	virtual void Hide( bool bHide )
+	{
+		SetRndFlags( ERF_HIDDEN, bHide );
+	}
+
 	// gives access to object components
 	virtual struct IStatObj * GetEntityStatObj( unsigned int nPartId, unsigned int nSubPartId = 0, Matrix34 * pMatrix = NULL, bool bReturnOnlyVisible = false) { return 0; }
 	virtual void SetEntityStatObj( unsigned int nSlot, IStatObj * pStatObj, const Matrix34 * pMatrix = NULL ) {};
-	virtual struct ICharacterInstance* GetEntityCharacter( unsigned int nSlot, Matrix34 * pMatrix = NULL ) { return 0; }
+	virtual struct ICharacterInstance* GetEntityCharacter( unsigned int nSlot, Matrix34 * pMatrix = NULL, bool bReturnOnlyVisible = false ) { return 0; }
 
 	// rendering flags
 	ILINE void SetRndFlags(unsigned int dwFlags) { m_dwRndFlags = dwFlags; }
@@ -257,7 +262,7 @@ struct IRenderNode : public IShadowCaster
   //! set material layers mask
   ILINE void SetMaterialLayers(uint8 nMtlLayers) { m_nMaterialLayers = nMtlLayers; }
 
-	ILINE void SetMinSpec( int nMinSpec )
+	virtual void SetMinSpec( int nMinSpec )
 	{
 		m_dwRndFlags &= ~ERF_SPEC_BITS_MASK;
 		m_dwRndFlags |= (nMinSpec << ERF_SPEC_BITS_SHIFT) & ERF_SPEC_BITS_MASK;
@@ -317,6 +322,8 @@ struct IRenderNode : public IShadowCaster
 
   virtual void OnRenderNodeBecomeVisible() {}
 
+  virtual	bool IsMovableByGame() const { return false; }
+
 	//////////////////////////////////////////////////////////////////////////
 	// Variables
 	//////////////////////////////////////////////////////////////////////////
@@ -354,7 +361,8 @@ struct SVegetationSpriteInfo
 {
   struct SSectorTextureSet * pTerrainTexInfoForSprite;
   class CVegetation * pVegetation;
-  uchar ucSpriteAlphaTestRef;
+  uint16 dwAngle;
+  uint16 ucSpriteAlphaTestRef;
 };
 
 struct ILightSource : public IRenderNode
@@ -364,6 +372,7 @@ struct ILightSource : public IRenderNode
 	virtual const Matrix34& GetMatrix() = 0;
 	virtual struct ShadowMapFrustum * GetShadowFrustum(int nId = 0) = 0;
 	virtual bool IsLightAreasVisible() = 0;
+  virtual void SetCastingException(IRenderNode * pNotCaster) = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -401,6 +410,7 @@ const int IVOXELOBJECT_FLAG_COMPUTE_AO = 4;
 const int IVOXELOBJECT_FLAG_SNAP_TO_TERRAIN = 8;
 const int IVOXELOBJECT_FLAG_SMART_BASE_COLOR = 16;
 const int IVOXELOBJECT_FLAG_COMPILED = 32;
+const int IVOXELOBJECT_FLAG_EXIST = 64;
 
 //////////////////////////////////////////////////////////////////////////
 // IVoxelObject is an interface to the Voxel Object Render Node object.
@@ -409,12 +419,14 @@ struct IVoxelObject : public IRenderNode
 {
 	virtual struct IMemoryBlock * GetCompiledData() = 0;
 	virtual void SetCompiledData(void * pData, int nSize, uchar ucChildId = 0) = 0;
-	virtual void SetMatrix( const Matrix34& mat ) = 0;
+  virtual void SetObjectName( const char * pName ) = 0;
+  virtual void SetMatrix( const Matrix34& mat ) = 0;
 	virtual bool ResetTransformation() = 0;
 	virtual void InterpolateVoxelData() = 0;
 	virtual void SetFlags(int nFlags) = 0;
 	virtual void Regenerate() = 0;
 	virtual void CopyHM() = 0;
+  virtual bool IsEmpty() = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -546,6 +558,28 @@ struct SDistanceCloudProperties
 struct IDistanceCloudRenderNode : public IRenderNode
 {
 	virtual void SetProperties( const SDistanceCloudProperties& properties ) = 0;
+};
+
+//////////////////////////////////////////////////////////////////////////////////////
+// IVolumeObjectRenderNode is an interface to the Volume Object Render Node object.
+//////////////////////////////////////////////////////////////////////////////////////
+struct SVolumeObjectProperties
+{
+};
+
+struct SVolumeObjectMovementProperties
+{
+	bool m_autoMove;
+	Vec3 m_speed;
+	Vec3 m_spaceLoopBox;
+	float m_fadeDistance;
+};
+
+struct IVolumeObjectRenderNode : public IRenderNode
+{
+	virtual void LoadVolumeData(const char* filePath) = 0;
+	virtual void SetProperties(const SVolumeObjectProperties& properties) = 0;
+	virtual void SetMovementProperties(const SVolumeObjectMovementProperties& properties) = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////

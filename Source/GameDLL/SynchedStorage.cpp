@@ -20,6 +20,8 @@ void CSynchedStorage::Reset()
 {
 	m_globalStorage.clear();
 	m_entityStorage.clear();
+	m_channelStorageMap.clear();
+	m_channelStorage.clear();
 }
 
 //------------------------------------------------------------------------
@@ -60,6 +62,23 @@ void CSynchedStorage::Dump()
 
 	for (TStorage::const_iterator it=m_globalStorage.begin(); it!=m_globalStorage.end(); ++it)
 		ValueDumper(it->first, it->second);
+
+	CryLogAlways("---------------------------\n");
+	CryLogAlways("Local Channel:");
+	for (TStorage::const_iterator it=m_channelStorage.begin(); it!=m_channelStorage.end(); ++it)
+		ValueDumper(it->first, it->second);
+
+	if (gEnv->bServer)
+	{
+		CryLogAlways("---------------------------\n");
+		for (TChannelStorageMap::const_iterator cit=m_channelStorageMap.begin(); cit!=m_channelStorageMap.end(); ++cit)
+		{
+			INetChannel *pNetChannel=m_pGameFramework->GetNetChannel(cit->first);
+			CryLogAlways("Channel %d (%s)", cit->first, pNetChannel?pNetChannel->GetName():"null");
+			for (TStorage::const_iterator it=cit->second.begin(); it!=cit->second.end(); ++it)
+				ValueDumper(it->first, it->second);
+		}
+	}
 
 	CryLogAlways("---------------------------\n");
 	for (TEntityStorageMap::const_iterator eit=m_entityStorage.begin(); eit!=m_entityStorage.end(); ++eit)
@@ -203,13 +222,39 @@ CSynchedStorage::TStorage *CSynchedStorage::GetEntityStorage(EntityId id, bool c
 	TEntityStorageMap::iterator it=m_entityStorage.find(id);
 	if (it!=m_entityStorage.end())
 		return &it->second;
-	else
+	else if (create)
 	{
 		std::pair<TEntityStorageMap::iterator, bool> result=m_entityStorage.insert(
 			TEntityStorageMap::value_type(id, TStorage()));
 		return &result.first->second;
 	}
+
+	return 0;
 }
+
+//------------------------------------------------------------------------
+CSynchedStorage::TStorage *CSynchedStorage::GetChannelStorage(int channelId, bool create)
+{
+	TChannelStorageMap::iterator it=m_channelStorageMap.find(channelId);
+	if (it!=m_channelStorageMap.end())
+		return &it->second;
+	else
+	{
+		INetChannel *pNetChannel=m_pGameFramework->GetNetChannel(channelId);
+		if ((!gEnv->bServer && !pNetChannel) || (gEnv->bServer && pNetChannel->IsLocal()))
+			return &m_channelStorage;
+
+		if (gEnv->bServer && create)
+		{
+			std::pair<TChannelStorageMap::iterator, bool> result=m_channelStorageMap.insert(
+				TEntityStorageMap::value_type(channelId, TStorage()));
+			return &result.first->second;
+		}
+	}
+
+	return 0;
+}
+
 
 static void AddStorageTo( const CSynchedStorage::TStorage& stor, ICrySizer * s )
 {

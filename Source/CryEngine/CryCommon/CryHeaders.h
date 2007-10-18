@@ -61,7 +61,8 @@ enum ChunkTypes
 	ChunkType_BreakablePhysics	= 0xAAFC0000,
 	ChunkType_FaceMap,
 	ChunkType_SpeedInfo, // speed & distance information
-	ChunkType_FootPlantInfo //footplant information
+	ChunkType_FootPlantInfo, //footplant information
+	ChunkType_BonesBoxes	
 };
 
 enum ECgfStreamType
@@ -1419,11 +1420,12 @@ struct COMPILED_PHYSICALPROXY_CHUNK_DESC_0800
 
 struct COMPILED_MORPHTARGETS_CHUNK_DESC_0800
 {
-	enum {VERSION=0x0800};
+	enum {VERSION=0x0800, VERSION1=0x801};
 	CHUNK_HEADER chdr;
 	uint32 numMorphTargets;
 	AUTO_STRUCT_INFO
 };
+
 
 struct COMPILED_INTFACES_CHUNK_DESC_0800
 {
@@ -1443,6 +1445,13 @@ struct COMPILED_INTSKINVERTICES_CHUNK_DESC_0800
 struct COMPILED_EXT2INTMAP_CHUNK_DESC_0800
 {
 	enum {VERSION=0x0800};
+	CHUNK_HEADER chdr;
+	AUTO_STRUCT_INFO
+};
+
+struct COMPILED_BONEBOXES_CHUNK_DESC_0800
+{
+	enum {VERSION=0x0800, VERSION1=0x801};
 	CHUNK_HEADER chdr;
 	AUTO_STRUCT_INFO
 };
@@ -1515,6 +1524,23 @@ struct CryKeyPQLog
 	AUTO_STRUCT_INFO
 };
 
+
+// This structure only for intrmediate results!
+struct CryKeyPQ
+{
+	int nTime;
+	Vec3 vPos;
+	CryQuat vRot; // logarithm of the rotation
+
+	// resets to initial position/rotation/time
+	void reset ()
+	{
+		nTime = 0;
+		vPos.x = vPos.y = vPos.z = 0;
+		vRot.v.x = vRot.v.y = vRot.v.z = vRot.w;
+	}
+
+};
 
 
 //========================================
@@ -1649,6 +1675,15 @@ struct CONTROLLER_CHUNK_DESC_0830 : public BASE_CONTROLLER_CHUNK
 	uint8 ChunkType;
 
 	AUTO_STRUCT_INFO
+};
+
+// Removed PQLog stuff, as intermediate result now we using floats
+// followed by CryKeyPQLog array
+struct CONTROLLER_CHUNK_DESC_0831
+{
+	enum {VERSION = 0x0831};
+	unsigned numKeys;
+	unsigned nControllerId;
 };
 
 

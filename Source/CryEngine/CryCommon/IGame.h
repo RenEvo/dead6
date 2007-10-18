@@ -67,7 +67,8 @@ struct IGame
 
 	// Description:
 	//		Reloads the currently running map (from level start savegame)
-	virtual void InitMapReloading() = 0;
+	//		Return the savegame which will be loaded
+	virtual string InitMapReloading() = 0;
 
 	// Description:
 	//		Updates the MOD.
@@ -124,6 +125,24 @@ struct IGame
 	// Return Value:
 	//		Void
 	virtual void OnClearPlayerIds() = 0;
+
+	// Description:
+	//		The game is reloading the level.
+	// Return Value:
+	//		Void
+	virtual bool IsReloading() = 0;
+
+	// Description:
+	//		Auto-Savegame name creation
+	// Return Value:
+	//		c_str or NULL
+	virtual const char* CreateSaveGameName() = 0;
+
+	// Description:
+	//		Mapping level filename to "official" name.
+	// Return Value:
+	//		c_str or NULL
+	virtual const char* GetMappedLevelName(const char *levelName) const = 0;
 };
 
 

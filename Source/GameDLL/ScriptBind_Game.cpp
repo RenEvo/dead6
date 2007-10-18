@@ -110,13 +110,30 @@ int CScriptBind_Game::PlayFlashAnim(IFunctionHandler *pH)
 //------------------------------------------------------------------------
 int CScriptBind_Game::PlayVideo(IFunctionHandler *pH)
 {
-	SCRIPT_CHECK_PARAMETERS(1);
+	SCRIPT_CHECK_PARAMETERS_MIN(1);
 
 	const char* pVideo(0);
 	pH->GetParam(1, pVideo);
+
+	int audioCh(0);
+	if (pH->GetParamCount() > 1)
+		pH->GetParam(2, audioCh);
+
+	int voiceCh(-1);
+	if (pH->GetParamCount() > 2)
+		pH->GetParam(3, voiceCh);
+
+	bool useSubtitles(false);
+	if (pH->GetParamCount() > 3)
+		pH->GetParam(4, useSubtitles);
+
+	bool exclusiveVideo(false);
+	if (pH->GetParamCount() > 4)
+		pH->GetParam(5, exclusiveVideo);
+
 	CFlashMenuObject* pFMO(CFlashMenuObject::GetFlashMenuObject());
 	if (pVideo && pFMO)
-		pFMO->PlayVideo(pVideo);
+		pFMO->PlayVideo(pVideo, true, 0, audioCh, voiceCh, useSubtitles, exclusiveVideo);
 
 	return pH->EndFunction();
 }

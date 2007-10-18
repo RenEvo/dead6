@@ -8,24 +8,39 @@
 
 #include "IActionMapManager.h"
 #include "IPlayerInput.h"
+#include "Player.h"
 
 class CPlayer;
 struct SPlayerStats;
 
-class CPlayerInput : public IPlayerInput, public IActionListener
+class CPlayerInput : public IPlayerInput, public IActionListener, public IPlayerEventListener
 {
 public:
+
+	enum EMoveButtonMask
+	{
+		eMBM_Forward	= (1 << 0),
+		eMBM_Back			= (1 << 1),
+		eMBM_Left			= (1 << 2),
+		eMBM_Right		= (1 << 3)
+	};
+
 	CPlayerInput( CPlayer * pPlayer );
 	~CPlayerInput();
+
+	// IPlayerInput
+	virtual void PreUpdate();
+	virtual void Update();
+	virtual void PostUpdate();
+	// ~IPlayerInput
 
 	// IActionListener
 	virtual void OnAction( const ActionId& action, int activationMode, float value );
 	// ~IActionListener
 	
-	// IPlayerInput
-	virtual void PreUpdate();
-	virtual void Update();
-	virtual void PostUpdate();
+	// IPlayerEventListener
+	virtual void OnObjectGrabbed(IActor* pActor, bool bIsGrab, EntityId objectId, bool bIsNPC, bool bIsTwoHanded);
+	// ~IPlayerEventListener
 
 	virtual void SetState( const SSerializedPlayerInput& input );
 	virtual void GetState( SSerializedPlayerInput& input );
@@ -39,18 +54,15 @@ public:
 	{
 		return PLAYER_INPUT;
 	};
+
+	ILINE virtual uint32 GetMoveButtonsState() const { return m_moveButtonState; }
+	ILINE virtual uint32 GetActions() const { return m_actions; }
+
 	// ~IPlayerInput
 
 	void SerializeSaveGame( TSerialize ser );
 
 private:
-	enum EMoveButtonMask
-	{
-		eMBM_Forward	= (1 << 0),
-		eMBM_Back			= (1 << 1),
-		eMBM_Left			= (1 << 2),
-		eMBM_Right		= (1 << 3),
-	};
 
 	EStance FigureOutStance();
 	void AdjustMoveButtonState( EMoveButtonMask buttonMask, int activationMode );
@@ -68,9 +80,13 @@ private:
 	bool OnActionMoveRight(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionRotateYaw(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionRotatePitch(EntityId entityId, const ActionId& actionId, int activationMode, float value);
+	bool OnActionVRotatePitch(EntityId entityId, const ActionId& actionId, int activationMode, float value); // needed so player can shake unfreeze while in a vehicle
+	bool OnActionVRotateYaw(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionJump(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionCrouch(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionSprint(EntityId entityId, const ActionId& actionId, int activationMode, float value);
+	bool OnActionSuitMode(EntityId entityId, const ActionId& actionId, int activationMode, float value);
+	bool OnActionSuitSkin(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionToggleStance(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionProne(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	//bool OnActionZeroGBrake(EntityId entityId, const ActionId& actionId, int activationMode, float value);
@@ -78,7 +94,7 @@ private:
 	bool OnActionGBoots(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionLeanLeft(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionLeanRight(EntityId entityId, const ActionId& actionId, int activationMode, float value);
-	bool OnActionHolsterItem(EntityId entityId, const ActionId& actionId, int activationMode, float value);
+	//bool OnActionHolsterItem(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionUse(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	// Nanosuit
 	bool OnActionSpeedMode(EntityId entityId, const ActionId& actionId, int activationMode, float value);
@@ -95,6 +111,7 @@ private:
 	bool OnActionXIRotatePitch(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionXIMoveX(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 	bool OnActionXIMoveY(EntityId entityId, const ActionId& actionId, int activationMode, float value);
+	bool OnActionXIDisconnect(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 
 	bool OnActionInvertMouse(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 private:
@@ -102,7 +119,6 @@ private:
 
 	CPlayer* m_pPlayer;
 	SPlayerStats* m_pStats;
-	TActionHandler<CPlayerInput>	m_actionHandler;
 	uint32 m_actions;
 	uint32 m_lastActions;
 	Vec3 m_deltaMovement;
@@ -118,6 +134,14 @@ private:
 	uint32 m_moveButtonState;
 	Vec3 m_filteredDeltaMovement;
 	bool m_checkZoom;
+	float m_fSuitModeActionTime;
+	int	m_iSuitModeActionPressed;
+	int m_iCarryingObject;
+	int m_lastSerializeFrameID;
+
+	bool m_doubleJumped;
+
+	static TActionHandler<CPlayerInput>	s_actionHandler;
 };
 
 #endif

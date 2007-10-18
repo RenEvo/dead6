@@ -63,34 +63,53 @@
 #define FloatU32ExpMask				(0xFF << 23)
 #define FloatU32FracMask			((1 << 23) - 1)
 #define FloatU32SignMask			(1 << 31)
-#define FloatNAN							(FloatU32ExpMask | FloatU32FracMask)
+#define F32NAN								(0x7F800001)					//produces rock solid fp-exceptions
+#define F32NAN_SAFE						(FloatU32ExpMask | FloatU32FracMask) //this one is not triggering an fp-exception
 
 #define DoubleU64(x)					(*( (uint64*) &(x) ))
 #define DoubleU64ExpMask			((uint64)255 << 55)
 #define DoubleU64FracMask			(((uint64)1 << 55) - (uint64)1)
 #define DoubleU64SignMask			((uint64)1 << 63)
-#define DoubleNAN							(DoubleU64ExpMask | DoubleU64FracMask)
+#if defined(__GNUC__)
+	#define F64NAN								(0x7FF0000000000001ULL)	//produces rock solid fp-exceptions
+#else
+	#define F64NAN								(0x7FF0000000000001)	//produces rock solid fp-exceptions
+#endif
+#define F64NAN_SAFE						(DoubleU64ExpMask | DoubleU64FracMask)  //this one is not triggering an fp-exception
 
 //--------------------------------------------------------------------------------
 
-ILINE bool NumberValid(float x)
+ILINE bool NumberValid(const float& x)
 {
-	return ((FloatU32(x) & FloatU32ExpMask) != FloatU32ExpMask);
+	//return ((FloatU32(x) & FloatU32ExpMask) != FloatU32ExpMask);
+
+	uint32 i = FloatU32(x);
+	uint32 expmask = FloatU32ExpMask;
+	uint32 iexp = i & expmask;
+	bool invalid = (iexp == expmask);
+
+	if (invalid)
+	{
+		uint32 i = 0x7F800001;
+		float fpe = *(float*)(&i);
+	}
+
+	return !invalid;
 }
 
-ILINE bool NumberNAN(float x)
+ILINE bool NumberNAN(const float& x)
 {
 	return (((FloatU32(x) & FloatU32ExpMask) == FloatU32ExpMask) && 
 					((FloatU32(x) & FloatU32FracMask) != 0));
 }
 
-ILINE bool NumberINF(float x)
+ILINE bool NumberINF(const float& x)
 {
 	return (((FloatU32(x) & FloatU32ExpMask) == FloatU32ExpMask) && 
 					((FloatU32(x) & FloatU32FracMask) == 0));
 }
 
-ILINE bool NumberDEN(float x)
+ILINE bool NumberDEN(const float& x)
 {
 	return (((FloatU32(x) & FloatU32ExpMask) == 0) && 
 					((FloatU32(x) & FloatU32FracMask) != 0));
@@ -98,24 +117,24 @@ ILINE bool NumberDEN(float x)
 
 //--------------------------------------------------------------------------------
 
-ILINE bool NumberValid(double x)
+ILINE bool NumberValid(const double& x)
 {
 	return ((DoubleU64(x) & DoubleU64ExpMask) != DoubleU64ExpMask);
 }
 
-ILINE bool NumberNAN(double x)
+ILINE bool NumberNAN(const double& x)
 {
 	return (((DoubleU64(x) & DoubleU64ExpMask) == DoubleU64ExpMask) && 
 					((DoubleU64(x) & DoubleU64FracMask) != 0));
 }
 
-ILINE bool NumberINF(double x)
+ILINE bool NumberINF(const double& x)
 {
 	return (((DoubleU64(x) & DoubleU64ExpMask) == DoubleU64ExpMask) && 
 					((DoubleU64(x) & DoubleU64FracMask) == 0));
 }
 
-ILINE bool NumberDEN(double x)
+ILINE bool NumberDEN(const double& x)
 {
 	return (((DoubleU64(x) & DoubleU64ExpMask) == 0) && 
 					((DoubleU64(x) & DoubleU64FracMask) != 0));
@@ -124,37 +143,37 @@ ILINE bool NumberDEN(double x)
 //--------------------------------------------------------------------------------
 
 
-ILINE bool NumberValid(int8 x)
+ILINE bool NumberValid(const int8 x)
 {	
-	return 1; //integers are always valid
+	return true; //integers are always valid
 }
-ILINE bool NumberValid(uint8 x)
+ILINE bool NumberValid(const uint8 x)
 {	
-	return 1; //integers are always valid
+	return true; //integers are always valid
 }
-ILINE bool NumberValid(int16 x)
+ILINE bool NumberValid(const int16 x)
 {	
-	return 1; //integers are always valid
+	return true; //integers are always valid
 }
-ILINE bool NumberValid(uint16 x)
+ILINE bool NumberValid(const uint16 x)
 {	
-	return 1; //integers are always valid
+	return true; //integers are always valid
 }
-ILINE bool NumberValid(int32 x)
+ILINE bool NumberValid(const int32 x)
 {	
-	return 1; //integers are always valid
+	return true; //integers are always valid
 }
-ILINE bool NumberValid(uint32 x)
+ILINE bool NumberValid(const uint32 x)
 {	
-	return 1; //integers are always valid
+	return true; //integers are always valid
 }
-ILINE bool NumberValid(int64 x)
+ILINE bool NumberValid(const int64 x)
 {	
-	return 1; //integers are always valid
+	return true; //integers are always valid
 }
-ILINE bool NumberValid(uint64 x)
+ILINE bool NumberValid(const uint64 x)
 {	
-	return 1; //integers are always valid
+	return true; //integers are always valid
 }
 
 

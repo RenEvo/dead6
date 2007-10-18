@@ -8,6 +8,7 @@ Description:  Anti-Suit field
 -------------------------------------------------------------------------
 History:
 - 10:04:2007   14:39 : Created by Marco Koegler
+- 21:08:2007   Benito G.R. - Not used (not registered in WeaponSytem)
 
 *************************************************************************/
 

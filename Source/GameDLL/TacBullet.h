@@ -9,4 +9,8 @@ public:
 	CTacBullet(void);
 	~CTacBullet(void);
 	virtual void HandleEvent(const SGameObjectEvent &);
+
+private:
+
+	void SleepTargetInVehicle(EntityId shooterId, CActor* pActor);
 };

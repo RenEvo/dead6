@@ -14,6 +14,7 @@ History:
 #include "StdAfx.h"
 #include "NetInputChainDebug.h"
 #include "IEntitySystem.h"
+#include "ITextModeConsole.h"
 
 #if ENABLE_NETINPUTCHAINDEBUG
 #include "ConfigurableVariant.h"
@@ -49,6 +50,8 @@ static void Put( const char * name, const TNetInputValue& value )
 	FILETIME tm;
 	GetSystemTimeAsFileTime(&tm);
 
+	ITextModeConsole * pTMC = gEnv->pSystem->GetITextModeConsole();
+
 	if (lastFrame != gEnv->pRenderer->GetFrameID())
 	{
 		ypos = 0;
@@ -56,14 +59,22 @@ static void Put( const char * name, const TNetInputValue& value )
 		tstamp = (uint64(tm.dwHighDateTime)<<32) | tm.dwLowDateTime;
 	}
 	float white[] = {1,1,1,1};
+	char buf[256];
+
 	if (const Vec3 * pVec = value.GetPtr<Vec3>())
 	{
-		gEnv->pRenderer->Draw2dLabel(10, ypos+=20, 2, white, false, "%s: %f %f %f", name, pVec->x, pVec->y, pVec->z);
+		sprintf(buf, "%s: %f %f %f", name, pVec->x, pVec->y, pVec->z);
+		gEnv->pRenderer->Draw2dLabel(10, ypos+=20, 2, white, false, "%s", buf);
+		if (pTMC)
+			pTMC->PutText( 0, ypos/20, buf );
 		if (fout) fprintf(fout, "%I64d %s %s %f %f %f\n", tstamp, GetEntityName(), name, pVec->x, pVec->y, pVec->z);
 	}
 	else if (const float * pFloat = value.GetPtr<float>())
 	{
-		gEnv->pRenderer->Draw2dLabel(10, ypos+=20, 2, white, false, "%s: %f", name, *pFloat);
+		sprintf(buf, "%s: %f", name, *pFloat);
+		gEnv->pRenderer->Draw2dLabel(10, ypos+=20, 2, white, false, "%s", buf);
+		if (pTMC)
+			pTMC->PutText( 0, ypos/20, buf );
 		if (fout) fprintf(fout, "%I64d %s %s %f\n", tstamp, GetEntityName(), name, *pFloat);
 	}
 	if (fout)

@@ -21,6 +21,7 @@
 #define DATA_FOLDER "game"
 #endif
 
+#include <ISystem.h>
 #include <ICryPak.h>
 
 namespace PathUtil
@@ -241,19 +242,29 @@ namespace PathUtil
 	}
 
 	//! Makes a fully specified file path from path and file name.
+#if defined __CRYCG__
+	extern string MakeFullPath(const string &);
+#else
 	inline string MakeFullPath( const string &relativePath )
 	{
-#ifndef _XBOX
-		// Not supported on XBox.
+#if defined(_XBOX) || (defined(PS3) && defined(USE_HDD0))
+	//not supported on xbox and non available for hard disk support PS3
+	return relativePath;
+#else
+	#if defined(PS3)
+		char path_buffer[_MAX_PATH];
+		_fullpath(path_buffer,relativePath.c_str(),_MAX_PATH);
+		return path_buffer;//already converted
+	#else	
 		char path_buffer[_MAX_PATH];
 		if (_fullpath(path_buffer,relativePath.c_str(),_MAX_PATH))
-		{
 			return ToUnixPath(path_buffer);
-		}
 		else
-#endif
 			return relativePath;
+	#endif//PS3
+#endif//_XBOX
 	}
+#endif//__CRYCG__
 
 	//////////////////////////////////////////////////////////////////////////
 	// Description:

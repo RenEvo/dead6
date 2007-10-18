@@ -18,6 +18,7 @@
 #ifndef _CRY_ENGINE_MINI_LOG_HDR_
 #define _CRY_ENGINE_MINI_LOG_HDR_
 
+#if !defined(__SPU__)
 #include <stdarg.h>
 
 struct IMiniLog
@@ -100,4 +101,5 @@ struct CNullMiniLog: public IMiniLog
 	void LogV(const ELogType nType, const char* szFormat, va_list args) {}
 };
 
+#endif//__SPU__
 #endif //_CRY_ENGINE_MINI_LOG_HDR_

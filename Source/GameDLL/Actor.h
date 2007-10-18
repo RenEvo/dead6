@@ -21,6 +21,7 @@
 #include <IActorSystem.h>
 #include <IActionMapManager.h>
 #include <CoherentValue.h>
+#include <IMusicSystem.h>
 
 #include "Game.h" // for stance enum
 #include "IAgent.h" // for stance enum
@@ -29,6 +30,7 @@
 #include "IMovementController.h"
 #include "ScreenEffects.h"
 #include "GrabHandler.h"
+#include "WeaponAttachmentManager.h"
 
 struct SActorFrameMovementParams
 {
@@ -41,8 +43,10 @@ struct SActorFrameMovementParams
 		lookIK(false), 
 		aimIK(false), 
 		jump(false),
+		strengthJump(false),
 		sprint(0.0f),
-		stance(STANCE_NULL)
+		stance(STANCE_NULL),
+		allowStrafe(false)
 	{
 	}
 
@@ -61,9 +65,12 @@ struct SActorFrameMovementParams
 	// aim target
 	bool aimIK;
 	bool jump;
+	bool strengthJump;
 	float sprint;
 	// stance
 	EStance stance;
+
+	bool allowStrafe;
 };
 
 struct IActorMovementController : public IMovementController
@@ -151,12 +158,15 @@ struct SActorParams
 	Vec3	vLimitDir;
 	float	vLimitRangeH;
 	float	vLimitRangeV;
+	float vLimitRangeVUp;
+	float vLimitRangeVDown;
 
-	float headBobbingMultiplier;
 	float	weaponBobbingMultiplier;
 	float	weaponInertiaMultiplier;
 
 	float speedMultiplier;
+
+	float timeImpulseRecover;
 
 	SActorParams()
 	{
@@ -167,15 +177,18 @@ struct SActorParams
 		vLimitDir.Set(0,0,0);
 		vLimitRangeH = 0.0f;
 		vLimitRangeV = 0.0f;
+		vLimitRangeVUp = 0.0f;
+		vLimitRangeVDown = 0.0f;
 
 		viewFoVScale = 1.0f;
 		viewSensitivity = 1.0f;
 
-		headBobbingMultiplier = 1.0f;
 		weaponInertiaMultiplier = 1.0f;
 		weaponBobbingMultiplier = 1.0f;
 
 		speedMultiplier = 1.0f;
+
+		timeImpulseRecover = 0.0f;
 	}
 };
 
@@ -184,14 +197,18 @@ struct SActorStats
 	float inAir;//double purpose, tells if the actor is in air and for how long
 	float onGround;//double purpose, tells if the actor is on ground and for how long
 
-	float inWater;
-	float waterLevel;
-	float bottomDepth;
+	float inWaterTimer;
+	float relativeWaterLevel;
+	float relativeBottomDepth;
+	float worldWaterLevelDelta;
+	bool swimJumping;
 
-	float headUnderWater;
+	float headUnderWaterTimer;
+	float worldWaterLevel;
 
 	float speed;
 	float speedFlat;
+	Vec3	angVelocity;
 
 	Vec3 velocity;
 	Vec3 velocityUnconstrained;
@@ -209,6 +226,7 @@ struct SActorStats
 	Vec3 forceLookVector;
 	float	bobCycle;
 
+	float grabbedTimer;
 	bool isGrabbed;
 	bool isRagDoll;
 
@@ -221,6 +239,12 @@ struct SActorStats
 	EntityId mountedWeaponID;
 
 	int groundMaterialIdx;
+
+	SActorStats()
+	{
+		memset( this,0,sizeof(SActorStats) );
+	}
+
 };
 
 struct SStanceInfo
@@ -281,6 +305,22 @@ struct SStanceInfo
 		}
 		return weaponOffset;
 	}
+
+	static inline Vec3	GetOffsetWithLean(float lean, const Vec3& sOffset, const Vec3& sLeftLean, const Vec3& sRightLean)
+	{
+		if (lean < -0.01f)
+		{
+			float a = CLAMP(-lean, 0.0f, 1.0f);
+			return sOffset + a * (sLeftLean - sOffset);
+		}
+		else if (lean > 0.01f)
+		{
+			float a = CLAMP(lean, 0.0f, 1.0f);
+			return sOffset + a * (sRightLean - sOffset);
+		}
+		return sOffset;
+	}
+
 
 	// Returns the size of the stance including the collider and the ground location.
 	inline AABB	GetStanceBounds() const
@@ -468,7 +508,7 @@ struct SLinkStats
 
 	IVehicle *GetLinkedVehicle();
 
-	void Serialize( TSerialize ser, unsigned aspects );
+	void Serialize( TSerialize ser );
 };
 
 class CItem;
@@ -477,7 +517,7 @@ class CWeapon;
 class CActor :
 	public CGameObjectExtensionHelper<CActor, IActor>,
 	public IGameObjectView,
-	public IGameObjectPhysics
+	public IGameObjectProfileManager
 {
 public:
 	struct ItemIdParam
@@ -510,67 +550,63 @@ public:
 
 	struct ReviveParams
 	{
-		ReviveParams(): pos(0,0,0), rot(0,0,0,1.0f), teamId(0), cleaninv(false) {};
-		ReviveParams(const Vec3 &p, const Ang3 &a, int tId, bool cinv): pos(p), rot(Quat::CreateRotationXYZ(a)), teamId(tId), cleaninv(cinv) {};
-		ReviveParams(const Vec3 &p, const Quat &q, int tId, bool cinv): pos(p), rot(q), teamId(tId), cleaninv(cinv) {};
+		ReviveParams(): pos(0,0,0), rot(0,0,0,1.0f), teamId(0) {};
+		ReviveParams(const Vec3 &p, const Ang3 &a, int tId): pos(p), rot(Quat::CreateRotationXYZ(a)), teamId(tId) {};
+		ReviveParams(const Vec3 &p, const Quat &q, int tId): pos(p), rot(q), teamId(tId) {};
 		void SerializeWith(TSerialize ser)
 		{
 			ser.Value("teamId", teamId, 'team');
 			ser.Value("pos", pos, 'wrld');
 			ser.Value("rot", rot, 'ori1');
-			ser.Value("cleaninv", cleaninv, 'bool');
 		};
 
 		int	 teamId;
 		Vec3 pos;
 		Quat rot;
-		bool cleaninv;
 	};
 
 	struct ReviveInVehicleParams
 	{
-		ReviveInVehicleParams(): vehicleId(0), seatId(0), teamId(0), cleaninv(false) {};
-		ReviveInVehicleParams(EntityId vId, int sId, int tId, bool cinv): vehicleId(vId), seatId(sId), teamId(tId), cleaninv(cinv) {};
+		ReviveInVehicleParams(): vehicleId(0), seatId(0), teamId(0) {};
+		ReviveInVehicleParams(EntityId vId, int sId, int tId): vehicleId(vId), seatId(sId), teamId(tId) {};
 		void SerializeWith(TSerialize ser)
 		{
 			ser.Value("teamId", teamId, 'team');
 			ser.Value("vehicleId", vehicleId, 'eid');
 			ser.Value("seatId", seatId, 'seat');
-			ser.Value("cleaninv", cleaninv, 'bool');
 		};
 
 		int	 teamId;
 		EntityId vehicleId;
 		int seatId;
-		bool cleaninv;
 	};
 
 	struct KillParams
 	{
 		KillParams() {};
-		KillParams(EntityId _shooterId, EntityId _weaponId, float _damage, int _material, bool _headshot, const Vec3 &_impulse)
-		: headshot(_headshot),
-			shooterId(_shooterId),
-			weaponId(_weaponId),
+		KillParams(EntityId _shooterId, int _weaponClassId, float _damage, int _material, int _hit_type, const Vec3 &_impulse)
+		: shooterId(_shooterId),
+			weaponClassId(_weaponClassId),
 			damage(_damage),
 			material(_material),
+			hit_type(_hit_type),
 			impulse(_impulse)
 		{};
 
-		bool headshot;
 		EntityId shooterId;
-		EntityId weaponId;
+		int weaponClassId;
 		float damage;
 		int material;
+		int hit_type;
 		Vec3 impulse;
 
 		void SerializeWith(TSerialize ser)
 		{
-			ser.Value("headshot", headshot, 'bool');
 			ser.Value("shooterId", shooterId, 'eid');
-			ser.Value("weaponId", weaponId, 'eid');
+			ser.Value("weaponClassId", weaponClassId, 'ui16');
 			ser.Value("damage", damage, 'dmg');
 			ser.Value("material", material, 'mat');
+			ser.Value("hit_type", hit_type, 'hTyp');
 			ser.Value("impulse", impulse, 'kImp');
 		};
 	};
@@ -627,6 +663,22 @@ public:
 			ser.Value("target", targetId, 'eid');
 		}
 	};
+	struct SetSpectatorHealthParams
+	{
+		SetSpectatorHealthParams(): health(0) {};
+		SetSpectatorHealthParams(int _health): health(_health) {};
+		int health;
+		void SerializeWith(TSerialize ser)
+		{
+			ser.Value("health", health, 'i8');
+		}
+	};
+
+	struct NoParams
+	{
+		void SerializeWith(TSerialize ser) {};
+	};
+
 	enum EActorSpectatorMode
 	{
 		eASM_None = 0,												// normal, non-spectating
@@ -645,20 +697,23 @@ public:
 	DECLARE_SERVER_RMI_NOATTACH_FAST(SvRequestUseItem, ItemIdParam, eNRT_ReliableOrdered);
 	// cannot be _FAST - see comment on InvokeRMIWithDependentObject
 	DECLARE_CLIENT_RMI_NOATTACH(ClPickUp, PickItemParams, eNRT_ReliableOrdered);
+	DECLARE_CLIENT_RMI_NOATTACH(ClClearInventory, NoParams, eNRT_ReliableOrdered);
+
 	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClDrop, DropItemParams, eNRT_ReliableOrdered);
 	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClStartUse, ItemIdParam, eNRT_ReliableOrdered);
 	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClStopUse, ItemIdParam, eNRT_ReliableOrdered);
 
-	DECLARE_CLIENT_RMI_PREATTACH(ClSetSpectatorMode, SetSpectatorModeParams, eNRT_ReliableUnordered);
+	DECLARE_CLIENT_RMI_PREATTACH(ClSetSpectatorMode, SetSpectatorModeParams, eNRT_ReliableOrdered);
+	DECLARE_CLIENT_RMI_PREATTACH(ClSetSpectatorHealth, SetSpectatorHealthParams, eNRT_ReliableOrdered);
 
 	DECLARE_CLIENT_RMI_PREATTACH(ClRevive, ReviveParams, eNRT_ReliableOrdered);
 	DECLARE_CLIENT_RMI_PREATTACH(ClReviveInVehicle, ReviveInVehicleParams, eNRT_ReliableOrdered);
+	DECLARE_CLIENT_RMI_POSTATTACH(ClSimpleKill, NoParams, eNRT_ReliableOrdered);
 	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClKill, KillParams, eNRT_ReliableOrdered);
 	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClMoveTo, MoveParams, eNRT_ReliableOrdered);
 
-	// these need to be pre-attached to keep the ordering with ClRevive
-	DECLARE_CLIENT_RMI_PREATTACH(ClSetAmmo, AmmoParams, eNRT_ReliableOrdered);
-	DECLARE_CLIENT_RMI_PREATTACH(ClAddAmmo, AmmoParams, eNRT_ReliableOrdered);
+	DECLARE_CLIENT_RMI_NOATTACH(ClSetAmmo, AmmoParams, eNRT_ReliableOrdered);
+	DECLARE_CLIENT_RMI_NOATTACH(ClAddAmmo, AmmoParams, eNRT_ReliableOrdered);
 
 	CItem *GetItem(EntityId itemId) const;
 	CItem *GetItemByClass(IEntityClass* pClass) const;
@@ -667,19 +722,22 @@ public:
 
 	virtual void SelectNextItem(int direction, bool keepHistory, const char *category=0);
 	virtual void HolsterItem(bool holster);
-	virtual void SelectLastItem(bool keepHistory);
+	virtual void SelectLastItem(bool keepHistory, bool forceNext = false);
 	virtual void SelectItemByName(const char *name, bool keepHistory);
 	virtual void SelectItem(EntityId itemId, bool keepHistory);
 
 	virtual bool UseItem(EntityId itemId);
 	virtual bool PickUpItem(EntityId itemId, bool sound);
 	virtual bool DropItem(EntityId itemId, float impulseScale=1.0f, bool selectNext=true, bool byDeath=false);
+	virtual void DropAttachedItems();
 
-	virtual void NetReviveAt(const Vec3 &pos, const Quat &rot, bool cleanInv, int teamId);
-	virtual void NetReviveInVehicle(EntityId vehicleId, int seatId, bool cleanInv, int teamId);
-	virtual void NetKill(EntityId shooterId, EntityId weaponId, int damage, int material, bool headshot);
+	virtual void NetReviveAt(const Vec3 &pos, const Quat &rot, int teamId);
+	virtual void NetReviveInVehicle(EntityId vehicleId, int seatId, int teamId);
+	virtual void NetSimpleKill();
+	virtual void NetKill(EntityId shooterId, uint16 weaponClassId, int damage, int material, int hit_type);
 
 	virtual void SetSleepTimer(float timer);
+	Vec3 GetWeaponOffsetWithLean(EStance stance, float lean, const Vec3& eyeOffset);
 		
 public:
 	CActor();
@@ -689,8 +747,9 @@ public:
 	virtual void ProcessEvent(SEntityEvent& event);
 	virtual void Release() { delete this; };
 	virtual void ResetAnimGraph();
-	virtual void Serialize( TSerialize ser, unsigned aspects );
-	virtual void PostSerialize() {}
+	virtual void FullSerialize( TSerialize ser );
+	virtual bool NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int flags );
+	virtual void PostSerialize();
 	virtual void SerializeSpawnInfo( TSerialize ser );
 	virtual ISerializableInfoPtr GetSpawnInfo();
 	virtual void SetChannelId(uint16 id);
@@ -701,7 +760,7 @@ public:
 	virtual IMaterial *GetReplacementMaterial() { return m_pReplacementMaterial; };
 
 	virtual bool Init( IGameObject * pGameObject );
-	virtual void InitClient( int channelId ) {};
+	virtual void InitClient( int channelId );
 	virtual void PostInit( IGameObject * pGameObject );
 	virtual void PostInitClient(int channelId) {};
 	virtual void Update(SEntityUpdateContext& ctx, int updateSlot);
@@ -717,28 +776,38 @@ public:
 
 	virtual void HandleEvent( const SGameObjectEvent& event );
 	virtual void PostUpdate(float frameTime);
+	virtual void PostRemoteSpawn() {};
 
 	virtual bool IsThirdPerson() const { return true; };
   virtual void ToggleThirdPerson(){}
 
 
 	virtual void RequestFacialExpression(const char* pExpressionName /* = NULL */);
+	virtual void PrecacheFacialExpression(const char* pExpressionName);
+
+	virtual void NotifyInventoryAmmoChange(IEntityClass* pAmmoClass, int amount);
+	virtual EntityId	GetGrabbedEntityId() const { return 0; }
+
+	virtual void HideAllAttachments(bool isHiding);
 
 	// ~IActor
+
+	// IGameObjectProfileManager
+	virtual bool SetAspectProfile( EEntityAspects aspect, uint8 profile );
+	virtual uint8 GetDefaultProfile( EEntityAspects aspect ) { return aspect == eEA_Physics? eAP_NotPhysicalized : 0; }
+	// ~IGameObjectProfileManager
 
 	// IActionListener
 	virtual void OnAction(const ActionId& actionId, int activationMode, float value);
 	// ~IActionListener
 
-	// IGameObjectPhysics
-	virtual bool SetProfile( uint8 profile );
-	virtual bool SerializeProfile( TSerialize ser, uint8 profile, int pflags );
-	virtual uint8 GetDefaultProfile() { return eAP_Alive; }
-	// ~IGameObjectPhysics
-
 	virtual void ProfileChanged( uint8 newProfile );
 
 	//------------------------------------------------------------------------
+	float GetAirControl() const { return m_airControl; };
+	float GetAirResistance() const { return m_airResistance; };
+	float GetTimeImpulseRecover() const { return m_timeImpulseRecover; };
+
 	virtual void SetViewRotation( const Quat &rotation ) {};
 	virtual Quat GetViewRotation() const { return GetEntity()->GetRotation(); };
 	virtual void EnableTimeDemo( bool bTimeDemo ) {};
@@ -751,7 +820,7 @@ public:
 	virtual void Revive( bool fromInit = false );
   virtual void Reset(bool toGame) {};
 	//physicalization
-	virtual void Physicalize();
+	virtual void Physicalize(EStance stance=STANCE_NULL);
 	virtual void PostPhysicalize();
 	virtual void RagDollize( bool fallAndPlay );
 	//
@@ -759,10 +828,11 @@ public:
 
 	virtual void SetSpectatorMode(uint8 mode, EntityId targetId) {};
 	virtual uint8 GetSpectatorMode() const { return 0; };
-
-	virtual EntityId GetSpectatorTarget() const { return 0; };
 	virtual void SetSpectatorTarget(EntityId targetId) {};
-
+	virtual EntityId GetSpectatorTarget() const { return 0; };
+	virtual void SetSpectatorHealth(int health) {};
+	virtual int GetSpectatorHealth() const { return 0; };
+	
 	//get actor status
 	virtual SActorStats *GetActorStats() { return 0; };
 	virtual const SActorStats *GetActorStats() const { return 0; };
@@ -775,18 +845,18 @@ public:
 	virtual void SetParams(SmartScriptTable &rTable,bool resetFirst = false);
 	virtual bool GetParams(SmartScriptTable &rTable) { return false; };
 	//
-	virtual void Freeze(bool freeze);
-	virtual void Fall(Vec3 hitPos = Vec3(0,0,0), bool forceFall = false);
+	virtual void Freeze(bool freeze) {};
+	virtual void Fall(Vec3 hitPos = Vec3(0,0,0), bool forceFall = false, float time = 0.0f);
 	//throw away the actors helmet (if available) [Jan Müller]
 	virtual bool LooseHelmet(Vec3 hitDir = Vec3(0,0,0), Vec3 hitPos = Vec3(0,0,0));
 	virtual void GoLimp();
 	virtual void StandUp();
-	bool	IsFallen() const;
+	virtual bool IsFallen() const;
 	//
 	virtual IEntity *LinkToVehicle(EntityId vehicleId);
 	virtual IEntity *LinkToVehicleRemotely(EntityId vehicleId);
 	virtual void LinkToMountedWeapon(EntityId weaponId) {};
-	virtual IEntity *LinkToEntity(EntityId entityId);
+	virtual IEntity *LinkToEntity(EntityId entityId, bool bKeepTransformOnDetach=true);
 	
 	ILINE virtual IEntity *GetLinkedEntity() const
 	{
@@ -797,6 +867,8 @@ public:
 	{
 		return m_linkStats.GetLinkedVehicle();
 	}
+
+	virtual void SetViewInVehicle(Quat viewRotation) {};
 
 	virtual void SupressViewBlending() {};
 
@@ -829,6 +901,8 @@ public:
 	virtual void AddAngularImpulse(const Ang3 &angular,float deceleration=0.0f,float duration=0.0f){}
 	//
 	virtual void SetViewLimits(Vec3 dir,float rangeH,float rangeV) {};
+	virtual void SetZoomSpeedMultiplier(float m);
+	virtual float GetZoomSpeedMultiplier() const;
 	virtual void SetHealth( int health );
 	virtual void DamageInfo(EntityId shooterID, EntityId weaponID, float damage, const char *damageType);
 	virtual IAnimatedCharacter * GetAnimatedCharacter() { return m_pAnimatedCharacter; }
@@ -844,22 +918,30 @@ public:
   virtual float GetFrozenAmount(bool stages=false) const { return m_frozenAmount; }
   void SetFrozenAmount(float amount);  
   
-  ILINE bool IsFrozen();  
+  bool IsFrozen();
   virtual void AddFrost(float frost);  
 
 	virtual void BindInputs( IAnimationGraphState * pAGState );
 	//marcok: GC hack
 	virtual bool IsSwimming() {	return false; }
+	virtual bool ShouldSwim(){ return false; };
+
+	virtual bool IsSprinting() { return false;}
+	virtual bool CanFire(){ return true; }
 
 	//stances
 	ILINE virtual EStance GetStance() const 
 	{
+/*
 		if(!m_pAnimatedCharacter)
 			return STANCE_NULL;
 		int stance = m_pAnimatedCharacter?m_pAnimatedCharacter->GetCurrentStance():STANCE_NULL;
+
 		if (stance < 0 || stance > STANCE_LAST)
 			return STANCE_NULL;
 		return (EStance)stance;
+*/
+		return m_stance;
 	}
 	ILINE const SStanceInfo *GetStanceInfo(EStance stance) const 
 	{
@@ -937,6 +1019,8 @@ public:
 	virtual void UpdateGrab(float frameTime);
 	
 	virtual bool CheckInventoryRestrictions(const char *itemClassName);
+	virtual bool CheckVirtualInventoryRestrictions(const std::vector<string> &inventory, const char *itemClassName);
+
 	virtual bool CanPickUpObject(IEntity *obj, float& heavyness, float& volume);
 	virtual bool CanPickUpObject(float mass, float volume);
 	virtual float GetActorStrength() const;
@@ -961,7 +1045,7 @@ public:
 	//stances
 	virtual void	SetStance(EStance stance);
 	virtual void  StanceChanged(EStance last) {};
-  virtual bool	TrySetStance(EStance stance) { return true; }		//Only for the player
+  virtual bool	TrySetStance(EStance stance); // Shared between humans and aliens.
 	//
 	
 	IAnimationGraphState * GetAnimationGraphState();
@@ -984,11 +1068,14 @@ public:
 
 	virtual void UpdateFootSteps(float frameTime);
 	CScreenEffects *GetScreenEffects() {return m_screenEffects;};
+	CWeaponAttachmentManager* GetWeaponAttachmentManager() { return m_pWeaponAM; }
+	void InitActorAttachments();
 
 	virtual void SwitchDemoModeSpectator(bool activate) {};	//this is a player only function
 
 	//misc
 	virtual void ReplaceMaterial(const char *strMaterial);
+	virtual void SendMusicLogicEvent(EMusicLogicEvents event){};
 	
 	// ugly: replace by real class system
 	static  const char* GetActorClassType() { return "CActor"; }
@@ -1020,14 +1107,18 @@ protected:
 
 	virtual Vec3 GetModelOffset() const { return GetStanceInfo(GetStance())->modelOffset; }
 
-	virtual void CreateActorFaceAttachments();
-
 private:
 	mutable IInventory * m_pInventory;
 	mutable IInteractor * m_pInteractor;
 	void ClearExtensionCache();
+	void CrapDollize();
 
 protected:
+	void RequestServerResync()
+	{
+		if (!IsClient())
+			GetGameObject()->RequestRemoteUpdate(eEA_Physics | eEA_GameClientDynamic | eEA_GameServerDynamic | eEA_GameClientStatic | eEA_GameServerStatic);
+	}
 
 	void GetActorMemoryStatistics( ICrySizer * pSizer );
 	
@@ -1047,11 +1138,12 @@ protected:
 
  
 	EStance m_stance;
-	EStance m_stanceCollider;
-	bool m_forceUpdateStanceCollider;
+	EStance m_desiredStance;
 
 	static SStanceInfo m_defaultStance;
 	SStanceInfo m_stances[STANCE_LAST];
+
+	float m_zoomSpeedMultiplier;
 
 	SmartScriptTable m_actorStats;
 
@@ -1079,6 +1171,11 @@ protected:
 	// ScreenEffects-related variables
 	CScreenEffects *m_screenEffects;
 
+	// Weapon Attachment manager
+	CWeaponAttachmentManager *m_pWeaponAM;
+
+	uint8 m_currentPhysProfile;
+
 	EBonesID m_currentFootID;
 
 	float m_fallAndPlayTimer;
@@ -1089,12 +1186,18 @@ protected:
 	bool m_rightFoot;
 	bool m_bHasHUD;
 
-	//helmet serialization
-	EntityId	m_lostHelmet;
-	string		m_lostHelmetObj;
+	float m_airControl;
+	float m_airResistance;
+	float m_timeImpulseRecover;
 
-	bool m_bLastItemCloaked;
-	_smart_ptr<IMaterial> m_lastCloakMat;
+	EntityId m_netLastSelectablePickedUp;
+
+	//helmet serialization
+	EntityId	m_lostHelmet, m_serializeLostHelmet;
+	string		m_lostHelmetObj, m_serializelostHelmetObj;
+	string		m_lostHelmetMaterial;
+	string		m_lostHelmetPos;
+
 	_smart_ptr<IMaterial> m_pReplacementMaterial;
 
 	//
@@ -1102,7 +1205,7 @@ protected:
   std::map< IAttachmentObject*, _smart_ptr<IMaterial> > m_attchObjMats;
   //std::map< EntityId, IMaterial* > m_wepAttchMats;
 
-	float			m_sleepTimer;
+	float			m_sleepTimer,m_sleepTimerOrg;
 
 	int				m_teamId;
 	EntityId	m_lastItemId;

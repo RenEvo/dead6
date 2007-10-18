@@ -39,6 +39,8 @@ enum ENanoMode
 	NANOMODE_STRENGTH,
 	NANOMODE_CLOAK,
 	NANOMODE_DEFENSE,
+	NANOMODE_INVULNERABILITY,
+	NANOMODE_DEFENSE_HIT_REACTION,
 	//
 	NANOMODE_LAST
 };
@@ -69,19 +71,42 @@ enum ENanoSound
 	ESound_SuitSpeedActivate,
 	ESound_SuitArmorActivate,
 	ESound_SuitCloakActivate,
+	ESound_SuitCloakFeedback,
 	ESound_GBootsActivated,
 	ESound_GBootsDeactivated,
 	ESound_ZeroGThruster,
 	ESound_GBootsLanded,
 	ESound_FreeFall,
 	ESound_ColdBreath,
+	ESound_AISuitHumming,
+	ESound_AISuitCloakFeedback,
 	ESound_Suit_Last
+};
+
+enum ENanoAction
+{
+	eNA_None,
+	eNA_Jump,
+	eNA_Forward,
+	eNA_Backward,
+	eNA_Sprint,
+	eNA_Cloak,
+	eNA_ArmorCharge,
+	eNA_Crouch,
+	eNA_Melee,
+	eNA_Skin,
 };
 
 struct SNanoSlot
 {
 	float desiredVal;
 	float realVal;
+	
+	SNanoSlot()
+	{
+		desiredVal=0.0f;
+		realVal=0.0f;
+	};
 };
 
 class CNanoSuit;
@@ -100,7 +125,7 @@ struct SNanoCloak
 	void Reset()
 	{
 		//default is normal mode
-		m_mode = CLOAKMODE_CHAMELEON;
+		m_mode = CLOAKMODE_REFRACTION;
 		m_active = false;
 
 		m_energyCost = 6.0f;	//this stuff is set from BasicActor.lua
@@ -168,6 +193,9 @@ public:
 		SNanoMaterial() : body(0), helmet(0), arms(0){}
 	};
 
+	static SNanoMaterial* GetNanoMaterial(ENanoMode mode, bool bAsian=false);
+	static bool AssignNanoMaterialToEntity(IEntity* pEntity, SNanoMaterial* pNanoMaterial);
+
 	CNanoSuit();
 	~CNanoSuit();
 
@@ -182,13 +210,23 @@ public:
 	void Serialize( TSerialize ser, unsigned aspects );
 	void GetMemoryStatistics(ICrySizer * s);
 
+	bool Tap(ENanoAction nanoAction);
+	bool AttemptAction(ENanoAction nanoAction);
+	void ConsumeAction();
+	ENanoAction PendingAction() const {	return m_pendingAction;	}
+
 	void Death();
+	void Hit(int damage);
 
 	//setting
-	void SetSuitEnergy(float value);
+	void SetSuitEnergy(float value, bool playerInitiated = false);
 	bool SetMode(ENanoMode mode, bool forceUpdate = false);
 	void SetCloakLevel(ENanoCloakMode mode); // currently 0 - 3
 	void SetParams(SmartScriptTable &rTable,bool resetFirst);
+
+	void SetInvulnerability(bool invulnerable);
+	void SetInvulnerabilityTimeout(float timeout);
+	bool IsInvulnerable() const { return m_invulnerable; };
 
 	//getting
 	ENanoMode GetMode() const { return m_currentMode; };
@@ -201,15 +239,18 @@ public:
 	ILINE float GetHealthRegenRate() { return m_healthRegenRate; }
 	ILINE const CPlayer* GetOwner() const { return m_pOwner; }
 	ILINE const SNanoCloak *GetCloak() { return &m_cloak; }
-	ILINE bool IsNightVisionEnabled() const { return m_bNightVisionEnabled; };
+	ILINE bool IsNightVisionEnabled() const { return (m_bNightVisionEnabled && m_active); };
 	ILINE void EnableNightVision(bool enable) { m_bNightVisionEnabled=enable; };
 	//get sprinting multiplier for ground movement
-	float GetSprintMultiplier();
+	float GetSprintMultiplier(bool strafing);
+	void SetCloak(bool on, bool force=false);
 
 	//set energy back to max
 	void ResetEnergy();
 	//plays an ENanoSound
 	void PlaySound(ENanoSound sound, float param = 1.0f, bool stopSound = false);
+
+	void SelectSuitMaterial();
 
 	// listener 
 	void AddListener(INanoSuitListener* pListener);
@@ -217,20 +258,19 @@ public:
 
 private:
 	void Precache();
-	int IDByName(char *slotStr);
 	void Balance(float energy);
 	bool SetAllSlots(float armor, float strength, float speed);
-	void SetCloak(bool on, bool force=false);
-	void SelectSuitMaterial();
 	int  GetButtonFromMode(ENanoMode mode);
-	void UpdateSprinting(float &recharge, SPlayerStats &stats, float frametime);
+	void UpdateSprinting(float &recharge, const SPlayerStats &stats, float frametime);
 
 	IGameFramework *m_pGameFramework;
 	
 	CPlayer*			m_pOwner;
 	SNanoMaterial*m_pNanoMaterial;
 
-	SNanoCloak m_cloak;
+	SNanoCloak	m_cloak;
+	ENanoAction	m_lastTap;
+	ENanoAction	m_pendingAction;
 
 	// basic variables
 	float m_energy;
@@ -239,17 +279,22 @@ private:
 	float m_healthAccError;
 	float m_healthRegenRate;
 	float m_activationTime;
+	float m_invulnerabilityTimeout;
 	bool m_active;
 	bool m_bWasSprinting;
 	bool m_bSprintUnderwater;
 
 	bool m_bNightVisionEnabled;
+	bool m_invulnerable;
 
 	// timing helpers
 	float m_now;
 	float m_lastTimeUsedThruster;
 	float m_healTime;
 	float m_startedSprinting;
+	float m_energyRechargeDelay;
+	float m_healthRegenDelay;
+	float m_defenseHitTimer;
 
 	//this is used as a mask for nanosuit features
 	uint16 m_featureMask;
@@ -260,7 +305,17 @@ private:
 
 	//sound playback
 	float		m_fLastSoundPlayedMedical;
-	tSoundID m_sounds[ESound_Suit_Last];
+
+	struct SSuitSound
+	{
+		tSoundID ID;
+		bool bLooping;
+		bool b3D;
+		int nMassIndex;
+		int nSpeedIndex;
+		int nStrengthIndex;
+	};
+	SSuitSound m_sounds[ESound_Suit_Last];
 
 	std::vector<INanoSuitListener*> m_listeners;
 };

@@ -184,7 +184,7 @@ struct struct_VERTEX_FORMAT_P3F_COL4UB_RES4UB_TEX2F_PS4F
 {
   Vec3 xyz;
   UCol color;
-	UCol reserved;		// w = backlight, xy = displacement
+	UCol reserved;		// w = backlight, xy = displacement, z = polygon break
   float st[2];
 	Vec2 xaxis;
 	Vec2 yaxis;
@@ -197,6 +197,14 @@ struct struct_VERTEX_FORMAT_P3F_COL4UB_RES4UB_TEX2F_PS4F
 	inline void SetBacklighting( float f)
 	{
 		reserved.bcolor[0] = UnitUFloatToUInt8(f);
+	}
+	inline void SetPolygonBreak(bool b)
+	{
+		reserved.bcolor[3] = b;
+	}
+	inline uint8 GetPolygonBreak() const
+	{
+		return reserved.bcolor[3];
 	}
 };
 
@@ -318,46 +326,6 @@ struct SAuxVertex
 
 _inline void *CreateVertexBuffer(int nFormat, int nVerts)
 {
-#if defined(PS3)
-	//COMPILER_BUG (03/2007): the current ps3 compiler puts the switch statement into the 
-	//	linkonce section but jump tables > 8 entries use a toc so this is not linkable for different modules
-	if(nFormat ==  VERTEX_FORMAT_P3F)
-		return new struct_VERTEX_FORMAT_P3F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_P3F_COL4UB_TEX2F)
-		return new struct_VERTEX_FORMAT_P3F_COL4UB_TEX2F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_P3F_N4B_COL4UB)
-		return new struct_VERTEX_FORMAT_P3F_N4B_COL4UB[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_P3F_TEX2F)
-		return new struct_VERTEX_FORMAT_P3F_TEX2F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_P4S_COL4UB_TEX2F)
-		return new struct_VERTEX_FORMAT_P4S_COL4UB_TEX2F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_P4S_TEX2F)
-		return new struct_VERTEX_FORMAT_P4S_TEX2F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_P3F_COL4UB)
-		return new struct_VERTEX_FORMAT_P3F_COL4UB[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_TRP3F_COL4UB_TEX2F)
-		return new struct_VERTEX_FORMAT_TRP3F_COL4UB_TEX2F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_TRP3F_TEX2F_TEX3F)
-		return new struct_VERTEX_FORMAT_TRP3F_TEX2F_TEX3F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_P3F_TEX3F)
-		return new struct_VERTEX_FORMAT_P3F_TEX3F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_P3F_TEX2F_TEX3F)
-		return new struct_VERTEX_FORMAT_P3F_TEX2F_TEX3F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_TEX2F)
-		return new struct_VERTEX_FORMAT_TEX2F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_WEIGHTS4UB_INDICES4UB_P3F)
-		return new struct_VERTEX_FORMAT_WEIGHTS4UB_INDICES4UB_P3F[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_2xP3F_INDEX4UB)
-		return new struct_VERTEX_FORMAT_2xP3F_INDEX4UB[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_COL4UB_COL4UB)
-		return new struct_VERTEX_FORMAT_COL4UB_COL4UB[nVerts];
-	if(nFormat ==  VERTEX_FORMAT_P3F_COL4UB_RES4UB_TEX2F_PS4F)
-	{
-		assert(!"returning non-array which will subsequently get deleted with delete[].");
-		return new struct_VERTEX_FORMAT_P3F_COL4UB_RES4UB_TEX2F_PS4F[nVerts];
-	}
-	assert(0);
-#else
   switch(nFormat)
   {
     case VERTEX_FORMAT_P3F:
@@ -413,7 +381,6 @@ _inline void *CreateVertexBuffer(int nFormat, int nVerts)
     default:
       assert(0);
   }
-#endif//PS3
   return NULL;
 }
 
@@ -484,7 +451,6 @@ struct SVertexStream
 {
   void *m_VData;      // pointer to buffer data
   UHWBuf m_VertBuf;   // HW buffer descriptor
-  int m_nItems;
   bool m_bLocked;     // Used in Direct3D only
   bool m_bDynamic;
   int m_nBufOffset;
@@ -501,7 +467,6 @@ struct SVertexStream
   {
     m_VData = NULL;
     m_VertBuf.m_pPtr = NULL;
-    m_nItems = 0;
     m_bLocked = false;
   }
   void *GetStream(int *nOffs)
@@ -526,9 +491,7 @@ public:
     {
       m_VS[i].Reset();
     }
-    m_NumVerts = 0;
-    m_vertexformat = 0;
-    m_BaseVertex = 0;
+    m_nVertexFormat = 0;
   }
 
   CVertexBuffer(void* pData, int nVertexFormat, int nVertCount=0)
@@ -540,9 +503,7 @@ public:
       m_VS[i].m_bLocked = false;
     }
     m_VS[VSF_GENERAL].m_VData = pData;
-    m_vertexformat = nVertexFormat;
-    m_NumVerts = nVertCount;
-    m_BaseVertex = 0;
+    m_nVertexFormat = nVertexFormat;
   }
   void *GetStream(int nStream, int *nOffs)
   {
@@ -551,9 +512,7 @@ public:
 
   SVertexStream m_VS[VSF_NUM]; // 4 vertex streams and one index stream
 
-  int   m_vertexformat;
-  int   m_NumVerts;
-  int   m_BaseVertex;
+  int m_nVertexFormat;
 
   int Size(int Flags, int nVerts);
 };

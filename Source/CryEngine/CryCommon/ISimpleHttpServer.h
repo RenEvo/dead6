@@ -28,9 +28,6 @@ struct ISimpleHttpServer
 	// stops the HTTP server
 	virtual void Stop() = 0;
 
-	// updates the HTTP server
-	virtual void Update() = 0;
-
 	enum EStatusCode {eSC_Okay, eSC_BadRequest, eSC_NotFound, eSC_RequestTimeout, eSC_NotImplemented, eSC_ServiceUnavailable, eSC_UnsupportedVersion, eSC_InvalidStatus};
 	enum EContentType {eCT_HTML, eCT_XML, eCT_MAX};
 	virtual void SendResponse(EStatusCode statusCode, EContentType contentType, const string& content, bool closeConnection = false) = 0;

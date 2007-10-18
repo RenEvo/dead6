@@ -65,9 +65,9 @@ LANGUAGE LANG_GERMAN, SUBLANG_GERMAN
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,0,0,1
- PRODUCTVERSION 1,0,0,1
- FILEFLAGSMASK 0x17L
+ FILEVERSION 1,1,1,5634
+PRODUCTVERSION 1,1,1,5634
+FILEFLAGSMASK 0x17L
 #ifdef _DEBUG
  FILEFLAGS 0x1L
 #else
@@ -82,10 +82,10 @@ BEGIN
         BLOCK "000904b0"
         BEGIN
             VALUE "CompanyName", "Crytek GmbH"
-            VALUE "FileVersion", "1, 0, 0, 1"
-            VALUE "LegalCopyright", "Copyright (C) Crytek GmbH"
+            VALUE "FileVersion", "1, 1, 1, 5634"
+            VALUE "LegalCopyright", "(C) 2007 Crytek GmbH"
             VALUE "ProductName", "CryEngine2"
-            VALUE "ProductVersion", "1, 0, 0, 1"
+            VALUE "FileVersion", "1, 1, 1, 5634"
         END
     END
     BLOCK "VarFileInfo"
@@ -94,6 +94,22 @@ BEGIN
     END
 END
 
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Cursor
+//
+
+IDC_CURSOR1             CURSOR                  "Cursor_Green.cur"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDI_ICON1               ICON                    "Crysis.ico"
 #endif    // German (Germany) resources
 /////////////////////////////////////////////////////////////////////////////
 

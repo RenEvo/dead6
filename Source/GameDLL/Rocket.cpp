@@ -29,7 +29,7 @@ CRocket::~CRocket()
 	//LAW might be dropped automatically (to be sure that works in MP too)
 	if(CWeapon* pWeapon = GetWeapon())
 	{
-		if(pWeapon->IsAutoDroppable() && (!pWeapon->GetOwnerId() || pWeapon->GetOwnerId()==GetOwnerId()))
+		if(pWeapon->IsAutoDroppable())
 			pWeapon->AutoDrop();
 	}
 }
@@ -42,7 +42,7 @@ void CRocket::HandleEvent(const SGameObjectEvent &event)
 
 	CProjectile::HandleEvent(event);
 
-	if (!gEnv->bServer || GetISystem()->IsDemoMode() == 2)
+	if (!gEnv->bServer || IsDemoPlayback())
 		return;
 
 	if (event.event == eGFE_OnCollision)
@@ -62,19 +62,14 @@ void CRocket::HandleEvent(const SGameObjectEvent &event)
 			gEnv->pPhysicalWorld->GetSurfaceParameters(pCollision->idmat[1], bouncy, friction, pierceabilityMat);
 
 			pe_params_particle params;
-			pCollision->pEntity[0]->GetParams(&params);
+			
+			if(pCollision->pEntity[0]->GetParams(&params)==0)
+				SetDefaultParticleParams(&params);
 			
 			if((params.velocity>1.0f) && (pCollision->idmat[1] != CBullet::GetWaterMaterialId())
 				&& (!pCollision->pEntity[1] || (pCollision->pEntity[1]->GetType() != PE_LIVING && pCollision->pEntity[1]->GetType() != PE_ARTICULATED)))
 			{
-				//Just check entity velocity (should be 0 if not pierceable, even when material is wrong set)
-				// hack for pierceability on terrain - zero bounding boxes is terrain, which will cause rocket to explode regardless of pierceability logic
-				//pe_params_bbox bbox;
-				//pCollision->pEntity[1]->GetParams(&bbox);
-
-				//If not water and not an actor...
-				//if( (!bbox.BBox[0].IsZero() || !bbox.BBox[1].IsZero()) && pierceabilityMat>=params.iPierceability )
-				if(pierceabilityMat>=params.iPierceability)
+				if(pierceabilityMat>params.iPierceability)
 					return;
 			}
 
@@ -94,5 +89,11 @@ void CRocket::Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity, flo
 	m_launchLoc=pos;
 
 	m_safeExplosion = GetParam("safeexplosion", m_safeExplosion);
+
+	if(CWeapon* pWeapon = GetWeapon())
+	{
+		if(pWeapon->IsAutoDroppable())
+			pWeapon->AddFiredRocket();
+	}
 }
 

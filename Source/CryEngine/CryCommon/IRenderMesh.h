@@ -60,8 +60,8 @@ struct IRenderMesh
 	// Creates an indexed mesh from this render mesh (accepts an optional pointer to an IIndexedMesh object that should be used)
 	virtual IIndexedMesh* GetIndexedMesh(IIndexedMesh *pIdxMesh=0) = 0;
 
-	virtual void SetSysVertCount( int nCount ) = 0;
-	virtual int GetSysVertCount() = 0;
+	virtual void SetVertCount( int nCount ) = 0;
+	virtual int GetVertCount() = 0;
 
 	virtual unsigned short *GetIndices(int * pIndicesCount) = 0;
 
@@ -80,9 +80,11 @@ struct IRenderMesh
 
 	virtual IRenderMesh *GetVertexContainer() = 0;
 	virtual PodArray<CRenderChunk> *	GetChunks() = 0;
+  virtual PodArray<CRenderChunk> *	GetChunksSkinned() = 0;
+  virtual void CreateChunksSkinned() = 0;
 	
-	virtual void SetIndicesCount( uint32 nIndices ) = 0;
-	virtual uint32 GetIndicesCount() = 0;
+	virtual void SetSysIndicesCount( uint32 nIndices ) = 0;
+	virtual uint32 GetSysIndicesCount() = 0;
 
 	virtual CVertexBuffer * GetSysVertBuffer() = 0;
 	virtual void AddRenderElements(CRenderObject * pObj=0, int nSortId=EFSLIST_GENERAL, int nAW=1, IMaterial * pIMatInfo=NULL, int nTechniqueID=0) = 0;
@@ -102,6 +104,7 @@ struct IRenderMesh
 	virtual IMaterial* GetMaterial() = 0;
 	virtual void SetBBox(const Vec3 & vBoxMin, const Vec3 & vBoxMax) = 0;
 	virtual void GetBBox(Vec3 & vBoxMin, Vec3 & vBoxMax) = 0;
+  virtual void UpdateBBoxFromMesh() = 0;
 	virtual void InvalidateVideoBuffer(int flags=-1) = 0;
 	virtual void AddRE(CRenderObject * pObj, IShader * pEf, int nList=EFSLIST_GENERAL, int nAW=1) = 0;
 	virtual uint GetUpdateFrame() = 0;
@@ -111,7 +114,7 @@ struct IRenderMesh
 	virtual int	GetPrimetiveType() = 0;
 	virtual int GetVertexFormat() = 0;
 //	virtual bool CreateFromVertexBufferSource( struct VertexBufferSource* pSource ) = 0;
-	virtual void Render(const struct SRendParams & rParams, CRenderObject * pObj, IMaterial *pMaterial) = 0;
+	virtual void Render(const struct SRendParams & rParams, CRenderObject * pObj, IMaterial *pMaterial, bool bSkinned=false) = 0;
 	virtual void RenderDebugLightPass(const Matrix34 & mat, const int nLightMask, const float fAlpha, const int nMaxLightNumber) = 0;
 	virtual uint * GetPhysVertexMap() = 0;
 	virtual void SetPhysVertexMap(uint * pVtxMap) = 0;
@@ -146,7 +149,6 @@ struct IRenderMesh
 	// Return:
 	//    Size of texture memory in bytes.
 	virtual int GetTextureMemoryUsage( IMaterial *pMaterial,ICrySizer *pSizer=NULL ) = 0;
-  virtual void SetDontReallocate(bool bDontReallocate=true) = 0;
 	virtual float GetAverageTrisNumPerChunk(IMaterial * pMat) = 0;
 };
 

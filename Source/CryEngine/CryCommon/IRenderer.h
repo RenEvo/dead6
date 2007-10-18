@@ -162,7 +162,7 @@ public:
 
   void CalcTileVerts(Vec3 *V, f32 nPosX, f32 nPosY, f32 nGridSizeX, f32 nGridSizeY) const;    // CALCS EIGHT CORNERS FOR TILE OF VIEW-FRUSTUM 
 
-  void CalcRegionVerts(Vec3 *V, Vec2& vMin, Vec2& vMax) const;
+  void CalcRegionVerts(Vec3 *V, const Vec2& vMin, const Vec2& vMax) const;
 
   void CalcTiledRegionVerts(Vec3 *V, Vec2& vMin, Vec2& vMax, f32 nPosX, f32 nPosY, f32 nGridSizeX, f32 nGridSizeY) const;
 
@@ -488,7 +488,7 @@ inline void CRenderCamera::CalcTiledRegionVerts(Vec3 *V, Vec2& vMin, Vec2& vMax,
 }
 
 
-inline void CRenderCamera::CalcRegionVerts(Vec3 *V, Vec2& vMin, Vec2& vMax) const
+inline void CRenderCamera::CalcRegionVerts(Vec3 *V, const Vec2& vMin, const Vec2& vMax) const
 {
   float NearZ = -Near;
 
@@ -702,7 +702,6 @@ private:
 // Render features
 
 #define RFT_MULTITEXTURE 1
-#define RFT_BUMP         2
 #define RFT_OCCLUSIONQUERY 4
 #define RFT_PALTEXTURE   8      // Support paletted textures
 #define RFT_HWGAMMA      0x10
@@ -719,11 +718,12 @@ private:
 
 #define RFT_HW_GF2        0x10000 // GF2 class hardware (ATI Radeon 7500 as well :) )
 #define RFT_HW_GF3        0x20000 // NVidia GF3 class hardware (ATI Radeon 8500 as well :) )
-#define RFT_HW_ATI 0x30000 // ATI R300 class hardware
-#define RFT_HW_CUBAGL   0x40000 // Nintendo Game-Cube
+#define RFT_HW_ATI				0x30000 // unclassified ATI hardware
+#define RFT_HW_NVIDIA     0x40000 // unclassified NVidia hardware
 #define RFT_HW_GFFX       0x50000 // Geforce FX class hardware
 #define RFT_HW_NV4X       0x60000 // NV4X class hardware
 #define RFT_HW_MASK       0x70000 // Graphics chip mask
+
 #define RFT_HW_HDR        0x80000 // Hardware supports high dynamic range rendering
 
 #define RFT_HW_PS20       0x100000  // Pixel shaders 2.0
@@ -735,6 +735,7 @@ private:
 #define RFT_DIRECTACCESSTOVIDEOMEMORY   0x10000000
 #define RFT_RGBA          0x20000000 // RGBA order (otherwise BGRA)
 #define RFT_DEPTHMAPS     0x40000000 // depth maps are supported
+#define RFT_HW_VERTEXTEXTURES 0x80000000 // vertex texture fecthing supported
 
 //====================================================================
 // PrecacheResources flags
@@ -1174,10 +1175,13 @@ struct IRenderer//: public IRendererCallbackServer
 	
   //! Shut down the renderer
   virtual void  ShutDown(bool bReInit=false)=0;
+  virtual void  ShutDownFast()=0;
 
   //! Creates array of all supported video formats (except low resolution formats)
 	//! Returns number of formats in memory
   virtual int EnumDisplayFormats(SDispFormat *Formats)=0;
+	//! Return all supported by video card video AA formats
+	virtual int EnumAAFormats(const SDispFormat &rDispFmt, SAAFormat *Formats)=0;
 
   //! Changes resolution of the window/device (doen't require to reload the level
   virtual bool  ChangeResolution(int nNewWidth, int nNewHeight, int nNewColDepth, int nNewRefreshHZ, bool bFullScreen)=0;
@@ -1187,12 +1191,6 @@ struct IRenderer//: public IRendererCallbackServer
 
   //! Free the allocated resources
   virtual void  FreeResources(int nFlags)=0;
-
-  //! Should be called before loading of the level
-  virtual void  PreLoad()=0;
-
-  //! Should be called after loading of the level
-  virtual void  PostLoad()=0;
 
   //! Should be called at the beginning of every frame
   virtual void  BeginFrame()=0;
@@ -1206,11 +1204,6 @@ struct IRenderer//: public IRendererCallbackServer
 
 	//! Should be called at the end of every frame
 	virtual void  EndFrame()=0;
-
-
-  //! This renderer will share resources (textures) with specified renderer.
-  //! Specified renderer must be of same type as this renderer.
-  virtual void  ShareResources( IRenderer *renderer )=0;
 
   virtual void  GetViewport(int *x, int *y, int *width, int *height)=0;
   virtual void  SetViewport(int x, int y, int width, int height)=0;
@@ -1236,7 +1229,7 @@ struct IRenderer//: public IRendererCallbackServer
 	virtual void CreateBuffer(int size, int vertexformat, CVertexBuffer *buf, int Type, const char *szSource, bool bDynamic=false)=0;
 
   //! Release a vertex buffer
-  virtual void  ReleaseBuffer(CVertexBuffer *bufptr)=0;
+  virtual void  ReleaseBuffer(CVertexBuffer *bufptr, int nVerts)=0;
 
   //! Draw a vertex buffer
   virtual void  DrawBuffer(CVertexBuffer *src,SVertexStream *indicies,int numindices, int offsindex, int prmode,int vert_start=0,int vert_stop=0, CRenderChunk *pChunk=NULL)=0;
@@ -1244,12 +1237,12 @@ struct IRenderer//: public IRendererCallbackServer
   //! Update a vertex buffer
   virtual void  UpdateBuffer(CVertexBuffer *dest,const void *src,int vertexcount, bool bUnLock, int nOffs=0, int Type=0)=0;
 
-  virtual void  UnlockBuffer(CVertexBuffer *dest, int Type)=0;
+  virtual void  UnlockBuffer(CVertexBuffer *dest, int Type, int nVerts)=0;
 
-  virtual void  CreateIndexBuffer(SVertexStream *dest,const void *src,int indexcount)=0;
+  virtual void  CreateIndexBuffer(SVertexStream *dest,const void *src,int indexcount, int oldIndexCount)=0;
   //! Update indicies
-  virtual void  UpdateIndexBuffer(SVertexStream *dest,const void *src, int indexcount, bool bUnLock=true, bool bDynamic=false)=0;
-  virtual void  ReleaseIndexBuffer(SVertexStream *dest)=0;
+  virtual void  UpdateIndexBuffer(SVertexStream *dest,const void *src, int indexcount, int oldIndexCount, bool bUnLock=true, bool bDynamic=false)=0;
+  virtual void  ReleaseIndexBuffer(SVertexStream *dest, int nIndices)=0;
 
   //! Check for an error in the current frame
   virtual void  CheckError(const char *comment)=0;
@@ -1274,6 +1267,9 @@ struct IRenderer//: public IRendererCallbackServer
 
   //! Set delta gamma
   virtual bool  SetGammaDelta(const float fGamma)=0;
+
+  //! Restore gamma (reset gamma setting if not in fullscreen mode)
+  virtual void  RestoreGamma(void)=0;
 
   //! Change display size
   virtual bool  ChangeDisplay(unsigned int width,unsigned int height,unsigned int cbpp)=0;
@@ -1408,6 +1404,11 @@ struct IRenderer//: public IRendererCallbackServer
   virtual const SShaderProfile &GetShaderProfile(EShaderType eST) const= 0;
   virtual void          SetShaderQuality(EShaderType eST, EShaderQuality eSQ) = 0;
 
+  // Get renderer quality
+  virtual ERenderQuality EF_GetRenderQuality() const = 0;
+  // Get shader type quality
+  virtual EShaderQuality EF_GetShaderQuality(EShaderType eST) = 0;
+
   // Load shader item for name (name)
   virtual SShaderItem   EF_LoadShaderItem (const char *szName, bool bShare, int flags=0, SInputShaderResources *Res=NULL, uint nMaskGen=0)=0;
   // reload file
@@ -1526,6 +1527,7 @@ struct IRenderer//: public IRendererCallbackServer
   //! NOTE: the following functions will be removed.
   virtual void EnableVSync(bool enable)=0;
   virtual void PushMatrix()=0;
+  virtual void PopMatrix()=0;
 
   virtual void EnableTMU(bool enable)=0;
   virtual void SelectTMU(int tnum)=0;
@@ -1564,11 +1566,10 @@ struct IRenderer//: public IRendererCallbackServer
   virtual int ScreenToTexture()=0;
   virtual void EnableSwapBuffers(bool bEnable) = 0;
   virtual WIN_HWND GetHWND() = 0;
+	virtual WIN_HWND GetCurrentContextHWND() = 0;
 
   virtual void OnEntityDeleted(struct IRenderNode * pRenderNode)=0;
 
-  //! Return all supported by video card video AA formats
-  virtual int EnumAAFormats(TArray<SAAFormat>& Formats, bool bReset)=0;
   virtual int CreateRenderTarget (int nWidth, int nHeight, ETEX_Format eTF)=0;
   virtual bool DestroyRenderTarget (int nHandle)=0;
   virtual bool SetRenderTarget (int nHandle)=0;
@@ -1592,11 +1593,27 @@ struct IRenderer//: public IRendererCallbackServer
 		EndSubmitMask,
 		DisableMask
 	};
-	virtual void SF_ConfigMask( ESFMaskOp maskOp, unsigned int stencilRef ) = 0;
-	virtual void SF_DrawIndexedTriList( int baseVertexIndex, int minVertexIndex, int numVertices, int startIndex, int triangleCount, const SSF_GlobalDrawParams& params ) = 0;
-	virtual void SF_DrawLineStrip( int baseVertexIndex, int lineCount, const SSF_GlobalDrawParams& params ) = 0;
-	virtual void SF_DrawGlyphClear( const SSF_GlobalDrawParams& params ) = 0;
+	virtual void SF_ConfigMask(ESFMaskOp maskOp, unsigned int stencilRef) = 0;
+	virtual void SF_DrawIndexedTriList(int baseVertexIndex, int minVertexIndex, int numVertices, int startIndex, int triangleCount, const SSF_GlobalDrawParams& params) = 0;
+	virtual void SF_DrawLineStrip(int baseVertexIndex, int lineCount, const SSF_GlobalDrawParams& params) = 0;
+	virtual void SF_DrawGlyphClear(const SSF_GlobalDrawParams& params) = 0;
 	virtual void SF_Flush() = 0;
+	virtual int SF_CreateTexture(int width, int height, int numMips, unsigned char* pData, ETEX_Format eTF) = 0;
+	struct SUpdateRect
+	{
+		int dstX, dstY;
+		int srcX, srcY;
+		int width, height;
+		
+		void Set(int dx, int dy, int sx, int sy, int w, int h)
+		{
+			dstX = dx; dstY = dy;
+			srcX = sx; srcY = sy;
+			width = w; height = h;
+		}
+	};
+	virtual bool SF_UpdateTexture(int texId, int mipLevel, int numRects, const SUpdateRect* pRects, unsigned char* pData, size_t pitch, ETEX_Format eTF) = 0;
+	virtual void SF_GetMeshMaxSize(int& numVertices, int& numIndices) const = 0;
 #endif // #ifndef EXCLUDE_SCALEFORM_SDK
 
 	//////////////////////////////////////////////////////////////////////////
@@ -1609,12 +1626,12 @@ struct IRenderer//: public IRendererCallbackServer
 
 	virtual int GetMaxTextureSize()=0;
 
-	virtual uint32 PushRAEColdDatas( const Vec4* pRAELightInfo ) = 0;
-
 	virtual const char * GetTextureFormatName(ETEX_Format eTF) = 0;
 	virtual int GetTextureFormatDataSize(int nWidth, int nHeight, int nDepth, int nMips, ETEX_Format eTF) = 0;
 
-	virtual void SetDefaultMaterial(IMaterial * pDefMat) = 0;
+	virtual void SetDefaultMaterials(IMaterial * pDefMat, IMaterial * pTerrainDefMat) = 0;
+
+  virtual bool IsMultiGPUModeActive() const = 0;
 };
 
 
@@ -1653,9 +1670,9 @@ struct IRenderer//: public IRendererCallbackServer
 #define EFQ_GetAllMeshes						34
 // multigpu (crossfire/sli) is enabled
 #define EFQ_MultiGPUEnabled					35
-
 #define EFQ_DrawNearFov							36
-
+#define EFQ_TextureStreamingEnabled	37
+#define EFQ_FSAAEnabled							38
 
 //////////////////////////////////////////////////////////////////////
 
@@ -1691,7 +1708,8 @@ struct SRendParams
 
   //! object transformations
   Matrix34    *pMatrix;
-  
+  //! 
+  struct SInstancingInfo * pInstInfo;
   //! object previous transformations - motion blur specific
   Matrix34    *pPrevMatrix;
   //! custom sorting offset
@@ -1742,6 +1760,7 @@ struct SRendParams
 	uint8   nMotionBlurAmount;
 	// material layers bitmask -> which material layers are active
 	uint8 nMaterialLayers;
+  uint32 nMaterialLayersBlend;
 	//! custom offset for sorting by distance
 	byte  nAfterWater;
 	//! TerrainTexInfo for grass
@@ -1753,6 +1772,8 @@ struct SRendParams
 	struct CRNTmpData ** ppRNTmpData;
 	//! LOD transition states slot id
 	uint8 nLodTransSlotId;
+  // Vision modes stuff
+  uint32 nVisionParams;
 };
 
 #endif //_IRENDERER_H

@@ -38,6 +38,14 @@
 
 #include "PoolAllocatorSynchronization.h"
 
+// define to have additional checks against pointers being valid for this pool
+// (like, ensuring deallocation to the correct pool)
+//#define CHECK_POOL_ALLOCATED_POINTERS
+
+#ifdef CHECK_POOL_ALLOCATED_POINTERS
+#include "CryArray.h"
+#endif
+
 namespace stl
 {
 	template <int S, typename L = PoolAllocatorSynchronizationMultithreaded>
@@ -104,6 +112,8 @@ namespace stl
 		size_t GetTotalAllocatedNodeSize();
 		size_t GetTotalAllocatedMemory();
 
+		void CheckPtr(void * p, bool allowNull = true);
+
 	private:
 		ObjectNode* GrowBucket();
 
@@ -116,7 +126,37 @@ namespace stl
 
 		BucketList pBucketList;
 		ObjectList pFreeList;
+
+#ifdef CHECK_POOL_ALLOCATED_POINTERS
+		typedef std::pair<void*,void*> PointerRange;
+		typedef DynArray<PointerRange> PointerRanges;
+		PointerRanges legalPointers;
+#endif
 	};
+
+	template <int S, typename L> ILINE void PoolAllocator<S, L>::CheckPtr(void * p, bool allowNull)
+	{
+		// check for 4 byte alignment
+		assert((((INT_PTR)p)&3)==0);
+		// check that we're not in page 0 (unless we can be NULL)
+		if (allowNull)
+			assert(((INT_PTR)p)>4095 || !p);
+		else
+			assert(((INT_PTR)p)>4095);
+#ifdef CHECK_POOL_ALLOCATED_POINTERS
+		if (p)
+		{
+			Synchronization::CLock lk(synchronization);
+			for (PointerRanges::iterator it = legalPointers.begin(); it != legalPointers.end(); ++it)
+			{
+				// allow up to the end of the block+1
+				if (p >= it->first && p <= it->second)
+					return;
+			}
+			assert(!"pointer not allocated by this pool allocator");
+		}
+#endif
+	}
 
 	template <int S, typename L> inline PoolAllocator<S, L>::PoolAllocator(int nBucketSize)
 	:	nBucketSize(nBucketSize),
@@ -135,6 +175,7 @@ namespace stl
 		// Lock the allocator to manipulate state atomically (linux only).
 		typename Synchronization::CLock lock(this->synchronization);
 
+		CheckPtr(this->pFreeList);
 		// Remove the first object from the free list and return it - needs to be atomic.
 		ObjectNode* pOldFreeList = 0;
 		ObjectNode* pNext = 0;
@@ -151,11 +192,14 @@ namespace stl
 		}
 		while (Synchronization::AtomicCompareAndSwapPtr((VoidList*)&this->pFreeList, pNext, pOldFreeList) != pOldFreeList);
 
+		CheckPtr(pOldFreeList);
 		return pOldFreeList;
 	}
 
 	template <int S, typename L> ILINE void PoolAllocator<S, L>::Deallocate(void* pObject)
 	{
+		CheckPtr(pObject);
+		CheckPtr(this->pFreeList);
 		// Lock the allocator to manipulate state atomically (linux only).
 		typename Synchronization::CLock lock(this->synchronization);
 
@@ -167,6 +211,7 @@ namespace stl
 			static_cast<ObjectNode*>(pObject)->pNext = pOldFreeList;
 		}
 		while (Synchronization::AtomicCompareAndSwapPtr((VoidList*)&this->pFreeList, static_cast<ObjectNode*>(pObject), pOldFreeList) != pOldFreeList);
+		CheckPtr(this->pFreeList);
 	}
 
 	// NB: This function may return incorrect values if called concurrently from different threads.
@@ -293,6 +338,13 @@ namespace stl
 		// Allocate the new bucket of the required size.
 		BucketNode* pBucketNode = reinterpret_cast<BucketNode*>(new unsigned char [nBucketSizeInBytes]);
 
+#ifdef CHECK_POOL_ALLOCATED_POINTERS
+		{
+			Synchronization::CLock lk(synchronization);
+			legalPointers.push_back( PointerRange( pBucketNode, ((unsigned char *)pBucketNode) + nBucketSizeInBytes ) );
+		}
+#endif
+
 		// Loop through all the nodes in the bucket, adding them to the free list.
 		ObjectNode* pNewFreeList = 0;
 		ObjectNode* pNewFreeListTail = &pBucketNode->objectNodes[0];
@@ -363,6 +415,33 @@ namespace stl
 		PoolAllocatorNoMT(int nBucketSize = PoolAllocator<S>::DefaultBucketSize)
 			: PoolAllocator<S,PoolAllocatorSynchronizationSinglethreaded>(nBucketSize) {}
 	};
+
+	//////////////////////////////////////////////////////////////////////////
+	template<class T>
+	class TPoolAllocator: public PoolAllocator<sizeof(T)>
+	{
+	public:
+		TPoolAllocator(int nBucketSize = PoolAllocator<sizeof(T)>::DefaultBucketSize)
+			: PoolAllocator<sizeof(T)>(nBucketSize)
+		{}
+
+		void Delete(T* ptr)
+		{
+			if (ptr)
+			{
+				ptr->~T();
+				Deallocate(ptr);
+			}
+		}
+	};
+
+}
+
+template<class T>
+void* operator new(size_t size, stl::TPoolAllocator<T>& pool)
+{
+	assert(size == sizeof(T));
+	return pool.Allocate();
 }
 
 #endif //__POOLALLOCATOR_H__

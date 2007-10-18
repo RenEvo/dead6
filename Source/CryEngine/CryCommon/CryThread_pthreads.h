@@ -13,15 +13,10 @@
 	#define PTHREAD_MUTEX_FAST_NP PTHREAD_MUTEX_NORMAL
 #endif
 
-
-#if defined(WIN32)
-	#include <pthreads_win32.h>
-#else
-	#include <sys/types.h>
-	#include <sys/time.h>
-	#include <pthread.h>
-	#include <sched.h>
-#endif
+#include <sys/types.h>
+#include <sys/time.h>
+#include <pthread.h>
+#include <sched.h>
 
 template<class LockClass> class _PthreadCond;
 template<int PthreadMutexType> class _PthreadLockBase;
@@ -83,9 +78,7 @@ public:
 #ifndef NDEBUG
 	bool IsLocked()
 	{
-#if defined(WIN32)
-		return pthread_mutex_islocked_np(&m_Lock);
-#elif defined(LINUX)
+#if defined(LINUX)
 		// FIXME implement
 		return true;
 #else
@@ -95,7 +88,7 @@ public:
 #endif
 };
 
-#if !defined(PS3)
+#if defined CRYLOCK_HAVE_FASTLOCK
 	#if defined(_DEBUG) && defined(PTHREAD_MUTEX_ERRORCHECK_NP)
 	template<> class CryLock<CRYLOCK_FAST>
 		: public _PthreadLock<CryLock<CRYLOCK_FAST>, PTHREAD_MUTEX_ERRORCHECK_NP>
@@ -110,7 +103,7 @@ public:
 	public:
 		CryLock() { }
 	};
-#endif//PS3
+#endif // CRYLOCK_HAVE_FASTLOCK
 
 template<> class CryLock<CRYLOCK_RECURSIVE>
   : public _PthreadLock<CryLock<CRYLOCK_RECURSIVE>, PTHREAD_MUTEX_RECURSIVE>
@@ -122,8 +115,8 @@ public:
 	CryLock() { }
 };
 
-#if !defined(PS3)
-	template<> class CryCondLock<CRYLOCK_FAST> : public CryLock<CRYLOCK_FAST> {};
+#if defined CRYLOCK_HAVE_FASTLOCK
+template<> class CryCondLock<CRYLOCK_FAST> : public CryLock<CRYLOCK_FAST> {};
 #endif
 template<> class CryCondLock<CRYLOCK_RECURSIVE> : public CryLock<CRYLOCK_RECURSIVE> {};
 
@@ -139,25 +132,6 @@ public:
   void Wait(LockClass &Lock) { pthread_cond_wait(&m_Cond, &Lock.m_Lock); }
 	bool TimedWait(LockClass &Lock, uint32 milliseconds)
 	{
-#if defined(WIN32)
-		// Our pthreads_win32 library has an extension supporting relative timed
-		// waits.  We'll use that.
-		int err;
-		
-		while (true)
-		{
-			err = pthread_cond_timedwait_rel(&m_Cond, &Lock.m_Lock, milliseconds);
-			// Note: EINTR can't occur for the pthreads_win32 implementation.
-			if (err == ETIMEDOUT)
-			{
-				return false;
-			}
-			else
-				assert(err == 0);
-			break;
-		}
-		return true;
-#else
 		struct timeval now;
     struct timespec timeout;
     int err;
@@ -188,7 +162,6 @@ public:
 			break;
 		}
 		return true;
-#endif
 	}
 
 	// Get the POSIX pthread_cont_t.
@@ -197,55 +170,42 @@ public:
 	pthread_cond_t &Get_pthread_cond_t() { return m_Cond; }
 };
 
-template<class LockClass> class _CryCondWithLock
-  : public _PthreadCond<LockClass>
+#if defined CRYLOCK_HAVE_FASTLOCK
+template<>
+class CryCond< CryLock<CRYLOCK_FAST> >
+	: public _PthreadCond< CryLock<CRYLOCK_FAST> >
 {
-  LockClass m_Lock;
+	typedef CryLock<CRYLOCK_FAST> LockClass;
+	CryCond(const CryCond<LockClass>&);
+	CryCond<LockClass>& operator = (const CryCond<LockClass>&);
 
 public:
-  void Wait() { _PthreadCond<LockClass>::Wait(m_Lock); }
-	void Wait(LockClass &Lock) { _PthreadCond<LockClass>::Wait(Lock); }
-	bool TimedWait(uint32 milliseconds)
-	{
-		return _PthreadCond<LockClass>::Wait(m_Lock, milliseconds);
-	}
-	bool TimedWait(LockClass &Lock, uint32 milliseconds)
-	{
-		return _PthreadCond<LockClass>::Wait(Lock, milliseconds);
-	}
-  void Lock() { m_Lock.Lock(); }
-	bool TryLock() { return m_Lock.TryLock(); }
-  void Unlock() { m_Lock.Unlock(); }
-  LockClass &GetLock() { return m_Lock; }
+	CryCond() { }
 };
+#endif // CRYLOCK_HAVE_FASTLOCK
 
-template<class LockClass> class CryCond<LockClass, false>
-  : public _PthreadCond<LockClass>
+template<>
+class CryCond< CryLock<CRYLOCK_RECURSIVE> >
+	: public _PthreadCond< CryLock<CRYLOCK_RECURSIVE> >
 {
-	CryCond(const CryCond<LockClass, false>&);
-	void operator = (const CryCond<LockClass, false>&);
+	typedef CryLock<CRYLOCK_RECURSIVE> LockClass;
+	CryCond(const CryCond<LockClass>&);
+	CryCond<LockClass>& operator = (const CryCond<LockClass>&);
 
 public:
 	CryCond() { }
 };
 
-template<class LockClass> class CryCond<LockClass, true>
-  : public _CryCondWithLock<LockClass>
-{
-	CryCond(const CryCond<LockClass, true>&);
-	void operator = (const CryCond<LockClass, true>&);
-
-public:
-	CryCond() { }
-};
-
-class _PthreadRWLock
+class CryRWLock
 {
 	pthread_rwlock_t m_Lock;
 
+	CryRWLock(const CryRWLock &);
+	CryRWLock &operator= (const CryRWLock &);
+
 public:
-	_PthreadRWLock() { pthread_rwlock_init(&m_Lock, NULL); }
-	~_PthreadRWLock() { pthread_rwlock_destroy(&m_Lock); }
+	CryRWLock() { pthread_rwlock_init(&m_Lock, NULL); }
+	~CryRWLock() { pthread_rwlock_destroy(&m_Lock); }
 	void RLock() { pthread_rwlock_rdlock(&m_Lock); }
 	bool TryRLock() { return pthread_rwlock_tryrdlock(&m_Lock) != EBUSY; }
 	void WLock() { pthread_rwlock_wrlock(&m_Lock); }
@@ -255,13 +215,17 @@ public:
 	void Unlock() { pthread_rwlock_unlock(&m_Lock); }
 };
 
+// Indicate that this implementation header provides an implementation for
+// CryRWLock.
+#define _CRYTHREAD_HAVE_RWLOCK 1
+
 class CrySimpleThreadSelf
 {
 protected:
-#if defined(LINUX)
 	static THREADLOCAL CrySimpleThreadSelf *m_Self;
-#endif
 };
+
+#define SIMPLE_THREAD_STACK_SIZE (64*1024)
 
 template<class Runnable>
 class CrySimpleThread
@@ -270,6 +234,7 @@ class CrySimpleThread
 {
 public:
 	typedef void (*ThreadFunction)(void *);
+	typedef CryRunnable RunnableT;
 
 private:
 #if !defined(NO_THREADINFO)
@@ -299,22 +264,7 @@ private:
 	static void SetThreadInfo(CrySimpleThread<Runnable> *self)
 	{
 		pthread_t thread = pthread_self();
-  #if defined(WIN32)
-		// This is evil.  Would be better to extend the pthreads_win32 API for
-		// getting the thread ID.  However, pthreads_win32 is a temorary solution
-		// anyway, so we'll go with this hack until the native implementation is
-		// done.
-		struct ptw32_thread_struct
-		{
-			DWORD ID;
-			HANDLE Handle;
-		} *Thread = reinterpret_cast<ptw32_thread_struct *>(thread.p);
-		self->m_Info.m_ID = Thread->ID;
-		// Set the thread name.
-		self->SetName(NULL);
-  #else
 		self->m_Info.m_ID = (uint32)thread;
-  #endif
 	}
 #else
 	static void SetThreadInfo(CrySimpleThread<Runnable> *self) { }
@@ -323,36 +273,28 @@ private:
 	static void *PthreadRunRunnable(void *thisPtr)
 	{
 		CrySimpleThread<Runnable> *const self = (CrySimpleThread<Runnable> *)thisPtr;
-#if defined(LINUX)
 		m_Self = self;
-#endif
 		self->m_bIsStarted = true;
 		self->m_bIsRunning = true;
 		SetThreadInfo(self);
 		self->m_Runnable->Run();
 		self->m_bIsRunning = false;
 		self->Terminate();
-#if defined(LINUX)
 		m_Self = NULL;
-#endif
 		return NULL;
 	}
 
 	static void *PthreadRunThis(void *thisPtr)
 	{
 		CrySimpleThread<Runnable> *const self = (CrySimpleThread<Runnable> *)thisPtr;
-#if defined(LINUX)
 		m_Self = self;
-#endif
 		self->m_bIsStarted = true;
 		self->m_bIsRunning = true;
 		SetThreadInfo(self);
 		self->Run();
 		self->m_bIsRunning = false;
 		self->Terminate();
-#if defined(LINUX)
 		m_Self = NULL;
-#endif
 		return NULL;
 	}
 
@@ -477,12 +419,11 @@ public:
 
 	virtual void Start(Runnable &runnable, unsigned cpuMask = 0)
   {
-#if defined(LINUX)
     assert(m_ThreadID == 0);
-#endif
     pthread_attr_t threadAttr;
     pthread_attr_init(&threadAttr);
     pthread_attr_setdetachstate(&threadAttr, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setstacksize(&threadAttr, SIMPLE_THREAD_STACK_SIZE);
 		m_CpuMask = cpuMask;
 #if defined(PTHREAD_NPTL)
 		if (cpuMask != ~0 && cpuMask != 0)
@@ -510,12 +451,11 @@ public:
 
 	virtual void Start(unsigned cpuMask = 0)
 	{
-#if defined(LINUX)
     assert(m_ThreadID == 0);
-#endif
     pthread_attr_t threadAttr;
     pthread_attr_init(&threadAttr);
     pthread_attr_setdetachstate(&threadAttr, PTHREAD_CREATE_JOINABLE);
+    pthread_attr_setstacksize(&threadAttr, SIMPLE_THREAD_STACK_SIZE);
 		m_CpuMask = cpuMask;
 #if defined(PTHREAD_NPTL)
 		if (cpuMask != ~0 && cpuMask != 0)
@@ -551,21 +491,17 @@ public:
 		Start(cpuMask);
 	}
 
-#if defined(LINUX)
 	static CrySimpleThread<Runnable> *Self()
 	{
 		return reinterpret_cast<CrySimpleThread<Runnable> *>(m_Self);
 	}
-#endif
 
   void Exit()
   {
     assert(m_ThreadID == pthread_self());
 		m_bIsRunning = false;
 		Terminate();
-#if defined(LINUX)
 		m_Self = NULL;
-#endif
     pthread_exit(NULL);
   }
 
@@ -616,8 +552,8 @@ public:
 		m_bIsStarted = false;
 	}
 
-	bool IsStarted() { return m_bIsStarted; }
-	bool IsRunning() { return m_bIsRunning; }
+	bool IsStarted() const { return m_bIsStarted; }
+	bool IsRunning() const { return m_bIsRunning; }
 };
 
 #endif

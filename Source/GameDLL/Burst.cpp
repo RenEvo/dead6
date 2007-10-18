@@ -98,22 +98,24 @@ bool CBurst::CanFire(bool considerAmmo) const
 }
 
 //------------------------------------------------------------------------
-void CBurst::StartFire(EntityId shooterId)
+void CBurst::StartFire()
 {
 	if (!m_bursting)
 	{
 		if (m_next_burst <= 0.0f)
 		{
-			CSingle::StartFire(shooterId);
+			CSingle::StartFire();
+
 			m_next_burst = m_next_burst_dt;
 		}
 	}
 }
 
 //------------------------------------------------------------------------
-void CBurst::StopFire(EntityId shooterId)
+void CBurst::StopFire()
 {
-
+	if(m_firing)
+		SmokeEffect();
 }
 
 //------------------------------------------------------------------------

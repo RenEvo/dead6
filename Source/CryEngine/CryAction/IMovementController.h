@@ -34,6 +34,8 @@ struct SActorTargetParams
 		locationRadius(0.5f), 
 		startRadius(-1.0f),
 		signalAnimation(true), 
+		projectEnd(false),
+		navSO(false),
 		stance(STANCE_NULL), 
 		pQueryStart(NULL), 
 		pQueryEnd(NULL),
@@ -50,6 +52,8 @@ struct SActorTargetParams
 	float locationRadius; // amount of 'slop' allowed in target location (meters)
 	float startRadius; // radius around the start direction
 	bool signalAnimation; // true if we're to send a signal at a target, false if we're to set an action
+	bool projectEnd;
+	bool navSO;
 	string animation;
 	EStance stance;
 	TAnimationGraphQueryID * pQueryStart;
@@ -60,9 +64,21 @@ struct SActorTargetParams
 class CMovementRequest
 {
 public:
-	CMovementRequest() : m_flags(0), m_distanceToPathEnd(-1.0f), m_alertness(0), m_alertnessLast(0) {}
+	CMovementRequest()
+		: m_flags(0),
+			m_lookTarget(0), m_aimTarget(0), m_fireTarget(0), m_moveTarget(0),
+			m_desiredSpeed(0), m_lookImportance(0),
+			m_deltaMovement(0),m_deltaRotation(ZERO),
+			m_desiredLean(0),
+			m_pseudoSpeed(0),
+			m_forcedNavigation(0),
+			m_desiredBodyDirectionAtTarget(0), m_distanceToPathEnd(-1.0f), 
+			m_alertness(0), m_alertnessLast(0),
+			m_stance(STANCE_NULL)
+	{
+	}
 
-	// was anything set at all in this request?
+	// was anything set at all in this request?`
 	bool IsEmpty()
 	{
 		return m_flags == 0;
@@ -633,9 +649,12 @@ struct SStanceState
 		fireDirection(FORWARD_DIRECTION),
 		eyePosition(0,0,0),
 		eyeDirection(FORWARD_DIRECTION),
-		stanceSize(AABB::RESET),
 		lean(0.0f)
 	{
+		m_StanceSize.min=Vec3(ZERO);		// Game logic bounds of the character related to the 'pos'.
+		m_StanceSize.max=Vec3(ZERO);		// Game logic bounds of the character related to the 'pos'.
+		m_ColliderSize.min=Vec3(ZERO);			// The size of only the collider in this stance.
+		m_ColliderSize.max=Vec3(ZERO);			// The size of only the collider in this stance.
 	}
 
 	// Note: All positions a directions are in worldspace.
@@ -648,8 +667,8 @@ struct SStanceState
 	Vec3 eyePosition;				// Game logic position of the eye of the character.
 	Vec3 eyeDirection;			// Direction from the eye position to the lookat or aim-at target.
 	float lean;							// The amount the character is leaning -1 = left, 1 = right;
-	AABB stanceSize;				// Game logic bounds of the character related to the 'pos'.
-	AABB colliderSize;			// The size of only the collider in this stance.
+	AABB m_StanceSize;				// Game logic bounds of the character related to the 'pos'.
+	AABB m_ColliderSize;			// The size of only the collider in this stance.
 };
 
 struct SMovementState : public SStanceState
@@ -664,6 +683,7 @@ struct SMovementState : public SStanceState
 		minSpeed(0.2f),
 		normalSpeed(1.0f),
 		maxSpeed(2.0f),
+		slopeAngle(0.0f),
 		atMoveTarget(false),
 		isAlive(true),
 		isAiming(false),
@@ -681,6 +701,7 @@ struct SMovementState : public SStanceState
 	float minSpeed;
 	float normalSpeed;
 	float maxSpeed;
+	float slopeAngle; // Degrees of ground below character (positive when facing uphill, negative when facing downhill).
 	bool atMoveTarget;
 	bool isAlive;
 	bool isAiming;

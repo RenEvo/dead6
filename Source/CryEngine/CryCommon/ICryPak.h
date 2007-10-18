@@ -214,8 +214,13 @@ struct ICryPak
 		FLAGS_ONLY_MOD_DIRS      = 1L << 20,
 
 		// if this is set, AdjustFileName will not make relative paths into full paths
-		FLAGS_NO_FULL_PATH	 = 1L << 21
+		FLAGS_NO_FULL_PATH	 = 1L << 21,
 
+		// if this is set, AdjustFileName will not map the input path into the master folder (Ex: Shaders will not be converted to Game\Shaders)
+		FLAGS_NO_MASTER_FOLDER_MAPPING = 1L << 22,
+
+		// if this is set, AdjustFileName will not adjust path for writing files
+		FLAGS_FOR_WRITING	 = 1L << 23
 	};
 
 	// Used for widening FOpen functionality. They're ignored for the regular File System files.
@@ -337,6 +342,7 @@ struct ICryPak
 	virtual bool IsInPak(FILE *handle)=0;
 	virtual bool RemoveFile(const char* pName) = 0; // remove file from FS (if supported)
 	virtual bool RemoveDir(const char* pName, bool bRecurse) = 0;  // remove directory from FS (if supported)
+	virtual bool IsAbsPath(const char* pPath) = 0; // determines if pPath is an absolute or relative path
 
 	// Type-safe endian conversion read.
 	template<class T>
@@ -356,12 +362,16 @@ struct ICryPak
 
 	// Arguments:
 	//   nFlags is a combination of EPathResolutionRules flags.
-  virtual intptr_t FindFirst( const char *pDir,struct _finddata_t *fd,unsigned int nFlags=FLAGS_IGNORE_MOD_DIRS )=0;
+  virtual intptr_t FindFirst( const char *pDir,struct _finddata_t *fd,unsigned int nFlags=0 )=0;
   virtual int FindNext(intptr_t handle, struct _finddata_t *fd)=0;
   virtual int FindClose(intptr_t handle)=0;
 //	virtual bool IsOutOfDate(const char * szCompiledName, const char * szMasterFile)=0;
 	//returns file modification time
 	virtual FileTime GetModificationTime(FILE*f)=0;
+
+	// Description:
+	//    Checks if specified file exist in filesystem.
+	virtual bool IsFileExist( const char *sFilename ) = 0;
 
 	// creates a directory
 	virtual bool MakeDir (const char* szPath) = 0;
@@ -479,7 +489,101 @@ struct IResourceList : public _reference_target_t
 //////////////////////////////////////////////////////////////////////////
 // Include File helpers.
 //////////////////////////////////////////////////////////////////////////
-#include "CryFile.h"
 #include "CryPath.h"
+#include "CryFile.h"
+
+//////////////////////////////////////////////////////////////////////
+#ifdef _XBOX
+inline void _ConvertNameForXBox(char *dst, const char *src)
+{
+	//! On XBox d:\ represents current working directory (C:\MasterCD)
+	//! only back slash (\) can be used
+	strcpy(dst, "d:\\");
+	if (src[0]=='.' && (src[1]=='\\' || src[1]=='/'))
+		strcat(dst, &src[2]);
+	else
+		strcat(dst, src);
+	int len = strlen(dst);
+	for (int n=0; dst[n]; n++)
+	{
+		if ( dst[n] == '/' )
+			dst[n] = '\\';
+		if (n > 8 && n+3 < len && dst[n] == '\\' && dst[n+1] == '.' && dst[n+2] == '.')
+		{
+			int m = n+3;
+			n--;
+			while (dst[n] != '\\')
+			{
+				n--;
+				if (!n)
+					break;
+			}
+			if (n)
+			{
+				memmove(&dst[n], &dst[m], len-m+1);
+				len -= m-n;
+				n--;
+			}
+		}
+	}
+}
+#endif
+
+//! Everybody should use fxopen instead of fopen
+//! so it will work both on PC and XBox
+inline FILE * fxopen(const char *file, const char *mode)
+{
+	//SetFileAttributes(file,FILE_ATTRIBUTE_ARCHIVE);
+	//	FILE *pFile = fopen("C:/MasterCD/usedfiles.txt","a");
+	//	if (pFile)
+	//	{
+	//		fprintf(pFile,"%s\n",file);
+	//		fclose(pFile);
+	//	}
+
+#ifdef _XBOX
+	char name[256];
+	_ConvertNameForXBox(name, file);
+	return fopen(name, mode);
+#else
+#if defined(PS3) && !defined(__SPU__)
+/*char name[strlen(gPS3Env->pFopenWrapperBasedir) + 1 + strlen(file) + 1];
+	sprintf(name, "%s/%s", gPS3Env->pFopenWrapperBasedir, file);
+	char adjustedName[MAX_PATH];
+	bool createFlag = false;
+	if (strchr(mode, 'w') || strchr(mode, 'a'))
+		createFlag = true;
+	GetFilenameNoCase(name, adjustedName, createFlag);
+	return fopen(adjustedName, mode);
+*/
+	return WrappedFopen(file, mode);
+#else
+#if defined(LINUX)
+	char adjustedName[MAX_PATH];
+	bool createFlag = false;
+	if (strchr(mode, 'w') || strchr(mode, 'a'))
+		createFlag = true;
+	GetFilenameNoCase(file, adjustedName, createFlag);
+	return fopen(adjustedName, mode);
+#else
+	// This is on windows.
+	if (gEnv && gEnv->pCryPak)
+	{
+		bool bWriteAccess = false;
+		for (const char *s = mode; *s; s++) { if (*s == 'w' || *s == 'W' || *s == 'a' || *s == 'A' || *s == '+') { bWriteAccess = true; break; }; }
+		int nAdjustFlags = ICryPak::FLAGS_NO_MASTER_FOLDER_MAPPING;
+		if (bWriteAccess)
+			nAdjustFlags |= ICryPak::FLAGS_FOR_WRITING;
+		char path[_MAX_PATH];
+		const char* szAdjustedPath = gEnv->pCryPak->AdjustFileName(file,path,nAdjustFlags);
+		return fopen(szAdjustedPath,mode);
+	}
+	else
+		return 0;
+#endif //LINUX
+#endif //PS3
+#endif
+}
+//////////////////////////////////////////////////////////////////////////
 
 #endif

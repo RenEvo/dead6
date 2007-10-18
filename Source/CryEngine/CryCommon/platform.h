@@ -52,6 +52,12 @@
 	#define NDEBUG
 #endif
 
+#if defined(PS3) && defined(PS3_OPT) && !defined(__SPU__)
+	#define MATH_H <fastmath.h>
+#else
+	#define MATH_H <math.h>
+#endif
+
 // Xenon target. (We generally use _XBOX but should really use XENON).
 #if defined(_XBOX_VER) && _XBOX_VER == 200
 	#define XENON
@@ -121,8 +127,10 @@
 
 #if defined(__GNUC__)
 	#if defined(PS3)
-		#define DLL_EXPORT
-		#define DLL_IMPORT
+//		#define DLL_EXPORT
+//		#define DLL_IMPORT
+		#define DLL_EXPORT __attribute__ ((visibility("default")))
+		#define DLL_IMPORT __attribute__ ((visibility("default")))
 	#else
 		#define DLL_EXPORT __attribute__ ((visibility("default")))
 		#define DLL_IMPORT __attribute__ ((visibility("default")))
@@ -136,6 +144,9 @@
 // Define BIT macro for use in enums and bit masks.
 #define BIT(x) (1<<(x))
 //////////////////////////////////////////////////////////////////////////
+
+//will be defined for SPUs and PS3 therefore only
+#define SPU_DEBUG_BREAK
 
 //////////////////////////////////////////////////////////////////////////
 // Globally Used Defines.
@@ -200,9 +211,11 @@ inline int IsHeapValid()
 	#define strdup dont_use_strdup
 #endif
 
+#if defined(PS3)
 //defines necessary stuff for SPU Software Cache
 //needs to be included for all platforms (mostly empty decls. there)
 #include "PS3CryCache.h"
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 #ifndef DEPRICATED
@@ -239,6 +252,8 @@ short  CryGetAsyncKeyState( int vKey );
 unsigned int CryGetFileAttributes( const char *lpFileName );
 bool   CrySetFileAttributes( const char *lpFileName,uint32 dwFileAttributes );
 
+#define CrySwprintf _snwprintf
+
 _inline void CryHeapCheck()
 {
 #if !defined(LINUX) && !defined (PS3)
@@ -250,6 +265,10 @@ _inline void CryHeapCheck()
   assert(Result==_HEAPOK);
 #endif
 }
+
+// Useful function to clean the structure.
+template <class T>
+inline void ZeroStruct( T &t ) { memset( &t,0,sizeof(t) ); }
 
 #ifndef NOT_USE_CRY_STRING
 	#include "CryString.h"
@@ -265,6 +284,9 @@ _inline void CryHeapCheck()
 // Include MultiThreading support.
 #include "MultiThread.h"
 
+// Include support for meta-type data.
+#include "TypeInfo.h"
+
 // Include Big/Small endianess conversion.
 #include "Endian.h"
 
@@ -273,10 +295,10 @@ _inline void CryHeapCheck()
 
 // Wrapper code for non-windows builds.
 #if defined(LINUX)
-#include "Linux_Win32Wrapper.h"
+	#include "Linux_Win32Wrapper.h"
 #endif
 #if defined(PS3)
-#include "PS3_Win32Wrapper.h"
+	#include "PS3_Win32Wrapper.h"
 #endif
 
 #ifndef NOT_USE_CRY_STRING
@@ -294,5 +316,33 @@ enum ETriState
 };
 
 #define SAFE_DELETE_VOID_ARRAY(p) { if(p) { delete[] (unsigned char*)(p);   (p)=NULL; } }
+
+#ifndef SPU_ENTRY
+	#if defined __CRYCG__
+		#define SPU_ENTRY(job_name) __attribute__ ((crycg_attr (entry, "job = " #job_name )))
+	#else
+		#define SPU_ENTRY(job_name)
+	#endif
+#endif
+
+//only for PS3 this will take effect, win32 does not support alignment
+#if !defined(_ALIGN)
+	#if defined(PS3)
+		#define _ALIGN(num) __attribute__ ((aligned(num)))
+	#else
+		#define _ALIGN(num) 
+	#endif
+#endif
+
+#if !defined(PS3)
+	//dummy definitions to avoid ifdef's
+	ILINE void SPUAddCacheWriteRangeAsync(const unsigned int, const unsigned int){}
+	#define __cache_range_write_async(a,b)
+	#define __flush_cache_range(a,b)
+	#define __flush_cache()
+	#define DECLARE_SPU_JOB(func_name, typedef_name)
+	#define DECLARE_SPU_CLASS_JOB(func_name, typedef_name, class_name)
+#endif//__SPU__
+
 
 #endif // _PLATFORM_H_

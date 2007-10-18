@@ -16,6 +16,13 @@ struct tm;
 ////////////////////////////////////////////////////////////////////////////////////////////////
 struct ITimer
 {
+	enum ETimer
+	{
+		ETIMER_GAME = 0, // pausable, serialized, frametime is smoothed/scaled/clamped, 
+		ETIMER_UI,       // non-pausable, non-serialized, frametime unprocessed
+		ETIMER_LAST
+	};
+
 	//! reset the timer (only needed because float precision wasn't last that long - can be removed if 64bit is used everywhere)
 	virtual void ResetTimer() = 0;	
 
@@ -23,10 +30,10 @@ struct ITimer
 	virtual void UpdateOnFrameStart() = 0;
 
 	//! return the time at the last UpdateOnFrameStart() call 
-	virtual float GetCurrTime() const = 0;
+	virtual float GetCurrTime(ETimer which = ETIMER_GAME) const = 0;
 
 	//! return the time at the last UpdateOnFrameStart() call 
-	virtual CTimeValue GetFrameStartTime() const = 0;
+	virtual CTimeValue GetFrameStartTime(ETimer which = ETIMER_GAME) const = 0;
 
 	//! return the current time
 	virtual CTimeValue GetAsyncTime() const = 0;
@@ -35,13 +42,16 @@ struct ITimer
 	virtual float GetAsyncCurTime()= 0;
 
 	//! return the time passed from the last UpdateOnFrameStart() in seconds
-	virtual float GetFrameTime() const = 0;
+	virtual float GetFrameTime(ETimer which = ETIMER_GAME) const = 0;
 
 	//! return the time passed from the last UpdateOnFrameStart() in seconds without any dilation, smoothing, clamping, etc...
 	virtual float GetRealFrameTime() const = 0;
 
-	//! return the time passed from the last UpdateOnFrameStart() in seconds
+	//! return the time scale applied to time values
 	virtual float GetTimeScale() const = 0;
+
+	//! set the time scale applied to time values
+	virtual void SetTimeScale(float s) = 0;
 
 	//! enable/disable timer
 	virtual void EnableTimer( const bool bEnable ) = 0;
@@ -53,10 +63,22 @@ struct ITimer
 	virtual float	GetFrameRate() = 0;
 
 	//! return the fraction to blend current frame in profiling stats.
-	virtual float GetProfileFrameBlending() = 0;
+	virtual float GetProfileFrameBlending( float* pfBlendTime = 0, int* piBlendMode = 0 ) = 0;
 
 	//! serialization
 	virtual void Serialize( TSerialize ser ) = 0;
+
+	//! try to pause/unpause a timer
+	//  returns true if successfully paused/unpaused, false otherwise
+	virtual bool PauseTimer(ETimer which, bool bPause) = 0;
+
+	//! determine if a timer is paused
+	//  returns true if paused, false otherwise
+	virtual bool IsTimerPaused(ETimer which) = 0;
+
+	//! try to set a timer
+	//  return true if successful, false otherwise
+	virtual bool SetTimer(ETimer which, float timeInSeconds) = 0;
 
 	//! make a tm struct from a time_t in UTC (like gmtime)
 	virtual void SecondsToDateUTC(time_t time, struct tm& outDateUTC) = 0;

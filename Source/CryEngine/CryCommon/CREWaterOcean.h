@@ -18,6 +18,7 @@ public:
   virtual void Release();
 
   virtual Vec3 GetPositionAt( float x, float y ) const;
+  virtual Vec4 *GetDisplaceGrid( ) const;
 
 private:
 

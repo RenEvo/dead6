@@ -28,7 +28,8 @@ CScan::CScan()
 :	m_scanning(false),
 	m_delayTimer(0.0f),
 	m_durationTimer(0.0f),
-	m_scanLoopId(INVALID_SOUNDID)
+	m_scanLoopId(INVALID_SOUNDID),
+	m_tagEntitiesDelay(0.0f)
 {
 }
 
@@ -80,7 +81,7 @@ const char *CScan::GetType() const
 void CScan::Activate(bool activate)
 {
 	m_scanning=false;
-	m_delayTimer=m_durationTimer=0.0f;
+	m_delayTimer=m_durationTimer=m_tagEntitiesDelay=0.0f;
 
 	if (m_scanLoopId != INVALID_SOUNDID)
 	{
@@ -113,6 +114,24 @@ void CScan::Update(float frameTime, uint frameId)
 
 		if(m_delayTimer==0.0f)
 		{
+			if(m_tagEntitiesDelay>0.0f)
+			{
+				m_tagEntitiesDelay-=frameTime;
+				if(m_tagEntitiesDelay<=0.0f)
+				{
+					m_tagEntitiesDelay = 0.0f;
+
+					//Here is when entities are displayed on Radar
+					if(gEnv->pGame->GetIGameFramework()->GetClientActor() == m_pWeapon->GetOwnerActor())
+					{
+						if(gEnv->bServer)
+							NetShoot(ZERO, 0);
+						else
+							m_pWeapon->RequestShoot(0, ZERO, ZERO, ZERO, ZERO, 1.0f, 0, false);
+					}
+				}
+			}
+
 			if (m_durationTimer>0.0f)
 			{
 				m_durationTimer-=frameTime;
@@ -120,8 +139,8 @@ void CScan::Update(float frameTime, uint frameId)
 				{
 					m_durationTimer=0.0f;
 					
-					StopFire(0);
-					m_pWeapon->RequestShoot(0, ZERO, ZERO, ZERO, ZERO, 0, false);
+					StopFire();
+					//m_pWeapon->RequestShoot(0, ZERO, ZERO, ZERO, ZERO, 1.0f, 0, false);
 				}
 			}
 		}
@@ -131,7 +150,7 @@ void CScan::Update(float frameTime, uint frameId)
 }
 
 //------------------------------------------------------------------------
-void CScan::StartFire(EntityId shooterId)
+void CScan::StartFire()
 {
 	if (!m_pWeapon->IsBusy())
 	{
@@ -151,9 +170,9 @@ void CScan::StartFire(EntityId shooterId)
 						if (pMtl)
 						{
 							const SShaderItem& shaderItem(pMtl->GetShaderItem());
-							if (shaderItem.m_pShaderResources && shaderItem.m_pShaderResources->m_Textures[0])
+							if (shaderItem.m_pShaderResources && shaderItem.m_pShaderResources->GetTexture(0))
 							{
-								SEfResTexture* pTex(shaderItem.m_pShaderResources->m_Textures[0]);
+								SEfResTexture* pTex(shaderItem.m_pShaderResources->GetTexture(0));
 								if (pTex->m_Sampler.m_pDynTexSource)
 								{
 									IFlashPlayer* pFlashPlayer(0);
@@ -171,21 +190,20 @@ void CScan::StartFire(EntityId shooterId)
 				}
 			}
 
-			CHUD *pHUD = g_pGame->GetHUD();
-			if(pHUD)
-				pHUD->SetRadarScanningEffect(true);
+			SAFE_HUD_FUNC(SetRadarScanningEffect(true));
 
 			m_scanning=true;
 			m_delayTimer=m_scanparams.delay;
 			m_durationTimer=m_scanparams.duration;
+			m_tagEntitiesDelay=m_scanparams.tagDelay;
 			m_pWeapon->SetBusy(true);
 
-			//request shooting for the local client
-			if(gEnv->pGame->GetIGameFramework()->GetClientActor() == m_pWeapon->GetOwnerActor())
-			{
-				Vec3 hit;
-				NetShoot(hit, 0);
-			}
+			//request shooting for the local client (Moved to Update())
+			//if(gEnv->pGame->GetIGameFramework()->GetClientActor() == m_pWeapon->GetOwnerActor())
+			//{
+				//Vec3 hit;
+				//NetShoot(hit, 0);
+			//}
 		}
 
 		m_pWeapon->PlayAction(m_scanactions.spin_up, 0, false, CItem::eIPAF_Default|CItem::eIPAF_CleanBlending);
@@ -195,7 +213,7 @@ void CScan::StartFire(EntityId shooterId)
 }
 
 //------------------------------------------------------------------------
-void CScan::StopFire(EntityId shooterId)
+void CScan::StopFire()
 {
 	if (!m_scanning)
 		return;
@@ -213,9 +231,9 @@ void CScan::StopFire(EntityId shooterId)
 				if (pMtl)
 				{
 					const SShaderItem& shaderItem(pMtl->GetShaderItem());
-					if (shaderItem.m_pShaderResources && shaderItem.m_pShaderResources->m_Textures[0])
+					if (shaderItem.m_pShaderResources && shaderItem.m_pShaderResources->GetTexture(0))
 					{
-						SEfResTexture* pTex(shaderItem.m_pShaderResources->m_Textures[0]);
+						SEfResTexture* pTex(shaderItem.m_pShaderResources->GetTexture(0));
 						if (pTex->m_Sampler.m_pDynTexSource)
 						{
 							IFlashPlayer* pFlashPlayer(0);
@@ -233,9 +251,7 @@ void CScan::StopFire(EntityId shooterId)
 		}
 	}
 
-	CHUD *pHUD = g_pGame->GetHUD();
-	if(pHUD)
-		pHUD->SetRadarScanningEffect(false);
+	SAFE_HUD_FUNC(SetRadarScanningEffect(false));
 
 	m_pWeapon->PlayAction(m_scanactions.spin_down, 0, false, CItem::eIPAF_Default|CItem::eIPAF_CleanBlending);
 
@@ -251,7 +267,7 @@ void CScan::StopFire(EntityId shooterId)
 }
 
 //------------------------------------------------------------------------
-void CScan::NetStartFire(EntityId shooterId)
+void CScan::NetStartFire()
 {
 	if (!m_pWeapon->IsClient())
 		return;
@@ -260,7 +276,7 @@ void CScan::NetStartFire(EntityId shooterId)
 }
 
 //------------------------------------------------------------------------
-void CScan::NetStopFire(EntityId shooterId)
+void CScan::NetStopFire()
 {
 	if (!m_pWeapon->IsClient())
 		return;
@@ -277,16 +293,15 @@ void CScan::NetShoot(const Vec3 &hit, int ph)
 {
 	if (m_pWeapon->IsServer())
 	{
-		SEntityProximityQuery query;
+		IEntity *pOwner=m_pWeapon->GetOwner();
+		EntityId ownerId=pOwner->GetId();
 
+		SEntityProximityQuery query;
 		float radius=m_scanparams.range;
-		Vec3 pos=m_pWeapon->GetEntity()->GetWorldPos();
+		Vec3 pos=pOwner->GetWorldPos();
 		query.box = AABB(Vec3(pos.x-radius,pos.y-radius,pos.z-radius), Vec3(pos.x+radius,pos.y+radius,pos.z+radius));
 		query.nEntityFlags = ENTITY_FLAG_ON_RADAR; // Filter by entity flag.
 		gEnv->pEntitySystem->QueryProximity( query );
-
-		IEntity *pOwner=m_pWeapon->GetOwner();
-		EntityId ownerId=pOwner->GetId();
 
 		for(int i=0; i<query.nCount; i++)
 		{
@@ -294,13 +309,18 @@ void CScan::NetShoot(const Vec3 &hit, int ph)
 			if(pEntity && pEntity != pOwner && !pEntity->IsHidden())
 			{
 				CActor *pActor=m_pWeapon->GetActor(pEntity->GetId());
-				if (pActor && pActor->GetActorClass()==CPlayer::GetActorClassType())
+				if (pActor && (pActor->GetSpectatorMode()!=0 || pActor->GetHealth()<=0.0f))
+					continue;
+
+/*				if (pActor && pActor->GetActorClass()==CPlayer::GetActorClassType())
 				{
 					CPlayer *pPlayer=static_cast<CPlayer *>(pActor);
 					CNanoSuit *pSuit=pPlayer->GetNanoSuit();
 					if (pSuit && pSuit->GetMode()==NANOMODE_CLOAK && pSuit->GetCloak()->GetType()==CLOAKMODE_REFRACTION)
 						continue;
 				}
+				else*/ if(IItem *pItem = g_pGame->GetIGameFramework()->GetIItemSystem()->GetItem(pEntity->GetId()))
+					continue;
 
 				g_pGame->GetGameRules()->AddTaggedEntity(ownerId, pEntity->GetId(), true);
 			}

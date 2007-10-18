@@ -20,17 +20,23 @@ History:
 #include "C4.h"
 
 
+IEntityClass* CPlant::m_pAVMineClass = NULL;
+IEntityClass* CPlant::m_pClaymoreClass = NULL;
 
 //------------------------------------------------------------------------
 CPlant::CPlant()
 : m_projectileId(0)
 {
-	
+	m_projectiles.clear();
+	m_plantPos.zero();
+	m_plantDir.zero();
+	m_plantVel.zero();
 }
 
 //------------------------------------------------------------------------
 CPlant::~CPlant()
 {
+	m_projectiles.clear();
 }
 
 //------------------------------------------------------------------------
@@ -87,7 +93,6 @@ void CPlant::Activate(bool activate)
 	m_tickTimer = 0.0f;
 
 	CheckAmmo();
-	SetLED(0, m_plantparams.led_minutes, m_plantparams.led_layers.c_str());
 }
 
 //------------------------------------------------------------------------
@@ -102,22 +107,22 @@ bool CPlant::OutOfAmmo() const
 //------------------------------------------------------------------------
 void CPlant::NetShoot(const Vec3 &hit, int ph)
 {
-	NetShootEx(ZERO, ZERO, ZERO, hit, ph);
+	NetShootEx(ZERO, ZERO, ZERO, hit, 1.0f, ph);
 }
 
 //------------------------------------------------------------------------
-void CPlant::NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, int ph)
+void CPlant::NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, float extra, int ph)
 {
-	Plant(pos, dir, vel, true);
+	Plant(pos, dir, vel, true, ph);
 }
 
 //------------------------------------------------------------------------
-void CPlant::NetStartFire(EntityId shooterId)
+void CPlant::NetStartFire()
 {
 }
 
 //------------------------------------------------------------------------
-void CPlant::NetStopFire(EntityId shooterId)
+void CPlant::NetStopFire()
 {
 }
 
@@ -139,23 +144,7 @@ int CPlant::GetDamage() const
 	return m_plantparams.damage;
 }
 
-
 //------------------------------------------------------------------------
-struct CPlant::ReleaseButtonAction
-{
-	ReleaseButtonAction(CPlant *_plant): pPlant(_plant) {};
-
-	CPlant *pPlant;
-
-	void execute(CItem *_this)
-	{
-		if (pPlant->m_time>=pPlant->m_plantparams.min_time)
-		{
-			_this->SetBusy(false);
-		}
-	}
-};
-
 void CPlant::Update(float frameTime, uint frameId)
 {
 	FUNCTION_PROFILER( GetISystem(), PROFILE_GAME );
@@ -174,98 +163,120 @@ void CPlant::Update(float frameTime, uint frameId)
 			
 			if (m_planting)
 			{
-				CActor *pActor = m_pWeapon->GetOwnerActor();
-				IMovementController *pMC = pActor?pActor->GetMovementController():0;
-				SMovementState info;
-				if (pMC)
-					pMC->GetMovementState(info);
-
 				Vec3 pos;
 				Vec3 dir(FORWARD_DIRECTION);
 				Vec3 vel(0,0,0);
 
-				if (m_pWeapon->GetStats().fp)
-					pos = m_pWeapon->GetSlotHelperPos(CItem::eIGS_FirstPerson, m_plantparams.helper.c_str(), true);
-				else if (pMC)
-					pos = info.eyePosition+info.eyeDirection*0.25f;
-				else
-					pos = pActor->GetEntity()->GetWorldPos();
+				// placed weapons have already stored the position etc to place at.
+				if(m_plantparams.place_on_ground)
+					Plant(m_plantPos, m_plantDir, m_plantVel);
+				else if(GetPlantingParameters(pos, dir, vel))
+					Plant(pos, dir, vel);
 
-				if (pMC)
-					dir = info.eyeDirection;
-				else
-					dir = pActor->GetEntity()->GetWorldRotation().GetColumn1();
-
-				if (IPhysicalEntity *pPE=pActor->GetEntity()->GetPhysics())
-				{
-					pe_status_dynamics sv;
-					if (pPE->GetStatus(&sv))
-					{
-						if (sv.v.len2()>0.01f)
-						{
-							float dot=sv.v.GetNormalized().Dot(dir);
-							if (dot<0.0f)
-								dot=0.0f;
-							vel=sv.v*dot;
-						}
-					}
-				}
-
-				Plant(pos, dir, vel);
+				m_plantPos.zero();
+				m_plantDir.zero();
+				m_plantVel.zero();
 
 				requireUpdate = true;
 			}
 		}
 	}
 
-	if (m_timing && m_holding)
+	if (requireUpdate)
+		m_pWeapon->RequireUpdate(eIUS_FireMode);
+}
+
+// returns true if firing is allowed
+bool CPlant::GetPlantingParameters(Vec3& pos, Vec3& dir, Vec3& vel) const
+{
+	CActor *pActor = m_pWeapon->GetOwnerActor();
+	IMovementController *pMC = pActor?pActor->GetMovementController():0;
+	SMovementState info;
+	if (pMC)
+		pMC->GetMovementState(info);
+
+	if (m_pWeapon->GetStats().fp)
+		pos = m_pWeapon->GetSlotHelperPos(CItem::eIGS_FirstPerson, m_plantparams.helper.c_str(), true);
+	else if (pMC)
+		pos = info.eyePosition+info.eyeDirection*0.25f;
+	else
+		pos = pActor->GetEntity()->GetWorldPos();
+
+	if (pMC)
+		dir = info.eyeDirection;
+	else
+		dir = pActor->GetEntity()->GetWorldRotation().GetColumn1();
+
+	if (IPhysicalEntity *pPE=pActor->GetEntity()->GetPhysics())
 	{
-		if (m_tickTimer>0.0f)
+		pe_status_dynamics sv;
+		if (pPE->GetStatus(&sv))
 		{
-			m_tickTimer-=frameTime;
-
-			if (m_tickTimer<=0.0f)
-				TickTimer();
-
-			requireUpdate = true;
+			if (sv.v.len2()>0.01f)
+			{
+				float dot=sv.v.GetNormalized().Dot(dir);
+				if (dot<0.0f)
+					dot=0.0f;
+				vel=sv.v*dot;
+			}
 		}
 	}
 
-	if (!m_pressing && m_holding)
+	// if the ammo should be placed (claymore/mine) rather than thrown forward (c4), check if we can do so...
+	if(m_plantparams.place_on_ground)
 	{
-		requireUpdate = true;
+		ray_hit hit;
+		static const int objTypes = ent_static | ent_terrain;
+		static const unsigned int flags = rwi_stop_at_pierceable|rwi_colltype_any;
+		static IPhysicalEntity* pSkipEnts[10];
+		int nskip = CSingle::GetSkipEntities(m_pWeapon, pSkipEnts, 10);
+		int res = gEnv->pPhysicalWorld->RayWorldIntersection(pos, 2.0f * dir, objTypes, flags, &hit, 1, pSkipEnts, nskip);
+		if(!res)
+			return false;
+		else
+		{
+			// check surface normal - must be close to up
+			if(hit.n.z < 0.8f)
+				return false;
 
+ 			// special case to stop stacking of claymores/mines (they are static so are hit by the ray)
+ 			if(hit.pCollider && hit.pCollider->GetiForeignData() == PHYS_FOREIGN_ID_ENTITY)
+			{
+				IEntity * pEntity = (IEntity*)hit.pCollider->GetForeignData(PHYS_FOREIGN_ID_ENTITY);
+				if(pEntity)
+				{
+					if(!m_pClaymoreClass)
+						m_pClaymoreClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass("claymoreexplosive");
+					if(!m_pAVMineClass)
+						m_pAVMineClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass("avexplosive");
 
-		m_holding = false;
-		m_pWeapon->PlayAction(m_plantactions.release_button.c_str());
-		m_pWeapon->GetScheduler()->TimerAction(m_pWeapon->GetCurrentAnimationTime(CItem::eIGS_FirstPerson), CSchedulerAction<ReleaseButtonAction>::Create(this), false);			
+					if(pEntity->GetClass() == m_pClaymoreClass || pEntity->GetClass() == m_pAVMineClass)
+						return false;
+				}
+ 			}
+
+			// second check to see if there is another object in the way
+			float hitDist = hit.dist;
+			int res = gEnv->pPhysicalWorld->RayWorldIntersection(pos, 2.0f * dir, ent_all, flags, &hit, 1, pSkipEnts, nskip);
+			if(res && hit.dist < hitDist-0.1f)
+			{
+				return false;
+			}
+
+			pos = hit.pt;
+		}
 	}
 
-	if (requireUpdate)
-		m_pWeapon->RequireUpdate(eIUS_FireMode);
+	return true;
 }
 
 //------------------------------------------------------------------------
 bool CPlant::CanFire(bool considerAmmo/* =true */) const
 {
-	return !m_planting && !m_pressing && !m_pWeapon->IsBusy() && (!considerAmmo || !OutOfAmmo());
+	return !m_planting && !m_pressing && !m_pWeapon->IsBusy() && (!considerAmmo || !OutOfAmmo()) && PlayerStanceOK();
 }
 
 //------------------------------------------------------------------------
-struct CPlant::PressButtonAction
-{
-	PressButtonAction(CPlant *_plant): pPlant(_plant) {};
-	CPlant *pPlant;
-
-	void execute(CItem *_this)
-	{
-		pPlant->m_holding = true;
-		pPlant->m_pWeapon->PlayAction(pPlant->m_plantactions.hold_button.c_str(), 0, true, CItem::eIPAF_Default|CItem::eIPAF_NoBlend);
-
-		pPlant->TickTimer();
-	}
-};
-
 struct CPlant::StartPlantAction
 {
 	StartPlantAction(CPlant *_plant): pPlant(_plant) {};
@@ -275,46 +286,38 @@ struct CPlant::StartPlantAction
 	{
 		pPlant->m_pWeapon->SetBusy(false);
 		pPlant->m_planting = false;
-
-		if (pPlant->m_time>0.0f || pPlant->m_plantparams.simple)
+		
+		if(pPlant->m_pWeapon->OutOfAmmo(false))
 		{
-			if (! pPlant->m_plantparams.simple)
-			{
-				pPlant->m_time = 0.0f;
-
-				pPlant->SetLED(0.0f, pPlant->m_plantparams.led_minutes, pPlant->m_plantparams.led_layers.c_str());
-			}
-
-			if (pPlant->OutOfAmmo())
-				pPlant->SelectLast();
+			if(!pPlant->m_plantparams.simple)
+				pPlant->SelectDetonator();
 			else
 			{
-				pPlant->CheckAmmo();
-
-				_this->PlayAction(pPlant->m_plantactions.refill.c_str(), 0, 0, CItem::eIPAF_Default|CItem::eIPAF_NoBlend);
+				if(pPlant->m_pWeapon->GetOwnerActor())
+					pPlant->m_pWeapon->GetOwnerActor()->SelectNextItem(1, false);
 			}
 		}
 		else
-			pPlant->SelectDetonator();
+		{
+			pPlant->m_pWeapon->PlayAction(g_pItemStrings->select.c_str(),0,false,CItem::eIPAF_Default|CItem::eIPAF_NoBlend|CItem::eIPAF_CleanBlending);
+			pPlant->m_pWeapon->HideItem(false);
+		}
 	}
 };
 
-void CPlant::StartFire(EntityId shooterId)
+//------------------------------------------------------------------------
+void CPlant::StartFire()
 {
-	m_pWeapon->RequireUpdate(eIUS_FireMode);
-
 	if (!CanFire(true))
 		return;
 
-	if (m_timing)
-	{
-		m_pressing = true;
+	if(m_pWeapon->IsWeaponLowered())
+		return;
 
-		m_pWeapon->SetBusy(true);
-		m_pWeapon->PlayAction(m_plantactions.press_button.c_str());
-		m_pWeapon->GetScheduler()->TimerAction(m_pWeapon->GetCurrentAnimationTime(CItem::eIGS_FirstPerson), CSchedulerAction<PressButtonAction>::Create(this), false);
-	}
-	else
+	m_pWeapon->RequireUpdate(eIUS_FireMode);
+
+	GetPlantingParameters(m_plantPos, m_plantDir, m_plantVel);
+
 	{
 		m_planting = true;
 		m_pWeapon->SetBusy(true);
@@ -327,7 +330,7 @@ void CPlant::StartFire(EntityId shooterId)
 }
 
 //------------------------------------------------------------------------
-void CPlant::StopFire(EntityId shooterId)
+void CPlant::StopFire()
 {
 	m_timing=false;
 	m_pressing=false;
@@ -337,33 +340,15 @@ void CPlant::StopFire(EntityId shooterId)
 void CPlant::Serialize(TSerialize ser)
 {
 	if (ser.GetSerializationTarget()!=eST_Network)
+	{
 		ser.Value("projectileId", m_projectileId);
+		ser.Value("projectiles", m_projectiles);
+	}
+
 }
 
 //------------------------------------------------------------------------
-void CPlant::TickTimer()
-{
-	m_tickTimer = m_plantparams.tick_time;
-
-	if (m_time==0.0f)
-		m_time=m_plantparams.min_time;
-	else
-		m_time+=m_plantparams.tick;
-
-	if (m_time>m_plantparams.max_time)
-		m_time=0.0f;
-
-	m_pWeapon->PlayAction(m_plantactions.tick.c_str());
-
-	SetLED(m_time, m_plantparams.led_minutes, m_plantparams.led_layers.c_str());
-
-	if (!m_plantparams.simple && !m_pWeapon->IsServer())
-		m_pWeapon->GetGameObject()->InvokeRMI(CC4::SvRequestTime(), 
-			CC4::RequestTimeParams(m_time, m_pWeapon->GetCurrentFireMode()), eRMI_ToServer);
-}
-
-//------------------------------------------------------------------------
-void CPlant::Plant(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, bool net)
+void CPlant::Plant(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, bool net, int ph)
 {
 	IEntityClass* ammo = m_plantparams.ammo_type_class;
 	int ammoCount = m_pWeapon->GetAmmoCount(ammo);
@@ -371,30 +356,21 @@ void CPlant::Plant(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, bool net)
 		ammoCount = m_pWeapon->GetInventoryAmmoCount(ammo);
 
 	CProjectile *pAmmo = m_pWeapon->SpawnAmmo(ammo, net);
+	CActor *pActor=m_pWeapon->GetOwnerActor();
 	if (pAmmo)
 	{
 		pAmmo->SetParams(m_pWeapon->GetOwnerId(), m_pWeapon->GetHostId(), m_pWeapon->GetEntityId(), m_plantparams.damage, 0);
 		pAmmo->SetDestination(m_pWeapon->GetDestination());
 		pAmmo->Launch(pos, dir, vel);
 
-		if (m_time>0.0f)
-			pAmmo->GetEntity()->SetTimer(CProjectile::ePTIMER_LIFETIME, (int)(m_time*1000));
-		else
-			pAmmo->GetEntity()->SetTimer(CProjectile::ePTIMER_LIFETIME, 5*60*1000);
-
 		m_projectileId = pAmmo->GetEntity()->GetId();
 
 		if (m_projectileId && !m_plantparams.simple && m_pWeapon->IsServer())
 		{
-			CActor *pActor=m_pWeapon->GetOwnerActor();
 			if (pActor)
 			{
-				if (m_time>0.0f)
-					m_pWeapon->GetGameObject()->InvokeRMI(CC4::ClSetProjectileId(), 
-						CC4::SetProjectileIdParams(0, m_pWeapon->GetCurrentFireMode()), eRMI_ToClientChannel, pActor->GetChannelId());
-				else
-					m_pWeapon->GetGameObject()->InvokeRMIWithDependentObject(CC4::ClSetProjectileId(), 
-						CC4::SetProjectileIdParams(m_projectileId, m_pWeapon->GetCurrentFireMode()), eRMI_ToClientChannel, m_projectileId, pActor->GetChannelId());
+				SetProjectileId(m_projectileId);
+				m_pWeapon->GetGameObject()->InvokeRMIWithDependentObject(CC4::ClSetProjectileId(), CC4::SetProjectileIdParams(m_projectileId, m_pWeapon->GetCurrentFireMode()), eRMI_ToClientChannel, m_projectileId, pActor->GetChannelId());
 			}
 		}
 	}
@@ -410,40 +386,23 @@ void CPlant::Plant(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, bool net)
 			m_pWeapon->SetInventoryAmmoCount(ammo, ammoCount);
 	}
 
+	if (pAmmo && ph && pActor)
+	{
+		pAmmo->GetGameObject()->RegisterAsValidated(pActor->GetGameObject(), ph);
+		pAmmo->GetGameObject()->BindToNetwork();
+	}
+	else if (pAmmo && pAmmo->IsPredicted() && gEnv->bClient && gEnv->bServer && pActor && pActor->IsClient())
+	{
+		pAmmo->GetGameObject()->BindToNetwork();
+	}
+
 	if (!net)
-		m_pWeapon->RequestShoot(ammo, pos, dir, vel, ZERO, pAmmo? pAmmo->GetGameObject()->GetPredictionHandle() : 0, true);
+		m_pWeapon->RequestShoot(ammo, pos, dir, vel, ZERO, 1.0f, pAmmo? pAmmo->GetGameObject()->GetPredictionHandle() : 0, true);
 
 	m_pWeapon->HideItem(true);
 }
 
-//------------------------------------------------------------------------
-void CPlant::SetLED(float time, bool minutes, const char *layerFmt)
-{
-	int d[3]={0};
-
-	if (minutes)
-	{
-		int secs = (int)time%60;
-		d[2] = (int)(time/60);
-		d[1] = secs/10;
-		d[0] = secs%10;
-	}
-	else
-	{
-		d[2] = (int)(time/100);
-		d[1] = ((int)time%100)/10;
-		d[0] = (((int)time%100)/10)%10;
-	}
-
-	string layer;
-	for (int i=0;i<3;i++)
-	{
-		layer.Format(layerFmt, i+1, d[i]);
-		m_pWeapon->PlayLayer(layer.c_str(), CItem::eIPAF_Default|CItem::eIPAF_NoBlend|CItem::eIPAF_CleanBlending, true);
-	}
-}
-
-//------------------------------------------------------------------------
+//=======================================================================
 void CPlant::SelectDetonator()
 {
 	if (CActor *pOwner=m_pWeapon->GetOwnerActor())
@@ -454,19 +413,30 @@ void CPlant::SelectDetonator()
 	}
 }
 
-//------------------------------------------------------------------------
-void CPlant::SelectLast()
+//========================================================================
+void CPlant::SetProjectileId(EntityId id)
 {
-	CActor *pOwner=m_pWeapon->GetOwnerActor();
-	if (!pOwner)
-		return;
+	stl::push_back_unique(m_projectiles,id);
+}
 
-	EntityId lastId = pOwner->GetInventory()->GetLastItem();
+//====================================================================
+EntityId CPlant::GetProjectileId() const
+{
+	if(!m_projectiles.empty())
+		return m_projectiles.back();
 
-	if (!lastId || lastId==m_pWeapon->GetEntityId())
-		pOwner->SelectNextItem(1, true);
-	else
-		pOwner->SelectLastItem(false);
+	return 0;
+}
+//=====================================================================
+EntityId CPlant::RemoveProjectileId() 
+{
+	EntityId id = 0;
+	if(!m_projectiles.empty())
+	{
+		id= m_projectiles.back();
+		m_projectiles.pop_back();
+	}
+	return id;
 }
 
 //------------------------------------------------------------------------
@@ -481,4 +451,29 @@ void CPlant::GetMemoryStatistics(ICrySizer * s)
 	s->Add(m_name);
 	m_plantparams.GetMemoryStatistics(s);
 	m_plantactions.GetMemoryStatistics(s);
+}
+
+bool CPlant::PlayerStanceOK() const
+{
+	bool ok = true;
+	if(m_plantparams.need_to_crouch && m_pWeapon->GetOwnerActor())
+	{
+		CActor* pActor = (CActor*)m_pWeapon->GetOwnerActor();
+		ok = (pActor->GetStance() == STANCE_CROUCH);
+		if(ok)
+		{
+			ok &= (pActor->GetActorStats()->velocity.GetLengthSquared() < 0.1f);
+
+			if(ok)
+			{
+				// also fire a ray forwards to check the placement position is nearby
+				Vec3 pos;
+				Vec3 dir(FORWARD_DIRECTION);
+				Vec3 vel(0,0,0);
+				ok &= GetPlantingParameters(pos, dir, vel);
+			}
+		}
+	}
+	
+	return ok;
 }

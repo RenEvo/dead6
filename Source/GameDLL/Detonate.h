@@ -42,7 +42,7 @@ public:
 	virtual bool CanReload() const;
 
 	virtual bool CanFire(bool considerAmmo = true) const;
-	virtual void StartFire(EntityId shooterId);
+	virtual void StartFire();
 
 	virtual void NetShoot(const Vec3 &hit, int ph);
 	//~IFireMode

@@ -20,7 +20,7 @@
 #include <CryThreadImpl_windows.h>
 #elif defined(XENON)
 #include <CryThreadImpl_windows.h>
-#elif defined(PS3)
+#elif defined(PS3) && !defined __CRYCG__
 #include <CryThreadImpl_pthreads.h>
 #else
 // Put other platform specific includes here!

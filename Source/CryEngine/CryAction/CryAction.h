@@ -79,12 +79,12 @@ class CDownloadTask;
 class CGameplayAnalyst;
 class CTimeOfDayScheduler;
 class CNetworkCVars;
+class CCryActionCVars;
+class CGameStatsConfig;
 
 struct IAnimationGraphState;
 
-class CCryAction :
-	public IGameFramework,
-	public ICryPakFileAcesssSink
+class CCryAction : public IGameFramework
 {
 public:
 	CCryAction();
@@ -118,6 +118,7 @@ public:
 	virtual bool IsLoadingSaveGame();
 	virtual const char * GetLevelName();
 	virtual const char * GetAbsLevelPath();
+	virtual bool IsInTimeDemo(); 	// Check if time demo is playing;
 
 	virtual ISystem *GetISystem() { return m_pSystem; };
 	virtual ILanQueryListener *GetILanQueryListener() {return m_pLanQueryListener;}
@@ -146,7 +147,7 @@ public:
 	virtual bool BlockingSpawnPlayer();
 
 	virtual void ResetBrokenGameObjects();
-	void SerializeBreakableObjects(TSerialize ser); // defined in ActionGame.cpp
+	void Serialize(TSerialize ser); // defined in ActionGame.cpp
 	void FlushBreakableObjects();                   // defined in ActionGame.cpp
 	void ClearBreakHistory(); 
 
@@ -164,20 +165,40 @@ public:
 	virtual INetChannel *GetNetChannel(uint16 channelId);
 	virtual bool IsChannelOnHold(uint16 channelId);
 	virtual IGameObject * GetGameObject(EntityId id);
+	virtual bool GetNetworkSafeClassId(uint16 &id, const char *className);
+	virtual bool GetNetworkSafeClassName(char *className, size_t maxn, uint16 id);
 	virtual IGameObjectExtension * QueryGameObjectExtension( EntityId id, const char * name);
 
 	virtual INetContext* GetNetContext();
 
-	virtual bool SaveGame( const char * path, bool bQuick = false, bool bForceImmediate=true, ESaveGameReason reason = eSGR_QuickSave);
-	virtual bool LoadGame( const char * path, bool quick = false);
+	virtual bool SaveGame( const char * path, bool bQuick = false, bool bForceImmediate=true, ESaveGameReason reason = eSGR_QuickSave, bool ignoreDelay = false, const char* checkpointName = NULL);
+	virtual bool LoadGame( const char * path, bool quick = false, bool ignoreDelay = false);
 	virtual void ScheduleEndLevel( const char* nextLevel = "");
 
 	virtual void OnEditorSetGameMode( int iMode );
 	virtual bool IsEditing(){return m_isEditing;}
 
+	bool IsImmersiveMPEnabled();
+
+	virtual void AllowSave(bool bAllow = true)
+	{
+		m_bAllowSave = bAllow;
+	}
+
+	virtual void AllowLoad(bool bAllow = true)
+	{
+		m_bAllowLoad = bAllow;
+	}
+
+	virtual bool CanSave();
+	virtual bool CanLoad();
+
 	virtual bool CanCheat();
 
-	IAnimationGraphState * GetMusicGraphState() { return m_pMusicGraphState; }
+	// Music Logic
+	virtual IAnimationGraphState * GetMusicGraphState() { return m_pMusicGraphState; }
+	virtual IMusicLogic * GetMusicLogic() {return m_pMusicLogic; }
+
 	INetNub * GetServerNetNub();
 
 	void SetGameGUID( const char * gameGUID);
@@ -187,13 +208,7 @@ public:
 
 	// ~IGameFramework
 
-	// ICryPakListener
-	virtual void ReportFileOpen( FILE*, const char * );
-	// ~ICPL
-
 	static CCryAction * GetCryAction() { return m_pThis; }
-
-	void StopListeningToFiles();
 
 	bool ControlsEntity( EntityId id ) const;
 
@@ -206,6 +221,7 @@ public:
 	CScriptBind_Inventory *GetInventoryScriptBind() { return m_pScriptInventory; }
 	CPersistantDebug *GetPersistantDebug() { return m_pPersistantDebug; }
 	virtual IPersistantDebug * GetIPersistantDebug();
+	virtual IGameStatsConfig* GetIGameStatsConfig();
 
 	CDownloadTask* GetDownloadTask() const { return m_pDownloadTask; }
 
@@ -215,9 +231,11 @@ public:
 	CDialogSystem* GetDialogSystem() { return m_pDialogSystem; }
 	CTimeOfDayScheduler* GetTimeOfDayScheduler() const { return m_pTimeOfDayScheduler; }
 	IDebrisMgr* GetDebrisMgr() { return m_pDebrisMgr; }
+	CGameStatsConfig* GetGameStatsConfig();
 
 //	INetQueryListener* GetLanQueryListener() {return m_pLanQueryListener;}
 	bool LoadingScreenEnabled() const;
+
 
 	// this is a bit of a hack
 	int NetworkExposeClass( IFunctionHandler * pFH );
@@ -227,17 +245,20 @@ public:
 	void NotifyGameFrameworkListeners(ISaveGame* pSaveGame);
 	void NotifyGameFrameworkListeners(ILoadGame* pLoadGame);
 	virtual void EnableVoiceRecording(const bool enable);
+	virtual void MutePlayerById(EntityId mutePlayer);
   virtual IDebugHistoryManager* CreateDebugHistoryManager();
   virtual void ExecuteCommandNextFrame(const char* cmd);
 	virtual void PrefetchLevelAssets( const bool bEnforceAll );
 
   virtual void ShowPageInBrowser(const char* URL);
   virtual bool StartProcess(const char* cmd_line);
-  virtual void SaveServerConfig(const char* path);
+  virtual bool SaveServerConfig(const char* path);
 
   void  OnActionEvent(const SActionEvent& ev);
 	void AddProtectedFiles( INetNub * pNub );
-	bool ShouldProtect( const string& file );
+
+	bool IsPbSvEnabled() const { return m_pbSvEnabled; }
+	bool IsPbClEnabled() const { return m_pbClEnabled; }
 
 	void DumpMemInfo(const char* format, ...) PRINTF_PARAMS(2, 3);
 private:
@@ -267,9 +288,12 @@ private:
 	static void LoadGameCmd(IConsoleCmdArgs* args);
   static void KickPlayerCmd(IConsoleCmdArgs* args);
   static void KickPlayerByIdCmd(IConsoleCmdArgs* args);
-  static void OpenURLCmd(IConsoleCmdArgs* args);
+	static void BanPlayerCmd(IConsoleCmdArgs* args);
+	static void BanStatusCmd(IConsoleCmdArgs* args);
+	static void UnbanPlayerCmd(IConsoleCmdArgs* args);
+	static void OpenURLCmd(IConsoleCmdArgs* args);
 	static void TestResetCmd(IConsoleCmdArgs* args);
-  
+	
 	static void DumpAnalysisStatsCmd(IConsoleCmdArgs* args);
 
 	static void TestTimeout(IConsoleCmdArgs* args);
@@ -279,6 +303,7 @@ private:
 	static void TestNSStats(IConsoleCmdArgs* args);
   static void TestNSNat(IConsoleCmdArgs* args);
   static void TestPlayerBoundsCmd(IConsoleCmdArgs* args);
+	static void DumpStatsCmd(IConsoleCmdArgs* args);
 
 	// console commands for the remote control system
 	//static void rcon_password(IConsoleCmdArgs* args);
@@ -312,8 +337,10 @@ private:
 	static void DownloadPatch(IConsoleCmdArgs* pArgs);
 	static void InstallPatch(IConsoleCmdArgs* pArgs);
   
+	static void VerifyMaxPlayers( ICVar * pVar );
 
-	void InitNoProtects();
+	static void StaticSetPbSvEnabled(IConsoleCmdArgs* pArgs);
+	static void StaticSetPbClEnabled(IConsoleCmdArgs* pArgs);
   
 	// NOTE: anything owned by this class should be a pointer or a simple
 	// type - nothing that will need its constructor called when CryAction's
@@ -367,6 +394,8 @@ private:
  //	INetQueryListener *m_pLanQueryListener;
 	ILanQueryListener *m_pLanQueryListener;
 
+	CGameStatsConfig	*m_pGameStatsConfig;
+
 	// developer mode
 	CDevMode          *m_pDevMode;
 
@@ -396,11 +425,13 @@ private:
 	CPersistantDebug              *m_pPersistantDebug;
 
 	CNetworkCVars * m_pNetworkCVars;
+	CCryActionCVars * m_pCryActionCVars;
 
 	// Console Variables with some CryAction as owner
 	CMaterialEffectsCVars         *m_pMaterialEffectsCVars;
 
-	IAnimationGraphState * m_pMusicGraphState;
+	IAnimationGraphState					*m_pMusicGraphState;
+	IMusicLogic										*m_pMusicLogic;
 
 	// console variables
 	ICVar *m_pEnableLoadingScreen;
@@ -417,6 +448,7 @@ private:
 	struct SLocalAllocs
 	{
 		string m_delayedSaveGameName;
+		string m_checkPointName;
 		string m_nextLevelToLoad;
 	};
 	SLocalAllocs* m_pLocalAllocs;
@@ -426,20 +458,24 @@ private:
 		IGameFrameworkListener * pListener;
 		string name;
 		EFRAMEWORKLISTENERPRIORITY eFrameworkListenerPriority;
+		SGameFrameworkListener() : pListener(0), eFrameworkListenerPriority(FRAMEWORKLISTENERPRIORITY_DEFAULT) {}
 	};
 
-	typedef std::list<SGameFrameworkListener> TGameFrameworkListeners;
-	TGameFrameworkListeners *m_gameFrameworkListeners;
+	typedef std::vector<SGameFrameworkListener> TGameFrameworkListeners;
+	TGameFrameworkListeners *m_pGameFrameworkListeners;
+	TGameFrameworkListeners *m_pGameFrameworkListenersTemp;
 
 	int m_VoiceRecordingEnabled;
 
-	std::set<string> * m_pFilesInInit;
-	std::set<string> * m_pNoProtectRoots;
-	bool m_bListeningToFiles;
+	bool m_bAllowSave;
+	bool m_bAllowLoad;
   string  *m_nextFrameCommand;
   string  *m_connectServer;
 
 	float		m_lastSaveLoad;
+
+	bool m_pbSvEnabled;
+	bool m_pbClEnabled;
 };
 
 #endif //__CRYACTION_H__

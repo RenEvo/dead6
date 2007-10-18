@@ -44,8 +44,37 @@ inline uint16 IntegerLog2( uint16 x )
 	IL2VAL(0x2,1);
 	return c;
 }
+inline uint32 NumLeadingZeros( uint32 x )
+{
+	int y, m, n;
+	y = -(int)(x>>16);
+	m = (y >> 16) & 16;
+	n = 16 - m;
+	x = x >> m;
+
+	y = x - 0x100;
+	m = (y>>16) & 8;
+	n = n + m;
+	x = x << m;
+
+	y = x - 0x1000;
+	m = (y >> 16) & 4;
+	n = n + m;
+	x = x << m;
+
+	y = x - 0x4000;
+	m = (y >> 16) & 2;
+	n = n + m;
+	x = x << m;
+
+	y = x >> 14;
+	m = y & ~(y>>1);
+	return n + 2 - m;
+}
 inline uint32 IntegerLog2( uint32 x )
 {
+	return 31 - NumLeadingZeros(x);
+/*
 	uint32 c = 0;
 	IL2VAL(0xffff0000u,16);
 	IL2VAL(0xff00,8);
@@ -53,6 +82,7 @@ inline uint32 IntegerLog2( uint32 x )
 	IL2VAL(0xc,2);
 	IL2VAL(0x2,1);
 	return c;
+*/
 }
 inline uint64 IntegerLog2( uint64 x )
 {
@@ -70,7 +100,7 @@ inline uint64 IntegerLog2( uint64 x )
 template <typename TInteger>
 inline TInteger IntegerLog2_RoundUp( TInteger x )
 {
-	return IntegerLog2(x) + !IsPowerOfTwo(x);
+	return 1 + IntegerLog2(x-1);
 }
 
 static ILINE uint8 BitIndex( uint8 v )
@@ -90,10 +120,10 @@ static ILINE uint8 CountBits( uint8 v )
 	return c;
 }
 
-template <uint32 N>
+template <uint32 ILOG>
 struct CompileTimeIntegerLog2
 {
-	static const uint32 result = 1 + CompileTimeIntegerLog2<(N>>1)>::result;
+	static const uint32 result = 1 + CompileTimeIntegerLog2<(ILOG>>1)>::result;
 };
 template <>
 struct CompileTimeIntegerLog2<0>
@@ -101,10 +131,10 @@ struct CompileTimeIntegerLog2<0>
 	static const uint32 result = 0;
 };
 
-template <uint32 N>
+template <uint32 ILOG>
 struct CompileTimeIntegerLog2_RoundUp
 {
-	static const uint32 result = CompileTimeIntegerLog2<N>::result + ((N & (N-1))>0);
+	static const uint32 result = CompileTimeIntegerLog2<ILOG>::result + ((ILOG & (ILOG-1))>0);
 };
 
 // Character-to-bitfield mapping
@@ -130,6 +160,12 @@ inline uint32 AlphaBits(const char* s)
 	while (*s)
 		n |= AlphaBit(*s++);
 	return n;
+}
+
+// is a bit on in a new bit field, but off in an old bit field
+static ILINE bool TurnedOnBit( unsigned bit, unsigned oldBits, unsigned newBits )
+{
+	return (newBits & bit) != 0 && (oldBits & bit) == 0;
 }
 
 #endif

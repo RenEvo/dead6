@@ -20,10 +20,10 @@ History:
 
 //------------------------------------------------------------------------
 CCharge::CCharge()
-: m_charged(0),
-	m_chId(0),
-  m_chlightId(0),
-  m_chTimer(0.0f)
+: m_charged(0)
+, m_chId(0)
+, m_chlightId(0)
+, m_chTimer(0.0f)
 {
 }
 
@@ -42,17 +42,33 @@ void CCharge::Update(float frameTime, uint frameId)
 			m_chargeTimer -= frameTime;
 			if (m_chargeTimer<=0.0f)
 			{
-				m_charging = false;
 				m_charged++;
-				if (m_firing)
-					ChargedShoot();
+				if (m_charged >= m_chargeparams.max_charges)
+				{
+					m_charging = false;
+					m_charged = m_chargeparams.max_charges;
+					if (!m_chargeparams.shoot_on_stop)
+					{
+						if (m_firing)
+							ChargedShoot();
+					}
+				}
 			}
 		}
 
 		m_pWeapon->RequireUpdate(eIUS_FireMode);
 	}
 	else
-		CAutomatic::Update(frameTime, frameId);
+	{
+		if (!m_chargeparams.shoot_on_stop)
+		{
+			CAutomatic::Update(frameTime, frameId);
+		}
+		else
+		{
+			CSingle::Update(frameTime, frameId);
+		}
+	}
 
 	// update spinup effect
 	if (m_chTimer>0.0f)
@@ -110,6 +126,24 @@ void CCharge::Activate(bool activate)
 }
 
 //------------------------------------------------------------------------
+void CCharge::StopFire()
+{
+	if (m_chargeparams.shoot_on_stop)
+	{
+		if (m_charged > 0)
+		{
+			ChargedShoot();
+		}
+		m_pWeapon->PlayAction(m_chargeactions.uncharge.c_str());
+		m_charged = 0;
+		m_charging = false;
+		m_chargeTimer = 0.0f;
+	}
+
+	CAutomatic::StopFire();
+}
+
+//------------------------------------------------------------------------
 bool CCharge::Shoot(bool resetAnimation, bool autoreload /* =true */, bool noSound /* =false */)
 {
 	m_autoreload = autoreload;
@@ -118,7 +152,7 @@ bool CCharge::Shoot(bool resetAnimation, bool autoreload /* =true */, bool noSou
 	{
 		m_charging = true;
 		m_chargeTimer = m_chargeparams.time;
-		m_pWeapon->PlayAction(m_chargeactions.charge.c_str());
+		m_pWeapon->PlayAction(m_chargeactions.charge.c_str(),  0, false, CItem::eIPAF_Default|CItem::eIPAF_RepeatLastFrame);
 
 		ChargeEffect(true);
 	}
@@ -135,9 +169,10 @@ void CCharge::ChargedShoot()
 {
 	CAutomatic::Shoot(true, m_autoreload);
 
-	--m_charged;
-	if (m_charged<0)
-		m_charged=0;
+	m_charged=0;
+
+	if(m_chargeparams.reset_spinup)
+		StopFire();
 }
 
 //------------------------------------------------------------------------
@@ -156,9 +191,10 @@ void CCharge::ChargeEffect(bool attach)
 		m_chId = m_pWeapon->AttachEffect(slot, 0, true, m_chargeeffect.effect[id].c_str(), 
 			m_chargeeffect.helper[id].c_str(), Vec3(0,0,0), Vec3(0,1,0), 1.0f, false);
 
-		m_chlightId = m_pWeapon->AttachLight(slot, 0, true, false, m_chargeeffect.light_radius[id], m_chargeeffect.light_color[id], 1.0f, 0, 0,
+		m_chlightId = m_pWeapon->AttachLight(slot, 0, true, m_chargeeffect.light_radius[id], m_chargeeffect.light_color[id], 1.0f, 0, 0,
 			m_chargeeffect.light_helper[id].c_str());
 
 		m_chTimer = (uint)(m_chargeeffect.time[id]);
+
 	}
 }

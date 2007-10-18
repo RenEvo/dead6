@@ -18,7 +18,7 @@ struct ICVar;
 enum EVarFlags
 {
 	VF_CHEAT =								0x00000002,			// stays in the default state when cheats are disabled
-	VF_NOT_NET_SYNCED	=				0x00000080,			// can be changed on client and when connecting the var not sent to the client
+	VF_NOT_NET_SYNCED	=				0x00000080,			// can be changed on client and when connecting the var not sent to the client (should not be used during CVar creation, is set for all vars in Game/scripts/cvars.tx)
 	VF_DUMPTODISK	=						0x00000100,
 	VF_SAVEGAME	=							0x00000200,			// stored when saving a savegame
 	VF_NOHELP	=								0x00000400,
@@ -29,7 +29,7 @@ enum EVarFlags
 	VF_COPYNAME	=							0x00008000,			// otherwise the const char * to the name will be stored without copying the memory
 	VF_MODIFIED	=							0x00010000,			// Set when variable value modified.
 	VF_WASINCONFIG	=					0x00020000,			// Set when variable was present in config file.
-	VF_BITFIELD =						0x00040000,			// Allow bitfield setting syntax.
+	VF_BITFIELD =							0x00040000,			// Allow bitfield setting syntax.
 };
 
 struct ICVarDumpSink
@@ -66,6 +66,15 @@ struct IConsoleCmdArgs
 	virtual const char* GetArg( int nIndex ) const = 0;
 	// Gets complete command line
 	virtual const char* GetCommandLine() const = 0;
+};
+
+// Interface to the arguments of the console command.
+struct IConsoleArgumentAutoComplete
+{
+	// Gets number of matches for the argument to auto complete.
+	virtual int GetCount() const = 0;
+	// Gets argument value by index, nIndex must be in 0 <= nIndex < GetCount()
+	virtual const char* GetValue( int nIndex ) const = 0;
 };
 
 // This a definition of the console command function that can be added to console with AddCommand.
@@ -319,13 +328,19 @@ struct IConsole
 	// Auto completion.
 	//////////////////////////////////////////////////////////////////////////
 	virtual int		GetNumVars() = 0;
-	// return used size
-	virtual size_t GetSortedVars( const char **pszArray,size_t numItems ) = 0;
+	
+	// Arguments:
+	//   szPrefix - 0 or prefix e.g. "sys_spec_"
+	// Return
+	//   used size
+	virtual size_t GetSortedVars( const char **pszArray,size_t numItems, const char *szPrefix=0 ) = 0;
 	virtual const char*	AutoComplete( const char* substr ) = 0;
 	virtual const char*	AutoCompletePrev( const char* substr ) = 0;
 	virtual char *ProcessCompletion( const char *szInputBuffer ) = 0;
+	virtual void RegisterAutoComplete( const char *sVarOrCommand,IConsoleArgumentAutoComplete *pArgAutoComplete ) = 0;
 	// 
 	virtual void ResetAutoCompletion()=0;
+	//////////////////////////////////////////////////////////////////////////
 	
 	// Calculation of the memory used by the whole console system
 	virtual void GetMemoryUsage (class ICrySizer* pSizer) = 0;
@@ -366,7 +381,15 @@ struct IConsole
 	//////////////////////////////////////////////////////////////////////////
 	//
 	virtual void LoadConfigVar( const char *sVariable, const char *sValue )=0;
+
+	//////////////////////////////////////////////////////////////////////////
+	// Enable or disable the activation key (tilde by default).
+	// This is usefull when user is in a textfield and want to be able to enter the default key.
+	// bEnable=true console will show
+	// bEnable=false console will no show
+	virtual void EnableActivationKey(bool bEnable)=0;
 };
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -377,6 +400,14 @@ struct IConsole
 // (with the same name of the variable in the console)
 struct ICVar
 {
+	enum EConsoleLogMode
+	{
+		eCLM_Off,							// off
+		eCLM_ConsoleAndFile,	// normal info to console and file 
+		eCLM_FileOnly,				// normal info to file only
+		eCLM_FullInfo					// full info to file only
+	};
+
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	/* delete the variable
 		NOTE: the variable will automatically unregister itself from the console
@@ -386,12 +417,12 @@ struct ICVar
 	/* Return the integer value of the variable
 		@return the value
 	*/
-	virtual int GetIVal() = 0;
+	virtual int GetIVal() const= 0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	/* Return the float value of the variable
 		@return the value
 	*/
-	virtual float GetFVal() = 0;
+	virtual float GetFVal() const= 0;
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	/* Return the string value of the variable, don't store pointer as multiple calls to this function might return same memory ptr
 		@return the value
@@ -458,10 +489,16 @@ struct ICVar
 	virtual void GetMemoryUsage( class ICrySizer* pSizer )=0;
 
 	//////////////////////////////////////////////////////////////////////////
+	// only useful for CVarGroups, other types return GetIVal() 
+	// CVarGroups set multiple other CVars and this function returns
+	// the integer value the CVarGroup should have, when looking at the controlled cvars
 	// Returns:
-	//   true=normal condition, false=value does represent current state (only needed for CVarGroups)
-	virtual bool IsValid() const=0;
+	//   value that would represent the state, -1 if the state cannot be found 
+	virtual int GetRealIVal() const=0;
 
+	// only useful for CVarGroups
+	// log difference between expected state and real state
+	virtual void DebugLog( const int iExpectedValue, const EConsoleLogMode mode ) const {}
 };
 
 #endif //_ICONSOLE_H_

@@ -14,7 +14,7 @@ CHUDObituary::~CHUDObituary()
 {
 }
 
-void CHUDObituary::OnUpdate(float fDeltaTime, float fFadeValue)
+void CHUDObituary::Update(float fDeltaTime)
 {
 	if(!m_empty)
 	{

@@ -22,33 +22,22 @@ History:
 #include "HUD/HUDRadar.h"
 #include "HUD/HUDTextChat.h"
 
+static const bool DEBUG_VERBOSE = false;
 
 enum EUserInfoKey
 {
   eUIK_none,
   eUIK_nick,
-  eUIK_country,
-  eUIK_played,
-  eUIK_kills,
-  eUIK_deaths,
-  eUIK_accuracy,
-  eUIK_suitMode,
-  eUIK_favouriteWep,
-  eUIK_favouriteMap
+	eUIK_namespace,
+  eUIK_country
 };
 
 static TKeyValuePair<EUserInfoKey,const char*>
 gUserInfoKeys[] = {
   {eUIK_none,""},
   {eUIK_nick,"nick"},
+	{eUIK_namespace,"namespace"},
   {eUIK_country,"country"},
-  {eUIK_played,"played"},
-  {eUIK_kills,"kills"},
-  {eUIK_deaths,"deaths"},
-  {eUIK_accuracy,"accuracy"},
-  {eUIK_suitMode,"suitMode"},
-  {eUIK_favouriteWep,"fav_weapon"},
-  {eUIK_favouriteMap,"fav_map"}
 };
 
 struct CGameNetworkProfile::SChatText
@@ -81,6 +70,637 @@ struct CGameNetworkProfile::SChatText
   std::vector<SChatUser>  m_chatList;
 };
 
+
+struct IStoredSerialize
+{
+	virtual void Serialize(int& val,const char* name) = 0;
+	virtual void Serialize(float& val, const char* name) = 0;
+	virtual void Serialize(string& val, const char* name) = 0;
+};
+
+class CStoredBase
+{
+public:
+	struct SMetaData
+	{
+		SMetaData(int recid = -1, bool fr = false):recordId(recid),free(fr),locked(false){}
+		int		recordId;
+		bool	free:1;
+		bool  locked:1;
+	};
+
+	enum EFieldType
+	{
+		eFT_int,
+		eFT_float,
+		eFT_string
+	};
+
+	struct SFieldConfig
+	{
+		SFieldConfig(EFieldType t = eFT_int, const char* n = ""):type(t),name(n){}
+		EFieldType	type;
+		const char* name;
+	};
+
+	struct SConfigBuilder : public IStoredSerialize
+	{
+		SConfigBuilder(std::vector<SFieldConfig>& cfg):m_cfg(cfg){}
+
+		virtual void Serialize(int& val,const char* name)
+		{
+			m_cfg.push_back(SFieldConfig(eFT_int,name));
+		}
+		virtual void Serialize(float& val, const char* name)
+		{
+			m_cfg.push_back(SFieldConfig(eFT_float,name));
+		}
+		virtual void Serialize(string& val, const char* name)
+		{
+			m_cfg.push_back(SFieldConfig(eFT_string,name));
+		}
+		std::vector<SFieldConfig>& m_cfg;
+	};
+
+	class SReadSerializer : public IStoredSerialize
+	{
+	public:
+		SReadSerializer(int value, int idx):ivalue(value),type(eFT_int),field_idx(idx),cur_field(0){}
+		SReadSerializer(float value, int idx):fvalue(value),type(eFT_float),field_idx(idx),cur_field(0){}
+		SReadSerializer(const char* value, int idx):svalue(value),type(eFT_string),field_idx(idx),cur_field(0){}
+		virtual void Serialize(int& val,const char* name)
+		{
+			if(cur_field == field_idx)
+			{
+				val = ivalue;
+			}
+			cur_field++;
+		}
+		virtual void Serialize(float& val, const char* name)
+		{
+			if(cur_field == field_idx)
+			{
+				val = fvalue;
+			}
+			cur_field++;
+		}
+		virtual void Serialize(string& val, const char* name)
+		{
+			if(cur_field == field_idx)
+			{
+				val = svalue;
+			}
+			cur_field++;			
+		}
+	private:
+		int					ivalue;
+		float				fvalue;
+		const char* svalue;
+		int					field_idx;
+		int					cur_field;
+		EFieldType	type;
+	};
+
+
+	class SWriteSerializer : public IStoredSerialize
+	{
+	public:
+		SWriteSerializer(int idx):field_idx(idx),cur_field(0){}
+		virtual void Serialize(int& val,const char* name)
+		{
+			if(cur_field == field_idx)
+			{
+				ivalue = val;
+				type = eFT_int;
+			}
+			cur_field++;
+		}
+		virtual void Serialize(float& val, const char* name)
+		{
+			if(cur_field == field_idx)
+			{
+				fvalue = val;
+				type = eFT_float;
+			}
+			cur_field++;
+		}
+		virtual void Serialize(string& val, const char* name)
+		{
+			if(cur_field == field_idx)
+			{
+				svalue = val;
+				type = eFT_string;
+			}
+			cur_field++;			
+		}
+		const char* GetSValue()const
+		{
+			return svalue;
+		}
+		const int		GetIValue()const
+		{
+			return ivalue;
+		}
+		const float GetFValue()const
+		{
+			return fvalue;
+		}
+	private:
+		int					ivalue;
+		float				fvalue;
+		const char* svalue;
+		int					field_idx;
+		int					cur_field;
+		EFieldType	type;
+	};
+
+	CStoredBase()
+	{
+		
+	}
+
+	template<class T>
+	void InitConfig()
+	{
+		T val;
+		SConfigBuilder bld(m_config);
+		val.Serialize(&bld);
+	}
+	
+	virtual ~CStoredBase()
+	{}
+
+	std::vector<SFieldConfig>		m_config;
+};
+
+template<class T>
+class CGameNetworkProfile::TStoredArray : public CStoredBase
+{
+private:
+	struct SReader : public CGameNetworkProfile::SStorageQuery, public IStatsReader
+	{
+		SReader(TStoredArray* p,CGameNetworkProfile* pr, const char* table_name):SStorageQuery(pr),m_array(p),m_id(-1),m_table(table_name){}
+		
+		virtual const char* GetTableName()
+		{
+			return m_table;
+		}
+		virtual int         GetFieldsNum()
+		{
+			return m_array->m_config.size();
+		}
+		virtual const char* GetFieldName(int i)
+		{
+			return m_array->m_config[i].name;
+		}
+		virtual void        NextRecord(int id)
+		{
+			AddValue();
+			m_id = id;
+		}
+		virtual void        OnValue(int field, const char* val)
+		{
+			SReadSerializer s(val,field);
+			m_value.Serialize(&s);
+		}
+		virtual void        OnValue(int field, int val)
+		{
+			SReadSerializer s(val,field);
+			m_value.Serialize(&s);
+		}
+		virtual void        OnValue(int field, float val)
+		{
+			SReadSerializer s(val,field);
+			m_value.Serialize(&s);
+		}
+		virtual void        End(bool ok)
+		{
+			if(ok)
+				AddValue();
+			delete this;//we're done
+		}
+		void AddValue()
+		{
+			if(m_id != -1 && m_parent)
+			{
+				m_array->m_array.push_back(std::make_pair(m_value,SMetaData(m_id)));
+			}
+		}
+		T							m_value;
+		int						m_id;
+		TStoredArray*	m_array;
+		const char*   m_table;
+	};
+
+	struct SWriter : public CGameNetworkProfile::SStorageQuery, public IStatsWriter
+	{
+		SWriter(TStoredArray* p, CGameNetworkProfile* pr, const char* table_name):SStorageQuery(pr),m_array(p),m_curidx(-1),m_processed(0),m_table(table_name)
+		{
+			for(int i=0;i<m_array->m_array.size();++i)
+			{
+				SMetaData& md = m_array->GetMetaData(i);
+				if(!md.free && md.recordId == -1 && !md.locked)
+				{
+					md.locked = true;
+					if(DEBUG_VERBOSE)
+						CryLog("Writing %d",i);
+					m_ids.push_back(i);
+				}
+			}
+		}
+
+		virtual const char* GetTableName()
+		{
+			return m_table;
+		}
+		virtual int GetFieldsNum()
+		{
+			return m_array->m_config.size();
+		}
+		virtual const char* GetFieldName(int i)
+		{
+			return m_array->m_config[i].name;			
+		}
+		virtual int GetRecordsNum()
+		{
+			return m_ids.size();
+		}
+		virtual int NextRecord()
+		{
+			++m_curidx;
+			return -1;
+		}
+		virtual bool GetValue(int field, const char*& val)
+		{
+			if(m_array->m_config[field].type != eFT_string)
+				return false;
+			SWriteSerializer ser(field);
+			m_array->m_array[m_ids[m_curidx]].first.Serialize(&ser);
+			val = ser.GetSValue();
+			return true;
+		}
+		virtual bool GetValue(int field, int& val)
+		{
+			if(m_array->m_config[field].type != eFT_int)
+				return false;
+			SWriteSerializer ser(field);
+			m_array->m_array[m_ids[m_curidx]].first.Serialize(&ser);
+			val = ser.GetIValue();
+			return true;
+		}
+		virtual bool GetValue(int field, float& val)
+		{
+			if(m_array->m_config[field].type != eFT_float)
+				return false;
+			SWriteSerializer ser(field);
+			m_array->m_array[m_ids[m_curidx]].first.Serialize(&ser);
+			val = ser.GetFValue();
+			return true;			
+		}
+		//output
+		virtual void  OnResult(int idx, int id, bool success)
+		{
+			m_processed++;
+			if(DEBUG_VERBOSE)
+				CryLog("Written %s %d, id:%x",success?"ok":"failed",m_ids[idx],id);
+			if(m_parent)
+			{
+				m_array->GetMetaData(m_ids[idx]).locked = false;
+				if(success)
+				{
+					m_array->GetMetaData(m_ids[idx]).recordId = id;				
+				}
+			}
+		}
+
+		virtual void End(bool ok)
+		{			
+			delete this;
+		}
+		int								m_processed;
+		int								m_curidx;
+		std::vector<int>	m_ids;
+		TStoredArray*			m_array;
+		const	char*				m_table;
+	};
+
+	struct SDeleter : public CGameNetworkProfile::SStorageQuery, public IStatsDeleter
+	{
+		SDeleter(TStoredArray* p, CGameNetworkProfile* pr, const char* table_name):SStorageQuery(pr),m_array(p),cur_idx(0),processed(0),m_table(table_name)
+		{
+			for(int i=0;i<m_array->m_array.size();++i)
+			{
+				SMetaData& md = m_array->GetMetaData(i);
+				if(md.free && md.recordId != -1 && !md.locked)
+				{
+					md.locked = true;
+					if(DEBUG_VERBOSE)
+						CryLog("Deleting %d, id:%x",i,md.recordId);
+					ids.push_back(i);
+				}
+			}
+		}
+		virtual const char* GetTableName()
+		{
+			return m_table;
+		}
+		virtual int   GetRecordsNum()
+		{
+			return ids.size();
+		}
+		virtual int   NextRecord()
+		{
+			return m_array->GetMetaData(ids[cur_idx++]).recordId;
+		}
+		virtual void  OnResult(int idx, int id, bool success)
+		{
+			processed++;
+			if(DEBUG_VERBOSE)
+				CryLog("Deleted %s %d, id:%x",success?"ok":"failed",ids[idx],id);
+			if(m_parent)
+			{
+				m_array->GetMetaData(ids[idx]).locked = false;
+				if(success)
+					m_array->GetMetaData(ids[idx]).recordId = -1;
+			}
+		}
+		virtual void End(bool success)
+		{
+			delete this;//we're done
+		}
+		std::vector<int>	ids;
+		int								cur_idx;
+		int								processed;
+		TStoredArray*			m_array;
+		const char*				m_table;
+	};
+
+	SMetaData& GetMetaData(int idx)
+	{
+		return m_array[idx].second;
+	}
+
+public:
+	TStoredArray():m_numFree(0)
+	{
+		InitConfig<T>();
+	}
+
+	void push(const T& val)
+	{
+		if(m_numFree)
+		{
+			for(int i=0;i<m_array.size();++i)
+			{
+				if(m_array[i].second.free)
+				{
+					m_array[i].first = val;
+					m_array[i].second.free = false;
+					m_numFree--;
+					return;
+				}
+			}
+		}
+		m_array.push_back(std::make_pair(val,SMetaData()));
+	}
+
+	void erase(int idx)
+	{
+		assert(idx<size());
+		int r_idx = 0;
+		for(int i=0;i<m_array.size();++i)
+		{
+			if(m_array[i].second.free)
+				continue;
+			if(r_idx == idx)
+			{
+				m_array[i].first = T();
+				m_array[i].second.free = true;
+				m_numFree++;
+				return;
+			}
+			++r_idx;
+		}
+		assert(false);
+	}
+
+	bool empty()const
+	{
+		return m_array.empty() || m_array.size() == m_numFree;
+	}
+
+	int size()const
+	{
+		return m_array.size()-m_numFree;
+	}
+
+	const T& operator[](int idx)const
+	{
+		assert(idx<size());
+		int r_idx = 0;
+		for(int i=0;i<m_array.size();++i)
+		{
+			if(m_array[i].second.free)
+				continue;
+			if(r_idx == idx)
+			{
+				return m_array[i].first;
+			}
+			++r_idx;
+		}
+		assert(false);
+		return m_array[0].first;
+	}
+
+	void clear()
+	{
+		m_array.resize(0);
+		m_numFree = 0;
+	}
+	
+	void LoadRecords(CGameNetworkProfile* np, const char* table_name)
+	{
+		np->m_profile->ReadStats(new SReader(this,np,table_name));
+	}
+
+	void SaveRecords(CGameNetworkProfile* np, const char* table_name)
+	{
+		if(m_numFree)
+		{
+			for(int i=0;i<m_array.size();++i)
+				if(GetMetaData(i).free && !GetMetaData(i).locked && GetMetaData(i).recordId != -1)
+				{
+					np->m_profile->DeleteStats(new SDeleter(this, np, table_name));
+					break;
+				}
+		}
+		for(int i=0;i<m_array.size();++i)
+			if(!GetMetaData(i).free && !GetMetaData(i).locked && GetMetaData(i).recordId == -1)
+			{
+				np->m_profile->WriteStats(new SWriter(this, np, table_name));
+			}
+	}
+
+	std::vector<std::pair<T,SMetaData> >	m_array;
+	int																		m_numFree;
+};
+
+void SStoredUserInfo::Serialize(struct IStoredSerialize* ser)
+{
+	ser->Serialize(m_kills,"Kills");
+	ser->Serialize(m_deaths,"Deaths");
+	ser->Serialize(m_shots,"Shots");
+	ser->Serialize(m_hits,"Hits");
+	ser->Serialize(m_played,"Played");
+	ser->Serialize(m_mode,"FavoriteMode");
+	ser->Serialize(m_map,"FavoriteMap");
+	ser->Serialize(m_weapon,"FavoriteWeapon");
+	ser->Serialize(m_vehicle,"FavoriteVehicle");
+	ser->Serialize(m_suitmode,"FavoriteSuitMode");
+}
+
+struct CGameNetworkProfile::SUserInfoReader : public CStoredBase
+{
+	struct SReader : public CGameNetworkProfile::SStorageQuery, public IStatsReader
+	{
+		SReader(SUserInfoReader* r,CGameNetworkProfile* pr, const char* table_name, int id):SStorageQuery(pr),m_reader(r),m_id(-1),m_table(table_name),m_profile(id){}
+
+		virtual const char* GetTableName()
+		{
+			return m_table;
+		}
+		virtual int         GetFieldsNum()
+		{
+			return m_reader->m_config.size();
+		}
+		virtual const char* GetFieldName(int i)
+		{
+			return m_reader->m_config[i].name;
+		}
+		virtual void        NextRecord(int id)
+		{
+			AddValue();
+			m_id = id;
+		}
+		virtual void        OnValue(int field, const char* val)
+		{
+			SReadSerializer s(val,field);
+			m_value.Serialize(&s);
+		}
+		virtual void        OnValue(int field, int val)
+		{
+			SReadSerializer s(val,field);
+			m_value.Serialize(&s);
+		}
+		virtual void        OnValue(int field, float val)
+		{
+			SReadSerializer s(val,field);
+			m_value.Serialize(&s);
+		}
+		virtual void        End(bool ok)
+		{
+			if(ok)
+				AddValue();
+			delete this;//we're done
+		}
+		void AddValue()
+		{
+			if(m_id != -1 && m_parent)
+			{
+				m_reader->OnValue(m_profile, m_value);
+			}
+		}
+		SStoredUserInfo		m_value;
+		int								m_id;
+		SUserInfoReader*	m_reader;
+		const char*				m_table;
+		int								m_profile;
+	};
+
+	SUserInfoReader(CGameNetworkProfile *pr):m_profile(pr)
+	{
+		InitConfig<SStoredUserInfo>();
+	}
+
+	void ReadInfo(int profileId)
+	{
+		static string m_table;
+		if(m_table.empty())
+		{
+			m_table.Format("PlayerStats_v%d",g_pGame->GetIGameFramework()->GetIGameStatsConfig()->GetStatsVersion());
+		}
+		m_profile->m_profile->ReadStats(profileId, new SReader(this, m_profile, m_table, profileId));
+	}
+
+	void OnValue(int id, SStoredUserInfo& info)
+	{
+		if(DEBUG_VERBOSE)
+			CryLog("Info for %d read successfully - kills %d", id, info.m_kills);
+		
+		IGameStatsConfig* config = g_pGame->GetIGameFramework()->GetIGameStatsConfig();
+
+		SUserStats stats;
+		stats.m_accuracy = info.m_shots?(info.m_hits/float(info.m_shots)):0.0f;
+		stats.m_deaths = info.m_deaths;
+		stats.m_kills = info.m_kills;
+		stats.m_played = info.m_played;
+		stats.m_killsPerMinute = info.m_played?(info.m_kills/(float)info.m_played):0;
+
+		if(int mod = config->GetCategoryMod("mode"))
+		{
+			stats.m_gameMode = config->GetValueNameByCode("mode",info.m_mode%mod);
+		}
+
+		if(int mod = config->GetCategoryMod("map"))
+		{
+			stats.m_map = config->GetValueNameByCode("map",info.m_map%mod);
+		}
+
+		if(int mod = config->GetCategoryMod("weapon"))
+		{
+			stats.m_weapon = config->GetValueNameByCode("weapon",info.m_weapon%mod);
+		}
+		
+		if(int mod = config->GetCategoryMod("vehicle"))
+		{
+			stats.m_vehicle = config->GetValueNameByCode("vehicle",info.m_vehicle%mod);
+		}
+
+		if(int mod = config->GetCategoryMod("suit_mode"))
+		{
+			stats.m_suitMode = config->GetValueNameByCode("suit_mode",info.m_suitmode%mod);
+		}
+
+		m_profile->OnUserStats(id, stats, eUIS_backend);
+	}
+	CGameNetworkProfile *m_profile;
+};
+
+
+static TKeyValuePair<ENetworkProfileError,const char*>
+gProfileErrors[] = {	{eNPE_ok,""},
+											{eNPE_connectFailed,"@ui_menu_connectFailed"},
+											{eNPE_disconnected,"@ui_menu_disconnected"},
+											{eNPE_loginFailed,"@ui_menu_loginFailed"},
+											{eNPE_loginTimeout,"@ui_menu_loginTimeout"},
+											{eNPE_anotherLogin,"@ui_menu_anotherLogin"},
+											{eNPE_nickTaken,"@ui_menu_nickTaken"},
+											{eNPE_registerAccountError,"@ui_menu_registerAccountError"},
+											{eNPE_registerGeneric,"@ui_menu_registerGeneric"},
+											{eNPE_nickTooLong,"@ui_menu_nickTooLong"},
+											{eNPE_nickFirstNumber,"@ui_menu_nickFirstNumber"},
+											{eNPE_nickSlash,"@ui_menu_nickSlash"},
+											{eNPE_nickFirstSpecial,"@ui_menu_nickFirstSpecial"},
+											{eNPE_nickNoSpaces,"@ui_menu_nickNoSpaces"},
+											{eNPE_nickEmpty,"@ui_menu_nickEmpty"},
+											{eNPE_profileEmpty,"@ui_menu_profileEmpty"},
+											{eNPE_passTooLong,"@ui_menu_passTooLong"},
+											{eNPE_passEmpty,"@ui_menu_passEmpty"},
+											{eNPE_mailTooLong,"@ui_menu_mailTooLong"},
+											{eNPE_mailEmpty,"@ui_menu_mailEmpty"}
+};
+
+
 struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
 {
   enum EQueryReason
@@ -107,177 +727,31 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
 
   struct SBuddyRequest
   {
+		SBuddyRequest(const string& n, const string& m):nick(n),message(m){}
     string nick;
     string message;
   };
 
   struct SIgnoredProfile
   {
-    int recordId;
     int id;
     string nick;
+
+		void Serialize(IStoredSerialize* ser)
+		{
+			ser->Serialize(id,"profile");
+			ser->Serialize(nick,"nick");
+		}
   };
 
   typedef std::map<int, SBuddyRequest> TBuddyRequestsMap;
-
-  class CIgnoreListReader : public SStorageQuery, public IStatsReader
-  {
-  public:
-    CIgnoreListReader(CGameNetworkProfile* parent):
-    SStorageQuery(parent)
-    {
-      m_ignore.id = -1;
-      m_ignore.recordId = -1;
-    }
-
-    //input
-    virtual const char* GetTableName()
-    {
-      return "ignorelist";
-    }
-
-    virtual int         GetFieldsNum()
-    {
-      return 2;
-    }
-
-    virtual const char* GetFieldName(int i)
-    {
-      if(i==0)
-        return "profile";
-      else
-        return "nick";
-    }
-    //output
-    virtual void        NextRecord(int id)
-    {
-      AddIgnore();
-      m_ignore.recordId = id;
-    }
-
-    virtual void        OnValue(int field, const char* val)
-    {
-      assert(field == 1);
-      m_ignore.nick = val;
-    }
-
-    virtual void        OnValue(int field, int val)
-    {
-      assert(field == 0);
-      m_ignore.id = val;
-    }
-
-    virtual void        OnValue(int field, float val)
-    {
-      assert(false);    
-    }
-
-    virtual void        End(bool error)
-    {
-      if(!error)
-      {
-        AddIgnore();
-      }
-      //end
-      delete this;
-    }
-
-    void AddIgnore()
-    {
-      if(m_ignore.recordId == -1 || !m_parent)
-        return;
-      m_parent->m_buddies->AddIgnore(m_ignore.id,m_ignore.nick);
-    }
-
-    SIgnoredProfile m_ignore;
-  };
-
-  class CIgnoreListWriter : public SStorageQuery, public IStatsWriter
-  {
-  public:
-    CIgnoreListWriter(CGameNetworkProfile* parent):
-    SStorageQuery(parent),
-    m_idx(-1),
-    m_results(0)
-    {}
-
-    virtual const char* GetTableName()
-    {
-      return "ignoredlist";
-    }
-
-    virtual int GetFieldsNum()
-    {
-      return 2;
-    }
-
-    virtual const char* GetFieldName(int i)
-    {
-      if(i==0)
-        return "profile";
-      else
-        return "nick";
-    }
-
-    //output
-    virtual int   GetRecordsNum()
-    {
-      return m_parent->m_buddies->m_ignoreList.size();
-    }
-    virtual int   NextRecord()
-    {
-      m_idx++;
-      return m_parent->m_buddies->m_ignoreList[m_idx].recordId;
-    }
-
-    virtual bool  GetValue(int field, const char*& val)
-    {
-      if(field == 1)
-      {
-        if(m_parent->m_buddies->m_ignoreList[m_idx].nick.empty())
-          val = "";
-        else
-          val = m_parent->m_buddies->m_ignoreList[m_idx].nick;
-      }
-      else
-        return false;
-      return true;
-    }
-
-    virtual bool  GetValue(int field, int& val)
-    {
-      if(field == 0)
-        val = m_parent->m_buddies->m_ignoreList[m_idx].id;
-      else
-        return false;
-      return true;
-    }
-    virtual bool  GetValue(int field, float& val){return false;}
-    //output
-    virtual void  OnResult(int idx, int id, bool success)
-    {
-      if(success && m_parent)
-      {
-          m_parent->m_buddies->m_ignoreList[idx].recordId = id;
-      }
-
-      m_results++;
-      if(m_results == GetRecordsNum())
-      {
-        delete this;
-      }
-    }
-
-    int               m_idx;
-    int               m_results;
-  };
 
   SBuddies(CGameNetworkProfile* p):m_parent(p),m_textId(0),m_ui(0)
   {}
 
   void AddNick(const char* nick){}
 
-  void UpdateFriend(int id, const char* nick, EUserStatus s, const char* location)
+  void UpdateFriend(int id, const char* nick, EUserStatus s, const char* location, bool foreign)
   {
     SChatUser *u = 0;
     for(int i=0;i<m_buddyList.size();++i)
@@ -299,6 +773,7 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
     u->m_status = s;
     u->m_id = id;
     u->m_location = location;
+		u->m_foreign = foreign;
     //updated user with id
     if(m_ui)
     {
@@ -326,28 +801,13 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
 
   void AddIgnore(int id, const char* nick)
   {
-    bool found = false;
-    for(int i=0;i<m_ignoreList.size();++i)
-    {
-      if(m_ignoreList[i].id == -1)
-      {
-        m_ignoreList[i].id = id;
-        m_ignoreList[i].nick = nick;
-        found = true;
-        break;
-      }
-    }
-
-    if(!found)
-    {
-      SIgnoredProfile ip;
-      ip.recordId=-1;
-      ip.id = id;
-      ip.nick = nick;
-      m_ignoreList.push_back(ip);
-    }
+    SIgnoredProfile ip;
+    ip.id = id;
+    ip.nick = nick;
+    m_ignoreList.push(ip);
 
     SaveIgnoreList();
+
     if(m_ui)
     {
       SChatUser u;
@@ -363,8 +823,7 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
     {
       if(m_ignoreList[i].id == id)
       {
-        m_ignoreList[i].id = -1;
-        m_ignoreList[i].nick="";
+        m_ignoreList.erase(i);
         if(m_ui)
           m_ui->RemoveIgnore(id);
         SaveIgnoreList();
@@ -375,24 +834,18 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
 
   void OnFriendRequest(int id, const char* message)
   {
-    if(IsIgnoring(id))
+		if(IsIgnoring(id))
+		{
       m_parent->m_profile->AuthFriend(id,false);
-    SBuddyRequest br;
-    br.message = message;
-    
-    TUserInfoMap::iterator it = m_infoCache.find(id);
-    if(it!=m_infoCache.end())
-    {
-      br.nick = it->second.m_nick;
-      if(m_ui)
-        m_ui->OnAuthRequest(id,br.nick,message);
-    }
-    else
-    {
-      m_parent->m_profile->GetProfileInfo(id);
-    }
+			return;
+		}
 
-    m_requests.insert(std::make_pair(id,br));
+		SPendingOperation op(eQR_buddyRequest);
+		op.m_id = id;
+		op.m_param = message;
+		m_operations.push_back(op);
+		//if(!CheckId(id)) - not checking because there is a lag about having buddy added - omitted for possibility of auto add
+		m_parent->m_profile->GetUserNick(id);
   }
 
   void OnMessage(int id, const char* message)
@@ -411,7 +864,7 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
 
     if(m_parent->m_hub->IsIngame() && g_pGame->GetCVars()->g_buddyMessagesIngame)
     {
-      if(CHUDTextChat *pChat = g_pGame->GetHUD()->GetMPChat())
+      if(CHUDTextChat *pChat = SAFE_HUD_FUNC_RET(GetMPChat()))
       {
         const char* name = "";
         for(int i=0;i<m_buddyList.size();++i)
@@ -422,7 +875,7 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
             break;
           }
         }
-        pChat->AddChatMessage(string().Format("From [%s] :",name), message, 0);
+        pChat->AddChatMessage(string().Format("From [%s] :",name), message, 0, false);
       }
     }
   }
@@ -435,14 +888,34 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
     }
     else
     {
-      m_parent->m_hub->OnLoginFailed(descr);
+			m_parent->m_loggingIn = false;
+			
+			const char* err = VALUE_BY_KEY(res,gProfileErrors);
+			m_parent->m_hub->OnLoginFailed(err);
     }
   }
 
   void OnError(ENetworkProfileError res, const char* descr)
   {
-    if(m_ui)
-      m_ui->ShowError();
+		bool logoff = false;
+		switch(res)
+		{
+			case eNPE_connectFailed:
+			case eNPE_disconnected:		
+			case eNPE_anotherLogin:			
+				{
+					const char* err = VALUE_BY_KEY(res,gProfileErrors);
+					m_parent->m_hub->ShowError(err,true);
+					logoff = true;
+				}
+				break;
+		}	
+
+		if(m_parent->m_loggingIn && m_parent->m_hub)
+			m_parent->m_hub->CloseLoadingDlg();
+
+		if(logoff && m_parent->m_hub)
+			m_parent->m_hub->DoLogoff();
   }
 
   void OnProfileInfo(int id, const char* key, const char* value)
@@ -459,32 +932,16 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
     case eUIK_nick:
       u.m_nick = value;
       break;
+		case eUIK_namespace:
+			u.m_foreignName = !strcmp(value,"foreign");
+			break;
     case eUIK_country:
       u.m_country = value;
-      break;
-    case eUIK_played:
-      u.m_played = atoi(value);
-      break;
-    case eUIK_kills:
-      u.m_kills = atoi(value);
-      break;
-    case eUIK_deaths:
-      u.m_deaths = atoi(value);
-      break;
-    case eUIK_accuracy:
-      u.m_accuracy = atoi(value);
-      break;
-    case eUIK_suitMode:
-      u.m_suitmode = atoi(value);
-      break;
-    case eUIK_favouriteWep:
-      u.m_favoriteWeapon = atoi(value);
-      break;
-    case eUIK_favouriteMap:
-      u.m_favoriteMap = atoi(value);
+			if(id == m_parent->m_profileId)
+				m_parent->m_country = value;
       break;
     default:;
-    }
+    }		
   }
 
   virtual void OnProfileComplete(int id)
@@ -524,8 +981,14 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
     }
   }
   
-  virtual void OnUserNick(int id, const char* nick)
+  virtual void OnUserNick(int id, const char* nick, bool foreign_name)
   {
+		if(m_infoCache.find(id) == m_infoCache.end())
+		{
+			OnProfileInfo(id,"namespace",foreign_name?"foreign":"home");
+			OnProfileInfo(id,"nick",nick);
+		}
+
     for(int i=0;i<m_operations.size();++i)
     {
       if(m_operations[i].m_id == id && m_operations[i].m_nick.empty())
@@ -536,6 +999,55 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
       }
     }
   }
+
+	bool GetUserInfo(int id, SUserInfo& info)
+	{
+		TUserInfoMap::iterator it = m_infoCache.find(id);
+		if(it != m_infoCache.end())
+		{
+			if(!it->second.m_basic)//we have extended info
+			{
+				if(it->second.m_expires < gEnv->pTimer->GetFrameStartTime())
+				{
+					if(DEBUG_VERBOSE)
+						CryLog("Stats for %d expired on %d",it->first, uint32(it->second.m_expires.GetValue()&0xFFFFFFFF));
+					it->second.m_basic = true;//clear it
+				}
+				else
+				{
+					info = it->second;
+					return true;
+				}
+			}			
+		}
+		return false;
+	}
+
+	bool GetUserInfo(const char* nick, SUserInfo& info, int& id)
+	{
+		for(TUserInfoMap::iterator it = m_infoCache.begin(),eit = m_infoCache.end(); it!=eit; ++it)
+		{
+			if(it->second.m_nick == nick && !it->second.m_foreignName)
+			{
+				if(!it->second.m_basic)//we have extended info
+				{
+					if(it->second.m_expires < gEnv->pTimer->GetFrameStartTime())
+					{
+						if(DEBUG_VERBOSE)
+							CryLog("Stats for %d expired on %d",it->first, uint32(it->second.m_expires.GetValue()&0xFFFFFFFF));
+						it->second.m_basic = true;//clear it
+					}
+					else
+					{
+						id = it->first;
+						info = it->second;
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
 
   void ExecuteOperation(int idx)
   {
@@ -559,10 +1071,33 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
       break;
     case eQR_getStats:
       m_parent->m_profile->GetProfileInfo(o.m_id);
+			m_parent->m_infoReader->ReadInfo(o.m_id);
       break;
     case eQR_buddyRequest:
-      if(m_ui)
-        m_ui->OnAuthRequest(o.m_id,o.m_nick,o.m_param);
+			{
+				if(!strncmp(o.m_param.c_str(), AUTO_INVITE_TEXT, strlen(AUTO_INVITE_TEXT)))//this may be autogenerated
+				{
+					bool buddy = false;
+					for(int i=0;i<m_buddyList.size();++i)
+						if(m_buddyList[i].m_id == o.m_id)
+						{
+							buddy = true;
+							break;
+						}
+						if(buddy)
+						{
+							m_parent->m_profile->AuthFriend(o.m_id,true);
+							return;
+						}
+						else
+						{
+							o.m_param = "@ui_menu_auto_invite";								
+						}
+				}
+				m_requests.insert(std::make_pair(o.m_id,SBuddyRequest(o.m_nick,o.m_param)));
+				if(m_ui)
+	        m_ui->OnAuthRequest(o.m_id,o.m_nick,o.m_param);
+			}
       break;
     }
     m_operations.erase(m_operations.begin()+idx);
@@ -611,7 +1146,7 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
     TUserInfoMap::iterator it = m_infoCache.find(id);
     if(it!=m_infoCache.end())
     {
-      OnUserNick(id,it->second.m_nick);
+      OnUserNick(id,it->second.m_nick,it->second.m_foreignName);
       return true;
     }
     return false;
@@ -631,6 +1166,9 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
 
   void Ignore(const char* nick)
   {
+		if(!CanIgnore(nick))
+			return;
+
     Remove(nick);
 
     SPendingOperation op(eQR_addIgnore);
@@ -640,7 +1178,7 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
       m_parent->m_profile->GetUserId(nick);
   }
   
-  void GetUserInfo(const char* nick)
+  void QueryUserInfo(const char* nick)
   {
     SPendingOperation op(eQR_getStats);
     op.m_nick = nick;
@@ -649,7 +1187,7 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
       m_parent->m_profile->GetUserId(nick);
   }
 
-  void GetUserInfo(int id)
+  void QueryUserInfo(int id)
   {
     SPendingOperation op(eQR_getStats);
     op.m_id = id;
@@ -692,14 +1230,41 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
     m_parent->m_profile->SendFriendMessage(id,message);
   }
 
+	void OnUserStats(int id, const SUserStats& stats, EUserInfoSource src)
+	{
+		TUserInfoMap::iterator it = m_infoCache.find(id);
+		if(it != m_infoCache.end())
+		{
+			it->second.m_stats = stats;
+			it->second.m_source = src;
+			it->second.m_basic = false;
+			if(src == eUIS_backend)
+				it->second.m_expires = gEnv->pTimer->GetFrameStartTime() + 10*60.0f;//10 minutes cache
+			else
+				it->second.m_expires = gEnv->pTimer->GetFrameStartTime() + 20*60.0f;//20 minutes for chat users
+	
+			if(DEBUG_VERBOSE)
+				CryLog("Stats for %d cached on %d",it->first, uint32(it->second.m_expires.GetValue()&0xFFFFFFFF));
+			if(m_ui)
+				m_ui->ProfileInfo(id, it->second);
+		}
+		else
+		{
+			it = m_infoCache.insert(std::make_pair(id,SUserInfo())).first;
+			it->second.m_stats = stats;
+			if(m_ui)
+				m_ui->ProfileInfo(id, it->second);
+		}
+	}
+
   void ReadIgnoreList()
   {
-    m_parent->m_profile->ReadStats(new CIgnoreListReader(m_parent));
+		m_ignoreList.LoadRecords(m_parent,"ignorelist");
   }
 
   void SaveIgnoreList()
   {
-    m_parent->m_profile->WriteStats(new CIgnoreListWriter(m_parent));
+		m_ignoreList.SaveRecords(m_parent,"ignorelist");
   }
 
   bool CanInvite(const char* nick)
@@ -769,7 +1334,8 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
   }
 
   std::vector<SChatUser>        m_buddyList;
-  std::vector<SIgnoredProfile>  m_ignoreList;
+  //std::vector<SIgnoredProfile>  m_ignoreList;
+	TStoredArray<SIgnoredProfile> m_ignoreList;
   TUserInfoMap                  m_infoCache;
 
   TBuddyRequestsMap       m_requests;
@@ -786,169 +1352,14 @@ struct CGameNetworkProfile::SBuddies  : public INetworkProfileListener
   string                m_uisearch;
 };
 
+void SStoredServer::Serialize(struct IStoredSerialize* ser)
+{
+	ser->Serialize(ip,"ip");
+	ser->Serialize(port,"port");
+}
+
 struct CGameNetworkProfile::SStoredServerLists
 {
-  struct SServerListReader : public SStorageQuery, public IStatsReader
-  {
-    SServerListReader(CGameNetworkProfile* parent, bool rec):
-    SStorageQuery(parent),
-    m_recent(rec)
-    {
-      m_server.id = -1;
-    }
-  
-    //input
-    virtual const char* GetTableName()
-    {
-      return m_recent?"recent":"favorites";
-    }
-
-    virtual int         GetFieldsNum()
-    {
-      return 2;
-    }
-
-    virtual const char* GetFieldName(int i)
-    {
-      if(i==0)
-        return "ip";
-      else
-        return "port";
-    }
-    //output
-    virtual void        NextRecord(int id)
-    {
-      AddServer();
-      m_server.id = id;
-    }
-
-    virtual void        OnValue(int field, const char* val)
-    {
-      assert(false);
-    }
-
-    virtual void        OnValue(int field, int val)
-    {
-      if(field == 0)
-        m_server.ip = val;
-      else
-        m_server.port = val;
-    }
-
-    virtual void        OnValue(int field, float val)
-    {
-      assert(false);    
-    }
-
-    virtual void        End(bool error)
-    {
-      if(!error)
-      {
-        AddServer();
-      }
-      delete this;
-    }
-
-    void AddServer()
-    {
-      if(m_server.id ==-1 || !m_parent)
-        return;
-      if(m_recent)
-        m_parent->m_stroredServers->m_recent.push_back(m_server);
-      else
-        m_parent->m_stroredServers->m_favorites.push_back(m_server);
-    }
-
-    SStoredServer     m_server;
-    bool m_recent;
-  };
-
-  struct SServerListWriter : public SStorageQuery, public IStatsWriter 
-  {
-    SServerListWriter(CGameNetworkProfile* parent, bool rec):
-    SStorageQuery(parent),
-    m_recent(rec),
-    m_idx(-1),
-    m_results(0)
-    {
-    }
-
-    //input
-    virtual const char* GetTableName()
-    {
-      return m_recent?"recent":"favorites";
-    }
-
-    virtual int GetFieldsNum()
-    {
-      return 2;
-    }
-
-    virtual const char* GetFieldName(int i)
-    {
-      if(i==0)
-        return "ip";
-      else
-        return "port";
-    }
-
-    //output
-    virtual int   GetRecordsNum()
-    {
-      if(m_recent)
-        return m_parent->m_stroredServers->m_recent.size();
-      else
-        return m_parent->m_stroredServers->m_favorites.size();
-    }
-    virtual int   NextRecord()
-    {
-      m_idx++;
-      return GetServer().id;
-    }
-    virtual bool  GetValue(int field, const char*& val){return false;}
-    virtual bool  GetValue(int field, int& val)
-    {
-      if(field == 0)
-        val = GetServer().ip;
-      else if(field == 1)
-        val = GetServer().port;
-      else
-        return false;
-      return true;
-    }
-    virtual bool  GetValue(int field, float& val){return false;}
-    //output
-    virtual void  OnResult(int idx, int id, bool success)
-    {
-      if(success && m_parent)
-      {
-        if(m_recent)
-          m_parent->m_stroredServers->m_recent[idx].id = id;
-        else
-          m_parent->m_stroredServers->m_favorites[idx].id = id;
-      }
-
-      m_results++;
-      if(m_results == GetRecordsNum())
-      {
-        delete this;
-      }
-    }
-
-    const SStoredServer& GetServer()
-    {
-      assert(m_parent);
-      if(m_recent)
-        return m_parent->m_stroredServers->m_recent[m_idx];
-      else
-        return m_parent->m_stroredServers->m_favorites[m_idx];
-    }
-
-    int               m_idx;
-    bool              m_recent;
-    int               m_results;
-  };
-
   SStoredServerLists(CGameNetworkProfile* p):
   m_parent(p)
   {
@@ -961,9 +1372,19 @@ struct CGameNetworkProfile::SStoredServerLists
 
   void ReadLists()
   {
-    m_parent->m_profile->ReadStats(new SServerListReader(m_parent,false));
-    m_parent->m_profile->ReadStats(new SServerListReader(m_parent,true));    
+		m_favorites.LoadRecords(m_parent,"favorites");
+		m_recent.LoadRecords(m_parent,"recent");
   }
+
+	void SaveFavoritesList()
+	{
+		m_favorites.SaveRecords(m_parent,"favorites");
+	}
+
+	void SaveRecentList()
+	{
+		m_recent.SaveRecords(m_parent,"recent");
+	}
 
   void UIActivated(INProfileUI* ui)
   {
@@ -979,10 +1400,10 @@ struct CGameNetworkProfile::SStoredServerLists
   void AddFavoriteServer(uint ip, ushort port)
   {
     SStoredServer s;
-    s.id = -1;
     s.ip = ip;
     s.port = port;
-    m_favorites.push_back(s);
+    m_favorites.push(s);
+		SaveFavoritesList();
   }
 
   void RemoveFavoriteServer(uint ip, ushort port)
@@ -991,7 +1412,8 @@ struct CGameNetworkProfile::SStoredServerLists
     {
       if(m_favorites[i].ip==ip && m_favorites[i].port==port)
       {
-        m_favorites.erase(m_favorites.begin()+i);
+        m_favorites.erase(i);
+				SaveFavoritesList();
         break;
       }
     }
@@ -1000,26 +1422,29 @@ struct CGameNetworkProfile::SStoredServerLists
   void AddRecentServer(uint ip, ushort port)
   {
     SStoredServer s;
-    s.id = -1;
     s.ip = ip;
     s.port = port;
-    m_recent.push_back(s);
+    m_recent.push(s);
+		if(m_recent.size()>20)
+			m_recent.erase(0);
+		SaveRecentList();
   }
 
-  std::vector<SStoredServer>      m_favorites;
-  std::vector<SStoredServer>      m_recent;
-  INProfileUI*                    m_ui;
+  TStoredArray<SStoredServer>	m_favorites;
+  TStoredArray<SStoredServer>	m_recent;
+  INProfileUI*								m_ui;
 
-  CGameNetworkProfile*            m_parent;
+  CGameNetworkProfile*				m_parent;
 };
 
 CGameNetworkProfile::CGameNetworkProfile(CMPHub* hub):
-m_hub(hub)
+m_hub(hub),m_loggingIn(false),m_profileId(-1)
 {
   INetworkService *serv = gEnv->pNetwork->GetService("GameSpy");
   if(serv)
   {
     m_profile = serv->GetNetworkProfile();
+		m_infoReader.reset(new SUserInfoReader(this));
   }
   else
   {
@@ -1036,20 +1461,35 @@ CGameNetworkProfile::~CGameNetworkProfile()
 void CGameNetworkProfile::Login(const char* login, const char* password)
 {
   m_login = login;
+	m_password = password;
+	m_loggingIn = true;
   m_buddies.reset(new SBuddies(this));
   m_stroredServers.reset(new SStoredServerLists(this));
   m_profile->AddListener(m_buddies.get());
   m_profile->Login(login,password);
 }
 
-void CGameNetworkProfile::Register(const char* login, const char* password, const char* email)
+void CGameNetworkProfile::LoginProfile(const char* email, const char* password, const char* profile)
 {
-  assert(m_profile);
+	m_login = profile;
+	m_password = password;
+	m_loggingIn = true;
+	m_buddies.reset(new SBuddies(this));
+	m_stroredServers.reset(new SStoredServerLists(this));
+	m_profile->AddListener(m_buddies.get());
+	m_profile->LoginProfile(email,password,profile);
+}
+
+void CGameNetworkProfile::Register(const char* login, const char* email, const char* pass, const char* country, SRegisterDayOfBirth dob)
+{
+	assert(m_profile);
   m_login = login;
+	m_password = pass;
+	m_loggingIn = true;
   m_buddies.reset(new SBuddies(this));
   m_stroredServers.reset(new SStoredServerLists(this));
   m_profile->AddListener(m_buddies.get());
-  m_profile->Register(login,password,email);
+  m_profile->Register(login,email,pass,country, dob);
 }
 
 void CGameNetworkProfile::Logoff()
@@ -1060,6 +1500,7 @@ void CGameNetworkProfile::Logoff()
   //TODO: wait for important queries to finish.
   CleanUpQueries();
 
+	m_loggingIn = false;
   m_profile->Logoff();
   m_profile->RemoveListener(m_buddies.get());
   m_buddies.reset(0);
@@ -1096,14 +1537,15 @@ void CGameNetworkProfile::StopIgnore(const char* nick)
   m_buddies->StopIgnore(nick);
 }
 
-void CGameNetworkProfile::GetUserInfo(const char* nick)
+void CGameNetworkProfile::QueryUserInfo(const char* nick)
 {
-  m_buddies->GetUserInfo(nick);
+  m_buddies->QueryUserInfo(nick);
 }
 
-void CGameNetworkProfile::GetUserInfo(int id)
+void CGameNetworkProfile::QueryUserInfo(int id)
 {
-  m_buddies->GetUserInfo(id);
+	//m_infoReader->ReadInfo(id);
+  m_buddies->QueryUserInfo(id);
 }
 
 void CGameNetworkProfile::SendBuddyMessage(int id, const char* message)
@@ -1142,13 +1584,39 @@ void CGameNetworkProfile::AddRecentServer(uint ip, ushort port)
 
 bool CGameNetworkProfile::IsLoggedIn()const
 {
-  return m_profile->IsLoggedIn();
+  return m_profile->IsLoggedIn() && !m_loggingIn;
+}
+
+bool CGameNetworkProfile::IsLoggingIn()const
+{
+	return m_loggingIn;
+}
+
+const char* CGameNetworkProfile::GetLogin()const
+{
+	return m_login.c_str();
+}
+
+const char* CGameNetworkProfile::GetPassword()const
+{
+	return m_password.c_str();
+}
+
+const char* CGameNetworkProfile::GetCountry()const
+{
+	return m_country.c_str();
+}
+
+const int CGameNetworkProfile::GetProfileId()const
+{
+	return m_profileId;
 }
 
 void CGameNetworkProfile::SearchUsers(const char* nick)
 {
   m_buddies->m_uisearch=nick;
-  m_profile->SearchFriends(nick);
+	if(m_profile)
+		m_profile->SearchFriends(nick);
 }
 
 bool CGameNetworkProfile::CanInvite(const char* nick)
@@ -1179,16 +1647,51 @@ bool CGameNetworkProfile::CanIgnore(int id)
   return m_buddies->CanIgnore(id);
 }
 
+bool CGameNetworkProfile::GetUserInfo(int id, SUserInfo& info)
+{
+	return m_buddies->GetUserInfo(id, info);
+}
+
+bool CGameNetworkProfile::GetUserInfo(const char* nick, SUserInfo& info, int& id)
+{
+	return m_buddies->GetUserInfo(nick, info, id);
+}
+
+bool CGameNetworkProfile::IsIgnored(const char* nick)
+{
+	if(!stricmp(m_login.c_str(),nick))
+		return false;
+	return m_buddies->IsIgnoring(nick);
+}
+
 void CGameNetworkProfile::SetPlayingStatus(uint ip, ushort port, ushort publicport, const char* game_type)
 {
   string loc;
   loc.Format("%d.%d.%d.%d:%d/?type=game&queryport=%d&game=%s",ip&0xFF,(ip>>8)&0xFF,(ip>>16)&0xFF,(ip>>24)&0xFF,port,publicport,game_type);
-  m_profile->SetStatus(eUS_playing,loc);
+
+  if(m_profile)
+		m_profile->SetStatus(eUS_playing,loc);
 }
 
 void CGameNetworkProfile::SetChattingStatus()
 {
-  m_profile->SetStatus(eUS_chatting,"/?chatting");
+	assert(m_profile);
+	if(m_profile)
+		m_profile->SetStatus(eUS_chatting,"/?chatting");
+}
+
+void CGameNetworkProfile::OnUserStats(int id, const SUserStats& stats, EUserInfoSource src, const char* country)
+{
+	m_buddies->OnUserStats(id, stats, src);
+	if(strlen(country))
+		m_buddies->OnProfileInfo(id, "country", country);
+	if(id == m_profileId)//my stats
+		m_stats = stats;
+}
+
+void CGameNetworkProfile::OnUserNick(int profile, const char* user)
+{
+	m_buddies->OnUserNick(profile, user, false);
 }
 
 void CGameNetworkProfile::OnLoggedIn(int id, const char* nick)
@@ -1197,12 +1700,51 @@ void CGameNetworkProfile::OnLoggedIn(int id, const char* nick)
   m_login = nick;
 
   m_stroredServers->ReadLists();
-  m_hub->OnLoginSuccess(nick);
-  m_profile->SetStatus(eUS_online,"");
+	m_buddies->ReadIgnoreList();
+	m_infoReader->ReadInfo(m_profileId);
+
+  if(m_profile)
+		m_profile->SetStatus(eUS_online,"");
+}
+
+void CGameNetworkProfile::OnEndQuery()
+{
+	if(m_queries.empty() && m_loggingIn)
+	{
+		m_loggingIn = false;
+		m_hub->OnLoginSuccess(m_login);
+	}
+}
+
+void CGameNetworkProfile::RetrievePassword(const char *email)
+{
+	if(m_profile)
+		m_profile->RetrievePassword(email);
 }
 
 void CGameNetworkProfile::CleanUpQueries()
 {
   for(int i=0;i<m_queries.size();++i)
     m_queries[i]->m_parent = 0;
+}
+
+bool CGameNetworkProfile::IsDead() const
+{
+	return m_profile == 0;
+}
+
+const SUserStats&	CGameNetworkProfile::GetMyStats()const
+{
+	return m_stats;
+}
+
+bool CGameNetworkProfile::GetFavoriteServers(std::vector<SStoredServer>& svr_list)
+{
+	if(m_profile && m_profile->IsLoggedIn())
+	{
+		for(int i=0;i<m_stroredServers->m_favorites.size();++i)
+			svr_list.push_back(m_stroredServers->m_favorites[i]);	
+		return true;
+	}
+	return false;
 }

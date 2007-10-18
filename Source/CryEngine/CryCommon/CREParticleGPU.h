@@ -19,7 +19,7 @@ public:
 	virtual void  mfPrepare();
 
 	virtual bool  mfCullBox( Vec3& vmin, Vec3& vmax );
-	virtual float mfDistanceToCameraSquared( const CRenderObject& thisObject );
+	virtual float mfDistanceToCameraSquared( Matrix34& matInst );
 	virtual CRendElement* mfCopyConstruct();
 	
 	// compile shaders for this pass
@@ -45,7 +45,7 @@ public:
 		vMaxs.Set(0,0,0);
 	  }
 	  virtual void mfGetPlane(Plane& pl);
-	  virtual float mfDistanceToCameraSquared(const CRenderObject & thisObject);
+	  virtual float mfDistanceToCameraSquared(Matrix34& matInst);
 	  virtual void mfEndFlush();
 	  virtual int  mfTransform(Matrix44& ViewMatr, Matrix44& ProjMatr, vec4_t *verts, vec4_t *vertsp, int Num);
 	  virtual bool mfIsValidTime(CShader *ef, CRenderObject *obj, float curtime);
@@ -53,7 +53,7 @@ public:
 	  virtual bool mfCompile(CShader *ef, char *scr);
 	  virtual void *mfGetPointer(ESrcPointer ePT, int *Stride, EParamType Type, ESrcPointer Dst, int Flags);
 	  virtual bool mfPreDraw(SShaderPass *sl) { return true; }
-	  virtual float mfMinDistanceToCamera(CRenderObject *pObj) {return -1;};
+	  virtual float mfMinDistanceToCamera(Matrix34& matInst) {return -1;};
 	  virtual bool mfCheckUpdate(int nVertFormat, int Flags) {return true;}
 	  virtual void mfPrecache(const SShaderItem& SH) {}
 	  virtual int Size() {return 0;}

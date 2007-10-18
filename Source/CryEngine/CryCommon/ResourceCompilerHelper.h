@@ -126,7 +126,7 @@ public:
 
 	// you can test if the resource compiler is there with bool bOk=CallResourceCompilerForOneFile("")
 	// Arguments:
-	//   szFileName null terminted ABSOLUTE file path or 0 can be used to test for rc.exe existance, relative path needs to be relative to bin32/rc directory
+	//   szFileName null terminated ABSOLUTE file path or 0 can be used to test for rc.exe existance, relative path needs to be relative to bin32/rc directory
 	//   szAdditionalSettings - 0 or e.g. "/refresh" or "/refresh /xyz=56"
 	// Returns:
 	//   true=success, false=failed (you should open settings)

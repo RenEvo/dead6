@@ -32,13 +32,20 @@ template<class F> struct Vec2_tpl
 #ifdef _DEBUG
 	ILINE Vec2_tpl() 
 	{
-		uint32 unan=FloatNAN;	F nan=*(F*)(&unan);	
-		x=nan;	y=nan;
+		if (sizeof(F)==4)
+		{
+			uint32* p=(uint32*)&x;		p[0]=F32NAN;	p[1]=F32NAN;
+		}
+		if (sizeof(F)==8)
+		{
+			uint64* p=(uint64*)&x;		p[0]=F64NAN;	p[1]=F64NAN;
+		}
 	}
 #else
 	ILINE Vec2_tpl()	{};
 #endif
 
+	Vec2_tpl(type_zero) : x(0),y(0) {}
 
 	ILINE Vec2_tpl(F vx,F vy) { x=F(vx); y=F(vy);  }
 
@@ -49,8 +56,10 @@ template<class F> struct Vec2_tpl
 	template<class F1> ILINE explicit Vec2_tpl(const Vec3_tpl<F1> &src) { x=F(src.x); y=F(src.y); }
 	template<class F1> ILINE explicit Vec2_tpl(const F1 *psrc) { x=F(psrc[0]); y=F(psrc[1]); }
 
-	template<class F1> Vec2_tpl& operator=(const Vec2_tpl<F1>& src) { x=F(src.x); y=F(src.y); return *this; }
-	template<class F1> Vec2_tpl& operator=(const Vec3_tpl<F1>& src) { x=F(src.x); y=F(src.y); return *this; }
+	explicit ILINE Vec2_tpl(const Vec3_tpl<F>& v) : x((F)v.x), y((F)v.y) { assert(this->IsValid()); }
+
+	//template<class F1> Vec2_tpl& operator=(const Vec2_tpl<F1>& src) { x=F(src.x); y=F(src.y); return *this; }
+	//template<class F1> Vec2_tpl& operator=(const Vec3_tpl<F1>& src) { x=F(src.x); y=F(src.y); return *this; }
 
 	int operator!() const { return x==0 && y==0; }
 
@@ -134,7 +143,11 @@ template<class F> struct Vec2_tpl
   /// returns a vector perpendicular to this one (this->Cross(newVec) points "up")
   Vec2_tpl Perp() const {return Vec2_tpl(-y, x);}
 
-
+	// The size of the "paralell-trapets" area spanned by the two vectors.
+	ILINE F Cross (const Vec2_tpl<F> &v) const
+	{
+		return float (x*v.y - y*v.x);
+	}	
 
 	/*!
 	* Linear-Interpolation between Vec3 (lerp)
@@ -176,6 +189,13 @@ template<class F> struct Vec2_tpl
 	}
 	ILINE static Vec2_tpl<F> CreateSlerp( const Vec2_tpl<F>& p, const Vec2_tpl<F>& q, F t ) {
 		Vec2_tpl<F> v;	v.SetSlerp(p,q,t); return v;	
+	}
+
+	ILINE bool IsValid() const
+	{
+		if (!NumberValid(x)) return false;
+		if (!NumberValid(y)) return false;
+		return true;
 	}
 
 

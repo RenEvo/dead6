@@ -21,7 +21,6 @@ History:
 
 CGameFlashAnimation::CGameFlashAnimation()
 {
-	m_dock = eGFD_Stretch;
 	m_flags = 0;
 }
 
@@ -29,13 +28,8 @@ CGameFlashAnimation::CGameFlashAnimation()
 
 CGameFlashAnimation::~CGameFlashAnimation()
 {
-	CHUD* pHUD = g_pGame->GetHUD();
-
 	// deregister us from the HUD Updates and Rendering
-	if(pHUD)
-	{
-		pHUD->Remove(this);
-	}
+	SAFE_HUD_FUNC(Remove(this));
 
 	for(TGameFlashLogicsList::iterator iter=m_gameFlashLogicsList.begin(); iter!=m_gameFlashLogicsList.end(); ++iter)
 	{
@@ -44,27 +38,17 @@ CGameFlashAnimation::~CGameFlashAnimation()
 }
 
 //-----------------------------------------------------------------------------------------------------
-void CGameFlashAnimation::SetDock(uint32 eGFDock)
-{
-	m_dock = eGFDock;
-}
-//-----------------------------------------------------------------------------------------------------
-uint32 CGameFlashAnimation::GetDock() const
-{
-	return m_dock;
-}
-//-----------------------------------------------------------------------------------------------------
 uint32 CGameFlashAnimation::GetFlags() const
 {
 	return m_flags;
 }
 //-----------------------------------------------------------------------------------------------------
 
-void CGameFlashAnimation::Init(const char *strFileName, EGameFlashDock docking, uint32 flags)
+void CGameFlashAnimation::Init(const char *strFileName, EFlashDock docking, uint32 flags)
 {
 	Unload();
 	m_fileName = strFileName;
-	m_dock = docking;
+	SetDock(docking);
 	m_flags = flags;
 }
 
@@ -76,23 +60,19 @@ bool CGameFlashAnimation::Reload(bool forceUnload)
 
 	if (!m_fileName.empty() && !IsLoaded())
 	{
-		CHUD* pHUD = g_pGame->GetHUD();
-
-		if (pHUD && LoadAnimation(m_fileName.c_str()))
+		if (LoadAnimation(m_fileName.c_str()))
 		{
-			SetDock(m_dock);
-
 			IRenderer *pRenderer = gEnv->pRenderer;
 			GetFlashPlayer()->SetViewport(0,0,pRenderer->GetWidth(),pRenderer->GetHeight());
 			GetFlashPlayer()->SetBackgroundAlpha(0.0f);
 
-			pHUD->Register(this);
+			SAFE_HUD_FUNC(Register(this));
 
 			if (m_flags & eFAF_ThisHandler)
-				GetFlashPlayer()->SetFSCommandHandler(pHUD);
+				GetFlashPlayer()->SetFSCommandHandler(g_pGame?g_pGame->GetHUD():NULL);
 
-			pHUD->RepositionFlashAnimation(this);
-			pHUD->SetFlashColor(this);
+			SAFE_HUD_FUNC(RepositionFlashAnimation(this));
+			SAFE_HUD_FUNC(SetFlashColor(this));
 
 			if (!(m_flags & eFAF_Visible))
 				SetVisible(false);
@@ -106,7 +86,7 @@ bool CGameFlashAnimation::Reload(bool forceUnload)
 
 //-----------------------------------------------------------------------------------------------------
 
-bool CGameFlashAnimation::Load(const char *strFileName, EGameFlashDock docking, uint32 flags)
+bool CGameFlashAnimation::Load(const char *strFileName, EFlashDock docking, uint32 flags)
 {
 	Init(strFileName, docking, flags);
 	return Reload();
@@ -120,13 +100,8 @@ void CGameFlashAnimation::Unload()
 
 	CFlashAnimation::Unload();
 
-	CHUD* pHUD = g_pGame->GetHUD();
-
 	// remove us from the HUD updates and rendering
-	if(pHUD)
-	{
-		pHUD->Remove(this);
-	}
+	SAFE_HUD_FUNC(Remove(this));
 }
 
 //-----------------------------------------------------------------------------------------------------

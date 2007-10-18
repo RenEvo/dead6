@@ -39,7 +39,7 @@ struct ILevelRotation
   virtual void SetRandom(bool rnd) = 0;
   virtual bool IsRandom()const = 0;
 
-	virtual void ChangeLevel() = 0;
+	virtual void ChangeLevel(IConsoleCmdArgs* pArgs = NULL) = 0;
 };
 
 

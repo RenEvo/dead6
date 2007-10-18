@@ -15,6 +15,8 @@
 #include <ISplines.h>
 #include <Cry_Color.h>
 
+#define LOOKUP_SPLINE	1
+
 enum EParticleFacing
 {
 	ParticleFacing_Camera,
@@ -22,6 +24,7 @@ enum EParticleFacing
 	ParticleFacing_Velocity,
 	ParticleFacing_Horizontal,
 	ParticleFacing_Water,
+	ParticleFacing_Terrain,
 };
 
 enum EParticlePhysicsType
@@ -40,12 +43,22 @@ enum EParticleForceType
 	ParticleForce_Target,
 };
 
-enum EFeatureSelect
+enum ETrinary
 {
-	FeatureSelect_Both,
-	FeatureSelect_If_True,
-	FeatureSelect_If_False,
+	Trinary_Both,
+	Trinary_If_True,
+	Trinary_If_False
 };
+
+inline bool TrinaryMatch(ETrinary t1, ETrinary t2)
+{
+	return (t1 | t2) != 3;
+}
+
+inline bool TrinaryMatch(ETrinary t, bool b)
+{
+	return t != (Trinary_If_True + b);
+}
 
 enum EConfigSpecBrief
 {
@@ -54,16 +67,6 @@ enum EConfigSpecBrief
 	ConfigSpec_High,
 	ConfigSpec_VeryHigh,
 };
-
-inline int FeatureSelected(EFeatureSelect eSelect, bool bFeature)
-{
-	//					Feature
-	// Select		0		1
-	//	0				1		2		
-	//	1				0		2
-	//	2				1		0
-	return ~int(eSelect) & (int(bFeature)+1);
-}
 
 // Pseudo-random number generation, from a key.
 class CChaosKey
@@ -132,7 +135,29 @@ private:
 };
 
 //
-// ColorF specialisations.
+// Custom behavior for param types.
+//
+
+template<class T> struct TVarTraits
+{
+	typedef float	TRandom;
+
+	// Default small storage class for scalars.
+	typedef uint8	TStorage;
+
+	static TStorage ToStorage( T const& val )
+		{ return float_to_ufrac8(val); }
+	static void FromStorage( T& val, TStorage const& store )
+		{ val = ufrac8_to_float(store); }
+	static void InterpFromStorage( T& val, TStorage const& a, TStorage const& b, float fLerp )
+	{ 
+		val = ufrac8_to_float( a*(1.f-fLerp) + b*fLerp );
+	}
+};
+
+
+//
+// Color specialisations.
 //
 
 inline ColorF min( const ColorF& a, const ColorF& b )
@@ -150,30 +175,92 @@ inline ColorF minmag( const ColorF& a, const ColorF& b )
 	return ColorF( minmag(a.r,b.r), minmag(a.g,b.g), minmag(a.b,b.b), minmag(a.a,b.a) );
 }
 
+class RandomColor
+{
+public:
+	RandomColor(float f = 0.f)
+		: m_fVarRandom(f), m_bRandomHue(false)
+	{}
+	operator float() const
+	{
+		return m_fVarRandom;
+	}
+
+	ColorF GetRandom() const
+	{
+		if (m_bRandomHue)
+		{
+			ColorB clr(cry_rand32());
+			float fScale = m_fVarRandom / 255.f;
+			return ColorF(clr.r * fScale, clr.g * fScale, clr.b * fScale, 0.f);
+		}
+		else
+		{
+			return ColorF(Random(m_fVarRandom));
+		}
+	}
+
+	AUTO_STRUCT_INFO_LOCAL
+
+protected:
+	float	m_fVarRandom;				// $<Min=0> $<Max=1>
+	bool	m_bRandomHue;
+};
+
+inline ColorF Random(RandomColor const& rc)
+{
+	return rc.GetRandom();
+}
+
+
+template<> struct TVarTraits<ColorF>
+{
+	typedef RandomColor	TRandom;
+
+	typedef ColorB TStorage;
+	static TStorage ToStorage( ColorF const& val )
+	{
+		return TStorage
+		(
+			float_to_ufrac8(val.r),
+			float_to_ufrac8(val.g), 
+			float_to_ufrac8(val.b)
+		);
+	}
+	static void FromStorage( ColorF& val, TStorage const& store )
+	{ 
+		val.r = ufrac8_to_float(store.r); 
+		val.g = ufrac8_to_float(store.g); 
+		val.b = ufrac8_to_float(store.b); 
+	}
+	static void InterpFromStorage( ColorF& val, TStorage const& a, TStorage const& b, float fLerp )
+	{
+		float fILerp = 1.f - fLerp;
+		val.r = ufrac8_to_float(a.r*fILerp + b.r*fLerp);
+		val.g = ufrac8_to_float(a.g*fILerp + b.g*fLerp);
+		val.b = ufrac8_to_float(a.b*fILerp + b.b*fLerp);
+	}
+};
+
 //
 // Spline implementation class.
 //
 
 template<class T>
-class TCurveSpline: public spline::CBaseSplineInterpolator< T, spline::RangeLimitSpline<T> >
+class TCurveSpline: public spline::CBaseSplineInterpolator< 
+#if LOOKUP_SPLINE
+	T, spline::LookupTableSpline< T, TVarTraits<T>, spline::SplineKey<T> > 
+#else
+	T, spline::CatmullRomSpline< T, spline::SplineKey<T>, true > 
+#endif
+>
 {
 public:
-
-	virtual void Interpolate( float time, ISplineInterpolator::ValueType &value )
-	{
-		T v(1.f);
-		interpolate( time, v );
-		ToValueType(v, value);
-	}
 
 	// Implement serialisation for particles.
 	string ToString( int flags ) const;
 	void FromString( const char* str );
 	virtual void SerializeSpline( XmlNodeRef &node, bool bLoading );
-	size_t GetMemoryUsage() const
-	{
-		return m_keys.capacity() * sizeof(key_type);
-	}
 };
 
 template<class T>
@@ -220,10 +307,19 @@ public:
 	// Get the value at any key point from 0..1.
 	inline T GetValue(float fTime) const
 	{
-		T fVal(1.f);
+		T Val(1.f);
 		if (m_pSpline)
-			m_pSpline->fast_interpolate( fTime, fVal );
-		return fVal;
+			m_pSpline->fast_interpolate( fTime, Val );
+		return Val;
+	}
+	inline void ModValue(T& Val, float fTime) const
+	{
+		if (m_pSpline)
+		{
+			T CVal(1.f);
+			m_pSpline->fast_interpolate( fTime, CVal );
+			Val *= CVal;
+		}
 	}
 
 	T GetMaxValue() const
@@ -305,7 +401,7 @@ public:
 	size_t GetMemoryUsage() const
 	{
 		if (m_pSpline)
-			return sizeof(*m_pSpline) + m_pSpline->GetMemoryUsage();
+			return sizeof(*m_pSpline) + m_pSpline->mem_size();
 		else
 			return 0;
 	}
@@ -328,49 +424,6 @@ protected:
 	TSpline*	m_pSpline;
 };
 
-template<class T> struct TVarTraits
-{
-	typedef float	TRandom;
-};
-
-class RandomColor
-{
-public:
-	RandomColor(float f = 0.f)
-		: m_fVarRandom(f), m_bRandomHue(false)
-	{}
-	operator float() const
-	{
-		return m_fVarRandom;
-	}
-
-	ColorF operator *(CChaosKey key) const
-	{
-		if (m_bRandomHue)
-			// Generate random color by converting the 32-bit random value into 8-bit color components.
-			return ColorF(key.GetKey()) * m_fVarRandom;
-		else
-			// Randomise only intensity.
-			return ColorF(key*m_fVarRandom);
-	}
-
-	AUTO_STRUCT_INFO_LOCAL
-
-protected:
-	float	m_fVarRandom;				// $<Min=0> $<Max=1>
-	bool	m_bRandomHue;
-};
-
-inline ColorF operator *(CChaosKey key, RandomColor const& clr)
-{
-	return clr * key;
-}
-
-template<> struct TVarTraits<ColorF>
-{
-	typedef RandomColor	TRandom;
-};
-
 //
 // Composite parameter types, incorporating base value, randomness, and lifetime curves.
 //
@@ -378,7 +431,9 @@ template<> struct TVarTraits<ColorF>
 template<class T>
 class TVarParam
 {
+protected:
 	typedef typename TVarTraits<T>::TRandom TRandom;
+	typedef typename TVarTraits<T>::TStorage TStorage;
 
 public:
 	// Construction.
@@ -463,41 +518,43 @@ public:
 	{
 	}
 
-	TCurve<T> const& VarEmitterLife() const
-	{
-		return m_VarEmitterLife;
-	}
-	TCurve<T> & VarEmitterLife()
-	{
-		return m_VarEmitterLife;
-	}
-
 	//
 	// Value extraction.
 	//
 
-	inline T GetVarValue(CChaosKey keyRan, float fELife, T Abs = T(0)) const
+	inline T GetVarMod(float fELife) const
 	{
-		T val = m_Base;
+		T val = T(1.f);
 		if ((float)m_VarRandom != 0.f)
-		{
-			if (Abs)
-				val += keyRan.Jumble(this) * m_VarRandom * Abs;
-			else
-				val -= keyRan.Jumble(this) * m_VarRandom * val;
-		}
-		if (!m_VarEmitterLife.IsIdentity())
-			val *= m_VarEmitterLife.GetValue(fELife);
+			val -= Random(m_VarRandom) * val;
+		m_VarEmitterLife.ModValue(val, fELife);
 		return val;
+	}
+
+	inline T GetVarValue(float fELife) const
+	{
+		return GetVarMod(fELife) * m_Base;
 	}
 
 	inline T GetVarValue(float fMinMax, float fELife) const
 	{
 		T val = m_Base;
+		val -= (1.f-fMinMax) * m_VarRandom * val;
+		m_VarEmitterLife.ModValue(val, fELife);
+		return val;
+	}
+
+	inline T GetVarValue(CChaosKey keyRan, float fELife, T Abs = T(0.f)) const
+	{
+		T val = m_Base;
 		if ((float)m_VarRandom != 0.f)
-			val -= (1.f-fMinMax) * m_VarRandom * val;
-		if (!m_VarEmitterLife.IsIdentity())
-			val *= m_VarEmitterLife.GetValue(fELife);
+		{
+			if (Abs != T(0.f))
+				val += keyRan.Jumble(this) * m_VarRandom * Abs;
+			else
+				val -= keyRan.Jumble(this) * m_VarRandom * val;
+		}
+		m_VarEmitterLife.ModValue(val, fELife);
 		return val;
 	}
 
@@ -531,30 +588,20 @@ public:
 	{
 	}
 
-	TCurve<T> const& VarParticleLife() const
-	{
-		return m_VarParticleLife;
-	}
-	TCurve<T> & VarParticleLife()
-	{
-		return m_VarParticleLife;
-	}
-
 	//
 	// Value extraction.
 	//
 
-	// Uses a chaos key for randomisation in every dimension of T.
-	inline T GetVarValue(CChaosKey keyRan, float fELife, float fPLife) const
+	inline T GetValueFromBase( T val, float fParticleAge ) const
 	{
-		T val = m_Base;
-		if ((float)m_VarRandom != 0.f)
-			val -= keyRan.Jumble(this) * m_VarRandom * val;
-		if (!m_VarEmitterLife.IsIdentity())
-			val *= m_VarEmitterLife.GetValue(fELife);
-		if (!m_VarParticleLife.IsIdentity())
-			val *= m_VarParticleLife.GetValue(fPLife);
+		m_VarParticleLife.ModValue(val, fParticleAge);
 		return val;
+	}
+
+	inline T GetValueFromMod( T val, float fParticleAge ) const
+	{
+		m_VarParticleLife.ModValue(val, fParticleAge);
+		return m_Base * val;
 	}
 
 	T GetMinValue() const
@@ -602,7 +649,21 @@ struct STextureTiling
 			&& nVariantCount * nAnimFramesCount <= GetFrameCount();
 	}
 
+	void Correct()
+	{
+		nTilesX = max(nTilesX, 1U);
+		nTilesY = max(nTilesY, 1U);
+		nAnimFramesCount = max(nAnimFramesCount, 1U);
+		nVariantCount = max(nVariantCount, 1U);
+	}
+
 	AUTO_STRUCT_INFO_LOCAL
+};
+
+struct Vec3_Zero: Vec3
+{
+	Vec3_Zero() : Vec3(ZERO) {}
+	Vec3_Zero(const Vec3& v) : Vec3(v) {}
 };
 
 //! Particle system parameters
@@ -619,6 +680,7 @@ struct ParticleParams
 
 	// Particle timing
 	TVarEParam<float> fParticleLifeTime;	// $<Min=0> Lifetime of particle
+	bool bRemainWhileVisible;					// Particles will only die when not rendered (by any viewport).
 
 	// Appearance
 	EParticleFacing eFacing;					// $<Group="Appearance"> The basic particle shape type.
@@ -630,6 +692,7 @@ struct ParticleParams
 	string sGeometry;									// Geometry for 3D particles.
 	bool bGeometryInPieces;						// Spawn geometry pieces separately.
 	bool bSoftParticle;								// Enable soft particle processing in the shader.
+  bool bOceanParticle;								// Enable soft particle processing in the shader.
 
 	// Lighting
 	TVarEPParam<float> fAlpha;				// $<Group="Lighting"> $<Min=0> $<Max=1> Alpha value (fade parameters).
@@ -640,11 +703,14 @@ struct ParticleParams
 	float fEmissiveHDRDynamic;				// $<Min=0> $<SoftMax=2> Power to apply to engine HDR multiplier for emissive lighting in HDR.
 	bool bReceiveShadows;							// Shadows will cast on these particles.
 	bool bCastShadows;								// Particles will cast shadows (currently only geom particles).
+  TVarEPParam<float> fLightSourceIntensity;		// $<Min=0> $<SoftMax=16>
+  TVarEPParam<float> fLightHDRDynamic;				// $<Min=-2> $<SoftMax=2>
+  TVarEPParam<float> fLightSourceRadius;			// $<Min=0> $<SoftMax=1>
 
 	// Size
 	TVarEPParam<float> fSize;					// $<Group="Size"> $<Min=0> $<SoftMax=10> Particle size.
 	TVarEPParam<float> fTailLength;		// $<Min=0> $<SoftMax=10> Delay of tail ( 0 - no tail, 1 meter if speed is 1 meter/sec
-	uint nTailSteps;									// $<Min=0> $<Max=16> How many tail steps particle have.
+	uint nTailSteps;									// $<Min=0> $<SoftMax=16> How many tail steps particles have.
 	TVarEPParam<float> fStretch;			// $<Min=0> $<SoftMax=10> Stretch particle into moving direction
 	float fStretchOffsetRatio;				// Move particle center this fraction in direction of stretch.
 	float fMinPixels;									// $<Min=0> $<SoftMax=10> Augment true size with this many pixels.
@@ -655,15 +721,15 @@ struct ParticleParams
 	float fInheritVelocity;						// $<SoftMin=0> $<SoftMax=1> Fraction of emitter's velocity to inherit.
 	EGeomType eAttachType;						// Where to emit from attached geometry.
 	EGeomForm eAttachForm;						// How to emit from attached geometry.
-	Vec3 vPositionOffset;							// Spawn Position offset from the effect spawn position
-	Vec3 vRandomOffset;								// Random offset of the particle relative position to the spawn position
+	Vec3_Zero vPositionOffset;				// Spawn Position offset from the effect spawn position
+	Vec3_Zero vRandomOffset;					// Random offset of the particle relative position to the spawn position
 	float fPosRandomOffset;						// Radial random offset.
 
 	// Movement
 	TVarEParam<float> fSpeed;					// $<Group="Movement"> Initial speed of a particle.
 	TVarEPParam<float> fAirResistance;// $<Min=0> $<SoftMax=10> Air drag value, in inverse seconds.
 	TVarEPParam<float> fGravityScale;	// $<SoftMin=0> $<SoftMax=1> Multiplier for world gravity.
-	Vec3 vAcceleration;								// Specific world-space acceleration vector.
+	Vec3_Zero vAcceleration;					// Specific world-space acceleration vector.
 	TVarEPParam<float> fTurbulence3DSpeed;	// $<Min=0> $<SoftMax=10> 3D random turbulence force
 	TVarEPParam<float> fTurbulenceSize;			// $<Min=0> $<SoftMax=10> Radius of turbulence
 	TVarEPParam<float> fTurbulenceSpeed;		// $<SoftMin=-360> $<SoftMax=360> Speed of rotation
@@ -673,15 +739,16 @@ struct ParticleParams
 	TVarEParam<float>	fFocusAzimuth;	// $<SoftMax=360> Angle to rotate focus about default, for variation. 0 = Z axis.
 	bool bFocusGravityDir;						// Uses negative gravity dir, rather than emitter Y, as focus dir.
 	TVarEParam<float> fEmitAngle;			// $<Min=0> $<Max=180> Angle from focus dir (emitter Y), in degrees. RandomVar determines min angle.
-	Vec3 vInitAngles;									// $<SoftMin=-180> $<SoftMax=180> Initial rotation in symmetric angles (degrees).
-	Vec3 vRandomAngles;								// $<Min=0> $<Max=180> Bidirectional random angle variation.
-	Vec3 vRotationRate;								// $<SoftMin=-360> $<SoftMax=360> Rotation speed (degree/sec).
-	Vec3 vRandomRotationRate;					// $<Min=0> $<SoftMax=360> Random variation.
+	Vec3_Zero vInitAngles;						// $<SoftMin=-180> $<SoftMax=180> Initial rotation in symmetric angles (degrees).
+	Vec3_Zero vRandomAngles;					// $<Min=0> $<Max=180> Bidirectional random angle variation.
+	Vec3_Zero vRotationRate;					// $<SoftMin=-360> $<SoftMax=360> Rotation speed (degree/sec).
+	Vec3_Zero vRandomRotationRate;		// $<Min=0> $<SoftMax=360> Random variation.
 
 	// Physics
 	EParticlePhysicsType ePhysicsType;// $<Group="Physics"> 
 	bool bCollideTerrain;							// Collides with terrain (if Physics <> none)
-	bool bCollideObjects;							// Collides with other objects (if Physics <> none)
+	bool bCollideStaticObjects;				// Collides with static physics objects (if Physics <> none)
+	bool bCollideDynamicObjects;			// Collides with dynamic physics objects (if Physics <> none)
 	string sSurfaceType;							// $<Select="Surface"> Surface type for physicalised particles.
 	float fBounciness;								// $<SoftMin=0> $<SoftMax=1> Elasticity: 0 = no bounce, 1 = full bounce, <0 = die.
 	float fDynamicFriction;						// $<Min=0> $<SoftMax=10> Sliding drag value, in inverse seconds.
@@ -695,31 +762,32 @@ struct ParticleParams
 	TVarEParam<float> fSoundFXParam;	// $<Min=0> $<Max=1> Custom real-time sound modulation parameter.
 
 	// Advanced
-	int nDrawLast;						// $<Group="Advanced"> Add this element into the second list and draw this list last
-	bool bOnlyOutdoors;				// Particles only appear outdoors.
-	bool bOnlyAboveWater;			// Particles only appear above water
-	bool bOnlyUnderWater;			// Particles only appear under water.
+	int nDrawLast;								// $<Group="Advanced"> Add this element into the second list and draw this list last
+	bool bSortOldestFirst;				// Reverse sort order, oldest-to-newest.
+	ETrinary tVisibleIndoors;			// Whether visible indoors/outdoors/both.
+	ETrinary tVisibleUnderwater;	// Whether visible under/above water / both.
+	bool bDisableVisClipping;			// Disable particle clipping against vis/water boundaries.
 	bool bNotAffectedByFog;
-	bool bIgnoreAttractor;		// Ignore ParticleTargets.
-	bool bDrawNear;						// Render particle in near space (weapon)
-	bool bNoOffset;						// Disable centering of static objects
-	float fViewDistanceAdjust;// $<Min=0> $<SoftMax=1> Multiplier to automatic distance fade-out.
-	float fFillRateCost;			// $<Min=0> $<SoftMax=10> Adjustment to max screen fill allowed per emitter.
-	float fMotionBlurScale;		// $<Min=0> $<SoftMax=2> Multiplier to motion blur.
+	bool bIgnoreAttractor;				// Ignore ParticleTargets.
+	bool bDrawNear;								// Render particle in near space (weapon)
+	bool bNoOffset;								// Disable centering of static objects
+	float fViewDistanceAdjust;		// $<Min=0> $<SoftMax=1> Multiplier to automatic distance fade-out.
+	float fFillRateCost;					// $<Min=0> $<SoftMax=10> Adjustment to max screen fill allowed per emitter.
+	float fMotionBlurScale;				// $<Min=0> $<SoftMax=2> Multiplier to motion blur.
 	bool bBindEmitterToCamera;	
-	float fCameraMaxDistance;	// $<Min=0> $<SoftMax=100> Max distance from camera to render particles.
-	float fCameraMinDistance;	// $<Min=0> $<SoftMax=100> Min distance from camera to render particles.
-	bool bBindToEmitter;			// Always keep particle position binded to position of the emitter (for rockets etc...)
-	bool bMoveRelEmitter;			// Particle motion is in emitter space.
-	bool bSpaceLoop;					// Lock particles in box around emitter position, use vSpaceLoopBoxSize to set box size
-	bool bEncodeVelocity;			// Orient and encode velocity direction, for special shaders.
+	float fCameraMaxDistance;			// $<Min=0> $<SoftMax=100> Max distance from camera to render particles.
+	float fCameraMinDistance;			// $<Min=0> $<SoftMax=100> Min distance from camera to render particles.
+	bool bBindToEmitter;					// Always keep particle position binded to position of the emitter (for rockets etc...)
+	bool bMoveRelEmitter;					// Particle motion is in emitter space.
+	bool bSpaceLoop;							// Lock particles in box around emitter position, use vSpaceLoopBoxSize to set box size
+	bool bEncodeVelocity;					// Orient and encode velocity direction, for special shaders.
 
 	// Configurations
 	EConfigSpecBrief	eConfigMin;			// $<Group="Configuration"> 
 	EConfigSpecBrief	eConfigMax;
-	EFeatureSelect eDX10;
-	EFeatureSelect eGPUComputation;
-	EFeatureSelect eMultiThread;
+	ETrinary tDX10;
+	ETrinary tGPUComputation;
+	ETrinary tMultiThread;
 
 	ParticleParams() 
 	{
@@ -743,8 +811,6 @@ protected:
 		fDiffuseLighting = 1;
 		fViewDistanceAdjust = 1;
 		fFillRateCost = 1;
-		bCollideTerrain = true;
-		bCollideObjects = true;
 		fDensity = 1000;
 		fThickness = 1;
 		fMotionBlurScale = 1;

@@ -19,8 +19,8 @@
 
 //========================================================================================
 
-#include <math.h>
 #include <platform.h>
+#include MATH_H
 #include "Cry_ValidNumber.h"
 
 #ifdef LINUX
@@ -47,24 +47,9 @@ template <typename F> struct Matrix44_tpl;
 
 template <typename F> struct AngleAxis_tpl;
 
-
-
-template <class T> struct NanTraits;
-template <> struct NanTraits<f32> { static f32 GetNan() { static uint32 nan32=FloatNAN;		return *(f32*)(&nan32); } };
-template <> struct NanTraits<f64> { static f64 GetNan() { static uint64 nan64=DoubleNAN;	return *(f64*)(&nan64); } };
-
-//for integers we can't have illegal values
-template <> struct NanTraits< uint8> { static  uint8 GetNan() { static  uint8  nan8=0;		return *( uint8*)(&nan8); } };
-template <> struct NanTraits<  int8> { static   int8 GetNan() { static   int8  nan8=0;		return *(  int8*)(&nan8); } };
-template <> struct NanTraits<uint16> { static uint16 GetNan() { static uint16 nan16=0;		return *(uint16*)(&nan16); } };
-template <> struct NanTraits< int16> { static  int16 GetNan() { static  int16 nan16=0;		return *( int16*)(&nan16); } };
-template <> struct NanTraits<uint32> { static uint32 GetNan() { static uint32 nan32=0;		return *(uint32*)(&nan32); } };
-template <> struct NanTraits< int32> { static  int32 GetNan() { static  int32 nan32=0;		return *( int32*)(&nan32); } };
-template <> struct NanTraits<uint64> { static uint64 GetNan() { static uint64 nan64=0;		return *(uint64*)(&nan64); } };
-template <> struct NanTraits< int64> { static  int64 GetNan() { static  int64 nan64=0;		return *( int64*)(&nan64); } };
-
-
-
+#if defined(PS3) && defined(__SPU__)
+	struct Quat_s;
+#endif
 
 ///////////////////////////////////////////////////////////////////////////////
 // Definitions                                                               //
@@ -100,6 +85,52 @@ const f64 sqrt3	= (f64)1.7320508075688772935274463415059;
 #undef max
 #endif //max
 
+
+template<class T> inline void Limit(T& val, const T& min, const T& max)
+{
+	if (val < min) val = min;
+	else if (val > max)	val = max;
+}
+
+template<class T> ILINE T clamp_tpl( T X, T Min, T Max ) 
+{	
+	return X<Min ? Min : X<Max ? X : Max; 
+}
+
+
+ILINE f32 clamp( f32 X, f32 Min, f32 Max ) 
+{	
+	X = (X+Max-fabsf(X-Max))*0.5f;  //return the min
+	X = (X+Min+fabsf(X-Min))*0.5f;  //return the max 
+	return X;
+}
+ILINE f64 clamp( f64 X, f64 Min, f64 Max ) 
+{	
+	X = (X+Max-fabs(X-Max))*0.5;  //return the min
+	X = (X+Min+fabs(X-Min))*0.5;  //return the max 
+	return X;
+}
+
+
+#ifdef __GNUC__
+// GCC generates very bad (slow) code for the template versions of min() and
+// max() below, so we'll provided overloads for all primitive types.
+#define _MINMAXFUNC(TYPE) \
+	ILINE TYPE min(TYPE a, TYPE b) { return a < b ? a : b; } \
+	ILINE TYPE max(TYPE a, TYPE b) { return b < a ? a : b; }
+
+_MINMAXFUNC(int) _MINMAXFUNC(unsigned)
+_MINMAXFUNC(float)
+_MINMAXFUNC(double)
+
+ILINE int min(int a, unsigned b) { return min(a, static_cast<int>(b)); }
+ILINE int min(unsigned a, int b) { return min(static_cast<int>(a), b); }
+ILINE unsigned max(int a, unsigned b) { return max(static_cast<unsigned>(a), b); }
+ILINE unsigned max(unsigned a, int b) { return max(a, static_cast<unsigned>(b)); }
+
+#undef _MINMAXFUNC
+#endif//__GNUC__
+
 // Bring min and max from std namespace to global scope.
 template <class T>
 inline const T& min( const T& a, const T& b )
@@ -125,19 +156,13 @@ inline const T& max( const T& a, const T& b, _Compare comp)
 	return comp(a,b) ? b : a;
 }
 
+// Perform a safe division, with specified maximum quotient.
+// Returns min( n/d, m )
 template<class T>
-inline void Limit(T& val, const T& min, const T& max)
+inline T div_min( T n, T d, T m )
 {
-	if (val < min)
-		val = min;
-	else if (val > max)
-		val = max;
-}
-
-template<class T>
-inline T Clamp(const T& val, const T& min, const T& max)
-{
-  return val < min ? min : val < max ? val : max;
+	// Multiply both sides additionally by d to reverse sense when negative.
+	return n*d < m*d*d ? n/d : m;
 }
 
 ILINE float CorrectInvSqrt(float fNum, float fInvSqrtEst)
@@ -171,8 +196,8 @@ ILINE f32 cry_cosf(f32 x) {return fastcosf(x); }
 
 ILINE f32 cry_fmod(f32 x, f32 y) {return (f32)fmod((f64)x,(f64)y);}
 
-ILINE f32 cry_asinf(f32 x) {return (f32)asin((f64)x);}
-ILINE f32 cry_acosf(f32 x) {return (f32)acos((f64)x);}
+ILINE f32 cry_asinf(f32 x) {return f32(   asin( clamp((f64)x,-1.0,+1.0) )    );}
+ILINE f32 cry_acosf(f32 x) {return f32(   acos( clamp((f64)x,-1.0,+1.0) )    );}
 ILINE f32 cry_atanf(f32 x) {return (f32)atan((f64)x);}
 ILINE f32 cry_atan2f(f32 y, f32 x) {return (f32)atan2((f64)y,(f64)x);}
 
@@ -231,7 +256,13 @@ ILINE void cry_sincos (f64 angle, f64* pSin, f64* pCos) {
 
 ILINE f32 cry_sqrtf(f32 x) 
 {
-	__m128 s = _mm_sqrt_ss(_mm_load_ss(&x));
+	__m128 s = _mm_sqrt_ss(_mm_set_ss(x));
+	float r; _mm_store_ss(&r, s); 
+	return r;
+}
+ILINE f32 cry_sqrtf_fast(f32 x)
+{
+	__m128 s = _mm_rcp_ss(_mm_rsqrt_ss(_mm_set_ss(x)));
 	float r; _mm_store_ss(&r, s); 
 	return r;
 }
@@ -257,6 +288,7 @@ ILINE f32 cry_isqrtf_fast(f32 x)
 ILINE void cry_sincosf (f32 angle, f32* pSin, f32* pCos) {	*pSin = f32(sin(angle));	*pCos = f32(cos(angle));	}
 ILINE void cry_sincos  (f64 angle, f64* pSin, f64* pCos) {	*pSin = f64(sin(angle));  *pCos = f64(cos(angle));	}
 ILINE f32 cry_sqrtf(f32 x) {return sqrtf(x);}
+ILINE f32 cry_sqrtf_fast(f32 x) {return sqrtf(x);}
 ILINE f32 cry_isqrtf(f32 x) {return 1.f/sqrtf(x);}
 ILINE f32 cry_isqrtf_fast(f32 x) {return 1.f/sqrtf(x);}
 
@@ -266,8 +298,8 @@ ILINE f32 cry_sinf(f32 x) {return sinf(x);}
 ILINE f32 cry_cosf(f32 x) {return cosf(x);}
 ILINE f32 cry_fmod(f32 x, f32 y) {return (f32)fmodf(x,y);}
 ILINE f32 cry_ceilf(f32 x) {return ceilf(x);}
-ILINE f32 cry_asinf(f32 x) {return asinf(x);}
-ILINE f32 cry_acosf(f32 x) {return acosf(x);}
+ILINE f32 cry_asinf(f32 x) {return asinf( clamp(x,-1.0f,+1.0f) );}
+ILINE f32 cry_acosf(f32 x) {return acosf( clamp(x,-1.0f,+1.0f) );}
 ILINE f32 cry_atanf(f32 x) {return atanf(x);}
 ILINE f32 cry_atan2f(f32 y, f32 x) {return atan2f(y,x);}
 ILINE f32 cry_tanhf(f32 x) {return tanhf(x);}
@@ -290,10 +322,10 @@ ILINE f32 cos_tpl(f32 op) { return cry_cosf(op); }
 ILINE f64 sin_tpl(f64 op) { return sin(op); }
 ILINE f32 sin_tpl(f32 op) { return cry_sinf(op); }
 
-ILINE f64 acos_tpl(f64 op) { return acos(op); }
+ILINE f64 acos_tpl(f64 op) { return acos( clamp(op,-1.0,+1.0) ); }
 ILINE f32 acos_tpl(f32 op) { return cry_acosf(op); }
 
-ILINE f64 asin_tpl(f64 op) { return asin(op); }
+ILINE f64 asin_tpl(f64 op) { return asin( clamp(op,-1.0,+1.0) ); }
 ILINE f32 asin_tpl(f32 op) { return cry_asinf(op); }
 
 ILINE f64 atan_tpl(f64 op) { return atan(op); }
@@ -311,10 +343,12 @@ ILINE f32 log_tpl(f32 op) { return cry_logf(op); }
 ILINE f64 sqrt_tpl(f64 op) { return sqrt(op); }
 ILINE f32 sqrt_tpl(f32 op) { return cry_sqrtf(op); }
 
+// Only f32 version implemented, as it's approximate.
+ILINE f32 sqrt_fast_tpl(f32 op) { return cry_sqrtf_fast(op); }
+
 ILINE f64 isqrt_tpl(f64 op) { return 1.0/sqrt(op); }
 ILINE f32 isqrt_tpl(f32 op) { return cry_isqrtf(op); }
 
-// Only f32 version implemented, as it's approximate.
 ILINE f32 isqrt_fast_tpl(f32 op) { return cry_isqrtf_fast(op); }
 
 ILINE f64 isqrt_safe_tpl(f64 op) { return 1.0/sqrt(op + DBL_MIN); }
@@ -365,6 +399,29 @@ ILINE int64 int_ceil(f64 f)
 	return (f > f64(i)) ? i+1 : i;
 }
 
+// Fixed-int to float conversion.
+ILINE float ufrac8_to_float( float u )
+{
+	return u * (1.f/255.f);
+}
+ILINE float ifrac8_to_float( float i )
+{
+	return i * (1.f/127.f);
+}
+ILINE uint8 float_to_ufrac8( float f )
+{
+	int i = pos_round(f * 255.f);
+	assert(i >= 0 && i < 256);
+	return uint8(i);
+}
+ILINE int8 float_to_ifrac8( float f )
+{
+	int i = int_round(f * 127.f);
+	assert(abs(i) <= 127);
+	return int8(i);
+}
+
+
 static int32 inc_mod3[]={1,2,0}, dec_mod3[]={2,0,1};
 #ifdef PHYSICS_EXPORTS
 #define incm3(i) inc_mod3[i]
@@ -374,8 +431,6 @@ inline int32 incm3(int32 i) { return i+1 & (i-2)>>31; }
 inline int32 decm3(int32 i) { return i-1 + ((i-1)>>31&3); }
 #endif
 
-
-template<class T> inline T clamp_tpl( T X, T Min, T Max ) {	return X<Min ? Min : X<Max ? X : Max; }
 
 template<class F> inline F square(F fOp) { return(fOp*fOp); }
 
@@ -632,12 +687,18 @@ inline T BiRandom(T fRange)
 }
 
 //////////////////////////////////////////////////////////////////////////
+enum type_zero { ZERO };
+enum type_min { VMIN };
+enum type_max { VMAX };
+enum type_identity { IDENTITY };
 
 #include "Cry_Vector2.h"
 #include "Cry_Vector3.h"
 #include "Cry_Matrix.h"
 #include "Cry_Quat.h"
-
+#if defined(PS3) && defined(__SPU__)
+	#include "SPU/MathLib/Cry_Quat_s.h"
+#endif
 
 #if (defined(WIN32) || defined (_XBOX))
 #include "Cry_XOptimise.h"

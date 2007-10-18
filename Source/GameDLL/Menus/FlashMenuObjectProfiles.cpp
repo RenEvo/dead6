@@ -22,6 +22,8 @@ History:
 #include "ISound.h"
 #include "Game.h"
 #include "OptionsManager.h"
+#include "HUD/GameFlashLogic.h"
+#include "MPHub.h"
 
 //-----------------------------------------------------------------------------------------------------
 
@@ -33,6 +35,9 @@ void CFlashMenuObject::UpdateProfiles()
 
 	m_pPlayerProfileManager = pProfileMan;
 
+	IPlayerProfileManager::EProfileOperationResult result;
+	m_pPlayerProfileManager->SaveProfile(m_pPlayerProfileManager->GetCurrentUser(), result);
+
 	if(m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART])
 	{
 		m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("Root.MainMenu.Profile.resetProfiles");
@@ -43,12 +48,22 @@ void CFlashMenuObject::UpdateProfiles()
 		{
 			IPlayerProfileManager::SProfileDescription profDesc;
 			pProfileMan->GetProfileInfo(userName, i, profDesc);
-			m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("Root.MainMenu.Profile.addProfileToList", profDesc.name);
+			const IPlayerProfile *pProfile = m_pPlayerProfileManager->PreviewProfile(userName, profDesc.name);
+			string buffer;
+			if(pProfile && pProfile->GetAttribute("Singleplayer.LastSavedGame", buffer))
+			{
+				int pos = buffer.rfind('/');
+				if(pos)
+					buffer = buffer.substr(pos+1, buffer.length());
+			}
+			SFlashVarValue args[3] = {profDesc.name, buffer.c_str(), GetMappedProfileName(profDesc.name) };
+			m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("Root.MainMenu.Profile.addProfileToList", args, 3);
 		}
+		m_pPlayerProfileManager->PreviewProfile(userName, NULL);
 
 		IPlayerProfile *pProfile = pProfileMan->GetCurrentProfile(userName);
 		if(pProfile)
-			m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("setActiveProfile", pProfile->GetName());
+			m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("setActiveProfile", GetMappedProfileName(pProfile->GetName()));
 	}
 }
 
@@ -58,31 +73,48 @@ void CFlashMenuObject::AddProfile(const char *profileName)
 {
 	if(m_pPlayerProfileManager)
 	{
-		const char *userName = m_pPlayerProfileManager->GetCurrentUser();
+		CryFixedStringT<128> sName(profileName);
+		sName = sName.Trim();
 
-		bool bDone = m_pPlayerProfileManager->CreateProfile(userName,profileName);
+		// check for invalid chars
+		static const char* invalidChars = "\\/:*?\"<>~|";
+		if (sName.find_first_of(invalidChars) != CryFixedStringT<128>::npos)
+		{
+			if(m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART])
+			{
+				ShowMenuMessage("@ui_menu_PROFILEERROR");
+			}			
+			return;
+		}
+
+		const char *userName = m_pPlayerProfileManager->GetCurrentUser();
+	
+		IPlayerProfileManager::EProfileOperationResult result;
+		bool bDone = m_pPlayerProfileManager->CreateProfile(userName,sName.c_str(), false, result);
 		if(bDone)
 		{
-			SelectProfile(profileName);
+			SelectProfile(sName.c_str(), false, true);
+			RestoreDefaults();
 
 			IPlayerProfile *pProfile = m_pPlayerProfileManager->GetCurrentProfile(m_pPlayerProfileManager->GetCurrentUser());
 			if(!pProfile)
 				return;
 
-			//pProfile->SetAttribute("PlayerName", (TFlowInputData)profileName);
+			//reset to default (it's a copy of the current one)
+			g_pGame->GetOptions()->SaveValueToProfile("Singleplayer.LastSavedGame", "");
+
 			UpdateProfiles();
 			if(m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART])
 			{
 				m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("Root.MainMenu.Profile.gotoProfileMenu");
-				m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("showStatusMessage", SFlashVarValue("@ui_menu_PROFILECREATED"));
+				ShowMenuMessage("@ui_menu_PROFILECREATED");
 			}			
 		}
 		else
 		{
 			if(m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART])
 			{
-				//Error hack
-				m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("Root.MainMenu.Profile.Profile.Controls_M.Controls.Controls_Sub.Btn_SaveProfile.gotoAndPlay", "error");
+				ShowMenuMessage("@ui_menu_PROFILEERROR");
 			}			
 		}
 	}
@@ -90,7 +122,7 @@ void CFlashMenuObject::AddProfile(const char *profileName)
 
 //-----------------------------------------------------------------------------------------------------
 
-void CFlashMenuObject::SelectProfile(const char *profileName, bool silent)
+void CFlashMenuObject::SelectProfile(const char *profileName, bool silent, bool keepOldSettings)
 {
 	if(m_pPlayerProfileManager)
 	{
@@ -102,15 +134,19 @@ void CFlashMenuObject::SelectProfile(const char *profileName, bool silent)
 			SwitchProfiles(NULL, profileName);
     g_pGame->GetIGameFramework()->GetILevelSystem()->LoadRotation();
 		UpdateProfiles();
-		g_pGame->GetOptions()->InitProfileOptions();
+		if(keepOldSettings)
+			g_pGame->GetOptions()->UpdateToProfile();
+		g_pGame->GetOptions()->InitProfileOptions(true);
 		g_pGame->GetOptions()->UpdateFlashOptions();
+		g_pGame->GetOptions()->WriteGameCfg();
+		UpdateMenuColor();
 		if(m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART])
 		{
 			if(!silent)
 			{
 				m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("Root.MainMenu.Profile.gotoProfileMenu");
+				ShowMenuMessage("@ui_menu_PROFILELOADED");
 			}
-			m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("showStatusMessage", SFlashVarValue("@ui_menu_PROFILELOADED"));
 		}
 	}
 }
@@ -123,12 +159,19 @@ void CFlashMenuObject::SwitchProfiles(const char *oldProfile, const char *newPro
 	if(oldProfile)
 	{
 		m_pPlayerProfileManager->ActivateProfile(userName,oldProfile);
+		
+		if(m_multiplayerMenu)
+			m_multiplayerMenu->DoLogoff();
+		
 		g_pGame->GetOptions()->SaveValueToProfile("Activated", 0);
+		g_pGame->GetOptions()->SaveProfile();
+		
 	}
 	if(newProfile)
 	{
 		m_pPlayerProfileManager->ActivateProfile(userName,newProfile);
 		g_pGame->GetOptions()->SaveValueToProfile("Activated", 1);
+		g_pGame->GetOptions()->SaveProfile();
 	}
 }
 
@@ -165,10 +208,11 @@ void CFlashMenuObject::SelectActiveProfile()
 
 void CFlashMenuObject::DeleteProfile(const char *profileName)
 {
-	if(!m_pPlayerProfileManager) return;
+	if(!m_pPlayerProfileManager)
+		return;
 	const char *userName = m_pPlayerProfileManager->GetCurrentUser();
-	m_pPlayerProfileManager->DeleteProfile(userName, profileName);
-	UpdateProfiles();
+	IPlayerProfileManager::EProfileOperationResult result;
+	m_pPlayerProfileManager->DeleteProfile(userName, profileName, result);
 	
 	IPlayerProfile *pCurProfile = m_pPlayerProfileManager->GetCurrentProfile(userName);
 	if(!pCurProfile)
@@ -176,10 +220,12 @@ void CFlashMenuObject::DeleteProfile(const char *profileName)
 		IPlayerProfileManager::SProfileDescription profDesc;
 		m_pPlayerProfileManager->GetProfileInfo(userName, 0, profDesc);
 		SelectProfile(profDesc.name, true);
+		ShowMenuMessage("@ui_menu_PROFILEDELETED");
 	}
 
-	g_pGame->GetOptions()->InitProfileOptions();
+	g_pGame->GetOptions()->InitProfileOptions(true);
 	g_pGame->GetOptions()->UpdateFlashOptions();
+	UpdateProfiles();
 	if(m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART])
 	{
 		m_apFlashMenuScreens[MENUSCREEN_FRONTENDSTART]->Invoke("Root.MainMenu.Profile.updateProfileList");
@@ -200,3 +246,13 @@ void CFlashMenuObject::SetProfile()
 }
 
 //-----------------------------------------------------------------------------------------------------
+
+const wchar_t* CFlashMenuObject::GetMappedProfileName(const char* profileName)
+{
+	if (stricmp(profileName, "default") == 0)
+		gEnv->pSystem->GetLocalizationManager()->LocalizeLabel("@ui_DefaultProfileName", m_tempMappedProfileName);
+	else
+		gEnv->pSystem->GetLocalizationManager()->LocalizeString(profileName, m_tempMappedProfileName);
+	return m_tempMappedProfileName.c_str();
+}
+

@@ -24,6 +24,14 @@ public:
 		return new CFlowHitInfoNode(pActInfo);
 	}
 
+	void Serialize(SActivationInfo* pActInfo, TSerialize ser)
+	{
+		if (ser.IsReading())
+		{
+			DoRegister(pActInfo);
+		}
+	}
+
 	enum EInputPorts
 	{
 		EIP_Enable = 0,
@@ -81,23 +89,30 @@ public:
 		switch (event)
 		{
 		case eFE_Initialize:
-		case eFE_PostSerialize:
 			m_actInfo = *pActInfo;  // fall through and enable/disable listener
 		case eFE_Activate:
-			if (IsPortActive(pActInfo, EIP_Enable) || event == eFE_PostSerialize)
+			if (IsPortActive(pActInfo, EIP_Enable))
 			{
-				CGameRules* pGR = g_pGame->GetGameRules();
-				if (!pGR)
-					return;
-
-				bool bEnable = GetPortBool(pActInfo, EIP_Enable);
-				if (bEnable)
-					pGR->AddHitListener(this);
-				else
-					pGR->RemoveHitListener(this);
+				DoRegister(pActInfo);
 			}
 			break;
 		}
+	}
+
+	void DoRegister(SActivationInfo* pActInfo)
+	{
+		CGameRules* pGR = g_pGame->GetGameRules();
+		if (!pGR)
+		{
+			GameWarning("[flow] CFlowHitInfoNode::DoRegister: No GameRules!");
+			return;
+		}
+
+		bool bEnable = GetPortBool(pActInfo, EIP_Enable);
+		if (bEnable)
+			pGR->AddHitListener(this);
+		else
+			pGR->RemoveHitListener(this);
 	}
 
 	//CGameRules::IHitInfo
@@ -187,18 +202,25 @@ public:
 		return new CFlowExplosionInfoNode(pActInfo);
 	}
 
+	void Serialize(SActivationInfo* pActInfo, TSerialize ser)
+	{
+		if (ser.IsReading())
+			DoRegister(pActInfo);
+	}
+
 	enum EInputPorts
 	{
 		EIP_Enable = 0,
 		EIP_ShooterId,
-		EIP_Weapon,
+		EIP_WeaponLegacyDontUse,
+		EIP_Ammo,
 		EIP_ImpactTargetId,
 	};
 
 	enum EOutputPorts
 	{
 		EOP_ShooterId = 0,
-		EOP_WeaponId,
+		EOP_Ammo,
 		EOP_Pos,
 		EOP_Dir,
 		EOP_Radius,
@@ -214,15 +236,16 @@ public:
 	virtual void GetConfiguration(SFlowNodeConfig& config)
 	{
 		static const SInputPortConfig inputs[] = {
-			InputPortConfig<bool>("Enable", false, _HELP("Enable/Disable HitInfo")),
-			InputPortConfig<EntityId>("ShooterId", _HELP("When connected, limit HitInfo to this shooter")),
-			InputPortConfig<string> ("Weapon", _HELP("When set, limit HitInfo to this weapon"), 0, _UICONFIG("enum_global:weapon")),
-			InputPortConfig<EntityId>("ImpactTargetId",  _HELP("When connected, limit HitInfo to this Impact target (e.g. for Rockets)")),
+			InputPortConfig<bool>("Enable", false, _HELP("Enable/Disable ExplosionInfo")),
+			InputPortConfig<EntityId>("ShooterId", _HELP("When connected, limit ExplosionInfo to this shooter")),
+			InputPortConfig<string> ("Weapon", _HELP("!DONT USE! -> Use Ammo!"), _HELP("!DONT USE! -> Use Ammo!"), _UICONFIG("enum_global:ammos")),
+			InputPortConfig<string> ("Ammo", _HELP("When set, limit ExplosionInfo to this ammo"), 0, _UICONFIG("enum_global:ammos")),
+			InputPortConfig<EntityId>("ImpactTargetId",  _HELP("When connected, limit ExplosionInfo to this Impact target (e.g. for Rockets)")),
 			{0}
 		};
 		static const SOutputPortConfig outputs[] = {
 			OutputPortConfig<EntityId>("ShooterId", _HELP("EntityID of the Shooter")),
-			OutputPortConfig<EntityId>("WeaponId",  _HELP("EntityID of the Weapon")),
+			OutputPortConfig<string>  ("Ammo",  _HELP("Ammo Class")),
 			OutputPortConfig<Vec3>    ("Pos", _HELP("Position of the Explosion")),
 			OutputPortConfig<Vec3>    ("Dir", _HELP("Direction of the Explosion")),
 			OutputPortConfig<float>   ("Radius",   _HELP("Radius of Explosion")),
@@ -237,7 +260,7 @@ public:
 		};
 		config.pInputPorts = inputs;
 		config.pOutputPorts = outputs;
-		config.sDescription = _HELP("Tracks Explosions.\nAll input conditions (ShooterId, Weapon, ImpactTargetId) must be fulfilled to output.\nIf a condition is left empty/not connected, it is regarded as fulfilled.");
+		config.sDescription = _HELP("Tracks Explosions.\nAll input conditions (ShooterId, Ammo, ImpactTargetId) must be fulfilled to output.\nIf a condition is left empty/not connected, it is regarded as fulfilled.");
 		config.SetCategory(EFLN_WIP);
 	}
 
@@ -246,23 +269,30 @@ public:
 		switch (event)
 		{
 		case eFE_Initialize:
-		case eFE_PostSerialize:
 			m_actInfo = *pActInfo;  // fall through and enable/disable listener
 		case eFE_Activate:
 			if (IsPortActive(pActInfo, EIP_Enable))
 			{
-				CGameRules* pGR = g_pGame->GetGameRules();
-				if (!pGR)
-					return;
-
-				bool bEnable = GetPortBool(pActInfo, EIP_Enable);
-				if (bEnable)
-					pGR->AddHitListener(this);
-				else
-					pGR->RemoveHitListener(this);
+				DoRegister(pActInfo);
 			}
 			break;
 		}
+	}
+
+	void DoRegister(SActivationInfo* pActInfo)
+	{
+		CGameRules* pGR = g_pGame->GetGameRules();
+		if (!pGR)
+		{
+			GameWarning("[flow] CFlowExplosionInfoNode::DoRegister No GameRules!");
+			return;
+		}
+
+		bool bEnable = GetPortBool(pActInfo, EIP_Enable);
+		if (bEnable)
+			pGR->AddHitListener(this);
+		else
+			pGR->RemoveHitListener(this);
 	}
 
 	//CGameRules::IHitInfo
@@ -284,28 +314,28 @@ public:
 			return;
 
 		IEntitySystem* pEntitySys = gEnv->pEntitySystem;
-		IEntity* pTempEntity;
+		IEntity* pTempEntity = pEntitySys->GetEntity(explosionInfo.weaponId);
 
-		// check weapon match
-		const string& weapon = GetPortString(&m_actInfo, EIP_Weapon);
-		if (weapon.empty() == false)
+		// check ammo match
+		const string& ammo = GetPortString(&m_actInfo, EIP_Ammo);
+		if (ammo.empty() == false)
 		{
-			pTempEntity = pEntitySys->GetEntity(explosionInfo.weaponId);
-			if (pTempEntity == 0 || weapon.compare(pTempEntity->GetClass()->GetName()) != 0)
+			if (pTempEntity == 0 || ammo.compare(pTempEntity->GetClass()->GetName()) != 0)
 				return;
 		}
-
+		string ammoClass = pTempEntity ? pTempEntity->GetClass()->GetName() : "";
 		ActivateOutput(&m_actInfo, EOP_ShooterId, explosionInfo.shooterId);
-		ActivateOutput(&m_actInfo, EOP_WeaponId, explosionInfo.weaponId);
+		ActivateOutput(&m_actInfo, EOP_Ammo, ammoClass);
 		ActivateOutput(&m_actInfo, EOP_Pos, explosionInfo.pos);
 		ActivateOutput(&m_actInfo, EOP_Dir, explosionInfo.dir);
 		ActivateOutput(&m_actInfo, EOP_Radius, explosionInfo.radius);
 		ActivateOutput(&m_actInfo, EOP_Damage, explosionInfo.damage);
 		ActivateOutput(&m_actInfo, EOP_Pressure, explosionInfo.pressure);
 		ActivateOutput(&m_actInfo, EOP_HoleSize, explosionInfo.hole_size);
-		const char* hitType = "";
+		const char* hitType = 0;
 		if (CGameRules* pGR = g_pGame->GetGameRules())
 			hitType = pGR->GetHitType(explosionInfo.type);
+		hitType = hitType ? hitType : "";
 		ActivateOutput(&m_actInfo, EOP_Type, string(hitType));
 		if (explosionInfo.impact)
 		{

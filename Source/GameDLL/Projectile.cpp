@@ -28,18 +28,13 @@ History:
 
 #include "HUD/HUD.h"
 
-EntityId CProjectile::m_currentlyTracked = 0;
-
 //------------------------------------------------------------------------
 CProjectile::CProjectile()
 : m_whizSoundId(INVALID_SOUNDID),
 	m_trailSoundId(INVALID_SOUNDID),
 	m_trailEffectId(-1),
 	m_trailUnderWaterId(-1),
-	m_stuck(0),
-	m_stickyCollisions(0),
 	m_pPhysicalEntity(0),
-	m_pStickyBuddy(0),
 	m_pAmmoParams(0),
 	m_destroying(false),
 	m_remote(false),
@@ -47,18 +42,30 @@ CProjectile::CProjectile()
 	m_scaledEffectval(0.0f),
 	m_obstructObject(0),
 	m_damageDropPerMeter(0.0f),
+	m_damageDropMinDisSqr(0.0f),
+	m_firstDropApplied(false),
   m_hitTypeId(0),
 	m_scaledEffectSignaled(false),
-	m_stickToActor(false),
 	m_hitListener(false),
-	m_hitPoints(-1)
+	m_hitPoints(-1),
+	m_noBulletHits(false),
+	m_initial_pos(ZERO),
+	m_initial_dir(ZERO),
+	m_initial_vel(ZERO)
 {
 }
 
 //------------------------------------------------------------------------
 CProjectile::~CProjectile()
 {
-	GetGameObject()->ReleasePhysics(this);
+	if (GetEntityId() == SAFE_HUD_FUNC_RET(GetGrenadeDetectorId()))
+	{
+		SAFE_HUD_FUNC(SetGrenade(0));
+	}
+
+	EndScaledEffect(m_pAmmoParams->pScaledEffect);
+
+	GetGameObject()->ReleaseProfileManager(this);
 	GetGameObject()->EnablePhysicsEvent(false, eEPE_OnCollisionLogged);
 
 	if (m_obstructObject)
@@ -73,116 +80,167 @@ CProjectile::~CProjectile()
 }
 
 //------------------------------------------------------------------------
-bool CProjectile::SetProfile( uint8 profile )
+bool CProjectile::SetAspectProfile( EEntityAspects aspect, uint8 profile )
 {
-	if (m_pAmmoParams->physicalizationType == ePT_None)
-		return true;
+	//if (m_pAmmoParams->physicalizationType == ePT_None)
+		//return true;
 
-	Vec3 spin(m_pAmmoParams->spin);
-	Vec3 spinRandom(BiRandom(m_pAmmoParams->spinRandom.x), BiRandom(m_pAmmoParams->spinRandom.y), BiRandom(m_pAmmoParams->spinRandom.z));
-	spin += spinRandom;
-	spin = DEG2RAD(spin);
-
-	switch (profile)
+	if (aspect == eEA_Physics)
 	{
-	case ePT_Particle:
+		Vec3 spin(m_pAmmoParams->spin);
+		Vec3 spinRandom(BiRandom(m_pAmmoParams->spinRandom.x), BiRandom(m_pAmmoParams->spinRandom.y), BiRandom(m_pAmmoParams->spinRandom.z));
+		spin += spinRandom;
+		spin = DEG2RAD(spin);
+
+		switch (profile)
 		{
-			if (m_pAmmoParams->pParticleParams)
+		case ePT_Particle:
 			{
-				m_pAmmoParams->pParticleParams->wspin = spin;
-				if (!m_initialDir.IsZero() && !gEnv->bServer)
-					m_pAmmoParams->pParticleParams->heading=m_initialDir;
-			}
+				if (m_pAmmoParams->pParticleParams)
+				{
+					m_pAmmoParams->pParticleParams->wspin = spin;
+					if (!m_initial_dir.IsZero() && !gEnv->bServer)
+						m_pAmmoParams->pParticleParams->heading=m_initial_dir;
+				}
 
-			SEntityPhysicalizeParams params;
-			params.type = PE_PARTICLE;
-			params.mass = m_pAmmoParams->mass;
-			if (m_pAmmoParams->pParticleParams)
+				SEntityPhysicalizeParams params;
+				params.type = PE_PARTICLE;
+				params.mass = m_pAmmoParams->mass;
+				if (m_pAmmoParams->pParticleParams)
+					params.pParticle = m_pAmmoParams->pParticleParams;
+
+				GetEntity()->Physicalize(params);
+			}
+			break;
+		case ePT_Rigid:
 			{
-				params.pParticle = m_pAmmoParams->pParticleParams;
+				SEntityPhysicalizeParams params;
+				params.type = PE_RIGID;
+				params.mass = m_pAmmoParams->mass;
+				params.nSlot = 0;
+
+				GetEntity()->Physicalize(params);
+
+				pe_action_set_velocity velocity;
+				m_pPhysicalEntity = GetEntity()->GetPhysics();
+				velocity.w = spin;
+				m_pPhysicalEntity->Action(&velocity);
+
+				if (m_pAmmoParams->pSurfaceType)
+				{
+					int sfid = m_pAmmoParams->pSurfaceType->GetId();
+
+					pe_params_part part;
+					part.ipart = 0;
+
+					GetEntity()->GetPhysics()->GetParams(&part);
+					for (int i=0; i<part.nMats; i++)
+						part.pMatMapping[i] = sfid;
+				}
 			}
+			break;
 
+		case ePT_Static:
+			{
+				SEntityPhysicalizeParams params;
+				params.type = PE_STATIC;
+				params.nSlot = 0;
 
-			GetEntity()->Physicalize(params);
+				GetEntity()->Physicalize(params);
+
+				if (m_pAmmoParams->pSurfaceType)
+				{
+					int sfid = m_pAmmoParams->pSurfaceType->GetId();
+
+					pe_params_part part;
+					part.ipart = 0;
+
+					if (GetEntity()->GetPhysics()->GetParams(&part))
+						if (!is_unused(part.pMatMapping))
+							for (int i=0; i<part.nMats; i++)
+								part.pMatMapping[i] = sfid;
+				}
+			}
+			break;
+		case ePT_None:
+			{
+				SEntityPhysicalizeParams params;
+				params.type = PE_NONE;
+				params.nSlot = 0;
+
+				GetEntity()->Physicalize(params);
+			}
+			break;
 		}
-		break;
-	case ePT_Rigid:
+
+		m_pPhysicalEntity = GetEntity()->GetPhysics();
+
+		if (m_pPhysicalEntity)
 		{
-			SEntityPhysicalizeParams params;
-			params.type = PE_RIGID;
-			params.mass = m_pAmmoParams->mass;
-			params.nSlot = 0;
+			pe_simulation_params simulation;
+			simulation.maxLoggedCollisions = m_pAmmoParams->maxLoggedCollisions;
 
-			GetEntity()->Physicalize(params);
+			pe_params_flags flags;
+			flags.flagsOR = pef_log_collisions|(m_pAmmoParams->traceable?pef_traceable:0);
 
-			pe_action_set_velocity velocity;
-			m_pPhysicalEntity = GetEntity()->GetPhysics();
-			velocity.w = spin;
-			m_pPhysicalEntity->Action(&velocity);
+			pe_params_part colltype;
+			colltype.flagsAND=~geom_colltype_explosion;
 
-			if (m_pAmmoParams->pSurfaceType)
-			{
-				int sfid = m_pAmmoParams->pSurfaceType->GetId();
-
-				pe_params_part part;
-				part.ipart = 0;
-
-				GetEntity()->GetPhysics()->GetParams(&part);
-				for (int i=0; i<part.nMats; i++)
-					part.pMatMapping[i] = sfid;
-			}
+			m_pPhysicalEntity->SetParams(&simulation);
+			m_pPhysicalEntity->SetParams(&flags);
+			m_pPhysicalEntity->SetParams(&colltype);
 		}
-		break;
-	}
-
-	m_pPhysicalEntity = GetEntity()->GetPhysics();
-
-	if (m_pPhysicalEntity)
-	{
-		pe_simulation_params simulation;
-		simulation.maxLoggedCollisions = m_pAmmoParams->maxLoggedCollisions;
-
-		pe_params_flags flags;
-		flags.flagsOR = pef_log_collisions|(m_pAmmoParams->traceable?pef_traceable:0);
-
-		m_pPhysicalEntity->SetParams(&simulation);
-		m_pPhysicalEntity->SetParams(&flags);
 	}
 
 	return true;
 }
 
 //------------------------------------------------------------------------
-bool CProjectile::SerializeProfile( TSerialize ser, uint8 profile, int pflags )
+bool CProjectile::NetSerialize(TSerialize ser, EEntityAspects aspect, uint8 profile, int pflags)
 {
-	pe_type type = PE_NONE;
-	switch (profile)
+	if (aspect == eEA_Physics)
 	{
-	case ePT_Rigid:
-		type = PE_RIGID;
-		break;
-	case ePT_Particle:
-		type = PE_PARTICLE;
-		break;
-	default:
-		return false;
-	}
-
-	IEntityPhysicalProxy * pEPP = (IEntityPhysicalProxy *) GetEntity()->GetProxy(ENTITY_PROXY_PHYSICS);
-	if (ser.IsWriting())
-	{
-		if (!pEPP || !pEPP->GetPhysicalEntity() || pEPP->GetPhysicalEntity()->GetType() != type)
+		pe_type type = PE_NONE;
+		switch (profile)
 		{
-			gEnv->pPhysicalWorld->SerializeGarbageTypedSnapshot( ser, type, 0 );
+		case ePT_Rigid:
+			type = PE_RIGID;
+			break;
+		case ePT_Particle:
+			type = PE_PARTICLE;
+			break;
+		case ePT_None:
 			return true;
+		case ePT_Static:
+			{
+				Vec3 pos = GetEntity()->GetWorldPos();
+				Quat ori = GetEntity()->GetWorldRotation();
+				ser.Value("pos", pos, 'wrld');
+				ser.Value("ori", ori, 'ori1');
+				if (ser.IsReading())
+					GetEntity()->SetWorldTM( Matrix34::Create( Vec3(1,1,1), ori, pos ) );
+			}
+			return true;
+		default:
+			return false;
 		}
-	}
-	else if (!pEPP)
-	{
-		return false;
-	}
 
-	pEPP->SerializeTyped( ser, type, pflags );
+		IEntityPhysicalProxy * pEPP = (IEntityPhysicalProxy *) GetEntity()->GetProxy(ENTITY_PROXY_PHYSICS);
+		if (ser.IsWriting())
+		{
+			if (!pEPP || !pEPP->GetPhysicalEntity() || pEPP->GetPhysicalEntity()->GetType() != type)
+			{
+				gEnv->pPhysicalWorld->SerializeGarbageTypedSnapshot( ser, type, 0 );
+				return true;
+			}
+		}
+		else if (!pEPP)
+		{
+			return false;
+		}
+
+		pEPP->SerializeTyped( ser, type, pflags );
+	}
 	return true;
 }
 
@@ -193,7 +251,7 @@ bool CProjectile::Init(IGameObject *pGameObject)
 
 	g_pGame->GetWeaponSystem()->AddProjectile(GetEntity(), this);
 
-	if (!GetGameObject()->CapturePhysics(this))
+	if (!GetGameObject()->CaptureProfileManager(this))
 		return false;
 
 	m_pAmmoParams = g_pGame->GetWeaponSystem()->GetAmmoParams(GetEntity()->GetClass());
@@ -236,27 +294,8 @@ bool CProjectile::Init(IGameObject *pGameObject)
 		//Only projectiles with hit points are hit listeners
 		g_pGame->GetGameRules()->AddHitListener(this);
 		m_hitListener = true;
+		m_noBulletHits = m_pAmmoParams->noBulletHits;
 	}
-
-	// register with ai if needed
-	//FIXME
-	//make AI ignore grenades thrown by AI; needs proper/readable grenade reaction
-	if (m_pAmmoParams->aiType!=AIOBJECT_NONE)
-	{
-		bool	isFriendlyGrenade(false);
-		IEntity *pOwnerEntity = gEnv->pEntitySystem->GetEntity(m_ownerId);
-		if (pOwnerEntity && pOwnerEntity->GetAI())
-			isFriendlyGrenade = (pOwnerEntity->GetAI()->GetAIType()==AIOBJECT_PUPPET);
-
-		if (!isFriendlyGrenade)
-		{
-			AIObjectParameters params;
-			GetEntity()->RegisterInAISystem(m_pAmmoParams->aiType, params);
-		}
-	}
-
-	GetGameObject()->SetAIActivation(eGOAIAM_Always);
-
 	return true;
 }
 
@@ -273,38 +312,39 @@ void CProjectile::Release()
 }
 
 //------------------------------------------------------------------------
-void CProjectile::Serialize(TSerialize ser, unsigned aspects)
+void CProjectile::FullSerialize(TSerialize ser)
 {
-	if(ser.GetSerializationTarget() != eST_Network)
+	assert(ser.GetSerializationTarget() != eST_Network);
+
+	ser.Value("Remote", m_remote);
+	// m_tracerpath should be serialized but the template-template stuff doesn't work under VS2005
+	ser.Value("Owner", m_ownerId, 'eid');
+	ser.Value("Weapon", m_weaponId, 'eid');
+	ser.Value("TrailEffect", m_trailEffectId);
+	ser.Value("TrailSound", m_trailSoundId);
+	ser.Value("WhizSound", m_whizSoundId);
+	ser.Value("Damage", m_damage);
+	ser.Value("Destroying", m_destroying);
+	ser.Value("LastPos", m_last);
+	ser.Value("InitialPos", m_initial_pos);
+	ser.Value("DamageDrop", m_damageDropPerMeter);
+	ser.Value("DamageDropMinR", m_damageDropMinDisSqr);
+	ser.Value("FirstDropApplied", m_firstDropApplied);
+	ser.Value("ScaledEffectSignaled", m_scaledEffectSignaled);
+	ser.Value("HitListener", m_hitListener);
+	ser.Value("HitPoints", m_hitPoints);
+
+	bool wasVisible = false;
+	if(ser.IsWriting())
+		wasVisible = (GetEntity()->GetSlotFlags(0)&(ENTITY_SLOT_RENDER))?true:false;
+	ser.Value("Visibility", wasVisible);
+	if(ser.IsReading())
 	{
-		ser.Value("Remote", m_remote);
-		// m_tracerpath should be serialized but the template-template stuff doesn't work under VS2005
-		ser.Value("Owner", m_ownerId, 'eid');
-		ser.Value("Weapon", m_weaponId, 'eid');
-		ser.Value("TrailEffect", m_trailEffectId);
-		ser.Value("TrailSound", m_trailSoundId);
-		ser.Value("WhizSound", m_whizSoundId);
-		ser.Value("Damage", m_damage);
-		ser.Value("Destroying", m_destroying);
-		ser.Value("LastPos", m_last);
-		ser.Value("InitialPos", m_initialPos);
-		ser.Value("DamageDrop", m_damageDropPerMeter);
-		ser.Value("ScaledEffectSignaled", m_scaledEffectSignaled);
-		ser.Value("HitListener", m_hitListener);
-		ser.Value("HitPoints", m_hitPoints);
-
-		bool wasVisible = false;
-		if(ser.IsWriting())
-			wasVisible = (GetEntity()->GetSlotFlags(0)&(ENTITY_SLOT_RENDER))?true:false;
-		ser.Value("Visibility", wasVisible);
-		if(ser.IsReading())
-		{
-			if(wasVisible)
-				GetEntity()->SetSlotFlags(0, GetEntity()->GetSlotFlags(0)|ENTITY_SLOT_RENDER);
-			else
-				GetEntity()->SetSlotFlags(0, GetEntity()->GetSlotFlags(0)&(~ENTITY_SLOT_RENDER));
-		}
-
+		if(wasVisible)
+			GetEntity()->SetSlotFlags(0, GetEntity()->GetSlotFlags(0)|ENTITY_SLOT_RENDER);
+		else
+			GetEntity()->SetSlotFlags(0, GetEntity()->GetSlotFlags(0)&(~ENTITY_SLOT_RENDER));
+		InitWithAI();
 	}
 }
 
@@ -327,33 +367,36 @@ void CProjectile::Update(SEntityUpdateContext &ctx, int updateSlot)
 	ScaledEffect(m_pAmmoParams->pScaledEffect);
 
 	// update whiz
-	if (m_whizSoundId == INVALID_SOUNDID)
+	if(m_pAmmoParams->pWhiz)
 	{
-		IActor *pActor = g_pGame->GetIGameFramework()->GetClientActor();
-		if (pActor && (m_ownerId != pActor->GetEntityId()))
+		if (m_whizSoundId == INVALID_SOUNDID)
 		{
-			float probability = 0.85f;
-
-			if (Random()<=probability)
+			IActor *pActor = g_pGame->GetIGameFramework()->GetClientActor();
+			if (pActor && (m_ownerId != pActor->GetEntityId()))
 			{
-				Lineseg line(m_last, pos);
-				Vec3 player = pActor->GetEntity()->GetWorldPos();
+				float probability = 0.85f;
 
-				float t;
-				float distanceSq=Distance::Point_LinesegSq(player, line, t);
-
-				if (distanceSq < 5*5 && (t>=0.0f && t<=1.0f))
+				if (Random()<=probability)
 				{
-					if (distanceSq >= 0.65*0.65)
-					{
-						Sphere s;
-						s.center = player;
-						s.radius = 6.0f;
+					Lineseg line(m_last, pos);
+					Vec3 player = pActor->GetEntity()->GetWorldPos();
 
-						Vec3 entry,exit;
-						int intersect=Intersect::Lineseg_Sphere(line, s, entry,exit);
-						if (intersect==0x1 || intersect==0x3) // one entry or one entry and one exit
-							WhizSound(true, entry, (pos-m_last).GetNormalized());
+					float t;
+					float distanceSq=Distance::Point_LinesegSq(player, line, t);
+
+					if (distanceSq < 4.7f*4.7f && (t>=0.0f && t<=1.0f))
+					{
+						if (distanceSq >= 0.65*0.65)
+						{
+							Sphere s;
+							s.center = player;
+							s.radius = 4.7f;
+
+							Vec3 entry,exit;
+							int intersect=Intersect::Lineseg_Sphere(line, s, entry,exit);
+							if (intersect==0x1 || intersect==0x3) // one entry or one entry and one exit
+								WhizSound(true, entry, (pos-m_last).GetNormalized());
+						}
 					}
 				}
 			}
@@ -362,10 +405,6 @@ void CProjectile::Update(SEntityUpdateContext &ctx, int updateSlot)
 
 	if (m_trailSoundId==INVALID_SOUNDID)
 		TrailSound(true);
-
-	// hack - fixes smoke grenade sometimes not showing up.
-	if (m_trailEffectId<0 /*&& m_totalLifetime > 0.5f*/)
-		TrailEffect(true);
 
 	m_totalLifetime += ctx.fFrameTime;
 	m_last = pos;
@@ -384,17 +423,6 @@ void CProjectile::HandleEvent(const SGameObjectEvent &event)
     EventPhysCollision *pCollision = (EventPhysCollision *)event.ptr;
 
 		IEntity *pCollidee = pCollision->iForeignData[0]==PHYS_FOREIGN_ID_ENTITY ? (IEntity*)pCollision->pForeignData[0]:0;
-		
-		// DO NOT USE THIS (makes explosives explode just placing another one on top)
-		// For bullets hits see CProjectile::OnHit
-		/*if (pCollidee && pCollidee->GetId() != GetEntity()->GetId())
-		{
-			if (CProjectile* pProjectile = g_pGame->GetWeaponSystem()->GetProjectile(pCollidee->GetId()))
-			{
-				Explode(true);
-				return;
-			}
-		}*/
 
 		const SCollisionParams* pCollisionParams = m_pAmmoParams->pCollision;
     if (pCollisionParams)
@@ -405,6 +433,7 @@ void CProjectile::HandleEvent(const SGameObjectEvent &event)
       if (pCollisionParams->sound)
       {
         _smart_ptr<ISound> pSound = gEnv->pSoundSystem->CreateSound(pCollisionParams->sound, FLAG_SOUND_DEFAULT_3D);
+				pSound->SetSemantic(eSoundSemantic_Projectile);
         pSound->SetPosition(pCollision->pt);
         pSound->Play();
       }
@@ -418,25 +447,30 @@ void CProjectile::HandleEvent(const SGameObjectEvent &event)
       }
     }
 
-    if (m_pAmmoParams->sticky && !m_stickToActor && m_stuck < MAX_STICKY_POINTS)
-      Stick(pCollision);
-
     Ricochet(pCollision);
 
 		//Update damage
-		if(m_damageDropPerMeter>0.0001f)
+		if((m_damageDropPerMeter>0.0001f)&&
+			(((pCollision->pt-m_initial_pos).len2()>m_damageDropMinDisSqr)||m_firstDropApplied))
 		{
-			Vec3 vDiff = pCollision->pt - m_initialPos;
+			
+			if(!m_firstDropApplied)
+			{
+				m_firstDropApplied = true;
+				m_initial_pos = m_initial_pos + (m_initial_dir*(sqrt_fast_tpl(m_damageDropMinDisSqr)));
+			}
+
+			Vec3 vDiff = pCollision->pt - m_initial_pos;
 			float dis  = vDiff.len();
 
-					m_damage -= (int)(floor_tpl(m_damageDropPerMeter * dis));
+			m_damage -= (int)(floor_tpl(m_damageDropPerMeter * dis));
 					
-					//Check m_damage is positive
-					if(m_damage<MIN_DAMAGE)
-						m_damage=MIN_DAMAGE;
+			//Check m_damage is positive
+			if(m_damage<MIN_DAMAGE)
+					m_damage=MIN_DAMAGE;
 
 			//Also modify initial position (the projectile could not be destroyed, cause of pirceability)
-			m_initialPos = pCollision->pt;
+			m_initial_pos = pCollision->pt;
 		}
   }
 }
@@ -454,13 +488,10 @@ void CProjectile::ProcessEvent(SEntityEvent &event)
 				GetEntity()->SetSlotFlags(0, GetEntity()->GetSlotFlags(0)|ENTITY_SLOT_RENDER);
 				break;
 			case ePTIMER_LIFETIME:
-				Explode(true);
-				break;
-			case ePTIMER_STICKY:
-				{
-					if (m_stuck<MIN_STICKY_POINTS)
-						Unstick();
-				}
+				if(m_pAmmoParams->quietRemoval)	// claymores don't explode when they timeout
+					Destroy();
+				else
+					Explode(true);
 				break;
 			}
 		}
@@ -489,7 +520,7 @@ void CProjectile::Physicalize()
 	if (!m_pAmmoParams || m_pAmmoParams->physicalizationType == ePT_None)
 		return;
 
-	GetGameObject()->SetPhysicalizationProfile(m_pAmmoParams->physicalizationType);
+	GetGameObject()->SetAspectProfile(eEA_Physics, m_pAmmoParams->physicalizationType);
 }
 
 //------------------------------------------------------------------------
@@ -518,7 +549,7 @@ void CProjectile::SetVelocity(const Vec3 &pos, const Vec3 &dir, const Vec3 &velo
 }
 
 //------------------------------------------------------------------------
-void CProjectile::SetParams(EntityId ownerId, EntityId hostId, EntityId weaponId, int damage, int hitTypeId, float damageDrop /*= 0.0f*/)
+void CProjectile::SetParams(EntityId ownerId, EntityId hostId, EntityId weaponId, int damage, int hitTypeId, float damageDrop /*= 0.0f*/, float damageDropMinR /*=0.0f*/)
 {
 	m_ownerId = ownerId;
 	m_weaponId = weaponId;
@@ -526,16 +557,21 @@ void CProjectile::SetParams(EntityId ownerId, EntityId hostId, EntityId weaponId
 	m_damage = damage;
   m_hitTypeId = hitTypeId;
 	m_damageDropPerMeter = damageDrop;
+	m_damageDropMinDisSqr = damageDropMinR*damageDropMinR;
 
 	if (m_hostId || m_ownerId)
 	{
+		IEntity* pSelfEntity = GetEntity();
+		if (pSelfEntity)
+			pSelfEntity->AddEntityLink("Shooter", m_ownerId);
+
 		IEntity *pEntity = gEnv->pEntitySystem->GetEntity(m_hostId?m_hostId:m_ownerId);
 		if (pEntity)
 		{
-			if (GetEntity())
+			if (pSelfEntity)
 			{
 				//need to set AI species to the shooter - not to be scared of it's own rockets 
-				IAIActor* pAIActor = CastToIAIActorSafe(GetEntity()->GetAI());
+				IAIActor* pAIActor = CastToIAIActorSafe(pSelfEntity->GetAI());
 				IAIActor* pShooterAIActor = CastToIAIActorSafe(pEntity->GetAI());
 				if (pAIActor && pShooterAIActor)
 				{
@@ -565,9 +601,15 @@ void CProjectile::Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity,
 	//Must set velocity after position, if not velocity could be reseted for PE_RIGID
 	SetVelocity(pos, dir, velocity, speedScale);
 
-	m_initialPos = pos;
-	m_initialDir = dir;
+	m_initial_pos = pos;
+	m_initial_dir = dir;
+	m_initial_vel = velocity;
+
 	m_last = pos;
+
+	// Attach effect when fired (not first update)
+	if (m_trailEffectId<0)
+		TrailEffect(true);
 
 	IAIObject* pAI = 0;
 	if ((pAI = GetEntity()->GetAI()) != NULL && pAI->GetAIType() == AIOBJECT_GRENADE)
@@ -575,13 +617,15 @@ void CProjectile::Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity,
 		IEntity *pOwnerEntity = gEnv->pEntitySystem->GetEntity(m_ownerId);
 		if (pOwnerEntity && pOwnerEntity->GetAI())
 		{
-			if (pOwnerEntity->GetAI()->GetProxy() && pOwnerEntity->GetPhysics())
+			pe_status_dynamics dyn;
+			pe_status_dynamics dynProj;
+			if (pOwnerEntity->GetAI()->GetProxy() && pOwnerEntity->GetPhysics() 
+				&& pOwnerEntity->GetPhysics()->GetStatus(&dyn) 
+				&& GetEntity()->GetPhysics()->GetStatus(&dynProj))
 			{
-				pe_status_dynamics dyn;
-				pOwnerEntity->GetPhysics()->GetStatus(&dyn);
-				Vec3 ownerVel = dyn.v;
-				GetEntity()->GetPhysics()->GetStatus(&dyn);
-				Vec3 grenadeDir = dyn.v.GetNormalizedSafe();
+				
+				Vec3 ownerVel( dyn.v);
+				Vec3 grenadeDir(dynProj.v.GetNormalizedSafe());
 
 				// Trigger the signal at the predicted landing position.
 				Vec3 predictedPos = pos;
@@ -591,8 +635,10 @@ void CProjectile::Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity,
 /*				bool res = pOwnerEntity->GetAI()->GetProxy()->GetSecWeapon()->PredictProjectileHit(
 					pOwnerEntity->GetPhysics(), GetEntity()->GetPos(), grenadeDir, ownerVel, 1, predictedPos, speed);*/
 
+				gEnv->pAISystem->GrenadeEvent(predictedPos, 0.0f, AIGE_GRENADE_THROWN, GetEntity(), pOwnerEntity);
+
 				// Inform the AI that sees the throw
-				IAIObject* pOwnerAI = pOwnerEntity->GetAI();
+/*				IAIObject* pOwnerAI = pOwnerEntity->GetAI();
 				AutoAIObjectIter it(gEnv->pAISystem->GetFirstAIObjectInRange(IAISystem::OBJFILTER_TYPE, AIOBJECT_PUPPET, predictedPos, 20.0f, false));
 				for(; it->GetObject(); it->Next())
 				{
@@ -622,6 +668,7 @@ void CProjectile::Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity,
 						}
 					}
 				}
+*/
 			}
 		}
 	}
@@ -631,13 +678,12 @@ void CProjectile::Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity,
 //------------------------------------------------------------------------
 void CProjectile::Destroy()
 {
-	if (GetEntityId() == CProjectile::m_currentlyTracked)
-	{
-		g_pGame->GetHUD()->SetGrenade(0);
-	}
 	m_destroying=true;
+
 	if ((GetEntity()->GetFlags()&ENTITY_FLAG_CLIENT_ONLY) || gEnv->bServer)
 		gEnv->pEntitySystem->RemoveEntity(GetEntity()->GetId());
+
+	WhizSound(false, ZERO, ZERO);
 }
 
 //------------------------------------------------------------------------
@@ -666,12 +712,23 @@ void CProjectile::Explode(bool destroy, bool impact, const Vec3 &pos, const Vec3
 
 		m_hitPoints = 0;
 
-		Vec3 epos = pos.len2()>0 ? pos : GetEntity()->GetWorldPos();
+		// marcok: using collision pos sometimes causes explosions to have no effect. Anton advised to use entity pos
+		Vec3 epos = pos.len2()>0 ? (pos - dir * 0.2f) : GetEntity()->GetWorldPos();
 
 		CGameRules *pGameRules = g_pGame->GetGameRules();
+		float minRadius = pExplosionParams->minRadius;
+		float maxRadius = pExplosionParams->maxRadius;
+		if (m_pAmmoParams->pFlashbang)
+		{
+			minRadius = m_pAmmoParams->pFlashbang->maxRadius;
+			maxRadius = m_pAmmoParams->pFlashbang->maxRadius;
+		}
 
-		ExplosionInfo explosionInfo(m_ownerId, m_weaponId, m_damage, epos, dir, pExplosionParams->maxRadius, 0.0f, pExplosionParams->pressure, pExplosionParams->holeSize, pGameRules->GetHitTypeId(pExplosionParams->type.c_str()));
-		explosionInfo.SetEffect(pExplosionParams->pParticleEffect, pExplosionParams->effectScale, pExplosionParams->maxblurdist);
+		ExplosionInfo explosionInfo(m_ownerId, GetEntityId(), m_damage, epos, dir, minRadius, maxRadius, pExplosionParams->minPhysRadius, pExplosionParams->maxPhysRadius, 0.0f, pExplosionParams->pressure, pExplosionParams->holeSize, pGameRules->GetHitTypeId(pExplosionParams->type.c_str()));
+		if(m_pAmmoParams->pFlashbang)
+			explosionInfo.SetEffect(pExplosionParams->pParticleEffect, pExplosionParams->effectScale, pExplosionParams->maxblurdist, m_pAmmoParams->pFlashbang->blindAmount, m_pAmmoParams->pFlashbang->flashbangBaseTime);
+		else
+			explosionInfo.SetEffect(pExplosionParams->pParticleEffect, pExplosionParams->effectScale, pExplosionParams->maxblurdist);
 		explosionInfo.SetEffectClass(m_pAmmoParams->pEntityClass->GetName());
 
 		if (impact)
@@ -690,8 +747,6 @@ void CProjectile::Explode(bool destroy, bool impact, const Vec3 &pos, const Vec3
 			FlashbangEffect(m_pAmmoParams->pFlashbang);
 	}
 
-	EndScaledEffect(m_pAmmoParams->pScaledEffect);
-
 	if (destroy)
 		Destroy();
 }
@@ -704,7 +759,7 @@ void CProjectile::TrailSound(bool enable, const Vec3 &dir)
 		if (!m_pAmmoParams->pTrail || !m_pAmmoParams->pTrail->sound)
 			return;
 
-		m_trailSoundId = GetSoundProxy()->PlaySound(m_pAmmoParams->pTrail->sound, Vec3(0,0,0), FORWARD_DIRECTION, FLAG_SOUND_DEFAULT_3D, 0, 0);
+		m_trailSoundId = GetSoundProxy()->PlaySound(m_pAmmoParams->pTrail->sound, Vec3(0,0,0), FORWARD_DIRECTION, FLAG_SOUND_DEFAULT_3D, eSoundSemantic_Projectile, 0, 0);
 		if (m_trailSoundId != INVALID_SOUNDID)
 		{
 			ISound *pSound=GetSoundProxy()->GetSound(m_trailSoundId);
@@ -732,6 +787,7 @@ void CProjectile::WhizSound(bool enable, const Vec3 &pos, const Vec3 &dir)
 		{
 			m_whizSoundId = pSound->GetId();
 
+			pSound->SetSemantic(eSoundSemantic_Projectile);
 			pSound->SetPosition(pos);
 			pSound->SetDirection(dir*m_pAmmoParams->pWhiz->speed);
 			pSound->Play();
@@ -739,9 +795,13 @@ void CProjectile::WhizSound(bool enable, const Vec3 &pos, const Vec3 &dir)
 	}
 	else if (m_whizSoundId!=INVALID_SOUNDID)
 	{
-		ISound *pSound=gEnv->pSoundSystem->GetSound(m_whizSoundId);
-		if (pSound)
-			pSound->Stop();
+		if (gEnv->pSoundSystem)
+		{
+			ISound *pSound=gEnv->pSoundSystem->GetSound(m_whizSoundId);
+			// only stop looping sounds and oneshots does not get cut when hitting a surface
+			if (pSound && pSound->GetFlags() & FLAG_SOUND_LOOP) 
+				pSound->Stop();
+		}
 		m_whizSoundId=INVALID_SOUNDID;
 	}
 }
@@ -757,6 +817,7 @@ void CProjectile::RicochetSound(const Vec3 &pos, const Vec3 &dir)
 	{
 		pSound->GetId();
 
+		pSound->SetSemantic(eSoundSemantic_Projectile);
 		pSound->SetPosition(pos);
 		pSound->SetDirection(dir*m_pAmmoParams->pRicochet->speed);
 		pSound->Play();
@@ -777,20 +838,30 @@ void CProjectile::TrailEffect(bool enable, bool underWater /*=false*/)
 		if (!pTrail)
 			return;
 
-		if (pTrail->effect)
+		bool fpOwner = false;
+		if(CWeapon *pWep = GetWeapon())
+			if(pWep->GetStats().fp)
+				fpOwner = true;
+
+		if(fpOwner && pTrail->effect_fp)
+		{
+			m_trailEffectId = AttachEffect(true, 0, pTrail->effect_fp, Vec3(0,0,0), Vec3(0,1,0), pTrail->scale, pTrail->prime);
+		}
+		else if (pTrail->effect)
 		{
 			if(!underWater)
 				m_trailEffectId = AttachEffect(true, 0, pTrail->effect, Vec3(0,0,0), Vec3(0,1,0), pTrail->scale, pTrail->prime);
 			else
 				m_trailUnderWaterId = AttachEffect(true, 0, pTrail->effect, Vec3(0,0,0), Vec3(0,1,0), pTrail->scale, pTrail->prime);
 		}
+
 	}
 	else if (m_trailEffectId>=0 && !underWater)
 	{
 		AttachEffect(false, m_trailEffectId);
 		m_trailEffectId=-1;
 	}
-	else if(m_trailUnderWaterId && underWater)
+	else if(m_trailUnderWaterId>=0 && underWater)
 	{
 		AttachEffect(false, m_trailUnderWaterId);
 		m_trailUnderWaterId=-1;
@@ -818,7 +889,7 @@ int CProjectile::AttachEffect(bool attach, int id, const char *name, const Vec3 
 		while (GetEntity()->GetSlotInfo(i, dummy))
 			i++;
 
-		GetEntity()->LoadParticleEmitter(i, pParticleEffect, 0, bParticlePrime);
+		GetEntity()->LoadParticleEmitter(i, pParticleEffect, 0, bParticlePrime, true);
 		Matrix34 tm = IParticleEffect::ParticleLoc(offset, dir, scale);
 		GetEntity()->SetSlotLocalTM(i, tm);
 
@@ -826,202 +897,6 @@ int CProjectile::AttachEffect(bool attach, int id, const char *name, const Vec3 
 	}
 
 	return -1;
-}
-
-//------------------------------------------------------------------------
-void CProjectile::Stick(EventPhysCollision *pCollision)
-{
-	assert(pCollision);
-	int trgId = 1;
-	int srcId = 0;
-	IPhysicalEntity *pTarget = pCollision->pEntity[trgId];
-	
-	if (pTarget == GetEntity()->GetPhysics())
-	{
-		trgId = 0;
-		srcId = 1;
-		pTarget = pCollision->pEntity[trgId];
-	}
-
-	IEntity *pTargetEntity = pTarget ? gEnv->pEntitySystem->GetEntityFromPhysics(pTarget) : 0;
-
-	if (pTarget && (!pTargetEntity || (pTargetEntity->GetId() != m_ownerId)))
-	{
-
-		//Special cases
-		if(pTargetEntity)
-		{
-			CActor *pActor = static_cast<CActor*>(gEnv->pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pTargetEntity->GetId()));
-			if(pActor && pActor->GetHealth()>0 && pActor->GetActorSpecies()!=eGCT_UNKNOWN)
-			{
-				  StickToCharacter(true,pTargetEntity);
-					return;
-			}
-			
-			//Do not stick to small objects...
-			if(!pActor)
-			{
-				pe_params_part pPart;
-				pPart.ipart = 0;
-				if(pTarget->GetParams(&pPart) && pPart.pPhysGeom && pPart.pPhysGeom->V<0.15f)
-					return;
-			}
-
-		}
-		else if(pTarget->GetType()==PE_LIVING)
-		{
-			//If for some reason we get here (which should not happen), return
-			//Never try to stick to living entities using constraints
-			return;
-		}
-
-		Vec3 an(GetEntity()->GetWorldTM().TransformVector(FORWARD_DIRECTION));
-		an.Normalize();
-		float dot = an.Dot(pCollision->n);
-		dot = fabs_tpl(dot);
-
-		bool stick=true;
-		if (m_pStickyBuddy)
-		{
-			for (int i=0;i<m_stuck;i++)
-			{
-				if (m_constraintspt[i].GetDistance(pCollision->pt)<0.175f)
-				{
-					stick=false;
-					break;
-				}
-			}
-		}
-
-		if (stick && (!m_pStickyBuddy || m_pStickyBuddy==pTarget) && pCollision->penetration<0.05f && (!m_pStickyBuddy || dot>=0.3f))
-		{
-			if (!m_pStickyBuddy)
-			{
-				GetEntity()->SetTimer(ePTIMER_STICKY, STICKY_TIMER);
-
-				pe_action_impulse ai;
-				ai.iApplyTime=0;
-				ai.impulse=-pCollision->n* m_pAmmoParams->mass;
-				m_pPhysicalEntity->Action(&ai);
-			}
-
-			pe_action_add_constraint ac;
-			ac.pBuddy = pTarget;
-			ac.pt[0] = pCollision->pt;
-			ac.pt[1] = pCollision->pt;
-			ac.partid[0] = pCollision->partid[srcId];
-			ac.partid[1] = pCollision->partid[trgId];
-
-			m_pStickyBuddy = pTarget;
-			m_constraints[m_stuck]=m_pPhysicalEntity->Action(&ac);
-			m_constraintspt[m_stuck++]=pCollision->pt;
-		}
-		else
-		{
-			// if we reached maximum number of collisions without a stuck 
-			if (++m_stickyCollisions>=MAX_STICKY_BADCOLLISIONS)
-				Unstick();
-		}
-	}
-}
-
-//------------------------------------------------------------------------
-void CProjectile::Unstick()
-{
-	for (int i=0;i<m_stuck;i++)
-	{
-		pe_action_update_constraint uc;
-		uc.bRemove = 1;
-		uc.idConstraint = m_constraints[i];
-		m_pPhysicalEntity->Action(&uc);
-	}
-
-	m_stuck=0;
-	m_stickyCollisions=0;
-	m_pStickyBuddy=0;
-
-	GetEntity()->KillTimer(ePTIMER_STICKY);
-};
-//------------------------------------------------------------------------
-bool CProjectile::StickToCharacter(bool stick,IEntity* pActor)
-{
-	if(!pActor)
-		return false;
-
-	ICharacterInstance* pCharacter = pActor->GetCharacter(0);
-	if(!pCharacter)
-		return false;
-
-	//Actors doesn't support constraints, try to stick as character attachment
-	IAttachmentManager *pAttachmentManager = pCharacter->GetIAttachmentManager();
-	IAttachment *pAttachment = NULL;
-	
-	//Select one of the attachment points
-	Vec3 charOrientation = pActor->GetRotation().GetColumn1();
-	Vec3 c4ToChar = pActor->GetWorldPos() - GetEntity()->GetWorldPos();
-	c4ToChar.Normalize();
-
-	if(c4ToChar.Dot(charOrientation)>0.0f)
-		pAttachment = pAttachmentManager->GetInterfaceByName("c4_back");
-	else
-		pAttachment = pAttachmentManager->GetInterfaceByName("c4_front");
-
-	if (!pAttachment)
-	{
-			GameWarning("No c4 face attachment found in actor");
-			if(!pAttachment)
-				return false;
-	}
-
-	if(stick)
-	{
-		CEntityAttachment *pEntityAttachment = new CEntityAttachment();
-		pEntityAttachment->SetEntityId(GetEntityId());
-
-		pAttachment->AddBinding(pEntityAttachment);
-		pAttachment->HideAttachment(0);
-		IgnoreCollisions(true,pActor);
-		//Dephysicalize object, instead of ignore collisions
-		//GetGameObject()->SetPhysicalizationProfile(eAP_NotPhysicalized);
-
-		m_pStickyBuddy = pActor->GetPhysics();
-		m_stickToActor = true;
-	}
-	else
-	{
-		pAttachment->ClearBinding();
-		IgnoreCollisions(false, pActor);
-		m_pStickyBuddy = NULL;
-		m_stickToActor = false;
-	}
-	return true;
-
-}
-//------------------------------------------------------------------------
-void CProjectile::IgnoreCollisions(bool ignore, IEntity *pEntity)
-{
-	if (!pEntity)
-		return;
-
-	if (!m_pPhysicalEntity)
-		return;
-
-	if (ignore)
-	{
-		pe_action_add_constraint ic;
-		ic.flags=constraint_inactive|constraint_ignore_buddy;
-		ic.pBuddy=pEntity->GetPhysics();
-		ic.pt[0].Set(0,0,0);
-		m_constraints[0]=m_pPhysicalEntity->Action(&ic);
-	}
-	else
-	{
-		pe_action_update_constraint up;
-		up.bRemove=true;
-		up.idConstraint = m_constraints[0];
-		m_constraints[0]=0;
-		m_pPhysicalEntity->Action(&up);
-	}
 }
 
 //------------------------------------------------------------------------
@@ -1041,8 +916,11 @@ void CProjectile::FlashbangEffect(const SFlashbangParams* flashbang)
 	if (!flashbang)
 		return;
 
-	float		radius	= flashbang->maxRadius;
+	const float radius = flashbang->maxRadius;
+	IEntity* pOwnerEntity = gEnv->pEntitySystem->GetEntity(m_ownerId);
+	gEnv->pAISystem->GrenadeEvent(GetEntity()->GetWorldPos(), radius, AIGE_FLASH_BANG, GetEntity(), pOwnerEntity);
 
+/*
 	// collect nearby players and enemies
 	SEntityProximityQuery query;
 	Vec3 center = GetEntity()->GetWorldPos();
@@ -1103,6 +981,8 @@ void CProjectile::FlashbangEffect(const SFlashbangParams* flashbang)
 
 		}
 	}
+
+*/
 }
 //------------------------------------------------------------------------
 void CProjectile::ScaledEffect(const SScaledEffectParams* pScaledEffect)
@@ -1157,16 +1037,20 @@ void CProjectile::ScaledEffect(const SScaledEffectParams* pScaledEffect)
 			m_obstructObject->SetParams(&pos);
 
 			// Signal the AI
-			if (!m_scaledEffectSignaled &&  m_totalLifetime > (pScaledEffect->delay + pScaledEffect->fadeInTime))
+			if (gEnv->pAISystem && !m_scaledEffectSignaled &&  m_totalLifetime > (pScaledEffect->delay + pScaledEffect->fadeInTime))
 			{
 				m_scaledEffectSignaled = true;
-				AutoAIObjectIter it(gEnv->pAISystem->GetFirstAIObjectInRange(IAISystem::OBJFILTER_TYPE, AIOBJECT_PUPPET, pos.pos, pScaledEffect->aiObstructionRadius*1.5f, false));
+
+				IEntity* pOwnerEntity = gEnv->pEntitySystem->GetEntity(m_ownerId);
+				gEnv->pAISystem->GrenadeEvent(pos.pos, pScaledEffect->aiObstructionRadius*1.5f, AIGE_SMOKE, GetEntity(), pOwnerEntity);
+
+/*				AutoAIObjectIter it(gEnv->pAISystem->GetFirstAIObjectInRange(IAISystem::OBJFILTER_TYPE, AIOBJECT_PUPPET, pos.pos, pScaledEffect->aiObstructionRadius*1.5f, false));
 				for(; it->GetObject(); it->Next())
 				{
 					IAIObject* pAI = it->GetObject();
 					if (!pAI->IsEnabled()) continue;
 					gEnv->pAISystem->SendSignal(SIGNALFILTER_SENDER, 1, "OnExposedToSmoke", pAI);
-				}
+				}*/
 			}
 		}
 
@@ -1183,8 +1067,6 @@ void CProjectile::ScaledEffect(const SScaledEffectParams* pScaledEffect)
 		m_scaledEffectval = effectVal;
 
 		gEnv->p3DEngine->SetPostEffectParam(pScaledEffect->ppname, effectVal);
-
-		
 	}
 }
 //------------------------------------------------------------------------
@@ -1216,9 +1098,7 @@ void CProjectile::EndScaledEffect(const SScaledEffectParams* pScaledEffect)
 //------------------------------------------------------------------------
 void CProjectile::SetTrackedByHUD()
 {
-	CProjectile::m_currentlyTracked = GetEntityId();
-	if(g_pGame->GetHUD())
-		g_pGame->GetHUD()->SetGrenade(m_currentlyTracked);
+	SAFE_HUD_FUNC(SetGrenade(GetEntityId()));
 }
 
 //------------------------------------------------------------------------
@@ -1246,7 +1126,10 @@ void CProjectile::Ricochet(EventPhysCollision *pCollision)
 	if ((matPierceability && matPierceability>=8) || Random()>probability)
 		return;
 
-	float angle=RAD2DEG(cry_fabsf(cry_acosf(dir.Dot(-pCollision->n))));
+	f32 cosine = dir.Dot(-pCollision->n);
+	if (cosine>1.0f)cosine=1.0f;
+	if (cosine<-1.0f)	cosine=-1.0f;
+	float angle=RAD2DEG( cry_fabsf(cry_acosf(cosine)) );
 	if (angle<10.0f)
 		return;
 
@@ -1316,10 +1199,9 @@ float CProjectile::GetSpeed() const
 //==================================================================
 void CProjectile::OnHit(const HitInfo& hit)
 {
-	//Not explode if frozen
-	if (CGameRules * pGameRules = g_pGame->GetGameRules())
-		if(pGameRules->IsFrozen(GetEntityId()))
-			return;
+	//C4, special case
+	if(m_noBulletHits)
+		return;
 
 	//Reduce hit points if hit, and explode (only for C4, AVMine and ClayMore)
 	if(hit.targetId==GetEntityId() && m_hitPoints>0 && !m_destroying)
@@ -1373,9 +1255,47 @@ void CProjectile::OnServerExplosion(const ExplosionInfo& explosion)
 
 }
 
+//---------------------------------------------------------------------------------
+void CProjectile::SetDefaultParticleParams(pe_params_particle *pParams)
+{
+ //Use ammo params if they exist
+ if(m_pAmmoParams && m_pAmmoParams->pParticleParams)
+ {
+	 pParams->mass = m_pAmmoParams->pParticleParams->mass; 
+	 pParams->size = m_pAmmoParams->pParticleParams->size;
+	 pParams->thickness = m_pAmmoParams->pParticleParams->thickness;
+	 pParams->heading.Set(0.0f,0.0f,0.0f);
+	 pParams->velocity = 0.0f;
+	 pParams->wspin = m_pAmmoParams->pParticleParams->wspin;
+	 pParams->gravity = m_pAmmoParams->pParticleParams->gravity;
+	 pParams->normal.Set(0.0f,0.0f,0.0f);
+	 pParams->kAirResistance = m_pAmmoParams->pParticleParams->kAirResistance;
+	 pParams->accThrust = m_pAmmoParams->pParticleParams->accThrust;
+	 pParams->accLift = m_pAmmoParams->pParticleParams->accLift;
+	 pParams->q0.SetIdentity(); 
+	 pParams->surface_idx = m_pAmmoParams->pParticleParams->surface_idx;
+	 pParams->flags = m_pAmmoParams->pParticleParams->flags;
+	 pParams->pColliderToIgnore = NULL;
+	 pParams->iPierceability = m_pAmmoParams->pParticleParams->iPierceability;
+ }
+ else
+ {
+	 int type = pParams->type;
+	 memset(pParams,0,sizeof(pe_params_particle));
+	 pParams->type = type;
+	 pParams->velocity = 0.0f;
+	 pParams->iPierceability = 7;	  
+ }
+}
+
 void CProjectile::GetMemoryStatistics(ICrySizer *s)
 {
 	s->Add(*this);
+}
+
+void CProjectile::PostRemoteSpawn()
+{
+	Launch(m_initial_pos, m_initial_vel, m_initial_dir);
 }
 
 //------------------------------------------------------------------------
@@ -1384,10 +1304,12 @@ void CProjectile::SerializeSpawnInfo( TSerialize ser )
 	ser.Value("hostId", m_hostId, 'eid');
 	ser.Value("ownerId", m_ownerId, 'eid');
 	ser.Value("weaponId", m_weaponId, 'eid');
-	ser.Value("dir", m_initialDir, 'dir0');
+	ser.Value("pos", m_initial_pos, 'wrld');
+	ser.Value("dir", m_initial_dir, 'dir0');
+	ser.Value("vel", m_initial_vel, 'vel0');
 
 	if (ser.IsReading())
-		SetParams(m_ownerId, m_hostId, m_weaponId, m_damage, m_hitTypeId, m_damageDropPerMeter);
+		SetParams(m_ownerId, m_hostId, m_weaponId, m_damage, m_hitTypeId, m_damageDropPerMeter, m_damageDropMinDisSqr);
 }
 
 //------------------------------------------------------------------------
@@ -1398,13 +1320,17 @@ ISerializableInfoPtr CProjectile::GetSpawnInfo()
 		EntityId hostId;
 		EntityId ownerId;
 		EntityId weaponId;
+		Vec3 pos;
 		Vec3 dir;
+		Vec3 vel;
 		void SerializeWith( TSerialize ser )
 		{
 			ser.Value("hostId", hostId, 'eid');
 			ser.Value("ownerId", ownerId, 'eid');
 			ser.Value("weaponId", weaponId, 'eid');
+			ser.Value("pos", pos, 'wrld');
 			ser.Value("dir", dir, 'dir0');
+			ser.Value("vel", vel, 'vel0');
 		}
 	};
 
@@ -1412,7 +1338,48 @@ ISerializableInfoPtr CProjectile::GetSpawnInfo()
 	p->hostId=m_hostId;
 	p->ownerId=m_ownerId;
 	p->weaponId=m_weaponId;
-	p->dir=m_initialDir;
+	p->pos=m_initial_pos;
+	p->dir=m_initial_dir;
+	p->vel=m_initial_vel;
 	
 	return p;
 }
+
+uint8 CProjectile::GetDefaultProfile( EEntityAspects aspect )
+{
+	if (aspect == eEA_Physics)
+		return m_pAmmoParams->physicalizationType;
+	else
+		return 0;
+}
+
+
+//------------------------------------------------------------------------
+void CProjectile::PostSerialize()
+{
+//	InitWithAI();
+}
+
+//------------------------------------------------------------------------
+void CProjectile::InitWithAI()
+{
+	// register with ai if needed
+	//FIXME
+	//make AI ignore grenades thrown by AI; needs proper/readable grenade reaction
+	if (m_pAmmoParams->aiType!=AIOBJECT_NONE)
+	{
+		bool	isFriendlyGrenade(true);
+		IEntity *pOwnerEntity = gEnv->pEntitySystem->GetEntity(m_ownerId);
+
+		if (pOwnerEntity && pOwnerEntity->GetAI())
+			isFriendlyGrenade = (pOwnerEntity->GetAI()->GetAIType()==AIOBJECT_PUPPET);
+
+		if (!isFriendlyGrenade)
+		{
+			AIObjectParameters params;
+			GetEntity()->RegisterInAISystem(m_pAmmoParams->aiType, params);
+		}
+	}
+	GetGameObject()->SetAIActivation(eGOAIAM_Always);
+}
+

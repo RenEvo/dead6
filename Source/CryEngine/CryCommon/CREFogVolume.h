@@ -17,7 +17,7 @@ public:
 	virtual ~CREFogVolume();
 	virtual void mfPrepare();
 	virtual bool mfDraw( CShader* ef, SShaderPass* sfm );
-	virtual float mfDistanceToCameraSquared( const CRenderObject& thisObject );
+	virtual float mfDistanceToCameraSquared( Matrix34& matInst );
 
 	IFogVolumeRenderNode* m_pFogVolume;
 

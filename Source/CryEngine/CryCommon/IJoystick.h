@@ -25,12 +25,6 @@ public:
 
 	virtual const char* GetName() const = 0;
 
-	virtual float Evaluate(float fTime) const = 0;
-	virtual bool HasKey(float fTime) const = 0;
-	virtual void InsertKey(float fTime, float fValue) = 0;
-	virtual void RemoveKey(float fTime) = 0;
-	virtual void SetKeyValue(float fTime, float fValue) = 0;
-	virtual void SerializeCurve(XmlNodeRef node, bool bLoading) = 0;
 	virtual void* GetTarget() = 0;
 
 	virtual void SetFlipped(bool flipped) = 0;
@@ -44,7 +38,8 @@ public:
 	virtual void CleanupKeys(float fErrorMax) = 0;
 
 	// TODO: Many of the above functions can be removed due to this function.
-	virtual ISplineInterpolator* GetSpline() = 0;
+	virtual int GetSplineCount() = 0;
+	virtual ISplineInterpolator* GetSpline(int splineIndex) = 0;
 };
 
 class IJoystick

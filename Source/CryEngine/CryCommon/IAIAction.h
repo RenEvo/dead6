@@ -30,6 +30,9 @@ struct IAIAction
 	// returns the Object entity associated to this AI Action
 	virtual IEntity* GetObjectEntity() const = 0;
 
+	// returns true if action is active and marked as high priority
+	virtual bool IsHighPriority() const { return false; }
+
 	// ends execution of this AI Action
 	virtual void EndAction() = 0;
 

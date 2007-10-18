@@ -43,6 +43,8 @@ struct IDebugHistoryManager
 	virtual void Clear() = 0;
 	virtual void GetMemoryStatistics(ICrySizer * s) = 0;
 	virtual void Release() = 0;
+
+	virtual void LayoutHelper(const char* id, const char* name, bool visible, float minout, float maxout, float minin, float maxin, float x, float y, float w=1.0f, float h=1.0f) = 0;
 };
 
 #endif /*__IDEBUGHISTORY_H__*/

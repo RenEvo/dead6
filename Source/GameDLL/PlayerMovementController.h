@@ -39,6 +39,10 @@ public:
 
 	virtual void Serialize(TSerialize &ser);
 
+	ILINE void StrengthJump(bool strengthJump) { m_strengthJump=strengthJump; };
+	ILINE bool ShouldStrengthJump() const { return m_strengthJump; };
+	ILINE void ClearStrengthJump() { m_strengthJump=false; };
+
 protected:
 	bool UpdateNormal( float frameTime, SActorFrameMovementParams& params );
 	virtual void UpdateMovementState( SMovementState& state );
@@ -56,12 +60,14 @@ protected:
 	bool m_atTarget;
 	bool m_usingLookIK;
 	bool m_usingAimIK;
+	bool m_aimClamped;
 	Vec3 m_lookTarget;
 	Vec3 m_aimTarget;
 	float m_animTargetSpeed;
 	int m_animTargetSpeedCounter;
 	Vec3 m_fireTarget;
 	EStance m_targetStance;
+	bool m_strengthJump;
 
 	SMovementState m_currentMovementState;
 
@@ -94,7 +100,14 @@ protected:
 	{
 	public:
 		CTargetInterpolator() { Reset(); }
-		void Reset() { m_lastValue = 0.0f; m_painDelta = 0.0f; m_pain = 0.0f; m_rotate = false; }
+		void Reset() 
+		{ 
+			m_lastValue = 0.0f; 
+			m_painDelta = 0.0f; 
+			m_pain = 0.0f; 
+			m_rotate = false; 
+			m_target=Vec3(ZERO);
+		}
 
 		bool HasTarget( CTimeValue now, CTimeValue timeout ) const 
 		{ 

@@ -13,7 +13,7 @@ SScaledEffectParams::SScaledEffectParams(const IItemParamsNode* scaledEffect)
 , aiObstructionRadius(5.0f)
 {
 	CItemParamReader reader(scaledEffect);
-	reader.Read("effect", ppname);
+	reader.Read("postEffect", ppname);
 	if (ppname)
 	{
 		reader.Read("radius", radius);
@@ -52,7 +52,10 @@ SCollisionParams::~SCollisionParams()
 }
 
 SExplosionParams::SExplosionParams(const IItemParamsNode* explosion)
-: maxRadius(5.0f)
+: minRadius(2.5f)
+, maxRadius(5.0f)
+, minPhysRadius(2.5f)
+, maxPhysRadius(5.0f)
 , pressure(200.0f)
 , holeSize(0.0f)
 , terrainHoleSize(3.0f)
@@ -65,6 +68,13 @@ SExplosionParams::SExplosionParams(const IItemParamsNode* explosion)
 
 	CItemParamReader reader(explosion);
 	reader.Read("max_radius", maxRadius);
+	minRadius = maxRadius * 0.8f;
+	maxPhysRadius = min(maxRadius, 5.0f);
+	minPhysRadius = maxPhysRadius * 0.8f;
+
+	reader.Read("min_radius", minRadius);
+	reader.Read("min_phys_radius", minPhysRadius);
+	reader.Read("max_phys_radius", maxPhysRadius);
 	reader.Read("pressure", pressure);
 	reader.Read("hole_size", holeSize);
 	reader.Read("terrain_hole_size", terrainHoleSize);
@@ -91,15 +101,20 @@ SExplosionParams::~SExplosionParams()
 }
 
 SFlashbangParams::SFlashbangParams(const IItemParamsNode* flashbang)
-: maxRadius(25.0f)
+: maxRadius(25.0f),
+blindAmount(0.7f),
+flashbangBaseTime(2.5f)
 {
 	CItemParamReader reader(flashbang);
 	reader.Read("max_radius", maxRadius);
+	reader.Read("blindAmount", blindAmount);
+	reader.Read("flashbangBaseTime", flashbangBaseTime);
 }
 
 STrailParams::STrailParams(const IItemParamsNode* trail)
 :	sound(0)
 , effect(0)
+, effect_fp(0)
 , scale(1.0f)
 , prime(true)
 {
@@ -111,6 +126,9 @@ STrailParams::STrailParams(const IItemParamsNode* trail)
 	reader.Read("effect", effect);
 	if (effect && !effect[0])
 		effect = 0;
+	reader.Read("effect_fp", effect_fp);
+	if (effect_fp && !effect_fp[0])
+		effect_fp = 0;
 
 	reader.Read("scale", scale);
 	reader.Read("prime", prime);
@@ -137,6 +155,8 @@ SAmmoParams::SAmmoParams(const IItemParamsNode* pItemParams_, const IEntityClass
 , aiType(AIOBJECT_NONE)
 , bulletType(-1)
 , hitPoints(-1)
+, noBulletHits(false)
+, quietRemoval(false)
 , physicalizationType(ePT_None)
 , mass(1.0f)
 , speed(0.0f)
@@ -144,7 +164,6 @@ SAmmoParams::SAmmoParams(const IItemParamsNode* pItemParams_, const IEntityClass
 , traceable(0)
 , spin(ZERO)
 , spinRandom(ZERO)
-, sticky(false)
 , pSurfaceType(0)
 , pParticleParams(0)
 , fpGeometry(0)
@@ -158,6 +177,7 @@ SAmmoParams::SAmmoParams(const IItemParamsNode* pItemParams_, const IEntityClass
 , pTrailUnderWater(0)
 , pItemParams(0)
 , pEntityClass(0)
+, sleepTime(0.0f)
 {
 	Init(pItemParams_, pEntityClass_);
 }
@@ -195,6 +215,7 @@ void SAmmoParams::Init(const IItemParamsNode* pItemParams_, const IEntityClass* 
 	LoadScaledEffect();
 	LoadCollision();
 	LoadExplosion();
+	LoadFlashbang();
 	LoadTrailsAndWhizzes();
 }
 
@@ -232,6 +253,9 @@ void SAmmoParams::LoadFlagsAndParams()
 		reader.Read("showtime", showtime);
 		reader.Read("bulletType",bulletType);
 		reader.Read("hitPoints",hitPoints);
+		reader.Read("noBulletHits",noBulletHits);
+		reader.Read("quietRemoval",quietRemoval);
+		reader.Read("sleepTime", sleepTime);
 
 		const char* typeName=0;
 		reader.Read("aitype", typeName);
@@ -264,6 +288,10 @@ void SAmmoParams::LoadPhysics()
 		{
 			physicalizationType = ePT_Rigid;
 		}
+		else if(!strcmpi(typ, "static"))
+		{
+			physicalizationType = ePT_Static;
+		}
 		else
 		{
 			GameWarning("Unknow physicalization type '%s' for projectile '%s'!", typ, pEntityClass->GetName());
@@ -271,13 +299,15 @@ void SAmmoParams::LoadPhysics()
 	}
 
 	CItemParamReader reader(physics);
-	reader.Read("mass", mass);
-	reader.Read("speed", speed);
-	reader.Read("max_logged_collisions", maxLoggedCollisions);
-	reader.Read("traceable", traceable);
-	reader.Read("spin", spin);
-	reader.Read("spin_random", spinRandom);
-	reader.Read("sticky", sticky);
+	if(physicalizationType != ePT_Static)
+	{
+		reader.Read("mass", mass);
+		reader.Read("speed", speed);
+		reader.Read("max_logged_collisions", maxLoggedCollisions);
+		reader.Read("traceable", traceable);
+		reader.Read("spin", spin);
+		reader.Read("spin_random", spinRandom);
+	}
 
 	// material
 	const char *material=0;
@@ -335,7 +365,7 @@ void SAmmoParams::LoadGeometry()
 		{
 			IStatObj* oldGeom = fpGeometry;
 
-			Vec3 angles(0,0,0);
+			Ang3 angles(0,0,0);
 			Vec3 position(0,0,0);
 			float scale=1.0f;
 			firstperson->GetAttribute("position", position);

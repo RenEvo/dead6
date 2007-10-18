@@ -108,6 +108,8 @@ struct IEntitySystemSink
 //////////////////////////////////////////////////////////////////////////
 struct IEntityArchetype
 {
+	// Retrieve entity class of the archetype.
+	virtual IEntityClass* GetClass() const = 0;
 	virtual const char* GetName() const = 0;
 	virtual IScriptTable* GetProperties() = 0;
 	virtual void LoadFromXML( XmlNodeRef &propertiesNode ) = 0;
@@ -156,6 +158,9 @@ struct IBreakableManager
 
 	// Check if static object can be shattered, by checking it`s surface types.
 	virtual bool CanShatter( IStatObj *pStatObj ) = 0;
+
+	// Check if entity can be shattered, by checking surface types of geometry or character.
+	virtual bool CanShatterEntity( IEntity *pEntity,int nSlot=-1 ) = 0;
 
 	virtual void FakePhysicsEvent( EventPhys * pEvent ) = 0;
 };
@@ -375,6 +380,11 @@ struct IEntitySystemBase
   // Description:
   //     Dumps entities in system
   virtual void DumpEntities() = 0;
+
+	//////////////////////////////////////////////////////////////////////////
+	// Description:
+	//     Do not spawn any entities unless forced to.
+	virtual void LockSpawning(bool lock) = 0;
 };
 
 extern "C"

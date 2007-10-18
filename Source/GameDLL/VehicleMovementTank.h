@@ -7,7 +7,7 @@ $DateTime$
 Description: Implements movement type for tracked vehicles
 
 -------------------------------------------------------------------------
-History:
+History:n
 - 13:06:2005: Created by MichaelR
 
 *************************************************************************/
@@ -27,9 +27,14 @@ public:
   // overrides from StdWheeled
   virtual bool Init(IVehicle* pVehicle, const SmartScriptTable &table);  
   virtual void PostInit();
+  virtual void Reset();
   	
+	virtual void ProcessAI(const float deltaTime);
 	virtual void ProcessMovement(const float deltaTime);
 	virtual bool RequestMovement(CMovementRequest& movementRequest);
+
+	virtual void OnEvent(EVehicleMovementEvent event, const SVehicleMovementEventParams& params);
+	virtual void OnAction(const TVehicleActionId actionId, int activationMode, float value);
 	
   virtual void Update(const float deltaTime);
   virtual void StopEngine();
@@ -45,6 +50,7 @@ protected:
   virtual bool DoGearSound() { return false; }
   virtual float GetMinRPMSoundRatio() { return 0.6f; }  
   virtual void DebugDrawMovement(const float deltaTime);
+  virtual float GetWheelCondition() const;
   void SetLatFriction(float latFric);
 
   float m_pedalSpeed;
@@ -60,15 +66,14 @@ protected:
   float m_currPedal;
   float m_currSteer;
   
-  // AI specific
-  bool m_bWideSteerThreshold;
-
   IVehiclePart* m_drivingWheels[2];
   float m_steeringImpulseMin;
   float m_steeringImpulseMax;
   float m_steeringImpulseRelaxMin;
   float m_steeringImpulseRelaxMax;
-  
+
+	typedef std::vector<IVehiclePart*> TTreadParts;
+	TTreadParts m_treadParts;    
 };
 
 #endif

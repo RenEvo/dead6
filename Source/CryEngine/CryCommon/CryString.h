@@ -279,6 +279,11 @@ public:
 	static value_type* _strstr( value_type* str, const_str strSearch);
 	static bool _IsValidString( const_str str );
 
+#if defined(WIN32) || defined(WIN64)
+	static int _vscpf( const_str format, va_list args);
+	static int _vsnpf( value_type* buf, int cnt, const_str format, va_list args);
+#endif
+
 public:
 	//////////////////////////////////////////////////////////////////////////
 	// Only used for debugging statistics.
@@ -472,6 +477,34 @@ inline void CryStringT<wchar_t>::_set( value_type *dest,value_type ch,size_type 
 {
 	wmemset( dest,ch,count );
 }
+
+#if defined(WIN32) || defined(WIN64)
+
+template<>
+inline int CryStringT<char>::_vscpf(const_str format, va_list args)
+{
+	return _vscprintf(format, args);
+}
+
+template<>
+inline int CryStringT<wchar_t>::_vscpf(const_str format, va_list args)
+{
+	return _vscwprintf(format, args);
+}
+
+template<>
+inline int CryStringT<char>::_vsnpf(value_type* buf, int cnt, const_str format, va_list args)
+{
+	return _vsnprintf(buf, cnt, format, args);
+}
+
+template<>
+inline int CryStringT<wchar_t>::_vsnpf(value_type* buf, int cnt, const_str format, va_list args)
+{
+	return _vsnwprintf(buf, cnt, format, args);
+}
+
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 template <class T>
@@ -1623,14 +1656,25 @@ inline CryStringT<T>& CryStringT<T>::Format( const_str format,... )
 {
 	assert(_IsValidString(format));
 
+#if defined(WIN32) || defined(WIN64)
+	va_list argList;
+	va_start(argList, format );
+	int n = _vscpf(format, argList);
+	if (n < 0) n = 0;
+	resize(n);
+	_vsnpf(m_str, n, format, argList);
+	va_end(argList);
+	return *this;
+#else
 	value_type temp[4096]; // Limited to 4096 characters!
 	va_list argList;
 	va_start(argList, format );
 	vsnprintf( temp,4096,format,argList ); 
-  temp[4095] = '\0';
+	temp[4095] = '\0';
 	va_end(argList);
 	*this = temp;
 	return *this;
+#endif
 }
 
 //////////////////////////////////////////////////////////////////////////

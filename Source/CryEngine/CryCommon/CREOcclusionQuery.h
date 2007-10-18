@@ -14,6 +14,7 @@ public:
   int m_nDrawFrame;
 	Vec3 m_vBoxMin;
 	Vec3 m_vBoxMax;
+  
   UINT_PTR m_nOcclusionID; // this will carry a pointer LPDIRECT3DQUERY9, so it needs to be 64-bit on WIN64 
 
 	CRenderMesh * m_pRMBox;
@@ -23,7 +24,8 @@ public:
 
   CREOcclusionQuery()
   {
-    m_nOcclusionID = 0;
+    m_nOcclusionID = 0; 
+
     m_nVisSamples = 800*600;
     m_nCheckFrame = 0;
     m_nDrawFrame = 0;

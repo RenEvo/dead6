@@ -61,6 +61,15 @@ inline T minmag( T const& a, T const& b)
 		return min(a,b);
 }
 
+template<>
+inline Vec3 minmag( Vec3 const& a, Vec3 const& b)
+{
+	Vec3 m;
+	for (int i = 0; i < 3; i++)
+		m[i] = minmag(a[i], b[i]);
+	return m;
+}
+
 //////////////////////////////////////////////////////////////////////////
 // Interface returned by backup methods of ISplineInterpolator.
 //////////////////////////////////////////////////////////////////////////
@@ -88,6 +97,7 @@ struct ISplineInterpolator
 	virtual int  InsertKey( float time,ValueType value ) = 0;
 	virtual void RemoveKey( int key ) = 0;
 
+	virtual void FindKeysInRange(float startTime, float endTime, int& firstFoundKey, int& numFoundKeys) = 0;
 	virtual void RemoveKeysInRange(float startTime, float endTime) = 0;
 
 	virtual int   GetKeyCount() = 0;
@@ -479,6 +489,33 @@ namespace spline
 			SetModified(true);
 		}
 
+		ILINE void find_keys_in_range(float startTime, float endTime, int& firstFoundKey, int& numFoundKeys)
+		{
+			int count = num_keys();
+			int start = 0;
+			int end = count;
+			for (int i = 0; i < count; ++i)
+			{
+				float keyTime = m_keys[i].time;
+				if (keyTime < startTime)
+					start = i + 1;
+				if (keyTime > endTime && end > i)
+					end = i;
+			}
+			if (start < end)
+			{
+				firstFoundKey = start;
+				numFoundKeys = end - start;
+			}
+			else
+			{
+				firstFoundKey = -1;
+				numFoundKeys = 0;
+			}
+
+			SetModified(true);
+		}
+
 		inline void update()
 		{
 			if (m_flags&MODIFIED)
@@ -523,9 +560,14 @@ namespace spline
 			}
 		}
 
-		size_t sizeofThis()const
+		size_t mem_size() const
 		{
-			return sizeof(*this) + sizeof(key_type)*m_keys.size();
+			return this->m_keys.capacity() * sizeof(this->m_keys[0]);
+		}
+
+		size_t sizeofThis() const
+		{
+			return sizeof(*this) + mem_size();
 		}
 
 		//////////////////////////////////////////////////////////////////////////
@@ -538,10 +580,10 @@ namespace spline
 		//////////////////////////////////////////////////////////////////////////
 
 	protected:
-		int				m_flags;
-		int				m_ORT;				// Out-Of-Range type.
 		std::vector<key_type>	m_keys;	// List of keys.
-		int				m_curr;				// Current key in track.
+		uint8			m_flags;
+		uint8			m_ORT;							// Out-Of-Range type.
+		int16			m_curr;							// Current key in track.
 
 		float			m_rangeStart;
 		float			m_rangeEnd;
@@ -549,6 +591,7 @@ namespace spline
 		// Return key before or equal to this time.
 		inline int seek_key( float t )
 		{
+			assert(num_keys() < (1<<15));
 			if ((m_curr >= num_keys()) || (time(m_curr) > t))
 				// Search from begining.
 				m_curr = 0;
@@ -579,114 +622,24 @@ namespace spline
 	// CatmullRomSpline class implementation
 	//////////////////////////////////////////////////////////////////////////
 	template <class T,class Key = SplineKey<T> >
-	class	CatmullRomSpline : public TSpline< Key,TCoeffBasis<T> >
+	class	TSplineSlopes : public TSpline< Key,TCoeffBasis<T> >
 	{
-	public:
-		typedef typename TSpline<Key,HermitBasis>::key_type key_type;
-
 	protected:
+		typedef typename TSpline<Key,HermitBasis>::key_type key_type;
+		typedef typename TSpline<Key,HermitBasis>::value_type value_type;
 
-		std::vector<typename TSpline< Key, TCoeffBasis<T> >::basis_type> m_coeffs;
-
-		virtual void comp_derivs()
+		void comp_derivs(bool bRangeLimit)
 		{
-			if (this->num_keys() > 1)
-			{
-				int last = this->num_keys()-1;
-				key_type &k0 = this->key(0);
-				key_type &k1 = this->key(last);
-				Zero(k0.ds);
-				Zero(k0.dd);
-				Zero(k1.ds);
-				Zero(k1.dd);
-
-				Zero(k0.ds);
-				k0.dd = (0.5f)*(this->value(1) - this->value(0));
-				k1.ds = (0.5f)*(this->value(last) - this->value(last-1));
-				Zero(k1.dd);
-
-				for (int i = 1; i < (this->num_keys()-1); ++i)
-				{
-					key_type &key = this->key(i);
-					key.ds = 0.5f*(this->value(i+1) - this->value(i-1));
-					key.dd = key.ds;
-				}
-			}
-		}
-
-		virtual void comp_deriv()
-		{
-			comp_derivs();
-
-			// Store coeffs for each segment.
-			m_coeffs.resize(this->num_keys());
-
-			if (this->num_keys() > 0)
-			{
-        unsigned i;
-				for (i = 0; i < m_coeffs.size()-1; i++)
-				{
-					m_coeffs[i].set(this->time(i), this->value(i), this->dd(i), this->time(i+1), this->value(i+1), this->ds(i+1));
-				}
-
-				// Last segment is just constant value.
-				m_coeffs[i].set(this->time(i), this->value(i), T(0.f), this->time(i)+1.f, this->value(i), T(0.f));
-			}
-
 			this->SetModified( false );
-		}
 
-		virtual	void interp_keys( int key1, int key2, float u, typename TSpline<Key,HermitBasis>::value_type& val )
-		{
-			u *= this->time(key2) - this->time(key1);
-			m_coeffs[key1].eval(val, u);
-		}
-
-	public:
-
-		// Quick version that skips update() and adjust_time(), and interpolates inline.
-		inline void fast_interpolate( float t, typename TSpline<Key,HermitBasis>::value_type& val )
-		{
-			if (this->empty())
-				return;
-
-			assert(this->is_updated());
-
-			if (t < this->time(0))
-			{
-				val = this->value(0);
-				return;
-			}
-
-			// Inline seek to proper key.
-			int curr;
-			for (curr = 0; curr < this->num_keys()-1; curr++)
-				if (this->time(curr+1) >= t)
-					break;
-			m_coeffs[curr].eval(val, t - this->time(curr));
-		}
-	};
-
-	//////////////////////////////////////////////////////////////////////////
-	// RangeLimitSpline, variant of CatmullRom with values guaranteed within control points.
-	//////////////////////////////////////////////////////////////////////////
-	template <class T,class Key = SplineKey<T> >
-	class	RangeLimitSpline: public CatmullRomSpline<T,Key>
-	{
-	public:
-		typedef typename TSpline<Key,HermitBasis>::key_type key_type;
-
-	protected:
-
-		typedef CatmullRomSpline<T,Key> Super;
-
-		virtual void comp_derivs()
-		{
-			// Compute slopes to ensure interpolation never exceeds 0..1 bounds.
-			// Also examine NonContinuous flag to customise slopes.
 			int last = this->num_keys()-1;
-			if (last > 0)
+			if (last <= 0)
+				return;
+
+			if (bRangeLimit)
 			{
+				// Compute slopes to ensure interpolation never exceeds 0..1 bounds.
+				// Also examine NonContinuous flag to customise slopes.
 				// Compute continuous slopes first.
 				for (int i = 0; i <= last; ++i)
 				{
@@ -696,11 +649,11 @@ namespace spline
 						// In/out slopes equal, and computed automatically.
 						if (i==0 || i==last)
 							// Slope 0 at endpoints.
-							key.ds = key.dd = T(0.f);
+							key.ds = key.dd = value_type(0.f);
 						else
 						{
-							T s0 = this->value(i) - this->value(i-1),
-								s1 = this->value(i+1) - this->value(i);
+							value_type s0 = this->value(i) - this->value(i-1),
+												 s1 = this->value(i+1) - this->value(i);
 							key.ds = key.dd = minmag(s0,s1);
 						}
 					}
@@ -740,28 +693,192 @@ namespace spline
 					}
 				}
 			}
+			else
+			{
+				key_type &k0 = this->key(0);
+				key_type &k1 = this->key(last);
+				Zero(k0.ds);
+				Zero(k0.dd);
+				Zero(k1.ds);
+				Zero(k1.dd);
+
+				Zero(k0.ds);
+				k0.dd = (0.5f)*(this->value(1) - this->value(0));
+				k1.ds = (0.5f)*(this->value(last) - this->value(last-1));
+				Zero(k1.dd);
+
+				for (int i = 1; i < (this->num_keys()-1); ++i)
+				{
+					key_type &key = this->key(i);
+					key.ds = 0.5f*(this->value(i+1) - this->value(i-1));
+					key.dd = key.ds;
+				}
+			}
+		}
+	};
+
+	//////////////////////////////////////////////////////////////////////////
+	// CatmullRomSpline class implementation
+	//////////////////////////////////////////////////////////////////////////
+	template <class T, class Key = SplineKey<T>, bool bRangeLimit = false >
+	class	CatmullRomSpline : public TSplineSlopes< T,Key >
+	{
+	protected:
+
+		typedef TSplineSlopes< T,Key > Super;
+
+		std::vector<typename TSpline< Key, TCoeffBasis<T> >::basis_type> m_coeffs;
+
+		virtual void comp_deriv()
+		{
+			this->comp_derivs( bRangeLimit );
+
+			// Store coeffs for each segment.
+			m_coeffs.resize(this->num_keys());
+
+			if (this->num_keys() > 0)
+			{
+        unsigned i;
+				for (i = 0; i < m_coeffs.size()-1; i++)
+				{
+					m_coeffs[i].set(this->time(i), this->value(i), this->dd(i), this->time(i+1), this->value(i+1), this->ds(i+1));
+				}
+
+				// Last segment is just constant value.
+				m_coeffs[i].set(this->time(i), this->value(i), T(0.f), this->time(i)+1.f, this->value(i), T(0.f));
+			}
+		}
+
+		virtual	void interp_keys( int key1, int key2, float u, typename TSpline<Key,HermitBasis>::value_type& val )
+		{
+			u *= this->time(key2) - this->time(key1);
+			m_coeffs[key1].eval(val, u);
+		}
+
+	public:
+
+		// Quick version that skips update() and adjust_time(), and interpolates inline.
+		inline void fast_interpolate( float t, typename TSpline<Key,HermitBasis>::value_type& val )
+		{
+			if (this->empty())
+				return;
+
+			assert(this->is_updated());
+
+			if (t < this->time(0))
+			{
+				val = this->value(0);
+				return;
+			}
+
+			// Inline seek to proper key.
+			int curr;
+			for (curr = 0; curr < this->num_keys()-1; curr++)
+				if (this->time(curr+1) >= t)
+					break;
+			m_coeffs[curr].eval(val, t - this->time(curr));
+		}
+
+		size_t mem_size() const
+		{
+			return Super::mem_size() + this->m_coeffs.capacity() * sizeof(this->m_coeffs[0]);
+		}
+	};
+
+	//////////////////////////////////////////////////////////////////////////
+	// LookupTableSpline class implementation
+	//////////////////////////////////////////////////////////////////////////
+	template <class T, class Storage, class Key = SplineKey<T> >
+	class	LookupTableSpline: public TSplineSlopes< T,Key >
+	{
+	public:
+		typedef typename TSpline<Key,HermitBasis>::key_type key_type;
+		typedef typename TSpline<Key,HermitBasis>::value_type value_type;
+
+		LookupTableSpline()
+			: m_indexScale(0)
+		{
+			this->SetModified(false);
+			create_table();
+		}
+		inline void fast_interpolate( float t, value_type& val )
+		{
+			assert(this->is_updated());
+			t = clamp(t, this->m_rangeStart, this->m_rangeEnd);
+			t -= this->m_rangeStart;
+			t *= m_indexScale;
+			int i = int(t);
+			t -= float(i);
+			Storage::InterpFromStorage(val, m_table[i], m_table[i+1], t);
+		}
+		inline void interpolate( float t, value_type& val )
+		{
+			this->update();
+			fast_interpolate( t, val );
+		}
+
+		size_t mem_size() const
+		{
+			return Super::mem_size() + this->m_table.capacity() * sizeof(this->m_table[0]);
+		}
+
+	protected:
+
+		typedef TSplineSlopes< T,Key > Super;
+		typedef typename Storage::TStorage storage_type;
+
+		enum { nMAX_ENTRIES = 128 };
+		enum { nENTRIES_PER_KEY = 32 };
+
+		void create_table()
+		{
+			// Construct lookup table.
+			m_indexScale = 0.f;
+			if (this->m_keys.size() > 1)
+			{
+				// If active spline range less than 1, reduce table entries.
+				int table_size = min<int>(nENTRIES_PER_KEY * (this->m_keys.size()-1), nMAX_ENTRIES);
+				SetRange( this->m_keys[0].time, this->m_keys.end()[-1].time * 0.999f );
+				float active_range = this->m_keys.end()[-1].time - this->m_keys[0].time;
+				m_indexScale = (table_size-1) / active_range;
+				m_table.resize(table_size);
+				float time_scale = active_range / (table_size-1);
+				for (int i = 0; i < table_size; i++)
+				{
+					value_type val(1.f);
+					Super::interpolate(this->m_rangeStart + i*time_scale, val);
+					m_table[i] = Storage::ToStorage(val);
+				}
+			}
+			else
+			{
+				this->SetRange(0.f, 0.f);
+				m_table.resize(2);
+				value_type val(1.f);
+				Super::interpolate(0.f, val);
+				m_table[0] = Storage::ToStorage(val);
+				m_table[1] = m_table[0];
+			}
 		}
 
 		virtual void comp_deriv()
 		{
-			Super::comp_deriv();
-
-	#ifdef _DEBUG
-			// Verify range limits.
-			T val0(0.f), val1(1.f);
-			T val;
-			for (int k = 0; k < this->num_keys()-1; k++)
-			{
-				for (float u = 0.f; u <= 1.f; u += 0.1f)
-				{
-					float w = 3.f*u*u - 2.f*u*u*u;
-					interp_keys(k, k+1, w, val);
-					assert(max(val, val0) == val);
-					assert(min(val, val1) == val);
-				}
-			}
-	#endif
+			this->comp_derivs(true);
+			create_table();
 		}
+
+		virtual	void interp_keys( int key1, int key2, float u, value_type& val )
+		{
+			u *= this->time(key2) - this->time(key1);
+
+			// Compute coeffs dynamically.
+			TCoeffBasis<T> coeff;
+			coeff.set(this->time(key1), this->value(key1), this->dd(key1), this->time(key2), this->value(key2), this->ds(key2));
+			coeff.eval(val, u);
+		}
+
+		std::vector<storage_type>	m_table;
+		float											m_indexScale;
 	};
 
 	//////////////////////////////////////////////////////////////////////////
@@ -773,12 +890,14 @@ namespace spline
 	{
 	public:
 		typedef typename TSpline<Key,HermitBasis>::key_type key_type;
+		typedef typename TSpline<Key,HermitBasis>::value_type value_type;
 
 		int GetInTangentType( int nkey ) { return (this->key(nkey).flags & SPLINE_KEY_TANGENT_IN_MASK)>>SPLINE_KEY_TANGENT_IN_SHIFT; }
 		int GetOutTangentType( int nkey ) { return (this->key(nkey).flags & SPLINE_KEY_TANGENT_OUT_MASK)>>SPLINE_KEY_TANGENT_OUT_SHIFT; }
 
 		virtual void comp_deriv()
 		{
+			this->SetModified( false );
 			if (this->num_keys() > 1)
 			{
 				int last = this->num_keys()-1;
@@ -802,10 +921,10 @@ namespace spline
 					switch (GetInTangentType(i))
 					{
 					case SPLINE_KEY_TANGENT_STEP:
-						key.ds = 0;
+						key.ds = value_type();
 						break;
 					case SPLINE_KEY_TANGENT_ZERO:
-						key.ds = 0;
+						key.ds = value_type();
 						break;
 					case SPLINE_KEY_TANGENT_LINEAR:
 						key.ds = this->value(i) - this->value(i-1);
@@ -814,10 +933,10 @@ namespace spline
 					switch (GetOutTangentType(i))
 					{
 					case SPLINE_KEY_TANGENT_STEP:
-						key.dd = 0;
+						key.dd = value_type();
 						break;
 					case SPLINE_KEY_TANGENT_ZERO:
-						key.dd = 0;
+						key.dd = value_type();
 						break;
 					case SPLINE_KEY_TANGENT_LINEAR:
 						key.dd = this->value(i+1) - this->value(i);
@@ -825,8 +944,6 @@ namespace spline
 					}
 				}
 			}
-
-			this->SetModified( false );
 		}
 
 	protected:
@@ -897,6 +1014,10 @@ namespace spline
 		{
 			if (key >= 0 && key < this->num_keys())
 				this->erase( key );
+		}
+		virtual void FindKeysInRange(float startTime, float endTime, int& firstFoundKey, int& numFoundKeys)
+		{
+			this->find_keys_in_range(startTime, endTime, firstFoundKey, numFoundKeys);
 		}
 		virtual void RemoveKeysInRange(float startTime, float endTime)
 		{

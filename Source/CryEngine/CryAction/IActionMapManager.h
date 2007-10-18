@@ -34,8 +34,9 @@ enum EActionActivationMode
 	eAAM_Always				= 0x0008,
 
 	// special modifiers
-	eAAM_ConsoleCmd		= 0x8000,
-	eAAM_NoModifiers	= 0x4000,
+	eAAM_Retriggerable	= 0x2000,
+	eAAM_NoModifiers		= 0x4000,
+	eAAM_ConsoleCmd			= 0x8000,
 };
 
 
@@ -85,6 +86,9 @@ struct IActionMap
 	virtual IActionMapBindInfoIteratorPtr CreateBindInfoIterator() = 0;
 	virtual void SetActionListener(EntityId id) = 0;
 	virtual const char* GetName() = 0;
+	virtual void Enable(bool enable) = 0;
+	virtual bool Enabled() = 0;
+
 	// Summary:
 	//   Retrieve key binding info for a specific action
 	// Description:
@@ -119,6 +123,8 @@ struct IActionFilter
 	virtual void Filter(const ActionId& action) = 0;
 	virtual bool SerializeXML(const XmlNodeRef& root, bool bLoading) = 0;
 	virtual const char* GetName() = 0;
+	virtual void Enable(bool enable) = 0;
+	virtual bool Enabled() = 0;
 };
 
 
@@ -139,7 +145,7 @@ struct IActionMapManager
 	virtual void Reset() = 0;
 	virtual void Clear() = 0;
 
-	virtual void LoadFromXML(const XmlNodeRef& node) = 0;
+	virtual void LoadFromXML(const XmlNodeRef& node, bool bCheckVersion=false) = 0;
 	virtual void SaveToXML(const XmlNodeRef& node) = 0;
 
 	virtual IActionMap *CreateActionMap(const char *name) = 0;
@@ -163,33 +169,33 @@ public:
 	// Returns true if the action should also be forwarded to scripts
 	typedef bool (T::*TOnActionHandler)(EntityId entityId, const ActionId& actionId, int activationMode, float value);
 
-	TActionHandler() : m_pThis(0){}
-
-	// set the object we are dispatching our calls to
-	void SetThis(T* pThis)	{	m_pThis = pThis;	}
-
 	// setup action handlers
 	void AddHandler(const ActionId& actionId, TOnActionHandler fnHandler)
 	{
 		m_actionHandlers.insert( std::make_pair(actionId, fnHandler) );
 	}
 
-	// call action handler
-	bool Dispatch(EntityId entityId, const ActionId& actionId, int activationMode, float value)
+	size_t GetNumHandlers() const
 	{
-		bool rVal = false;
-		return Dispatch(entityId, actionId, activationMode, value, rVal);
+		return m_actionHandlers.size();
 	}
 
 	// call action handler
-	bool Dispatch(EntityId entityId, const ActionId& actionId, int activationMode, float value, bool& rVal)
+	bool Dispatch(T* pThis, EntityId entityId, const ActionId& actionId, int activationMode, float value)
+	{
+		bool rVal = false;
+		return Dispatch(pThis, entityId, actionId, activationMode, value, rVal);
+	}
+
+	// call action handler
+	bool Dispatch(T* pThis, EntityId entityId, const ActionId& actionId, int activationMode, float value, bool& rVal)
 	{
 		rVal = false;
 
 		TOnActionHandler fnHandler = GetHandler(actionId);
-		if (fnHandler && m_pThis)
+		if (fnHandler && pThis)
 		{
-			rVal = (m_pThis->*fnHandler)(entityId, actionId, activationMode, value);
+			rVal = (pThis->*fnHandler)(entityId, actionId, activationMode, value);
 			return true;
 		}
 		else
@@ -211,7 +217,6 @@ public:
 private:
 	typedef std::multimap<ActionId, TOnActionHandler> TActionHandlerMap;
 
-	T*	m_pThis;
 	TActionHandlerMap	m_actionHandlers;
 };
 

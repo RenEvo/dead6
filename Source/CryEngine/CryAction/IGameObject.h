@@ -11,6 +11,7 @@
 #include "IEntitySystem.h"
 #include "SerializeFwd.h"
 #include "ActionMapManager.h"
+#include "PoolAllocator.h"
 
 inline void GameWarning(const char * ,...) PRINTF_PARAMS(1, 2);
 
@@ -19,7 +20,7 @@ struct IGameObjectView;
 struct IActionListener;
 struct IMovementController;
 struct IGameObjectExtension;
-struct IGameObjectPhysics;
+struct IGameObjectProfileManager;
 struct IWorldQuery;
 
 enum EEntityAspects
@@ -80,6 +81,7 @@ enum EUpdateEnableCondition
 	eUEC_InRange,
 	eUEC_VisibleAndInRange,
 	eUEC_VisibleOrInRange,
+  eUEC_VisibleOrInRangeIgnoreAI,
 	eUEC_VisibleIgnoreAI,
   eUEC_WithoutAI,
 };
@@ -130,6 +132,27 @@ struct SGameObjectExtensionRMI
 	ENetReliabilityType reliability;
 };
 
+template <size_t N>
+class CRMIAllocator
+{
+public:
+	static ILINE void * Allocate()
+	{
+		if (!m_pAllocator)
+			m_pAllocator = new stl::PoolAllocator<N>;
+		return m_pAllocator->Allocate();
+	}
+	static ILINE void Deallocate(void * p)
+	{
+		assert(m_pAllocator);
+		m_pAllocator->Deallocate(p);
+	}
+
+private:
+	static stl::PoolAllocator<N> * m_pAllocator;
+};
+template <size_t N> stl::PoolAllocator<N> * CRMIAllocator<N>::m_pAllocator = 0;
+
 // Summary
 //   Interface used to interact with a game object
 // See Also
@@ -150,12 +173,6 @@ protected:
 	class CRMIBodyImpl : public CRMIBody
 	{
 	public:
-		CRMIBodyImpl( const SGameObjectExtensionRMI * method, EntityId id, const T& params, IRMIListener * pListener, int userId, EntityId dependentId ) : 
-			CRMIBody( method, id, pListener, userId, dependentId ),
-			m_params(params)
-		{
-		}
-
 		void SerializeWith( TSerialize ser )
 		{
 			m_params.SerializeWith(ser);
@@ -166,8 +183,25 @@ protected:
 			return sizeof(*this);
 		}
 
+		static CRMIBodyImpl * Create( const SGameObjectExtensionRMI * method, EntityId id, const T& params, IRMIListener * pListener, int userId, EntityId dependentId )
+		{
+			return new (CRMIAllocator<sizeof(CRMIBodyImpl)>::Allocate()) CRMIBodyImpl(method, id, params, pListener, userId, dependentId);
+		}
+
+		void DeleteThis()
+		{
+			this->~CRMIBodyImpl();
+			CRMIAllocator<sizeof(CRMIBodyImpl)>::Deallocate(this);
+		}
+
 	private:
 		T m_params;
+
+		CRMIBodyImpl( const SGameObjectExtensionRMI * method, EntityId id, const T& params, IRMIListener * pListener, int userId, EntityId dependentId ) : 
+			CRMIBody( method, id, pListener, userId, dependentId ),
+			m_params(params)
+		{
+		}
 	};
 
 public:
@@ -193,16 +227,16 @@ public:
 	virtual void SetChannelId( uint16 ) = 0;
 	virtual INetChannel *GetNetChannel() const = 0;
 	// serialize some aspects of the game object
-	virtual void Serialize( TSerialize ser, unsigned what ) = 0;
+	virtual void FullSerialize( TSerialize ser ) = 0;
+	virtual bool NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int pflags ) = 0;
 	// in case things have to be set after serialization
 	virtual void PostSerialize() = 0;
 	// is the game object probably visible?
 	virtual bool IsProbablyVisible() = 0;
 	virtual bool IsProbablyDistant() = 0;
-	// change our physicalization profile
-	virtual bool SetPhysicalizationProfile( uint8 profile, bool fromNetwork = false ) = 0;
-	virtual bool SerializePhysics( TSerialize ser, uint8 profile, int pflags ) = 0;
-	virtual uint8 GetPhysicalizationProfile() = 0;
+	// change the profile of an aspect
+	virtual bool SetAspectProfile( EEntityAspects aspect, uint8 profile, bool fromNetwork = false ) = 0;
+	virtual uint8 GetAspectProfile( EEntityAspects aspect ) = 0;
 	virtual IGameObjectExtension * GetExtensionWithRMIBase( const void * pBase ) = 0;
 	virtual void EnablePrePhysicsUpdate( EPrePhysicsUpdate updateRule ) = 0;
 	virtual void SetNetworkParent( EntityId id ) = 0;
@@ -223,6 +257,9 @@ public:
 	// for debugging updates
 	virtual bool ShouldUpdate( ) = 0;
 
+	// register a partial update in the netcode without actually serializing - useful only for working around other bugs
+	virtual void RequestRemoteUpdate( uint8 aspectMask ) = 0;
+
 	// WARNING: there *MUST* be at least one frame between spawning ent and using this function to send an RMI if
 	// that RMI is _FAST, otherwise the dependent entity is ignored
 	template <class MI, class T>
@@ -241,7 +278,7 @@ public:
 	void InvokeRMI_Primitive( const MI method, const T& params, unsigned where, IRMIListener * pListener, int userId, int channel, EntityId dependentId )
 	{
 		method.Verify(params);
-		DoInvokeRMI( new CRMIBodyImpl<T>(method.pMethodInfo, GetEntityId(), params, pListener, userId, dependentId), where, channel );
+		DoInvokeRMI( CRMIBodyImpl<T>::Create(method.pMethodInfo, GetEntityId(), params, pListener, userId, dependentId), where, channel );
 	}
 
 	// turn an extension on
@@ -269,8 +306,8 @@ public:
 	virtual void ReleaseView( IGameObjectView * pGOV ) = 0;
 	virtual bool CaptureActions( IActionListener * pAL ) = 0;
 	virtual void ReleaseActions( IActionListener * pAL ) = 0;
-	virtual bool CapturePhysics( IGameObjectPhysics * pPH ) = 0;
-	virtual void ReleasePhysics( IGameObjectPhysics * pPH ) = 0;
+	virtual bool CaptureProfileManager( IGameObjectProfileManager * pPH ) = 0;
+	virtual void ReleaseProfileManager( IGameObjectProfileManager * pPH ) = 0;
 	virtual void EnableUpdateSlot( IGameObjectExtension * pExtension, int slot ) = 0;
 	virtual void DisableUpdateSlot( IGameObjectExtension * pExtension, int slot ) = 0;
   virtual uint8 GetUpdateSlotEnables( IGameObjectExtension * pExtension, int slot ) = 0;
@@ -315,10 +352,13 @@ class CRMIAtSyncItem : public IRMIAtSyncItem
 public:
 	typedef bool (Obj::*CallbackFunc)(const T&, INetChannel*);
 
-	CRMIAtSyncItem( const T& params, EntityId id, const SGameObjectExtensionRMI * pRMI, CallbackFunc callback, INetChannel * pChannel ) : m_params(params), m_id(id), m_pRMI(pRMI), m_callback(callback), m_pChannel(pChannel) {}
+	// INetAtSyncItem
+	// INetAtSyncItem
 
-	// INetAtSyncItem
-	// INetAtSyncItem
+	static ILINE CRMIAtSyncItem * Create( const T& params, EntityId id, const SGameObjectExtensionRMI * pRMI, CallbackFunc callback, INetChannel * pChannel )
+	{
+		return new (CRMIAllocator<sizeof(CRMIAtSyncItem)>::Allocate()) CRMIAtSyncItem(params, id, pRMI, callback, pChannel);
+	}
 
 	bool Sync()
 	{
@@ -349,7 +389,7 @@ public:
 		{
 			GameWarning("Error handling RMI %s", m_pRMI->pMsgDef->description);
 
-			if (!foundObject && !gEnv->bClient)
+			if (!foundObject && !gEnv->bServer && !m_pChannel->IsInTransition())
 			{
 				assert(msg[0]);
 				m_pChannel->Disconnect( eDC_ContextCorruption, msg );
@@ -372,7 +412,8 @@ public:
 
 	void DeleteThis()
 	{
-		delete this;
+		this->~CRMIAtSyncItem();
+		CRMIAllocator<sizeof(CRMIAtSyncItem)>::Deallocate(this);
 	}
 	// ~INetAtSyncItem
 
@@ -387,8 +428,9 @@ public:
 	}
 	// ~IRMICppLogger
 
-
 private:
+	CRMIAtSyncItem( const T& params, EntityId id, const SGameObjectExtensionRMI * pRMI, CallbackFunc callback, INetChannel * pChannel ) : m_params(params), m_id(id), m_pRMI(pRMI), m_callback(callback), m_pChannel(pChannel) {}
+
 	T m_params;
 	EntityId m_id;
 	const SGameObjectExtensionRMI * m_pRMI;
@@ -419,8 +461,7 @@ protected:
 	{
 		if (g_nMessages >= MAX_STATIC_MESSAGES)
 		{
-			assert(!"too many messages defined");
-			CryError("too many messages defined");
+			// Assert or CryError here uses gEnv, which is not yet initialized.
 			((void(*)())NULL)();
 			return NULL;
 		}
@@ -496,7 +537,7 @@ private:
 		assert(pID); \
 		Params_##name params; \
 		params.SerializeWith( ser ); \
-		return new CRMIAtSyncItem<Params_##name, cls>( params, *pID, m_info##name.pMethodInfo, &cls::Handle_##name, pChannel ); \
+		return CRMIAtSyncItem<Params_##name, cls>::Create( params, *pID, m_info##name.pMethodInfo, &cls::Handle_##name, pChannel ); \
 	} \
 	ILINE bool cls::Handle_##name( const Params_##name& params, INetChannel* pNetChannel )
 
@@ -506,7 +547,7 @@ private:
 	{ \
 		Params_##name params; \
 		params.SerializeWith( ser ); \
-		return new CRMIAtSyncItem<Params_##name, cls>( params, id, m_info##name.pMethodInfo, &cls::Handle_##name, pChannel ); \
+		return CRMIAtSyncItem<Params_##name, cls>::Create( params, id, m_info##name.pMethodInfo, &cls::Handle_##name, pChannel ); \
 	} \
 	ILINE bool cls::Handle_##name( const Params_##name& params, INetChannel* pNetChannel )
 
@@ -554,11 +595,10 @@ struct IGameObjectView
 	virtual void PostUpdateView( SViewParams& params ) = 0;
 };
 
-struct IGameObjectPhysics
+struct IGameObjectProfileManager
 {
-	virtual bool SetProfile( uint8 profile ) = 0;
-	virtual bool SerializeProfile( TSerialize ser, uint8 profile, int pflags ) = 0;
-	virtual uint8 GetDefaultProfile() = 0;
+	virtual bool SetAspectProfile( EEntityAspects aspect, uint8 profile ) = 0;
+	virtual uint8 GetDefaultProfile( EEntityAspects aspect ) = 0;
 };
 
 // Summary
@@ -618,10 +658,13 @@ struct IGameObjectExtension
 	//   Performs the serialization the extension
 	// Parameters
 	//   ser - object used to serialize values
-	//   aspect - serialization aspect, using for network serialization
+	//   aspect - serialization aspect, used for network serialization
+	//   profile - which profile to serialize; 255 == don't care
+	//   flags - physics flags to be used for serialization
 	// See Also
 	//   ISerialize
-	virtual void Serialize( TSerialize ser, unsigned aspect ) = 0;
+	virtual void FullSerialize( TSerialize ser ) = 0;
+	virtual bool NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int pflags ) = 0;
 	
 	// Summary
 	//   Performs post serialization fixes
@@ -680,6 +723,9 @@ struct IGameObjectExtension
 	// See Also
 	//   Update, IGameObject::EnablePostUpdates, IGameObject::DisablePostUpdates
 	virtual void PostUpdate( float frameTime ) = 0;
+
+	// Summary
+	virtual void PostRemoteSpawn() = 0;
 
 	// Summary
 	//   Retrieves the pointer to the game object

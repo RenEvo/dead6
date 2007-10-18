@@ -23,29 +23,29 @@
 #include "CVehicleMovementHarvester.h"
 
 // Crysis classes
-#include "Player.h"
 #include "Item.h"
 #include "Weapon.h"
 #include "VehicleWeapon.h"
 #include "AmmoPickup.h"
 #include "Binocular.h"
 #include "C4.h"
+#include "C4Detonator.h"
 #include "DebugGun.h"
 #include "PlayerFeature.h"
 #include "ReferenceWeapon.h"
 #include "OffHand.h"
 #include "Fists.h"
-#include "Flashlight.h"
 #include "Lam.h"
 #include "GunTurret.h"
-#include "TacticalAttachment.h"
 #include "ThrowableWeapon.h"
+#include "RocketLauncher.h"
 #include "VehicleMovementBase.h"
 #include "VehicleActionAutomaticDoor.h"
 #include "VehicleActionDeployRope.h"
 #include "VehicleActionEntityAttachment.h"
 #include "VehicleActionLandingGears.h"
 #include "VehicleDamageBehaviorBurn.h"
+#include "VehicleDamageBehaviorCameraShake.h"
 #include "VehicleDamageBehaviorExplosion.h"
 #include "VehicleDamageBehaviorTire.h"
 #include "VehicleMovementStdWheeled.h"
@@ -54,11 +54,54 @@
 #include "VehicleMovementStdBoat.h"
 #include "VehicleMovementTank.h"
 #include "VehicleMovementVTOL.h"
+#include "VehicleMovementAmphibious.h"
+#include "ScriptControlledPhysics.h"
 #include "HUD/HUD.h"
 
 #include <IItemSystem.h>
 #include <IVehicleSystem.h>
 #include <IGameRulesSystem.h>
+
+#define HIDE_FROM_EDITOR(className)																																				\
+  { IEntityClass *pItemClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(className);\
+  pItemClass->SetFlags(pItemClass->GetFlags() | ECLF_INVISIBLE); }																				\
+
+#define REGISTER_GAME_OBJECT(framework, name, script)\
+	{\
+		IEntityClassRegistry::SEntityClassDesc clsDesc;\
+		clsDesc.sName = #name;\
+		clsDesc.sScriptFile = script;\
+		struct C##name##Creator : public IGameObjectExtensionCreatorBase\
+		{\
+			C##name *Create()\
+			{\
+				return new C##name();\
+			}\
+			void GetGameObjectExtensionRMIData( void ** ppRMI, size_t * nCount )\
+			{\
+			C##name::GetGameObjectExtensionRMIData( ppRMI, nCount );\
+			}\
+		};\
+		static C##name##Creator _creator;\
+		framework->GetIGameObjectSystem()->RegisterExtension(#name, &_creator, &clsDesc);\
+	}
+
+#define REGISTER_GAME_OBJECT_EXTENSION(framework, name)\
+	{\
+		struct C##name##Creator : public IGameObjectExtensionCreatorBase\
+		{\
+		C##name *Create()\
+			{\
+			return new C##name();\
+			}\
+			void GetGameObjectExtensionRMIData( void ** ppRMI, size_t * nCount )\
+			{\
+			C##name::GetGameObjectExtensionRMIData( ppRMI, nCount );\
+			}\
+		};\
+		static C##name##Creator _creator;\
+		framework->GetIGameObjectSystem()->RegisterExtension(#name, &_creator, NULL);\
+	}
 
 ////////////////////////////////////////////////////
 void InitD6GameFactory(IGameFramework *pFramework)
@@ -77,8 +120,6 @@ void InitD6GameFactory(IGameFramework *pFramework)
 	// Items
 	REGISTER_FACTORY(pFramework, "Item", CItem, false);
 	REGISTER_FACTORY(pFramework, "PlayerFeature", CPlayerFeature, false);
-	REGISTER_FACTORY(pFramework, "Flashlight", CFlashlight, false);
-	REGISTER_FACTORY(pFramework, "TacticalAttachment", CTacticalAttachment, false);
 	REGISTER_FACTORY(pFramework, "LAM", CLam, false);
 
 	// Weapons
@@ -89,20 +130,23 @@ void InitD6GameFactory(IGameFramework *pFramework)
 	REGISTER_FACTORY(pFramework, "Claymore", CThrowableWeapon, false);
 	REGISTER_FACTORY(pFramework, "Binocular", CBinocular, false);
 	REGISTER_FACTORY(pFramework, "C4", CC4, false);
+	REGISTER_FACTORY(pFramework, "C4Detonator", CC4Detonator, false);
 	REGISTER_FACTORY(pFramework, "DebugGun", CDebugGun, false);
 	REGISTER_FACTORY(pFramework, "ReferenceWeapon", CReferenceWeapon, false);
 	REGISTER_FACTORY(pFramework, "OffHand", COffHand, false);
 	REGISTER_FACTORY(pFramework, "Fists", CFists, false);
 	REGISTER_FACTORY(pFramework, "GunTurret", CGunTurret, false);
-		
+	REGISTER_FACTORY(pFramework, "RocketLauncher", CRocketLauncher, false);
+
 	// vehicle objects
 	IVehicleSystem* pVehicleSystem = pFramework->GetIVehicleSystem();
 
-	#define REGISTER_VEHICLEOBJECT(name, obj) \
+#define REGISTER_VEHICLEOBJECT(name, obj) \
 	REGISTER_FACTORY((IVehicleSystem*)pVehicleSystem, name, obj, false); \
 	obj::m_objectId = pVehicleSystem->AssignVehicleObjectId();
 
 	REGISTER_VEHICLEOBJECT("Burn", CVehicleDamageBehaviorBurn);
+	REGISTER_VEHICLEOBJECT("CameraShake", CVehicleDamageBehaviorCameraShake);
 	REGISTER_VEHICLEOBJECT("Explosion", CVehicleDamageBehaviorExplosion);
 	REGISTER_VEHICLEOBJECT("BlowTire", CVehicleDamageBehaviorBlowTire);
 	REGISTER_VEHICLEOBJECT("AutomaticDoor", CVehicleActionAutomaticDoor);
@@ -117,24 +161,39 @@ void InitD6GameFactory(IGameFramework *pFramework)
 	REGISTER_FACTORY(pVehicleSystem, "StdWheeled", CVehicleMovementStdWheeled, false);
 	REGISTER_FACTORY(pVehicleSystem, "Tank", CVehicleMovementTank, false);
 	REGISTER_FACTORY(pVehicleSystem, "VTOL", CVehicleMovementVTOL, false);
+	REGISTER_FACTORY(pVehicleSystem, "Amphibious", CVehicleMovementAmphibious, false);
 	REGISTER_FACTORY(pVehicleSystem, "Harvester", CVehicleMovementHarvester, false);
 
 	// Custom Extensions
 	//REGISTER_GAME_OBJECT(pFramework, CustomFreezing);
 	//REGISTER_GAME_OBJECT(pFramework, CustomShatter);
 
+	// Load our gamerules in here
+	REGISTER_FACTORY(pFramework, "GameRules", CD6GameRules, false);
+	g_D6Core->pD6GameRules = (CD6GameRules*)(g_D6Core->pD6Game->GetIGameFramework()->GetIGameRulesSystem());
+
+	REGISTER_GAME_OBJECT_EXTENSION(pFramework, ScriptControlledPhysics);
+
+	// TODO Replace with only our gamerules
+#ifndef CRYSIS_BETA
+	pFramework->GetIGameRulesSystem()->RegisterGameRules("SinglePlayer", "GameRules");
+	pFramework->GetIGameRulesSystem()->AddGameRulesAlias("SinglePlayer", "sp");
+
+	pFramework->GetIGameRulesSystem()->RegisterGameRules("InstantAction", "GameRules");
+	pFramework->GetIGameRulesSystem()->AddGameRulesAlias("InstantAction", "ia");
+	pFramework->GetIGameRulesSystem()->AddGameRulesAlias("InstantAction", "dm");
+	pFramework->GetIGameRulesSystem()->AddGameRulesLevelLocation("InstantAction", "multiplayer/ia/");
+
+	pFramework->GetIGameRulesSystem()->RegisterGameRules("TeamInstantAction", "GameRules");
+	pFramework->GetIGameRulesSystem()->AddGameRulesAlias("TeamInstantAction", "tia");
+	pFramework->GetIGameRulesSystem()->AddGameRulesAlias("TeamInstantAction", "tdm");
+	pFramework->GetIGameRulesSystem()->AddGameRulesLevelLocation("TeamInstantAction", "multiplayer/tia/");
+	pFramework->GetIGameRulesSystem()->AddGameRulesLevelLocation("TeamInstantAction", "multiplayer/ia/");
+
+	//pFramework->GetIGameRulesSystem()->RegisterGameRules("TeamAction", "GameRules");
+#endif
+
 ////////////////////////////////////////////////////
 // !END
 ////////////////////////////////////////////////////
-
-	// Load our gamerules in here
-	REGISTER_FACTORY(pFramework, "D6CGameRules", CD6GameRules, false);
-	g_D6Core->pD6GameRules = (CD6GameRules*)(g_D6Core->pD6Game->GetIGameFramework()->GetIGameRulesSystem());
-
-	// TODO Replace with only our gamerules
-	pFramework->GetIGameRulesSystem()->RegisterGameRules("SinglePlayer", "D6CGameRules");
-	pFramework->GetIGameRulesSystem()->RegisterGameRules("InstantAction", "D6CGameRules");
-	pFramework->GetIGameRulesSystem()->RegisterGameRules("TeamInstantAction", "D6CGameRules");
-	pFramework->GetIGameRulesSystem()->RegisterGameRules("TeamAction", "D6CGameRules");
-	pFramework->GetIGameRulesSystem()->RegisterGameRules("PowerStruggle", "D6CGameRules");
 }

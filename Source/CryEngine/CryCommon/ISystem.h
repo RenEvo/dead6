@@ -57,6 +57,7 @@ struct INameTable;
 struct IBudgetingSystem;
 struct IFlowSystem;
 struct IDialogSystem;
+struct IMaterialEffects;
 struct IHardwareMouse;
 struct IAnimationGraphSystem;
 struct IFlashPlayer;
@@ -160,6 +161,12 @@ enum ESystemEvent
 	// Level reload. For cleanup code.
 	ESYSTEM_EVENT_LEVEL_RELOAD,
 
+	// When keyboard layout changed
+	ESYSTEM_EVENT_LANGUAGE_CHANGE,
+
+	// Toggled fullscreen
+	// wparam is 1 means we switched to fullscreen, 0 if for windowed
+	ESYSTEM_EVENT_TOGGLE_FULLSCREEN,
 	ESYSTEM_EVENT_USER = 0x1000,
 };
 
@@ -178,6 +185,7 @@ struct ILocalizationManager
 		const wchar_t* sLocalizedString;
 		const char* sEnglishSubtitle;
 		const wchar_t* sLocalizedSubtitle;
+		const wchar_t* sWho;
 		bool bUseSubtitle;
 	};
 
@@ -189,6 +197,7 @@ struct ILocalizationManager
 		const char* sEnglishSubtitle;
 		const wchar_t* sLocalizedSubtitle;
 		const char* sSoundEvent;
+		const wchar_t* sWho;
 		float fVolume;
 		float fDucking;	
 		float fRadioRatio;
@@ -199,6 +208,8 @@ struct ILocalizationManager
 
 
 	virtual bool SetLanguage( const char* sLanguage ) = 0;
+	virtual const char* GetLanguage() = 0;
+
 	virtual bool LoadExcelXmlSpreadsheet( const char* sFileName, bool bReload=false ) = 0;
 	// Summary:
 	//   Free localization data
@@ -291,6 +302,11 @@ struct ILocalizationManager
 	virtual void FormatStringMessage( wstring& outString, const wstring& sString, const wchar_t** sParams, int nParams ) = 0;
 	virtual void FormatStringMessage( wstring& outString, const wstring& sString, const wchar_t* param1, const wchar_t* param2=0, const wchar_t* param3=0, const wchar_t* param4=0 ) = 0;
 
+	virtual wchar_t ToUpperCase(wchar_t c) = 0;
+	virtual wchar_t ToLowerCase(wchar_t c) = 0;
+	virtual void LocalizeTime(time_t t, bool bMakeLocalTime, bool bShowSeconds, wstring& outTimeString) = 0;
+	virtual void LocalizeDate(time_t t, bool bMakeLocalTime, bool bShort, bool bIncludeWeekday, wstring& outDateString) = 0;
+	virtual void LocalizeDuration(int seconds, wstring& outDurationString) = 0;
 };
 
 // User defined callback, which can be passed to ISystem.
@@ -346,50 +362,10 @@ struct ISystemEventDispatcher
 	//virtual void OnLocaleChange() = 0;
 };
 
+
+
 // Structure passed to Init method of ISystem interface.
-struct SSystemInitParams
-{
-	void *hInstance;											//
-	void *hWnd;														//
-	char szSystemCmdLine[2048];						// command line
-	char szUserPath[256];						      // User alias path relative to My Documents folder.
-	ISystemUserCallback *pUserCallback;		//
-	ILog *pLog;														// You can specify your own ILog to be used by System.
-	ILogCallback *pLogCallback;										// You can specify your own ILogCallback to be added on log creation (used by Editor).
-	IValidator *pValidator;								// You can specify different validator object to use by System.
-	const char* sLogFileName;							// File name to use for log.
-	bool bEditor;													// When runing in Editor mode.
-	bool bPreview;												// When runing in Preview mode (Minimal initialization).
-	bool bTestMode;												// When runing in Automated testing mode.
-	bool bDedicatedServer;								// When runing a dedicated server.
-	ISystem *pSystem;											// Pointer to existing ISystem interface, it will be reused if not NULL.
-//	char szLocalIP[256];									// local IP address (needed if we have several servers on one machine)
-
-#if defined(LINUX)
-	void (*pCheckFunc)(void*);							// authentication function (must be set).
-#else
-	void *pCheckFunc;											// authentication function (must be set).
-#endif
-
-#ifdef WIN32
-	int hIcon;
-	int hCursor;
-#endif
-
-	// Initialization defaults.
-	SSystemInitParams()
-	{
-		hInstance = 0;
-		hWnd = 0;
-		memset(szSystemCmdLine,0,sizeof(szSystemCmdLine));
-		memset(szUserPath,0,sizeof(szUserPath));
-		pLog = 0;
-		pLogCallback = 0;
-		pValidator = 0;
-		pCheckFunc = 0;
-//		memset(szLocalIP,0,256);
-	}
-};
+struct SSystemInitParams{};
 
 // Typedef for frame profile callback function.
 typedef void (*FrameProfilerSectionCallback)( class CFrameProfilerSection *pSection );
@@ -401,6 +377,25 @@ struct ILoadConfigurationEntrySink
 	virtual void OnLoadConfigurationEntry_End() {}
 };
 
+struct SPlatformInfo
+{
+	unsigned int numCoresAvailableToProcess;
+
+#if defined(WIN32) || defined(WIN64)
+	enum EWinVersion
+	{
+		WinUndetected,
+		Win2000,
+		WinXP,
+		WinSrv2003,
+		WinVista
+	};
+
+	EWinVersion winVer;
+	bool win64Bit;
+	bool vistaKB940105Required;
+#endif
+};
 
 //////////////////////////////////////////////////////////////////////////
 // Global environment.
@@ -436,6 +431,7 @@ struct SSystemGlobalEnvironment
 	IAnimationGraphSystem*     pAnimationGraphSystem;
 	IDialogSystem*             pDialogSystem;
 	IHardwareMouse*            pHardwareMouse;
+	IMaterialEffects*          pMaterialEffects;
 
 	//////////////////////////////////////////////////////////////////////////
 	// Used to tell if this is a server/client/multiplayer instance
@@ -450,6 +446,21 @@ struct SSystemGlobalEnvironment
 	FrameProfilerSectionCallback callbackStartSection;
 	FrameProfilerSectionCallback callbackEndSection;
 	//////////////////////////////////////////////////////////////////////////
+
+	//////////////////////////////////////////////////////////////////////////
+	// Indicate Editor status.
+	//////////////////////////////////////////////////////////////////////////
+	bool                       bEditor;          // Engine is running under editor.
+	bool                       bEditorGameMode;  // Engine is in editor game mode.
+	//////////////////////////////////////////////////////////////////////////
+
+	//////////////////////////////////////////////////////////////////////////
+	// Used by CRY_ASSERT
+	bool											 bIgnoreAllAsserts;
+	//////////////////////////////////////////////////////////////////////////
+
+	SPlatformInfo pi;
+
 };
 
 
@@ -469,6 +480,9 @@ struct ISystem
 
 	// Returns pointer to the global environment structure.
 	virtual SSystemGlobalEnvironment* GetGlobalEnvironment() = 0;
+
+	// Returns the root folder specified by the command line option "-root <path>"
+	virtual const char* GetRootFolder() const = 0;
 
 	// Update all subsystems (including the ScriptSink() )
 	// Arguments:
@@ -529,16 +543,13 @@ struct ISystem
 	virtual bool CheckLogVerbosity( int verbosity ) = 0;
 
 	// returns true if this is dedicated server application
-	virtual bool IsDedicated() {return false;};
+	virtual bool IsDedicated() {return false;}
 
 	// returns true if this is editor application
-	virtual bool IsEditor() {return false;};
+	virtual bool IsEditor() {return false;}
 
 	// returns true if this is editor application and not in game mode
-	virtual bool IsEditorMode() {return false;};
-
-	// detect and set optimal spec
-	virtual void AutoDetectSpec() = 0;
+	virtual bool IsEditorMode() {return false;}
 
 	// return the related subsystem interface
 	virtual IGame *GetIGame() = 0;
@@ -587,6 +598,9 @@ struct ISystem
 	virtual void            SetIFlowSystem(IFlowSystem* pFlowSystem) = 0;
 	virtual void SetIAnimationGraphSystem(IAnimationGraphSystem* pAnimationGraphSystem) = 0;
 	virtual void SetIDialogSystem(IDialogSystem* pDialogSystem) = 0;
+	virtual void SetIMaterialEffects(IMaterialEffects* pMaterialEffects) = 0;
+	// Change current user sub path, the path is always relative to the user documents folder. (ex: "My Games\Crysis")
+	virtual void ChangeUserPath( const char *sUserPath ) = 0;
 
 	//virtual	const char			*GetGamePath()=0;
 
@@ -601,6 +615,7 @@ struct ISystem
 	virtual bool GetForceNonDevMode() const=0;
 	virtual bool WasInDevMode() const=0;
 	virtual bool IsDevMode() const=0;
+	virtual bool IsMODValid(const char *szMODName) const=0;
 	//////////////////////////////////////////////////////////////////////////
 
 	//////////////////////////////////////////////////////////////////////////
@@ -634,18 +649,9 @@ struct ISystem
 	// Returns true if system running in Test mode.
 	virtual bool IsTestMode() const = 0;
 
-	// controls the demo recording / playback (currently can't be disabled while game is running)
-	virtual void ActivateDemoMode(bool record) = 0;
-	virtual int IsDemoMode() const = 0;
-	
 	//////////////////////////////////////////////////////////////////////////
 	// Frame profiler functions
 	virtual void SetFrameProfiler(bool on, bool display, char *prefix) = 0;
-
-	// Starts section profiling.
-	virtual void StartProfilerSection( CFrameProfilerSection *pProfileSection ) = 0;
-	// Stops section profiling.
-	virtual void EndProfilerSection( CFrameProfilerSection *pProfileSection ) = 0;
 
 	//////////////////////////////////////////////////////////////////////////
 	// VTune Profiling interface.
@@ -655,12 +661,9 @@ struct ISystem
 	virtual void VTunePause() = 0;
 	//////////////////////////////////////////////////////////////////////////
 
-	virtual void Deltree(const char *szFolder, bool bRecurse) = 0;
-
 	//////////////////////////////////////////////////////////////////////////
 	// File version.
 	//////////////////////////////////////////////////////////////////////////
-	
 	virtual const SFileVersion& GetFileVersion() = 0;
 	virtual const SFileVersion& GetProductVersion() = 0;
 	
@@ -689,12 +692,17 @@ struct ISystem
 	//   bClient - if True returns local client config spec, if false returns server config spec.
 	virtual ESystemConfigSpec GetConfigSpec( bool bClient=true ) = 0;
 	
+	virtual ESystemConfigSpec GetMaxConfigSpec() const = 0;
+
 	// Changes current configuration specification for client or server.
 	// Arguments:
 	//   bClient - if True changes client config spec (sys_spec variable changed), 
 	//               if false changes only server config spec (as known on the client).
 	virtual void SetConfigSpec( ESystemConfigSpec spec,bool bClient ) = 0;
 	//////////////////////////////////////////////////////////////////////////
+
+	// detect and set optimal spec
+	virtual void AutoDetectSpec() = 0;
 
 	// Thread management for subsystems
 	// returns non-0 if the state was indeed changed, 0 if already in that state
@@ -764,10 +772,7 @@ struct ISystem
 	virtual uint64 GetUpdateCounter() = 0;
 };
 
-//////////////////////////////////////////////////////////////////////////
-// CrySystem DLL Exports.
-//////////////////////////////////////////////////////////////////////////
-typedef ISystem* (*PFNCREATESYSTEMINTERFACE)( SSystemInitParams &initParams );
+
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -783,15 +788,33 @@ inline ISystem *GetISystem()
 };
 //////////////////////////////////////////////////////////////////////////
 
+//////////////////////////////////////////////////////////////////////////
+// Interface that allow access to the CryEngine memory manager.
+//////////////////////////////////////////////////////////////////////////
+struct IMemoryManager
+{
+	struct SProcessMemInfo
+	{
+		uint64 PageFaultCount;
+		uint64 PeakWorkingSetSize;
+		uint64 WorkingSetSize;
+		uint64 QuotaPeakPagedPoolUsage;
+		uint64 QuotaPagedPoolUsage;
+		uint64 QuotaPeakNonPagedPoolUsage;
+		uint64 QuotaNonPagedPoolUsage;
+		uint64 PagefileUsage;
+		uint64 PeakPagefileUsage;
+	};
+	virtual bool GetProcessMemInfo( SProcessMemInfo &minfo ) = 0;
+};
+
+
 // This function must be called once by each module at the begining, to setup global pointers.
 extern void ModuleInitISystem( ISystem *pSystem );
 extern bool g_bProfilerEnabled;
+extern bool g_bTraceAllocations;
 
-// interface of the DLL
-extern "C" 
-{
-	CRYSYSTEM_API ISystem* CreateSystemInterface(const SSystemInitParams &initParams );
-}
+
 
 //////////////////////////////////////////////////////////////////////////
 // Display error message.
@@ -837,6 +860,7 @@ inline void CryWarning( EValidatorModule module,EValidatorSeverity severity,cons
 void CryLog(const char *, ...) PRINTF_PARAMS(1, 2);
 inline void CryLog( const char *format,... )
 {
+//	return;
 	if (gEnv && gEnv->pSystem)
 	{
 		va_list args;

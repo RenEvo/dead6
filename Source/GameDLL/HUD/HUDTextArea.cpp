@@ -17,7 +17,7 @@ CHUDTextArea::~CHUDTextArea()
 
 }
 
-void CHUDTextArea::OnUpdate(float deltaTime, float fadeValue)
+void CHUDTextArea::Update(float deltaTime)
 {
 	float now = m_pTimer->GetAsyncTime().GetMilliSeconds();
 	float fadetime = m_fadetime * 1000.0f;

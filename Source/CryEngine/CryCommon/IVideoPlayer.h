@@ -19,6 +19,7 @@ struct IVideoPlayer
 		PBS_PLAYING,
 		PBS_FINISHED,		
 		PBS_PAUSED,
+		PBS_PAUSED_NOFOCUS,
 		PBS_STOPPED
 	};
 
@@ -26,13 +27,19 @@ struct IVideoPlayer
 	virtual void Release() = 0;
 
 	// initialization
-	virtual bool Load(const char* pFilePath, unsigned int options = 0) = 0;
+	virtual bool Load(const char* pFilePath, unsigned int options, int audioCh = 0, int voiceCh = -1, bool useSubtitles = false) = 0;
 
 	// rendering
 	virtual EPlaybackStatus GetStatus() const = 0;
+	virtual bool Start() = 0;
+	virtual bool Stop() = 0;
 	virtual bool Pause(bool pause) = 0;	
 	virtual bool SetViewport(int x0, int y0, int width, int height) = 0;
 	virtual bool Render() = 0;
+	virtual void GetSubtitle(int subtitleCh, char* pStBuf, size_t pStBufLen) = 0;
+
+	virtual void EnablePerFrameUpdate(bool enable) = 0;
+	virtual bool IsPerFrameUpdateEnabled() const = 0;
 
 	// general property queries
 	virtual int GetWidth() const = 0;

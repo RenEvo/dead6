@@ -15,9 +15,15 @@ public:
 		m_pRenderer = gEnv->pRenderer;
 		assert (m_pRenderer != 0);
 
-		m_color = Col_Black;
+		m_currentColor = Col_Black;
+		m_targetColor = Col_Black;
+		m_drawColor = Col_Black;
 		m_pTexture = 0;
 		m_bActive = false;
+		m_duration = 0.0f;
+		m_curTime = 0.0f;
+		m_direction = 0;
+		m_ticket = 0;
 	}
 
 	~CHUDFader()
@@ -25,37 +31,100 @@ public:
 		SAFE_RELEASE(m_pTexture);
 	}
 
-	void SetTexture(const string& texName)
-	{
-		SAFE_RELEASE(m_pTexture);
-		if (texName.empty())
-			return;
 
-		m_pTexture = m_pRenderer->EF_LoadTexture(texName.c_str(),FT_DONT_RELEASE,eTT_2D);
-		if (m_pTexture != 0)
-			m_pTexture->SetClamp(true);
-	}
-
-	const char* GetDebugName()
+	const char* GetDebugName() const
 	{
 		if (m_pTexture)
 			return m_pTexture->GetName();
 		return "<no texture>";
 	}
 
-	void SetColor(const ColorF& color)
+	void Stop()
 	{
-		m_color = color;
+		m_bActive = false;
 	}
 
-	void SetActive(bool bActive)
+	void Reset()
 	{
-		m_bActive = bActive;
+		m_ticket = 0;
+		m_bActive = false;
 	}
 
 	bool IsActive() const { return m_bActive; }
+	bool IsPlaying(int ticket) const { return m_ticket > 0 && m_ticket==ticket; }
+	ColorF GetCurrentColor()
+	{
+		float curVal = 1.0;
+		if (m_duration != 0.0f)
+		{
+			curVal = m_curTime / m_duration;
+			curVal = CLAMP(curVal, 0.0f, 1.0f);
+		}
+		ColorF col;
+		col.lerpFloat(m_currentColor, m_targetColor, curVal);
+		return col;
+	}
+
+	int FadeIn(const ColorF& targetColor, float fDuration, bool bUseCurrentColor=true)
+	{
+		if (m_ticket == 0 || bUseCurrentColor == false)
+		{
+			m_currentColor = targetColor;
+			m_currentColor.a = 1.0f;
+		}
+		else
+			m_currentColor = GetCurrentColor();
+		m_targetColor = targetColor;
+		m_targetColor.a = 0.0f;
+		m_duration = fDuration > 0.0 ? fDuration : 0.0f;
+		m_curTime = 0.0f;
+		m_direction = -1;
+		m_bActive = true;
+		return ++m_ticket;
+	}
+
+	int FadeOut(const ColorF& targetColor, float fDuration, const char* textureName="", bool bUseCurrentColor=true)
+	{
+		SetTexture(textureName);
+		if (m_ticket == 0 || bUseCurrentColor == false)
+		{
+			m_currentColor = targetColor;
+			m_currentColor.a = 0.0f;
+		}
+		else
+			m_currentColor = GetCurrentColor();
+
+		m_targetColor = targetColor;
+		m_targetColor.a = 1.0f;
+		m_duration = fDuration > 0.0 ? fDuration : 0.0f;
+		m_curTime = 0.0f;
+		m_direction = 1;
+		m_bActive = true;
+		return ++m_ticket;
+	}
+
 
 	virtual void Update(float fDeltaTime)
+	{
+		if (m_bActive == false)
+			return;
+
+		if (m_curTime >= m_duration)
+		{
+			// when we're logically supposed to fade 'in' (meaning, to go away), do so
+			if (m_direction < 0)
+			{
+				m_bActive = false;
+				m_currentColor = m_targetColor;
+			}
+			m_currentColor = m_targetColor;
+			m_ticket = 0;
+		}
+		m_drawColor = GetCurrentColor();
+		m_curTime+=fDeltaTime;
+	}
+
+	virtual void Draw()
 	{
 		if (m_bActive == false)
 			return;
@@ -64,24 +133,56 @@ public:
 			m_pTexture ? m_pTexture->GetTextureID() : 0,
 			0.0f,1.0f,1.0f,0.0f, // tex coords
 			0.0f, // angle
-			m_color.r, m_color.g, m_color.b, m_color.a
+			m_drawColor.r, m_drawColor.g, m_drawColor.b, m_drawColor.a
 			);
 	}
 
+	static ITexture* LoadTexture(const char* textureName)
+	{
+		if (gEnv->pRenderer)
+			return gEnv->pRenderer->EF_LoadTexture(textureName,FT_DONT_ANISO|FT_DONT_RELEASE,eTT_2D);
+		else
+			return 0;
+	}
+protected:
+	void SetTexture(const char* textureName)
+	{
+		if (m_pTexture && textureName && strcmp(textureName, m_pTexture->GetName()) == 0)
+			return;
 
+		SAFE_RELEASE(m_pTexture);
+		if (textureName == 0 || *textureName == 0)
+			return;
+
+		m_pTexture = LoadTexture(textureName);
+		if (m_pTexture != 0)
+			m_pTexture->SetClamp(true);
+	}
+
+	
 protected:
 	IRenderer			*m_pRenderer;
-	ColorF         m_color;
-	ITexture*      m_pTexture;
+	ColorF         m_currentColor;
+	ColorF         m_targetColor;
+	ColorF         m_drawColor;
+	ITexture      *m_pTexture;
+	float          m_duration;
+	float          m_curTime;
+	int            m_direction;
+	int            m_ticket;
 	bool           m_bActive;
 };
 
-static const int NUM_FADERS = 4;
+static const int NUM_FADERS = 8;
+static const int MFX_FADER_OFFSET = 0;
+static const int MFX_FADER_END = 3;
+static const int GAME_FADER_OFFSET = 4;
+
 
 class CMasterFader : public CHUDObject
 {
 public:
-	CMasterFader() : CHUDObject(true)
+	CMasterFader() : CHUDObject()
 	{
 		m_bRegistered = false;
 		memset(m_pHUDFader, 0, sizeof(m_pHUDFader));
@@ -106,14 +207,19 @@ public:
 	}
 
 	// CHUDObject
-	virtual void OnUpdate(float fDeltaTime,float fFadeValue)
+	virtual void Update(float fDeltaTime)
 	{
+		const bool bInTimeDemo = g_pGame->GetIGameFramework()->IsInTimeDemo();
 		int nActive = 0;
 		for (int i=0; i<NUM_FADERS; ++i)
 		{
 			if (m_pHUDFader[i])
 			{
 				m_pHUDFader[i]->Update(fDeltaTime);
+				const bool bMFX = (i>= MFX_FADER_OFFSET && i <= MFX_FADER_END);
+				const bool bSkipDraw = bInTimeDemo && !bMFX;
+				if (!bSkipDraw) // in TimeDemo we don't draw
+					m_pHUDFader[i]->Draw();
 				if (m_pHUDFader[i]->IsActive())
 					++nActive;
 			}
@@ -121,7 +227,7 @@ public:
 		if (g_pGame->GetCVars()->hud_faderDebug != 0)
 		{
 			const float x = 5.0f;
-			float y = 100.0f;
+			float y = 115.0f;
 			float white[] = {1,1,1,1};
 			gEnv->pRenderer->Draw2dLabel( x, y, 1.2f, white, false, "HUDFader Active: %d", nActive );
 			y+=12.0f;
@@ -131,9 +237,13 @@ public:
 				{
 					if (m_pHUDFader[i] && m_pHUDFader[i]->IsActive())
 					{
-						gEnv->pRenderer->Draw2dLabel( x, y, 1.2f, white, false, "  Fader %d : Texture='%s'", i, m_pHUDFader[i]->GetDebugName());
-						y+=10.0f;
+						const ColorF colF = m_pHUDFader[i]->GetCurrentColor();
+						const ColorB colB (colF);
+						const bool bMFX = (i>= MFX_FADER_OFFSET && i <= MFX_FADER_END);
+						const bool bSkipDraw = bInTimeDemo && !bMFX;
+						gEnv->pRenderer->Draw2dLabel( x, y, 1.2f, white, false, " %sFader %d: ColRGBA=%d,%d,%d,%d Texture='%s' %s", bMFX ? "MFX " : "", i, colB.r, colB.g, colB.b, colB.a, m_pHUDFader[i]->GetDebugName(), bSkipDraw ? "[not drawn TimeDemo!]" : "");
 					}
+					y+=10.0f;
 				}
 			}
 		}
@@ -142,6 +252,25 @@ public:
 	virtual void OnHUDToBeDestroyed()
 	{
 		m_bRegistered = false;
+		for (int i=0; i<NUM_FADERS; ++i)
+		{
+			if (m_pHUDFader[i])
+				m_pHUDFader[i]->Reset();
+		}
+	}
+
+	virtual void Serialize(TSerialize ser)
+	{
+		if (ser.IsReading())
+		{
+			for (int i=0; i<NUM_FADERS; ++i)
+			{
+				if (m_pHUDFader[i])
+				{
+					m_pHUDFader[i]->Reset();
+				}
+			}
+		}
 	}
 	// ~CHUDObject
 
@@ -193,12 +322,13 @@ class CFlowFadeNode : public CFlowBaseNode
 {
 	CHUDFader* GetFader(SActivationInfo * pActInfo)
 	{
-		const int& group = GetPortInt(pActInfo, EIP_FadeGroup);
+		int group = GetPortInt(pActInfo, EIP_FadeGroup);
+		group+=m_nFaderOffset;
 		return GetHUDFader(group);
 	}
 
 public:
-	CFlowFadeNode( SActivationInfo * pActInfo )
+	CFlowFadeNode( SActivationInfo * pActInfo ) : m_bPlaying(false), m_bNeedFaderStop(false), m_direction(0), m_ticket(0), m_postSerializeTrigger(0)
 	{
 	}
 
@@ -218,11 +348,24 @@ public:
 
 	virtual void Serialize(SActivationInfo *pActInfo, TSerialize ser)
 	{
-		// not really QS/QL prepared at the moment
-		// so, we stop any fading on load
+		ser.Value("m_bPlaying", m_bPlaying);
+		ser.Value("m_direction", m_direction);
+		ser.Value("m_postSerializeTrigger", m_postSerializeTrigger);
+
 		if (ser.IsReading())
 		{
-			StopFader(pActInfo);
+			// in case we were playing before the fader is stopped on load,
+			// but still we need to activate outputs. this MUST NOT be done in serialize
+			// but in ProcessEvent
+			if (m_bPlaying)
+			{
+				pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, true);
+				m_postSerializeTrigger = m_direction;
+			}
+			m_bPlaying = false;
+			m_bNeedFaderStop = false;
+			m_ticket = 0;
+			m_direction = 0;
 		}
 	}
 
@@ -230,33 +373,9 @@ public:
 	{
 		CHUDFader* pFader = GetFader(pActInfo);
 		if (pFader)
-			pFader->SetActive(false);
-	}
-
-	void StartFader(SActivationInfo * pActInfo)
-	{
-		CHUDFader* pFader = GetFader(pActInfo);
-		if (pFader != 0)
-		{
-			pFader->SetTexture(GetPortString(pActInfo, EIP_TextureName));
-			pFader->SetActive(true);
-		}
-	}
-
-	void Interpol(SActivationInfo * pActInfo, const float fPosition)
-	{
-		CHUDFader* pFader = GetFader(pActInfo);
-		if (pFader != 0)
-		{
-			ColorF col;
-			col.a = m_direction > 0.0f ? fPosition : 1.0 - fPosition;
-			const Vec3 fadeColor = GetPortVec3(pActInfo, EIP_Color);
-			col.r = fadeColor[0];
-			col.g = fadeColor[1];
-			col.b = fadeColor[2];
-			pFader->SetColor(col);
-			ActivateOutput(pActInfo, EOP_FadeColor, fadeColor);
-		}
+			pFader->Stop();
+		m_ticket = 0;
+		m_bNeedFaderStop = false;
 	}
 
 	enum EInputPorts
@@ -264,6 +383,7 @@ public:
 		EIP_FadeGroup = 0,
 		EIP_FadeIn,
 		EIP_FadeOut,
+		EIP_UseCurrentColor,
 		EIP_InTime,
 		EIP_OutTime,
 		EIP_Color,
@@ -277,15 +397,37 @@ public:
 		EOP_FadeColor
 	};
 
+	void StartFader(SActivationInfo * pActInfo)
+	{
+		CHUDFader* pFader = GetFader(pActInfo);
+		if (pFader != 0)
+		{
+			const float fDuration = GetPortFloat(pActInfo, m_direction < 0 ? EIP_InTime : EIP_OutTime);
+			ColorF col;
+			const Vec3 fadeColor = GetPortVec3(pActInfo, EIP_Color);
+			const bool bUseCurColor = GetPortBool(pActInfo, EIP_UseCurrentColor);
+			col.r = fadeColor[0];
+			col.g = fadeColor[1];
+			col.b = fadeColor[2];
+			col.a = m_direction < 0 ? 0.0f : 1.0f;
+			if (m_direction < 0)
+				m_ticket = pFader->FadeIn(col, fDuration, bUseCurColor);
+			else
+				m_ticket =pFader->FadeOut(col, fDuration, GetPortString(pActInfo, EIP_TextureName), bUseCurColor);
+			m_bNeedFaderStop = true;
+		}
+	}
+
 	virtual void GetConfiguration(SFlowNodeConfig& config)
 	{
 		static const SInputPortConfig inputs[] = {
 			InputPortConfig<int> ("FadeGroup", 0, _HELP("Fade Group [0-3]"), 0, _UICONFIG("enum_int:0=0,1=1,2=2,3=3")),
 			InputPortConfig_Void("FadeIn", _HELP("Fade back from the specified color back to normal screen")),
 			InputPortConfig_Void("FadeOut", _HELP("Fade the screen to the specified color")),
+			InputPortConfig<bool> ("UseCurColor", true, _HELP("If checked, use the current color as Source color. Otherwise use [FadeColor] as Source color and Target color.")),
 			InputPortConfig<float>("FadeInTime", 2.0f, _HELP("Duration of fade in")),
 			InputPortConfig<float>("FadeOutTime", 2.0f, _HELP("Duration of fade out")),
-			InputPortConfig<Vec3> ("color_FadeColor"),
+			InputPortConfig<Vec3> ("color_FadeColor", _HELP("Target Color to fade to")),
 			InputPortConfig<string> ("tex_TextureName", _HELP("Texture Name")),
 			{0}
 		};
@@ -306,7 +448,29 @@ public:
 		switch (event)
 		{
 		case eFE_Initialize:
-			StopFader(pActInfo);
+			if (pActInfo->pGraph->GetGraphEntity(0) == 0 && pActInfo->pGraph->GetGraphEntity(1) == 0)
+				m_nFaderOffset = MFX_FADER_OFFSET;
+			else
+				m_nFaderOffset = GAME_FADER_OFFSET;
+
+			if (gEnv->pCryPak->GetLvlResStatus())
+			{
+				const string& texName = GetPortString(pActInfo, EIP_TextureName);
+				if (texName.empty() == false)
+				{
+					ITexture* pTexture = CHUDFader::LoadTexture(texName.c_str());
+					if (pTexture)
+						pTexture->Release();
+				}
+			}
+
+			if (m_bNeedFaderStop)
+			{
+				StopFader(pActInfo);
+				m_bPlaying = false;
+				m_bNeedFaderStop = false;
+				m_ticket = 0;
+			}
 			pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
 			break;
 		case eFE_Activate:
@@ -315,61 +479,74 @@ public:
 				{
 					StopFader(pActInfo);
 					pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, true);
-					m_startTime = gEnv->pTimer->GetFrameStartTime().GetMilliSeconds();
-					m_endTime = m_startTime + GetPortFloat(pActInfo, EIP_InTime) * 1000.0f;
-					StartFader(pActInfo);	
-					m_direction = -1.0f;
-					Interpol(pActInfo, 0.0f);
+					m_direction = -1;
+					StartFader(pActInfo);
+					m_bPlaying = true;
+					m_bNeedFaderStop = true;
+					m_postSerializeTrigger = 0;
 				}
 				if (IsPortActive(pActInfo, EIP_FadeOut))
 				{
 					StopFader(pActInfo);
 					pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, true);
-					m_startTime = gEnv->pTimer->GetFrameStartTime().GetMilliSeconds();
-					m_endTime = m_startTime + GetPortFloat(pActInfo, EIP_OutTime) * 1000.0f;
+					m_direction = 1;
 					StartFader(pActInfo);
-					m_direction = 1.0f;
-					Interpol(pActInfo, 0.0f);
+					m_bPlaying = true;
+					m_bNeedFaderStop = true;
+					m_postSerializeTrigger = 0;
 				}
 			}
 			break;
 		case eFE_Update:
 			{
-				const float fTime = gEnv->pTimer->GetFrameStartTime().GetMilliSeconds();
-				const float fDuration = m_endTime - m_startTime;
-				float fPosition;
-				if (fDuration <= 0.0)
-					fPosition = 1.0;
-				else
+				if (m_postSerializeTrigger)
 				{
-					fPosition = (fTime - m_startTime) / fDuration;
-					fPosition = CLAMP(fPosition, 0.0f, 1.0f);
+					ActivateOutput(pActInfo, m_postSerializeTrigger < 0 ? EOP_FadedIn : EOP_FadedOut, true);
+					m_postSerializeTrigger = 0;
+					pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+					return;
 				}
-				if (fTime >= m_endTime)
+
+				CHUDFader* pFader = GetFader(pActInfo);
+				if (pFader == 0 || m_bPlaying == false)
+				{
+					pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);	
+					m_bPlaying = false;
+					m_ticket = 0;
+					return;
+				}
+
+				ColorF col = pFader->GetCurrentColor();
+				Vec3 vCol (col.r,col.g,col.b);
+				ActivateOutput(pActInfo, EOP_FadeColor, vCol);
+				if (pFader->IsPlaying(m_ticket) == false)
 				{
 					if (m_direction < 0.0f)
 					{
-						StopFader(pActInfo);
 						ActivateOutput(pActInfo, EOP_FadedIn, true);
 						pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);					
+						m_bNeedFaderStop = false; 
 					}
 					else
 					{
 						ActivateOutput(pActInfo, EOP_FadedOut, true);
-						pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);					
+						pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);	
+						m_bNeedFaderStop = true; // but needs a stop, if we're faded out (fader is still active then!)
 					}
+					m_bPlaying = false;
+					m_ticket = 0;
 				}
-
-				Interpol(pActInfo, fPosition);
-				// caused by stop or by serialize call maybe
 			}
 			break;
 		}
 	}
 	protected:
-	float m_startTime;
-	float m_endTime;
-	float m_direction;
+	int   m_ticket;
+	int   m_direction;
+	int   m_nFaderOffset;
+	int   m_postSerializeTrigger;
+	bool  m_bPlaying;
+	bool  m_bNeedFaderStop;
 };
 
 REGISTER_FLOW_NODE("CrysisFX:ScreenFader", CFlowFadeNode);

@@ -23,6 +23,7 @@
 #include <IActionMapManager.h>
 #include "Network/NetActionSync.h"
 
+
 class CPlayerMovement;
 class CPlayerRotation;
 struct IPlayerInput;
@@ -40,6 +41,9 @@ struct SPlayerStats : public SActorStats
 
 	bool landed;
 	bool jumped;
+	bool wasStuck;
+	bool wasFlying; 
+	float stuckTimeout;
 
 	float jumpLock;
 	
@@ -52,6 +56,7 @@ struct SPlayerStats : public SActorStats
 
 	// falling things
 	float fallSpeed;
+	float downwardsImpactVelocity;
 		
 	bool isFiring;
 
@@ -73,6 +78,7 @@ struct SPlayerStats : public SActorStats
 	//cheating stuff
 	uint8 flyMode;//0 no fly, 1 fly mode, 2 fly mode + noclip
 	EntityId spectatorTarget;	// which player we are watching
+	int spectatorHealth;
 	uint8 spectatorMode;
 	// 0=off, 
 	// 1=on,no-move,
@@ -93,6 +99,8 @@ struct SPlayerStats : public SActorStats
 	Vec3 FPSecWeaponPosOffset;
 	Ang3 FPSecWeaponAnglesOffset;
 
+	bool FPWeaponSwayOn;
+
 	Vec3 gBootsSpotNormal;
 	
 	//
@@ -104,35 +112,35 @@ struct SPlayerStats : public SActorStats
 	float angularImpulseTimeMax;
 
 	//
-	float thrusterSprint;
+	float thrusters;
+	float zgDashTimer;
+	Vec3 zgDashWorldDir;
 
 	//ladder
-	bool isOnLadder;
-	uint ladderMaterial;
+	CCoherentValue<bool> isOnLadder;
+	bool isExitingLadder;
 
 	Vec3	ladderTop;
 	Vec3	ladderBottom;
 	Vec3  ladderOrientation;
 	Vec3  ladderUpDir;
-	bool  ladderMovingUp;
-	bool  ladderMovingDown;
 	int		ladderAction;		// actually a ELadderActionType
 
 	Quat  playerRotation;
 
 	bool	bSprinting;
+	bool  bIgnoreSprinting;
 	bool  bLookingAtFriendlyAI;
-
-	//
-	float viewFov;
 
 	//Force crouch
 	float forceCrouchTime;
 
+	int  grabbedHeavyEntity; //Player is grabbing two handed object(1) or NPC(2)
+
 	SPlayerStats()
 	{
-		memset(this,0,sizeof(SPlayerStats));
-		new (this) SActorStats();
+		memset(this,0,sizeof(SPlayerStats)); // This will zero everything, fine.
+		new (this) SActorStats(); // But this will set certain Vec3 to QNAN, due to the new default constructors.
 
 		mass = 80.0f;
 
@@ -141,25 +149,41 @@ struct SPlayerStats : public SActorStats
 		firstPersonBody = 2;
 
 		upVector.Set(0,0,1);
+
 		zeroGUp.Set(0,0,1);
 
-		thrusterSprint = 1.0f;
+		velocity.zero();
+		velocityUnconstrained.zero();
+		gravity.zero();
+		forceUpVector.zero();
+		forceLookVector.zero();
+
+		thrusters = 0.0f;
 		bSprinting = false;
+		bIgnoreSprinting = false;
 
 		groundMaterialIdx = -1;
 		
 		inFreefall = -1;
 
-		ladderMaterial = 0;
+		fallSpeed = 0.0f;
+		downwardsImpactVelocity = 0.0f;
 
 		forceCrouchTime = 0;
 		bLookingAtFriendlyAI = false;
 
-		inWater = -1000.0f;
-		waterLevel = 10.0f;
-
+		inWaterTimer = -1000.0f;
+		relativeWaterLevel = 10.0f;
+		worldWaterLevel = 0.0f;
+		worldWaterLevelDelta = 0.0f;
+		swimJumping = false;
+		
 		spectatorMode = 0;
 		spectatorTarget = 0;
+
+		grabbedHeavyEntity = 0;
+
+		FPWeaponSwayOn = false;
 	}
 
 	void Serialize( TSerialize ser, unsigned aspects );
@@ -242,12 +266,13 @@ struct IPlayerEventListener
 	virtual void OnStanceChanged(IActor* pActor, EStance stance) {};
 	virtual void OnSpecialMove(IActor* pActor, ESpecialMove move) {};
 	virtual void OnDeath(IActor* pActor, bool bIsGod) {};
+	virtual void OnObjectGrabbed(IActor* pActor, bool bIsGrab, EntityId objectId, bool bIsNPC, bool bIsTwoHanded) {};
 };
 
 class CPlayerView;
 
 class CPlayer :
-	public CActor
+	public CActor, public ISoundSystemEventListener
 {
 	friend class CPlayerMovement;
 	friend class CPlayerRotation;
@@ -273,6 +298,12 @@ public:
 		ESound_DiveIn,
 		ESound_DiveOut,
 		ESound_Underwater,
+		ESound_Thrusters,
+		ESound_ThrustersDash,
+		ESound_ThrustersDashFail,
+		ESound_ThrustersDash02,
+		ESound_ThrustersDashRecharged,
+		ESound_ThrustersDashRecharged02,
 		ESound_Player_Last
 	};
 
@@ -286,6 +317,7 @@ public:
 	enum ELadderState
 	{
 		eLS_Exit,
+		eLS_ExitTop,
 		eLS_Climb
 	};
 
@@ -300,6 +332,7 @@ public:
 	{
 		eLAT_None,
 		eLAT_ReachedEnd,
+		eLAT_ExitTop,
 		eLAT_Jump,
 		eLAT_StrafeLeft,
 		eLAT_StrafeRight,
@@ -307,8 +340,10 @@ public:
 		eLAT_Die,
 	};
 
-	static const int ASPECT_NANO_SUIT_SETTING = eEA_GameClientStatic;
-	static const int ASPECT_NANO_SUIT_ENERGY = eEA_GameServerDynamic;
+	static const int ASPECT_NANO_SUIT_SETTING			= eEA_GameClientDynamic; // needs to be the same as IPlayerInput::INPUT_ASPECT, so that both get serialized together
+	static const int ASPECT_NANO_SUIT_ENERGY			= eEA_GameServerDynamic;
+	static const int ASPECT_NANO_SUIT_INVULNERABLE= eEA_GameServerDynamic;
+	static const int ASPECT_NANO_SUIT_DEFENSE_HIT = eEA_GameServerDynamic;
 
 	static const int ASPECT_HEALTH				= eEA_GameServerStatic;
 	static const int ASPECT_FROZEN				= eEA_GameServerStatic;
@@ -322,6 +357,8 @@ public:
 	//marcok: GC hack
 	virtual bool ShouldSwim();
 	virtual bool IsSwimming() {	return m_bSwimming; }
+	virtual bool IsSprinting();
+	virtual bool CanFire();
 	virtual bool Init( IGameObject * pGameObject );
 	virtual void PostInit( IGameObject * pGameObject );
 	virtual void InitClient( int channelId );
@@ -340,18 +377,22 @@ public:
 	virtual int32 GetMaxArmor() const;
 
 	virtual IEntity *LinkToVehicle(EntityId vehicleId);
-	virtual IEntity *LinkToEntity(EntityId entityId);
+	virtual IEntity *LinkToEntity(EntityId entityId, bool bKeepTransformOnDetach=true);
 	virtual void LinkToMountedWeapon(EntityId weaponId);
+
+	virtual void SetViewInVehicle(Quat viewRotation);
+	virtual Vec3 GetVehicleViewDir() const { return m_vehicleViewDir; }
 
 	virtual void SupressViewBlending() { m_viewBlending = false; };
 
 	Vec3 GetLastRequestedVelocity() const { return m_lastRequestedVelocity; }
 	void SetDeathTimer() { m_fDeathTime = gEnv->pTimer->GetFrameStartTime().GetSeconds(); }
+	float GetDeathTime() const { return m_fDeathTime; }
+
+	void SufferingHighLatency(bool highLatency);
 
 	static  const char* GetActorClassType() { return "CPlayer"; }
 	virtual const char* GetActorClass() const { return CPlayer::GetActorClassType(); }
-
-  virtual bool IsCloaked() const;
 
 //	ILINE bool FeetUnderWater() const { return m_bFeetUnderWater; }
 
@@ -381,19 +422,21 @@ public:
 	};
 	struct LadderParams
 	{
-		LadderParams() : topPos(ZERO), bottomPos(ZERO), reason(eLAT_None) {};
-		LadderParams(Vec3 _topPos, Vec3 _bottomPos, ELadderActionType _reason)
-			: topPos(_topPos), bottomPos(_bottomPos), reason(_reason) {};
+		LadderParams() : topPos(ZERO), bottomPos(ZERO), ladderOrientation(ZERO), reason(eLAT_None) {};
+		LadderParams(Vec3 _topPos, Vec3 _bottomPos, Vec3 _ladderOrientation, ELadderActionType _reason)
+			: topPos(_topPos), bottomPos(_bottomPos), ladderOrientation(_ladderOrientation), reason(_reason) {};
 
 		void SerializeWith(TSerialize ser)
 		{
 			ser.Value("topPos", topPos, 'wrld');
 			ser.Value("bottomPos", bottomPos, 'wrld');
+			ser.Value("ladderOrientation", ladderOrientation, 'dir0');
 			ser.Value("reason", reason);
 		}
 
 		Vec3 topPos;
 		Vec3 bottomPos;
+		Vec3 ladderOrientation;
 		int reason;
 	};
 	struct HitAssistanceParams
@@ -412,14 +455,27 @@ public:
 
 	struct EMPParams
 	{
-		EMPParams(): entering(false) {};
-		EMPParams(bool enter): entering(enter) {};
+		EMPParams(): time(1.0f) {};
+		EMPParams(float _time): time(_time) {};
 
-		bool entering;
+		float time;
 
 		void SerializeWith(TSerialize ser)
 		{
-			ser.Value("entering", entering, 'bool');
+			ser.Value("time", time);
+		}
+	};
+
+	struct JumpParams
+	{
+		JumpParams(): strengthJump(false) {};
+		JumpParams(bool _strengthJump): strengthJump(_strengthJump) {};
+
+		bool strengthJump;
+
+		void SerializeWith(TSerialize ser)
+		{
+			ser.Value("strengthJump", strengthJump, 'bool');
 		}
 	};
 
@@ -431,19 +487,19 @@ public:
 
 	DECLARE_SERVER_RMI_NOATTACH_FAST(SvRequestUnfreeze, UnfreezeParams, eNRT_ReliableUnordered);
 
-	DECLARE_SERVER_RMI_NOATTACH(SvRequestStartDisarmMine, ItemIdParam, eNRT_ReliableUnordered);
-	DECLARE_SERVER_RMI_NOATTACH(SvRequestEndDisarmMine, ItemIdParam, eNRT_ReliableUnordered);
-
 	DECLARE_SERVER_RMI_NOATTACH_FAST(SvRequestHitAssistance, HitAssistanceParams, eNRT_ReliableUnordered);
 
 	DECLARE_CLIENT_RMI_NOATTACH(ClEMP, EMPParams, eNRT_ReliableOrdered);
+	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClJump, JumpParams, eNRT_ReliableUnordered);
+	DECLARE_SERVER_RMI_NOATTACH_FAST(SvRequestJump, JumpParams, eNRT_ReliableUnordered);
+
 
 	//set/get actor status
 	virtual void SetStats(SmartScriptTable &rTable);
 	virtual void UpdateScriptStats(SmartScriptTable &rTable);
 	virtual void UpdateStats(float frameTime);
 	virtual void UpdateSwimStats(float frameTime);
-	virtual void UpdateDrowning(float frameTime);
+	virtual void UpdateUWBreathing(float frameTime, Vec3 worldBreathPos);
 	virtual void SetParams(SmartScriptTable &rTable,bool resetFirst);
 	virtual bool GetParams(SmartScriptTable &rTable);
 
@@ -465,7 +521,7 @@ public:
 	virtual Vec3	GetStanceViewOffset(EStance stance,float *pLeanAmt=NULL,bool withY = false) const;
 	virtual bool IsThirdPerson() const;
 	virtual void StanceChanged(EStance last);
-  virtual bool TrySetStance(EStance stance);
+  //virtual bool TrySetStance(EStance stance); // Moved to Actor, to be shared with Aliens.
 
 	virtual void ResetAnimGraph();
 
@@ -476,13 +532,15 @@ public:
 	virtual uint8 GetFlyMode() const { return m_stats.flyMode; };
 	virtual void SetSpectatorMode(uint8 mode, EntityId targetId);
 	virtual uint8 GetSpectatorMode() const { return m_stats.spectatorMode; };
+	virtual void SetSpectatorTarget(EntityId targetId) { m_stats.spectatorTarget = targetId; };
 	virtual EntityId GetSpectatorTarget() const { return m_stats.spectatorTarget; };
-	virtual void SetSpectatorTarget(EntityId targetId);
+	virtual void SetSpectatorHealth(int health) { m_stats.spectatorHealth = health; };
+	virtual int GetSpectatorHealth() const { return m_stats.spectatorHealth; };
 	void MoveToSpectatorTargetPosition();
 
 	virtual void SelectNextItem(int direction, bool keepHistory, const char *category);
 	virtual void HolsterItem(bool holster);
-	virtual void SelectLastItem(bool keepHistory);
+	virtual void SelectLastItem(bool keepHistory, bool forceNext = false);
 	virtual void SelectItemByName(const char *name, bool keepHistory);
 	virtual void SelectItem(EntityId itemId, bool keepHistory);
 
@@ -491,17 +549,21 @@ public:
 
 	virtual void UpdateAnimGraph(IAnimationGraphState * pState);
 	virtual void PostUpdate(float frameTime);
+	virtual void PostRemoteSpawn();
+
+	virtual void AnimationEvent(ICharacterInstance *pCharacter, const AnimEventInstance &event);
 	
 	virtual void SetViewRotation( const Quat &rotation );
 	virtual Quat GetViewRotation() const;
 	virtual void EnableTimeDemo( bool bTimeDemo );
 
-	virtual void SetViewAngleOffset(const Vec3 &offset) { if (!m_ignoreRecoil) m_viewAnglesOffset = offset; };
+	virtual void SetViewAngleOffset(const Vec3 &offset);
 	virtual Vec3 GetViewAngleOffset() { return (Vec3)m_viewAnglesOffset; };
 
-	virtual bool SetProfile(uint8 profile );
+	virtual bool SetAspectProfile(EEntityAspects aspect, uint8 profile );
 
-	virtual void Serialize( TSerialize ser, unsigned aspects );
+	virtual void FullSerialize( TSerialize ser );
+	virtual bool NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int flags );
 	virtual void PostSerialize();
 	//set/get actor params
 	virtual void SetHealth( int health );
@@ -526,12 +588,16 @@ public:
 
 	//Player can grab north koreans
 	virtual int GetActorSpecies() { return eGCT_HUMAN; }
+	virtual bool IsCloaked() const;
+
+	virtual EntityId	GetGrabbedEntityId() const;
 
 	//Support sleep 
 	virtual bool CanSleep() {return true;}
 	
 	void UpdateParachute(float frameTime);
 	void ChangeParachuteState(int8 newState);
+	void UpdateFreefallAnimationInputs(bool force=false);
 
 	void ProcessCharacterOffset();
 
@@ -545,7 +611,9 @@ public:
 		
 	virtual void SwitchDemoModeSpectator(bool activate);
 	bool IsTimeDemo() const { return m_timedemo; }
-	void ForceFreeFall() { m_stats.inFreefall = true; }
+	void ForceFreeFall() { m_stats.inFreefall = 1; }
+
+	void StopLoopingSounds();
 
 	void RegisterPlayerEventListener	(IPlayerEventListener *pPlayerEventListener);
 	void UnregisterPlayerEventListener(IPlayerEventListener *pPlayerEventListener);
@@ -574,6 +642,7 @@ public:
 
 	void SpawnParticleEffect(const char* effectName, const Vec3& pos, const Vec3& dir);
 	void PlaySound(EPlayerSounds sound, bool play = true, bool param = false, const char* paramName = NULL, float paramValue = 0.0f);
+	virtual void SendMusicLogicEvent(EMusicLogicEvents event);
 
 	//Ladders
 	bool IsLadderUsable();
@@ -582,17 +651,17 @@ public:
 	void RequestLeaveLadder(ELadderActionType reason);
 	void LeaveLadder(ELadderActionType reason);
 
-	bool UpdateLadderAnimGraph(ELadderState eLS, ELadderDirection eLDIR, float time = 0.0f);
-	void EvaluateMovementOnLadder(float &verticalSpeed, float animationTime);
+	bool UpdateLadderAnimation(ELadderState eLS, ELadderDirection eLDIR, float time = 0.0f);
 
-	//Pick Up Items
-	bool NeedToCrouch();
+	//Pick Up Items (pos parameter is worldspace position of item to pick up)
+	bool NeedToCrouch(const Vec3& pos);
 
-	// mines
-	void StartDisarmMine(EntityId entityId);
-	void EndDisarmMine(EntityId entityId);
-	void RemoveMineEntity(EntityId entityId);
-
+	// mines (and claymores)
+	void RemoveAllExplosives(float timeDelay, uint8 typeId=0xff);
+	void RemoveExplosiveEntity(EntityId entityId);
+	void RecordExplosivePlaced(EntityId entityId, uint8 typeId);
+	void RecordExplosiveDestroyed(EntityId entityId, uint8 typeId);
+	
 	//First person fists/hands actions
 	void EnterFirstPersonSwimming();
 	void ExitFirstPersonSwimming();
@@ -600,13 +669,17 @@ public:
 	void UpdateFirstPersonSwimmingEffects(bool exitWater, float velSqr);
 	void UpdateFirstPersonFists();
 
+	void ResetScreenFX();
+	void ResetFPView();
+
 	//Hit assistance
 	bool HasHitAssistance();
+	
 
 	struct SStagingParams
 	{
 		SStagingParams() : 
-			bActive(false), bLocked(false), vLimitDir(ZERO), vLimitRangeH(0.0f), vLimitRangeV(0.0f)
+			bActive(false), bLocked(false), vLimitDir(ZERO), vLimitRangeH(0.0f), vLimitRangeV(0.0f), stance(STANCE_NULL)
 		{
 		}
 
@@ -615,6 +688,7 @@ public:
 		Vec3  vLimitDir;
 		float vLimitRangeH;
 		float vLimitRangeV;
+		EStance stance;
 		void Serialize(TSerialize ser)
 		{
 			assert( ser.GetSerializationTarget() != eST_Network );
@@ -624,16 +698,27 @@ public:
 			ser.Value("vLimitDir", vLimitDir);
 			ser.Value("vLimitRangeH", vLimitRangeH);
 			ser.Value("vLimitRangeV", vLimitRangeV);
+			ser.EnumValue("stance", stance, STANCE_NULL, STANCE_LAST);
 			ser.EndGroup();
 		}
 	};
 
 	void StagePlayer(bool bStage, SStagingParams* pStagingParams = 0); 
 
+	void NotifyObjectGrabbed(bool bIsGrab, EntityId objectId, bool bIsNPC, bool bIsTwoHanded = false); // called from OffHand.cpp. bIsGrab always true atm
+
+	virtual void OnSoundSystemEvent( ESoundSystemCallbackEvent event,ISound *pSound );
+
 private:
 	void AnimationControlled(bool activate);
 	bool ShouldUsePhysicsMovement();
   void Debug();
+	
+	void UpdateSounds(float fFrameTime);
+	float m_fLowHealthSoundMood;
+	float m_fConcentrationTimer;
+	bool m_bConcentration;
+
 	typedef std::list<IPlayerEventListener *> TPlayerEventListeners;
 	TPlayerEventListeners m_playerEventListeners;
 
@@ -703,6 +788,8 @@ protected:
 	//Demo Mode
 	bool m_bDemoModeSpectator;
 
+	bool m_bRagDollHead;
+
 	// animation graph input ids
 	IAnimationGraph::InputID m_inputAction;
 	IAnimationGraph::InputID m_inputItem;
@@ -720,10 +807,10 @@ protected:
 	bool m_bUnderwater;
 	bool m_bStabilize;
 	float m_fSpeedLean;
-	bool m_bCrawling;
 	float m_fDeathTime;
 	float m_drownEffectDelay;
 	float m_underwaterBubblesDelay;
+	float m_stickySurfaceTimer;
 
 	// used by parachute. 
 	int			m_nParachuteSlot;
@@ -732,7 +819,10 @@ protected:
 	float		m_openParachuteTimer;
 	bool    m_openingParachute;
 
+	bool		m_sufferingHighLatency;
+
 	CVehicleClient* m_pVehicleClient;
+	Vec3 m_vehicleViewDir;
 
 	//sound loops that are played when we don't have a nanosuit
 	float		 m_sprintTimer;
@@ -742,22 +832,23 @@ protected:
 
   typedef std::map<IEntityClass*, const SAlienInterferenceParams> TAlienInterferenceParams;
   static TAlienInterferenceParams m_interferenceParams;
-      
-  IDebugHistoryManager*   m_pDebugHistory;
-  IDebugHistory*          m_pMovementDebug;
-  IDebugHistory*          m_pDeltaXDebug;
-  IDebugHistory*          m_pDeltaYDebug;
 
-	float										m_mineDisarmStartTime;
-	EntityId								m_mineBeingDisarmed;
-	bool										m_disarmingMine;
+	std::list<EntityId>			m_explosiveList[3];
   bool                    m_bSpeedSprint;
 	bool										m_bHasAssistance;
-
+	bool                    m_bVoiceSoundPlaying;
+	bool                    m_bVoiceSoundRecursionFlag;
 	IGameObjectExtension*		m_pVoiceListener;
 	IGameObjectExtension*		m_pInteractor;
+	IEntitySoundProxy*      m_pSoundProxy;
 
 	SStagingParams m_stagingParams;
+
+	static uint s_ladderMaterial;
+public:
+	IDebugHistoryManager* m_pDebugHistoryManager;
+	void DebugGraph_AddValue(const char* id, float value) const;
+
 };
 
 

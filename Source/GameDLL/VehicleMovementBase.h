@@ -19,8 +19,11 @@ History:
 #include <IVehicleSystem.h>
 #include "Actor.h"
 #include "IMaterialEffects.h"
-
 #include "VehicleMovementTweaks.h"
+
+#define WIN32_LEAN_AND_MEAN
+#include <platform.h>
+#include "CryThread.h"
 
 #define ENGINESOUND_MAX_DIST 150.f
 #define ENGINESOUND_IDLE_RATIO 0.2f
@@ -249,18 +252,20 @@ public:
   virtual ~CVehicleMovementBase();
 
 	virtual bool Init(IVehicle* pVehicle, const SmartScriptTable &table);
-	virtual void Release();
-	virtual void Reset();
-  virtual void PostInit();
+	virtual void PostInit();
+  virtual void Release();
+	virtual void Reset();  
 	virtual void Physicalize();
   virtual void PostPhysicalize();
+
+	virtual void ResetInput();
 
   virtual EVehicleMovementType GetMovementType() { return eVMT_Other; }
 
 	virtual bool StartEngine(EntityId driverId);
 	virtual void StopEngine();
 	virtual bool IsPowered() { return m_isEnginePowered; }
-	virtual void DisableEngine(bool disable){ m_isEngineDisabled = disable; }
+	virtual void DisableEngine(bool disable);
 
 	virtual float GetDamageRatio() { return m_damage; }
 
@@ -300,6 +305,7 @@ public:
 	virtual void OnValuesTweaked() {}
 
   virtual void ProcessEvent(SEntityEvent& event);
+  virtual void SetSoundMasterVolume(float vol);
   
 protected:
 
@@ -335,6 +341,9 @@ protected:
   virtual bool Boosting() { return m_boost; }
   virtual void UpdateBoost(const float deltaTime);
   virtual void ResetBoost();
+
+  void ApplyAirDamp(float angleMin, float angVelMin, float deltaTime, int threadSafe);
+  void UpdateGravity(float gravity);
   
   // surface particle/sound methods
   virtual void InitExhaust();
@@ -342,12 +351,12 @@ protected:
   virtual void ResetParticles();
   virtual void UpdateSurfaceEffects(const float deltaTime);  
   virtual void RemoveSurfaceEffects();
-  virtual void GetParticleScale(const SEnvironmentLayer& layer, float speed, float power, float& countScale, float& sizeScale);
+  virtual void GetParticleScale(const SEnvironmentLayer& layer, float speed, float power, float& countScale, float& sizeScale, float& speedScale);
   virtual void EnableEnvEmitter(TEnvEmitter& emitter, bool enable);
   virtual void UpdateExhaust(const float deltaTime);  
   void FreeEmitterSlot(int& slot);
   void FreeEmitterSlot(const int& slot);
-  void StartExhaust();
+  void StartExhaust(bool ignition=true, bool reload=true);
   void StopExhaust();  
   float GetWaterMod(SExhaustStatus& exStatus);
   float GetSoundDamage();
@@ -383,14 +392,16 @@ protected:
 	float m_damage;
   
   string m_soundNames[eSID_Max];
-
+  
   Vec3 m_enginePos;
   float m_runSoundDelay;  
   float m_rpmScale, m_rpmScaleSgn;
   float m_rpmPitchSpeed;
   float m_maxSoundSlipSpeed;  
+  float m_soundMasterVolume;
   
   bool m_boost;
+	bool m_wasBoosting;
   float m_boostEndurance;
   float m_boostRegen;  
   float m_boostStrength;
@@ -405,12 +416,18 @@ protected:
 
   EntityId m_actorId;
   pe_status_dynamics m_statusDyn; // gets updated once per update
+  pe_status_dynamics m_PhysDyn; // gets updated once per phys update
+  pe_status_pos	m_PhysPos; // gets updated once per phys update
   float m_maxSpeed; 
   float m_speedRatio;
-  
+  float m_speedRatioUnit;
+
   float m_measureSpeedTimer;
   Vec3 m_lastMeasuredVel;
-  Vec3 m_localAccel;
+
+  // flight stabilization
+  Vec3 m_dampAngle;
+  Vec3 m_dampAngVel;  
 
   IPhysicalEntity* m_pWind[2];
   
@@ -439,6 +456,8 @@ protected:
 	CVehicleMovementTweaks::TTweakGroupId m_multiplayerTweaksId;
 
   static float m_sprintTime;
+
+	CryFastLock m_lock;
 };
 
 struct SPID

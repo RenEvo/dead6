@@ -31,6 +31,7 @@ public:
 		EIP_LimitYaw,
 		EIP_LimitPitch,
 		EIP_Lock,
+		EIP_Stance,
 	};
 
 	enum EOutputPorts
@@ -47,6 +48,7 @@ public:
 			InputPortConfig<float>("ViewLimitYaw", _HELP("ViewLimitYaw (0.0=FreeLook, 0.001=Lock)")),
 			InputPortConfig<float>("ViewLimitPitch", _HELP("ViewLimitPitch (0.0=Freelook, 0.001=Lock)")),
 			InputPortConfig<bool> ("LockPlayer", false, _HELP("Lock the player's position")),
+			InputPortConfig<int>( "TryStance", -1, _HELP("Try to set Stance on Locking [works only if Player was linked beforehand]"), 0, _UICONFIG("enum_int:<ignore>=-1,Stand=0,Crouch=1,Prone=2,Relaxed=3,Stealth=4,Swim=5,ZeroG=6")),
 			{0}
 		};
 		static const SOutputPortConfig outputs[] = {
@@ -92,6 +94,13 @@ public:
 					stagingParams.vLimitRangeH = DEG2RAD(rangeH);
 					stagingParams.vLimitRangeV = DEG2RAD(rangeV);
 					stagingParams.bLocked = GetPortBool(pActInfo, EIP_Lock);
+					int stance = GetPortInt(pActInfo, EIP_Stance);
+					if (stance < STANCE_NULL || stance >= STANCE_LAST)
+					{
+						stance = STANCE_NULL;
+						GameWarning("[flow] PlayerStaging: stance=%d invalid", stance);
+					}
+					stagingParams.stance = (EStance) stance;
 
 					bool bActive = (stagingParams.bLocked ||
 						(!stagingParams.vLimitDir.IsZero() && 
@@ -169,6 +178,7 @@ public:
 		EIP_Unlink,
 		EIP_Target,
 		EIP_DrawPlayer,
+		EIP_KeepTransform,
 	};
 
 	enum EOutputPorts
@@ -184,6 +194,7 @@ public:
 			InputPortConfig_Void  ("Unlink", _HELP("Unlink the Player (from any Entity)")),
 			InputPortConfig<EntityId> ("Target", _HELP("Target Entity Id") ),
 			InputPortConfig<int>  ("DrawPlayer", 0, _HELP("Draw the Player"), 0, _UICONFIG("enum_int:NoChange=0,Hide=-1,Show=1") ),
+			InputPortConfig<bool> ("KeepTransfromDetach", true, _HELP("Keep Transformation on Detach")),
 			{0}
 		};
 		static const SOutputPortConfig outputs[] = {
@@ -237,7 +248,7 @@ public:
 						else if (nDrawPlayer == 1)
 							pActorStats->isHidden = false;
 					}
-					pPlayerActor->LinkToEntity(0);
+					pPlayerActor->LinkToEntity(0, GetPortBool(pActInfo, EIP_KeepTransform));
 					ActivateOutput(pActInfo, EOP_Unlinked, true);
 				}
 			}

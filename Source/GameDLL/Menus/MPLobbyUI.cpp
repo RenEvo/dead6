@@ -13,6 +13,8 @@ History:
 *************************************************************************/
 #include "StdAfx.h"
 #include "MPLobbyUI.h"
+#include "Game.h"
+#include "OptionsManager.h"
 #include "GameNetworkProfile.h"
 #include "GameCVars.h"
 
@@ -49,7 +51,45 @@ struct CMPLobbyUI::SServerFilter
       m_dedicated(false),
       m_dx10(false)
   {
+		if(g_pGame->GetOptions())
+		{
+			g_pGame->GetOptions()->GetProfileValue("Filter.Enabled",m_on);
+			g_pGame->GetOptions()->GetProfileValue("Filter.GameMode",m_gamemode);
+			g_pGame->GetOptions()->GetProfileValue("Filter.MapName",m_mapname);
+			g_pGame->GetOptions()->GetProfileValue("Filter.MinPing",m_minping);
+			g_pGame->GetOptions()->GetProfileValue("Filter.NotFull",m_notfull);
+			g_pGame->GetOptions()->GetProfileValue("Filter.NotEmpty",m_notempty);
+			g_pGame->GetOptions()->GetProfileValue("Filter.NotPrivate",m_notprivate);
+			g_pGame->GetOptions()->GetProfileValue("Filter.NotCustomized",m_notcustomized);
+			g_pGame->GetOptions()->GetProfileValue("Filter.AutoTeam",m_autoteambalance);
+			g_pGame->GetOptions()->GetProfileValue("Filter.AntiCheat",m_anticheat);
+			g_pGame->GetOptions()->GetProfileValue("Filter.FriendlyFire",m_friendlyfire);
+			g_pGame->GetOptions()->GetProfileValue("Filter.GamePadsOnly",m_gamepadsonly);
+			g_pGame->GetOptions()->GetProfileValue("Filter.NoVoiceComm",m_novoicecomms);
+			g_pGame->GetOptions()->GetProfileValue("Filter.Dedicated",m_dedicated);
+			g_pGame->GetOptions()->GetProfileValue("Filter.DX10",m_dx10);
+		}
   }
+
+	~SServerFilter()
+	{
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.Enabled",m_on);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.GameMode",m_gamemode);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.MapName",m_mapname);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.MinPing",m_minping);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.NotFull",m_notfull);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.NotEmpty",m_notempty);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.NotPrivate",m_notprivate);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.NotCustomized",m_notcustomized);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.AutoTeam",m_autoteambalance);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.AntiCheat",m_anticheat);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.FriendlyFire",m_friendlyfire);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.GamePadsOnly",m_gamepadsonly);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.NoVoiceComm",m_novoicecomms);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.Dedicated",m_dedicated);
+		g_pGame->GetOptions()->SaveValueToProfile("Filter.DX10",m_dx10);
+		g_pGame->GetOptions()->SaveProfile();
+	}
 
   bool  IsEnabled()const
   {
@@ -58,6 +98,8 @@ struct CMPLobbyUI::SServerFilter
 
   bool  Filter(const SServerInfo& i)const
   {
+		if( !m_on )
+			return true;
     if( !m_gamemode.empty() && i.m_gameType != m_gamemode)
       return false;
     if( !m_mapname.empty())
@@ -86,8 +128,8 @@ struct CMPLobbyUI::SServerFilter
       return false;
     if( m_friendlyfire && !i.m_friendlyfire )
       return false;
-    //if( m_gamepadsonly && !i.m_gamepadsonly )
-    //  return false;
+    if( m_gamepadsonly && !i.m_gamepadsonly )
+      return false;
     if( m_novoicecomms && i.m_voicecomm )
       return false;
     if( m_dedicated && !i.m_dedicated )
@@ -102,11 +144,43 @@ struct CMPLobbyUI::SServerFilter
 
 	void UpdateUI()
 	{
+		m_parent->m_cmd = MPPath;
+		m_parent->m_cmd += "GameLobby_M.GameLobby.LeftLobby.setUseFilters";
+		SFlashVarValue arg[1] = {m_on};
+		m_parent->m_player->Invoke(m_parent->m_cmd,arg,1);
+
 		//setFilters = function(gameMode, mapName, ping, notFull, notEmpty, noPassword, autoTeam, antiCheat, friendlyFire, GamepadsOnly, noVoiceComm, dediServer, directX)
-		SFlashVarValue args[]={m_gamemode.empty()?"all":m_gamemode.c_str(),m_mapname,m_minping,m_notfull,m_notempty,m_notprivate,m_autoteambalance,m_anticheat,m_friendlyfire,m_gamepadsonly,m_novoicecomms,m_dedicated,m_dx10};
+		SFlashVarValue args[] = 
+		{
+			SFlashVarValue(m_gamemode.empty()?"all":m_gamemode.c_str()),
+			SFlashVarValue(m_mapname),
+			SFlashVarValue(m_minping),
+			SFlashVarValue(m_notfull),
+			SFlashVarValue(m_notempty),
+			SFlashVarValue(m_notprivate),
+			SFlashVarValue(m_autoteambalance),
+			SFlashVarValue(m_anticheat),
+			SFlashVarValue(m_friendlyfire),
+			SFlashVarValue(m_gamepadsonly),
+			SFlashVarValue(m_novoicecomms),
+			SFlashVarValue(m_dedicated),
+			SFlashVarValue(m_dx10)
+		};
 		m_parent->m_cmd = MPPath;
 		m_parent->m_cmd += "GameLobby_M.GameLobby.LeftLobby.setFilters";
 		m_parent->m_player->Invoke(m_parent->m_cmd,args,sizeof(args)/sizeof(args[0]));
+	}
+
+	void EnableFilters(bool enable)
+	{
+		if(m_on != enable)
+		{
+			m_on = enable;
+			m_parent->m_cmd = MPPath;
+			m_parent->m_cmd += "GameLobby_M.GameLobby.LeftLobby.setUseFilters";
+			SFlashVarValue arg[1] = {enable};
+			m_parent->m_player->Invoke(m_parent->m_cmd,arg,1);
+		}
 	}
 
   CMPLobbyUI *m_parent;
@@ -127,7 +201,6 @@ struct CMPLobbyUI::SServerFilter
   bool      m_dx10;
 
 };
-
 
 struct SMPServerList
 {
@@ -222,8 +295,8 @@ struct SMPServerList
     if(idx!=-1)
     {
       int ping = m_allServers[idx].m_ping;
-      if(srv.m_ping != 9999)
-        ping = srv.m_ping;
+      //if(srv.m_ping != 9999)
+      ping = srv.m_ping;
       
       if(srv.m_favorite != m_allServers[idx].m_favorite)
       {
@@ -372,11 +445,17 @@ struct SMPServerList
       switch(m_sl.m_sortcolumn)
       {
       case eSC_name:
-        if(m_sl.m_allServers[i].m_hostName.empty() && !m_sl.m_allServers[j].m_hostName.empty())
-          less = 0;
-        else
-          less = (m_sl.m_allServers[i].m_hostName < m_sl.m_allServers[j].m_hostName)?1:0;
-        break;
+				{
+					bool fn = !m_sl.m_allServers[i].m_hostName.empty();
+					bool sn = !m_sl.m_allServers[j].m_hostName.empty();
+					if(!fn && !sn)
+						less = -1;
+					else if(fn && sn)
+						less = (m_sl.m_allServers[i].m_hostName < m_sl.m_allServers[j].m_hostName)?1:0;
+					else
+						less = (fn && !sn)?1:0;
+				}
+				break;
       case eSC_ping:
         less = (m_sl.m_allServers[i].m_ping < m_sl.m_allServers[j].m_ping)?1:0;
         break;
@@ -536,19 +615,65 @@ struct SMPServerList
 ESortColumn         gSortColumn = eSC_none;
 ESortType           gSortType = eST_ascending;
 
-struct SUserListItem
+
+struct SUserStatus
 {
-  int     id;
-  string  name;
-  int     arrow;
-  bool    header;
-  bool    bubble;
-  bool    playing;
-  bool    offline;
-  string  status;
+	SUserStatus():port(0),ping(-1){}
+	string			server;
+	int					port;
+	string			gamemode;
+	int					ping;
+	EUserStatus status;
 };
 
-struct SMPUserList
+struct SUserListItem
+{
+  int					id;
+  string			name;
+  int					arrow;
+  bool				header;
+  bool				bubble;
+  bool				playing;
+  bool				offline;
+	bool				foreign;
+	SUserStatus status;
+	bool operator<(const SUserListItem& u) const
+	{
+		return name.compareNoCase(u.name)<0;
+	}
+	bool operator==(const SUserListItem& u) const
+	{
+		return name.compareNoCase(u.name)==0;
+	}
+};
+
+bool ParseUserStatus(SUserStatus& status, const char* str)
+{
+	const char* after_game = strstr(str,"://");
+	if (after_game)
+	{
+		string game(str, after_game);
+		after_game += 2;
+		if(!strncmp("chatting",after_game,strlen("chatting")))
+		{
+			status.status = eUS_chatting;
+		}
+		else if(!strncmp("playing",after_game,strlen("playing")))
+		{
+			status.status = eUS_playing;
+		}
+		else if(!strncmp("away",after_game,strlen("playing")))
+		{
+			status.status = eUS_away;
+		}
+		status.status = eUS_online;
+	}
+	else
+		return false;
+	return true;
+}
+
+struct CMPLobbyUI::SMPUserList
 {
   struct SVisibleEntry
   {
@@ -556,10 +681,11 @@ struct SMPUserList
     EVisibleUserType type;
   };
 
-  SMPUserList():
+	SMPUserList(CMPLobbyUI*	parent):
     m_visibleCount(22),
     m_firstVisible(0),
-    m_selected(-1)
+    m_selected(-1),
+		m_parent(parent)
   {
     InitHeaders();
   }
@@ -573,14 +699,15 @@ struct SMPUserList
     i.bubble = false;
     i.playing = false;
     i.offline = false;
+		i.foreign = false;
     i.id = 0;
-    i.name = "BUDDIES";
+    i.name = "@ui_menu_BUDDIES";
     m_headers.push_back(i);
     i.id = 1;
-    i.name = "GLOBAL CHAT";
+    i.name = "@ui_menu_GLOBAL_CHAT";
     m_headers.push_back(i);
     i.id = 2;
-    i.name = "IGNORE LIST";
+		i.name = "@ui_menu_IGNORE_LIST";
     m_headers.push_back(i);
   }
 
@@ -589,7 +716,7 @@ struct SMPUserList
     return min(m_visibleCount,int(m_visibleList.size()));
   }
 
-  const SUserListItem& GetListItem(int i)
+  SUserListItem& GetListItem(int i)
   {
     SVisibleEntry& v = m_visibleList[i];
     switch(v.type)
@@ -632,33 +759,38 @@ struct SMPUserList
     return false;
   }
 
-
-  void UpdateVisibleList()
-  {
-    SSelectionSave save(*this);
-    m_visibleList.resize(0);
+	void UpdateVisibleList()
+	{
+		SSelectionSave save(*this);
+		m_visibleList.resize(0);
 
     SVisibleEntry e;
     e.type = eVUT_header;
     e.idx = 0;
     m_visibleList.push_back(e);
-    e.type = eVUT_buddy;
-    for(int i=0;i<m_buddies.size();++i)
-    {
-      e.idx = i;
-      m_visibleList.push_back(e);
-    }
-    
-    e.type = eVUT_header;
-    e.idx = 1;
-    m_visibleList.push_back(e);
+    if(m_headers[0].arrow == 2)
+		{
+			e.type = eVUT_buddy;
+			for(int i=0;i<m_buddies.size();++i)
+			{
+				e.idx = i;
+				m_visibleList.push_back(e);
+			}
+		}
 
-    e.type = eVUT_global;
-    for(int i=0;i<m_chat.size();++i)
-    {
-      e.idx = i;
-      m_visibleList.push_back(e);
-    }
+		e.type = eVUT_header;
+		e.idx = 1;
+		m_visibleList.push_back(e);
+
+    if(m_headers[1].arrow == 2)
+		{
+			e.type = eVUT_global;
+			for(int i=0;i<m_chat.size();++i)
+			{
+				e.idx = i;
+				m_visibleList.push_back(e);
+			}
+		}
 
     if(g_pGameCVars->g_displayIgnoreList)
     {
@@ -667,16 +799,21 @@ struct SMPUserList
       m_visibleList.push_back(e);
     
       e.type = eVUT_ignore;
-      for(int i=0;i<m_ignore.size();++i)
-      {
-        e.idx = i;
-        m_visibleList.push_back(e);
-      }
-    }
-  }
+			if(m_headers[2].arrow == 2)
+			{
+				for(int i=0;i<m_ignore.size();++i)
+				{
+					e.idx = i;
+					m_visibleList.push_back(e);
+				}
+			}
+		}
+		SetStartIndex(m_firstVisible);
+	}
 
-  void AddUser(EChatCategory cat, int id, const char *name)
+  void AddUser(EChatCategory cat, int id, const char *name, bool foreign)
   {
+		SSelectionSave save(*this);
     SUserListItem i;
     i.id = id;
     i.name = name;
@@ -685,22 +822,25 @@ struct SMPUserList
     i.arrow = 0;
     i.offline = false;
     i.playing = false;
+		i.foreign = foreign;
     switch(cat)
     {
     case eCC_buddy:
-      m_buddies.push_back(i);
+      stl::binary_insert_unique(m_buddies,i);
       break;
     case eCC_global:
-      m_chat.push_back(i);
-      break;
+			stl::binary_insert_unique(m_chat,i);
+			break;
     case eCC_ignored:
-      m_ignore.push_back(i);
+			stl::binary_insert_unique(m_ignore,i);
       break;
     }
+		UpdateHeaders();
   }
 
   void RemoveUser(EChatCategory cat, int id)
   {
+		SSelectionSave save(*this);
     std::vector<SUserListItem> *p = 0;
     switch(cat)
     {
@@ -725,7 +865,15 @@ struct SMPUserList
         break;
       }
     }
+		UpdateHeaders();
   }
+
+	void UpdateHeaders()
+	{
+		/*m_headers[0].name.Format("@ui_menu_BUDDIES (%d)",m_buddies.size());
+		m_headers[1].name.Format("@ui_menu_GLOBAL_CHAT (%d)",m_chat.size());
+		m_headers[2].name.Format("@ui_menu_IGNORE_LIST (%d)",m_ignore.size());*/
+	}
 
   void SetUserStatus(EChatCategory cat, int id, EUserStatus status, const char* descr)
   {
@@ -750,11 +898,14 @@ struct SMPUserList
       if(list[i].id == id)
       {
         SUserListItem &u = list[i];
-        u.status = descr;        
-        switch(status)
+        if(!ParseUserStatus(u.status,descr))
+				{
+					u.status.status = status;
+				}
+        switch(u.status.status)
         {
         case eUS_offline:
-          //u.offline = true;
+          u.offline = true;
           u.playing = false;
           u.bubble = false;
           break;
@@ -778,19 +929,37 @@ struct SMPUserList
   {
     m_selected = id;
   }
+
   
+	void OpenGroup(int id)
+	{
+		if( id >= 0 && id < m_visibleList.size() && m_visibleList[id].type == eVUT_header )
+		{
+			SUserListItem& item = m_headers[m_visibleList[id].idx];
+			if(item.arrow == 1)
+				item.arrow = 2;
+			else
+				item.arrow = 1;
+		}			
+	}
+
   struct SSelectionSave
   {
-    SSelectionSave(SMPUserList& p):m_parent(p)
+    SSelectionSave(SMPUserList& p):m_parent(p),m_visibleDelta(0)
     {
       if(m_parent.m_selected == -1)
         return;
       if(!m_parent.m_visibleList.empty())
-        m_temp = m_parent.m_visibleList[m_parent.m_selected];
+			{
+        m_type = m_parent.m_visibleList[m_parent.m_selected].type;
+				const SUserListItem& item = m_parent.GetListItem(m_parent.m_selected);
+				m_id = item.id;
+				m_visibleDelta = m_parent.m_selected-m_parent.m_firstVisible;
+			}
       else //invalid
       {
-        m_temp.idx = -1;
-        m_temp.type = eVUT_header;
+        m_id = -1;
+        m_type = eVUT_header;
       }
     }
     ~SSelectionSave()
@@ -798,16 +967,25 @@ struct SMPUserList
       if(m_parent.m_selected == -1 || m_parent.m_visibleList.empty())
         return;
       for(int i=0;i<m_parent.m_visibleList.size();++i)
-        if(m_parent.m_visibleList[i].type == m_temp.type && m_parent.m_visibleList[i].idx == m_temp.idx)
+        if(m_parent.m_visibleList[i].type == m_type && m_parent.GetListItem(i).id == m_id)
         {
           m_parent.m_selected = i;
+					if(m_visibleDelta>=0 && m_visibleDelta<m_parent.m_visibleCount)//item was visible
+					{
+						m_parent.SetStartIndex(i - m_visibleDelta);
+					}
           return;
         }
       m_parent.m_selected = -1;
+			if(m_parent.m_parent)
+				m_parent.m_parent->SetChatButtonsMode(false,0);
     }
 
-    SMPUserList&  m_parent;
-    SVisibleEntry m_temp;
+		int 							m_visibleDelta;
+
+    SMPUserList&			m_parent;
+    EVisibleUserType	m_type;
+		int								m_id;
   };
 
   std::vector<SVisibleEntry> m_visibleList;
@@ -821,6 +999,7 @@ struct SMPUserList
   std::vector<SUserListItem> m_chat;
   std::vector<SUserListItem> m_ignore;
   std::vector<SUserListItem> m_buddies;
+	CMPLobbyUI*								 m_parent;
 };
 
 
@@ -879,10 +1058,13 @@ m_currentTab(-1),
 m_chatBlink(false)
 {
   m_cmd.reserve(256);
-  SetSortParams(gSortColumn,gSortType);
-  m_userlist.reset(new SMPUserList());
+  SetSortParams(gSortColumn, gSortType);
+  m_userlist.reset(new SMPUserList(this));
   m_chatlist.reset(new SMPChatText());
   m_filter.reset(new SServerFilter(this));
+
+	DisplayChatText();
+	SetChatHeader("@ui_menu_GLOBALCHAT",0);
 }
 
 CMPLobbyUI::~CMPLobbyUI()
@@ -969,11 +1151,19 @@ bool CMPLobbyUI::HandleFSCommand(EGsUiCommand cmd, const char* pArgs)
       ShowRequestDialog(u.name);
     }
     break;
-  case eGUC_addBuddyFromInfo:
-    {
-      ShowRequestDialog(m_infoNick);
-    }
-    break;
+	case eGUC_addBuddyFromFind:
+		{
+			if(pArgs && pArgs[0])
+			{
+				ShowRequestDialog(pArgs);
+			}
+		}
+		break;
+	case eGUC_addBuddyFromInfo:
+		{
+			ShowRequestDialog(m_infoNick);
+		}
+		break;
   case eGUC_addIgnoreFromInfo:
     {
       OnAddIgnore(m_infoNick);
@@ -989,8 +1179,11 @@ bool CMPLobbyUI::HandleFSCommand(EGsUiCommand cmd, const char* pArgs)
   case eGUC_stopIgnore:
     {
       int id = atoi(pArgs);
-      const SUserListItem& u = m_userlist->GetListItem(id);
-      OnStopIgnore(u.name);
+			if(id != -1)
+			{
+				const SUserListItem& u = m_userlist->GetListItem(id);
+				OnStopIgnore(u.name);
+			}
     }
     break;
   case eGUC_inviteBuddy:
@@ -1001,13 +1194,19 @@ bool CMPLobbyUI::HandleFSCommand(EGsUiCommand cmd, const char* pArgs)
   case eGUC_removeBuddy:
     {
       int id = atoi(pArgs);
-      OnRemoveBuddy(m_userlist->GetListItem(id).name);
+			if(id != -1)
+			{
+				OnRemoveBuddy(m_userlist->GetListItem(id).name);
+			}
     }
     break;
   case eGUC_chatClick:
     {
       int id = atoi(pArgs);
-      SelectUser(id);
+			if(id != -1)
+			{
+				SelectUser(id);
+			}
     }
     break;
   case eGUC_sortColumn:
@@ -1033,23 +1232,35 @@ bool CMPLobbyUI::HandleFSCommand(EGsUiCommand cmd, const char* pArgs)
     }
     break;
   case eGUC_displayInfo:
-    EnableInfoScreenContorls(false,false);
     OnShowUserInfo(atoi(pArgs),0);
     break;
   case eGUC_displayInfoInList:
     {
-      EnableInfoScreenContorls(false,false);
       int id = atoi(pArgs);
-      EVisibleUserType t = m_userlist->m_visibleList[id].type;
-      OnShowUserInfo(0,m_userlist->GetListItem(id).name);
+			if(id>=0 && id<m_userlist->m_visibleList.size())
+			{
+				EVisibleUserType t = m_userlist->m_visibleList[id].type;
+				switch(t)
+				{
+				case eVUT_global:
+					OnShowUserInfo(0, m_userlist->GetListItem(id).name);
+					break;
+				case eVUT_buddy:
+				case eVUT_ignore:
+					OnShowUserInfo(m_userlist->GetListItem(id).id, m_userlist->GetListItem(id).name);
+					break;
+				}
+			}
     }
     break;
   case eGUC_addFavorite:
+		OnAddFavorite();
     m_serverlist->SetSelectedFavorite(true);
     DisplayServerList();
     break;
   case eGUC_removeFavorite:
     {
+			OnRemoveFavorite();
       int sel = m_serverlist->m_selectedServer;
       m_serverlist->SetSelectedFavorite(false);
       if(sel!=-1 && m_serverlist->m_selectedServer ==-1)
@@ -1062,15 +1273,16 @@ bool CMPLobbyUI::HandleFSCommand(EGsUiCommand cmd, const char* pArgs)
       OnJoinWithPassword(atoi(pArgs));
     }
     break;
+	case eGUC_chatOpen:
+		m_userlist->OpenGroup(atoi(pArgs));
+		DisplayUserList();
+		break;
   default:
     handled = false;
   }
 
   handled = OnHandleCommand(cmd,pArgs) || handled;
-  if(m_filter->HandleFSCommand(cmd,pArgs))
-  {
-
-  }
+  handled = m_filter->HandleFSCommand(cmd,pArgs) || handled;  
 
   return handled;
 }
@@ -1170,18 +1382,25 @@ void  CMPLobbyUI::ChangeTab(int tab)
   if(tab != -1)
     OnActivateTab(tab);
   if(tab == 3)
+	{
+		m_chatBlink = false;
     SetBlinkChat(false);
-  else if(m_chatBlink)
-    SetBlinkChat(true);  
+		SelectUser(m_userlist->m_selected);
+	}
+  else
+	{
+		if(m_chatBlink)
+			SetBlinkChat(true);  
+		SetStatusString("");
+		}
 }
 
 void  CMPLobbyUI::DisplayServerList()
 {
   if(m_serverlist->m_dirty)
   {
-    if(m_filter->IsEnabled())
-      m_serverlist->DoFilter(m_filter.get());
-
+		if(m_filter.get())
+			m_serverlist->DoFilter(m_filter.get());
     m_serverlist->DoSort();
   }
   m_cmd = MPPath;
@@ -1259,7 +1478,7 @@ void  CMPLobbyUI::DisplayServerList()
     m_cmd = MPPath;
     m_cmd += "AddServer\0";
 
-    SFlashVarValue args[] = {server.m_serverId,(const char *)server.m_hostName, server.m_ping, uiNumPlayers, (const char *)server.m_mapName, (const char *)server.m_gameTypeName, uiIP, server.m_hostPort, server.m_private, server.m_official, server.m_favorite, server.m_anticheat};
+		SFlashVarValue args[] = {server.m_serverId, server.m_hostName.c_str(), server.m_ping, uiNumPlayers, server.m_mapName.c_str(), server.m_gameTypeName.c_str(), uiIP, server.m_hostPort, server.m_private, server.m_official, server.m_favorite, server.m_anticheat, server.m_canjoin};
     m_player->Invoke(m_cmd.c_str(), args, sizeof(args)/sizeof(args[0]));
 
   }
@@ -1309,9 +1528,9 @@ void CMPLobbyUI::SetChatMode(const char* buddy)
 {
   BlinkChat(true);
   if(buddy)
-    SetChatHeader(buddy);
+    SetChatHeader("@ui_menu_CHAT_WITH",buddy);
   else
-    SetChatHeader("Global chat");
+    SetChatHeader("@ui_menu_GLOBALCHAT",0);
 }
 
 void CMPLobbyUI::SelectServer(int id)
@@ -1332,37 +1551,57 @@ void  CMPLobbyUI::SelectUser(int id)
     switch(user_type)
     {
     case eVUT_buddy:
-      SetChatButtonsMode(true,1);
+      SetChatButtonsMode(!item.foreign,1);
       OnChatModeChange(false,item.id);
       OnUserSelected(eCC_buddy,item.id);
-      if(!item.status.empty())
-        SetStatusString(string().Format("Buddy \'%s\' is currently %s",item.name.c_str(),item.status.c_str()));
-      else
-        SetStatusString("");
-      SetChatHeader(string().Format("CHAT WITH %s",item.name.c_str()));
+			switch(item.status.status)
+			{
+			case eUS_online:
+				SetStatusString("@ui_menu_Buddy_is_online",item.name.c_str());
+				break;
+			case eUS_chatting:
+				SetStatusString("@ui_menu_Buddy_is_chatting",item.name.c_str());
+				break;
+			case eUS_playing:
+				SetStatusString("@ui_menu_Buddy_is_playing",item.name.c_str());
+				break;
+			case eUS_away:
+				SetStatusString("@ui_menu_Buddy_is_away",item.name.c_str());
+				break;
+			case eUS_offline:
+				SetStatusString("@ui_menu_Buddy_is_offline",item.name.c_str());
+				break;
+			default:
+				SetStatusString("");
+			}
+      SetChatMode(item.name.c_str());
       break;
     case eVUT_global:
       SetChatButtonsMode(true,CanAdd(eCC_global,item.id,item.name)?2:0);
       OnChatModeChange(true,0);
       OnUserSelected(eCC_global,item.id);
-      SetChatHeader(string().Format("GLOBAL CHAT"));
+      SetChatMode(0);
       SetStatusString("");
       break;
     case eVUT_ignore:
       SetChatButtonsMode(true,3);
       OnChatModeChange(true,0);
       OnUserSelected(eCC_ignored,item.id);
-      SetChatHeader(string().Format("GLOBAL CHAT"));
+      SetChatMode(0);
       SetStatusString("");
       break;
     case eVUT_header:
       SetChatButtonsMode(false,0);
       OnChatModeChange(true,0);
-      SetChatHeader(string().Format("GLOBAL CHAT"));
+      SetChatMode(0);
       SetStatusString("");
       break;
     }
   }
+	else
+	{
+		SetChatButtonsMode(false,0);
+	}
   m_userlist->SelectUser(id);
 }
 
@@ -1425,9 +1664,31 @@ void  CMPLobbyUI::SetServerDetails(const SServerDetails& sd)
 {
   m_cmd = MPPath;
   m_cmd += "GameLobby_M.GameLobby.setServerInfo";
-  SFlashVarValue args[]={sd.m_gamever.c_str(),"",0,sd.m_anticheat?"ON":"OFF",sd.m_friendlyfire?"ON":"OFF","-", sd.m_dedicated?"YES":"NO", sd.m_voicecomm?"ENABLED":"DISABLED","NO"};
-  m_player->Invoke(m_cmd,args,sizeof(args)/sizeof(args[0]));
-  
+	if(sd.m_noResponce)
+	{
+		SFlashVarValue args[]={"@ui_menu_N_A","@ui_menu_N_A","@ui_menu_N_A","@ui_menu_N_A","@ui_menu_N_A","@ui_menu_N_A","@ui_menu_N_A","@ui_menu_N_A","@ui_menu_N_A"};
+		m_player->Invoke(m_cmd,args,sizeof(args)/sizeof(args[0]));
+	}
+	else
+	{
+		static string timesting;
+		if(sd.m_timelimit && sd.m_timeleft)
+			timesting.Format("%02d:%02d",sd.m_timeleft/60,sd.m_timeleft%60);
+		else
+			timesting = "-";
+		SFlashVarValue args[]={sd.m_gamever.c_str(),
+													timesting.c_str(),
+													0,
+													sd.m_anticheat?"@ui_menu_ON":"@ui_menu_OFF",
+													sd.m_friendlyfire?"@ui_menu_ON":"@ui_menu_OFF",
+													"-", 
+													sd.m_dedicated?"@ui_menu_YES":"@ui_menu_NO", 
+													sd.m_voicecomm?"@ui_menu_ENABLED":"@ui_menu_DISABLED", 
+													sd.m_gamepadsonly?"@ui_menu_YES":"@ui_menu_NO"};
+
+		m_player->Invoke(m_cmd,args,sizeof(args)/sizeof(args[0]));
+	}
+
   m_cmd = MPPath;
   m_cmd += "SetPlayerGameMode";
   m_player->Invoke1(m_cmd,sd.m_gamemode.c_str());
@@ -1439,7 +1700,14 @@ void  CMPLobbyUI::SetServerDetails(const SServerDetails& sd)
 
     for(int i=0;i<sd.m_players.size();++i)
     {
-      SFlashVarValue args[]={i,sd.m_players[i].m_team,sd.m_players[i].m_name.c_str(),sd.m_players[i].m_rank,sd.m_players[i].m_kills,sd.m_players[i].m_deaths};
+      SFlashVarValue args[]={
+				SFlashVarValue(i),
+				SFlashVarValue(sd.m_players[i].m_team),
+				SFlashVarValue(sd.m_players[i].m_name.c_str()),
+				SFlashVarValue(sd.m_players[i].m_rank),
+				SFlashVarValue(sd.m_players[i].m_kills),
+				SFlashVarValue(sd.m_players[i].m_deaths)
+			};
       m_player->Invoke(m_cmd,args,sizeof(args)/sizeof(args[0]));
     }
     m_cmd = MPPath;
@@ -1469,9 +1737,9 @@ void  CMPLobbyUI::ClearUserList()
   m_player->Invoke0(m_cmd);
 }
 
-void  CMPLobbyUI::AddChatUser(EChatCategory cat, int id,const char *name)
+void  CMPLobbyUI::AddChatUser(EChatCategory cat, int id,const char *name, bool foreign)
 {
-  m_userlist->AddUser(cat,id,name);
+  m_userlist->AddUser(cat,id,name,foreign);
   DisplayUserList();
 }
 
@@ -1551,22 +1819,33 @@ void  CMPLobbyUI::BlinkChat(bool blink)
 
 void  CMPLobbyUI::EnableTabs(bool fav, bool recent, bool chat)
 {
-  m_cmd = "setMPTabs";
+	m_cmd = MPPath;
+	m_cmd += "setMPTabs";
   SFlashVarValue args[]={1,fav?1:0,recent?1:0,chat?1:0};
   m_player->Invoke(m_cmd,args,sizeof(args)/sizeof(args[0]));
 }
 
-void  CMPLobbyUI::ExpandCategory(EChatCategory cat, bool expand)
+void  CMPLobbyUI::SetChatHeader(const char* text, const char* name)
 {
-  m_cmd = "openCategory";
-  SFlashVarValue args[]={GetCategoryName(cat),expand};
-  m_player->Invoke(m_cmd,args,sizeof(args)/sizeof(args[0]));
-}
+	if(name && strlen(name))
+	{
+		static wstring tmp, tmp2;
+		gEnv->pSystem->GetLocalizationManager()->LocalizeLabel(text, tmp);
 
-void  CMPLobbyUI::SetChatHeader(const char* text)
-{
-  m_cmd = "setChatHeaderText";
-  m_player->Invoke1(m_cmd,text);
+		StrToWstr(name,tmp2);
+		
+		static wstring header;
+		header.resize(0);
+
+		gEnv->pSystem->GetLocalizationManager()->FormatStringMessage(header,tmp,tmp2.c_str());
+		m_cmd = "setChatHeaderText";
+		m_player->Invoke1(m_cmd,header.c_str());
+	}
+	else
+	{
+		m_cmd = "setChatHeaderText";
+		m_player->Invoke1(m_cmd,text);
+	}
 }
 
 void  CMPLobbyUI::AddSearchResult(int id, const char* nick)
@@ -1620,26 +1899,14 @@ void CMPLobbyUI::SetJoinPassword()
 {
   SFlashVarValue p("");
   m_player->GetVariable("_root.MPServer_Password",&p);
-  ICVar* pV = gEnv->pConsole->GetCVar("cl_password");
+  ICVar* pV = gEnv->pConsole->GetCVar("sv_password");
   if(pV)
     pV->Set(p.GetConstStrPtr());
 }
 
-const char* CMPLobbyUI::GetCategoryName(EChatCategory cat)const
+void	CMPLobbyUI::EnableResume(bool enable)
 {
-  switch(cat)
-  {
-  case eCC_buddy:
-    return "BUDDIES";
-    break;
-  case eCC_global:
-    return "GLOBAL CHAT";
-    break;
-  case eCC_ignored:
-    return "IGNORE";
-    break;
-  }
-  return "";
+	m_player->Invoke1("setResumeEnabled",enable);
 }
 
 void  CMPLobbyUI::SetBlinkChat(bool blink)
@@ -1669,10 +1936,10 @@ void  CMPLobbyUI::DisplayUserList()
 
   m_cmd = MPPath;
   m_cmd += "AddBuddy";
-  for(int i=0, num=m_userlist->GetDisplayCount();i<num;++i)
+  for(int i=0, num=m_userlist->GetDisplayCount(); i<num; ++i)
   {
     const SUserListItem &item = m_userlist->GetListItem(i+m_userlist->m_firstVisible);
-    SFlashVarValue args[]={i+m_userlist->m_firstVisible,item.name.c_str(),item.arrow,item.bubble,item.playing,item.playing,item.offline};
+    SFlashVarValue args[]={i+m_userlist->m_firstVisible,item.name.c_str(),item.arrow,item.bubble,item.playing,item.playing,item.offline,!item.foreign};
     m_player->Invoke(m_cmd,args,sizeof(args)/sizeof(args[0]));
   }
   UpdateUsers();
@@ -1683,20 +1950,84 @@ void  CMPLobbyUI::SetStatusString(const char* str)
   m_player->Invoke1("setToolTipText",str);
 }
 
+void  CMPLobbyUI::SetStatusString(const char* fmt, const char* param)
+{
+	static wstring tmp, tmp2;
+	gEnv->pSystem->GetLocalizationManager()->LocalizeLabel(fmt, tmp);
+
+	StrToWstr(param,tmp2);
+
+	static wstring text;
+	text.resize(0);
+
+	gEnv->pSystem->GetLocalizationManager()->FormatStringMessage(text,tmp,tmp2.c_str());
+	m_cmd = "setToolTipText";
+	m_player->Invoke1(m_cmd,text.c_str());
+}
+
 void  CMPLobbyUI::SetProfileInfo(const SUserInfo& ui)
 {
   m_infoNick = ui.m_nick;
   m_cmd = "setPlayerInfo";
-  SFlashVarValue args[]={ui.m_nick,"","","","","","","",""};
-  m_player->Invoke(m_cmd,args,sizeof(args)/sizeof(args[0]));
+	static string country_code;
+	if(!ui.m_country.empty())
+	{
+		country_code = "@ui_country_";
+		country_code += ui.m_country;
+	}
+	else
+		country_code = "";
+
+	static string played, accuracy, kills, deaths;
+	
+	if(ui.m_stats.m_played)
+		played.Format("%d",ui.m_stats.m_played/60);
+	else
+		played.resize(0);
+	
+	if(ui.m_stats.m_accuracy)
+		accuracy.Format("%.2f%%",ui.m_stats.m_accuracy);
+	else
+		accuracy.resize(0);
+
+	if(ui.m_stats.m_kills)
+		kills.Format("%d",ui.m_stats.m_kills);
+	else
+		kills.resize(0);
+
+	if(ui.m_stats.m_deaths)
+		deaths.Format("%d",ui.m_stats.m_deaths);
+	else
+		deaths.resize(0);
+
+  SFlashVarValue args[]={ui.m_nick.c_str(),
+												 country_code.c_str(),
+												 played.c_str(),
+												 accuracy.c_str(),
+												 ui.m_stats.m_suitMode.c_str(),
+												 kills.c_str(),
+												 deaths.c_str(),
+												 ui.m_stats.m_map.c_str(),
+												 ui.m_stats.m_weapon.c_str()};
+  m_player->Invoke(m_cmd, args, sizeof(args)/sizeof(args[0]));
+}
+
+void  CMPLobbyUI::SetProfileInfoNick(const char* nick)
+{
+	m_cmd = "setPlayerInfo";
+
+	SFlashVarValue args[]={nick, "", "", "", "", "", "", "", ""};
+
+	m_player->Invoke(m_cmd, args, sizeof(args)/sizeof(args[0]));
+	m_infoNick = nick;
 }
 
 void  CMPLobbyUI::SetJoinButtonMode(EJoinButtonMode m)
 {
   if(m == eJBM_default)
-    m_player->Invoke1("_root.Root.MainMenu.MultiPlayer.setJoinServerButtonState",-1);
+    m_player->Invoke1("_root.Root.MainMenu.MultiPlayer.setJoinServerButtonState", -1);
   else
-    m_player->Invoke1("_root.Root.MainMenu.MultiPlayer.setJoinServerButtonState",int(m));
+    m_player->Invoke1("_root.Root.MainMenu.MultiPlayer.setJoinServerButtonState", int(m));
 }
 
 void CMPLobbyUI::ShowRequestDialog(const char* nick)
@@ -1805,6 +2136,10 @@ bool CMPLobbyUI::SServerFilter::HandleFSCommand(EGsUiCommand cmd, const char* pA
   default:
     return false;
   }
+	if(cmd != eGUC_filtersEnable && cmd != eGUC_filtersDisplay)//if we're changed any filters setting, enable them
+	{
+		EnableFilters(true);
+	}
   //changed
   if(m_on || cmd==eGUC_filtersEnable)
   {

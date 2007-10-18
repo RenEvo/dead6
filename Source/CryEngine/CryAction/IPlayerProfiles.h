@@ -38,6 +38,7 @@ struct ISaveGameEnumerator
 		int         fileVersion;
 		const char* buildVersion;
 		time_t      saveTime;
+		XmlNodeRef  xmlMetaDataNode;
 	};
 
 	struct SGameDescription
@@ -106,17 +107,30 @@ struct IPlayerProfileManager
 	virtual int  GetProfileCount(const char* userId) = 0;
 	virtual bool GetProfileInfo(const char* userId, int index, IPlayerProfileManager::SProfileDescription& outInfo) = 0;
 
+	enum EProfileOperationResult
+	{
+		ePOR_Success					= 0,
+		ePOR_NotInitialized		= 1,
+		ePOR_NameInUse				= 2,
+		ePOR_UserNotLoggedIn	= 3,
+		ePOR_NoSuchProfile		= 4,
+		ePOR_ProfileInUse			= 5,
+		ePOR_NoActiveProfile	= 6,
+		ePOR_DefaultProfile   = 7,
+		ePOR_Unknown					=	255,
+	};
+
 	// create a new profile for a user 
-	virtual bool CreateProfile(const char* userId, const char* profileName) = 0;
+	virtual bool CreateProfile(const char* userId, const char* profileName, bool bOverrideIfPresent, EProfileOperationResult& result) = 0;
 
 	// delete a profile of an user 
-	virtual bool DeleteProfile(const char* userId, const char* profileName) = 0;
+	virtual bool DeleteProfile(const char* userId, const char* profileName, EProfileOperationResult& result) = 0;
 
 	// rename the current profile of the user
-	virtual bool RenameProfile(const char* userId, const char* newName) = 0;
+	virtual bool RenameProfile(const char* userId, const char* newName, EProfileOperationResult& result) = 0;
 
 	// save a profile
-	virtual bool SaveProfile(const char* userId) = 0;
+	virtual bool SaveProfile(const char* userId, EProfileOperationResult& result) = 0;
 
 	// load and activate a profile, returns the IPlayerProfile if successful
 	virtual IPlayerProfile* ActivateProfile(const char* userId, const char* profileName) = 0;
@@ -138,6 +152,14 @@ struct IPlayerProfileManager
 	// subsequent calls will invalidate former profiles. profileName can be "" or NULL which will
 	// delete the preview profile from memory
 	virtual const IPlayerProfile* PreviewProfile(const char* userId, const char* profileName) = 0;
+
+	// Set a shared savegame folder for all profiles
+	// this means all savegames get prefixed with the profilename and '_'
+	// by default: SaveGame folder is shared "%USER%/SaveGames/"
+	virtual void SetSharedSaveGameFolder(const char* sharedSaveGameFolder) = 0;
+
+	// Get the shared savegame folder
+	virtual const char* GetSharedSaveGameFolder() = 0;
 };
 
 struct ILevelRotationFile

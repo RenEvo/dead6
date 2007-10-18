@@ -49,8 +49,8 @@ public:
 	{
 	}
 
-	CHUDMissionObjective(CHUDMissionObjectiveSystem* pMOS, const char* id, const char* shortMsg, const char* msg = 0, bool secondaryObjective = false)
-											: m_pMOS(pMOS), m_shortMessage(shortMsg), m_screenMessage(msg), m_id(id), m_silent(false)
+	CHUDMissionObjective(CHUDMissionObjectiveSystem* pMOS, const char* id, const char* shortMsg, const char* msg = 0, const char* mapLabel = 0, bool secondaryObjective = false)
+											: m_pMOS(pMOS), m_shortMessage(shortMsg), m_screenMessage(msg), m_id(id), m_silent(false), m_mapLabel(mapLabel)
 	{
 		m_eStatus = DEACTIVATED;
 		m_trackedEntity = 0;
@@ -112,11 +112,19 @@ public:
 		return m_screenMessage.c_str();
 	}
 
+	ILINE const char* GetMapLabel() const
+	{
+		if(m_mapLabel.size() == 0)
+			return m_shortMessage.c_str();
+		return m_mapLabel.c_str();
+	}
+
 	void Serialize(TSerialize ser)
 	{
 		ser.Value("m_id", m_id);
 		ser.Value("m_shortDescription", m_shortMessage);
 		ser.Value("m_screenMessage", m_screenMessage);
+		ser.Value("m_mapLabel", m_mapLabel);
 		ser.Value("m_trackedEntity", m_trackedEntity, 'eid');
 		ser.Value("m_silent", m_silent);
 		ser.Value("m_secondary", m_secondary);
@@ -129,6 +137,7 @@ public:
 		s->Add(m_screenMessage);
 		s->Add(m_id);
 		s->AddContainer(m_mpChangeMap);
+		s->Add(m_mapLabel);
 	}
 
 protected:
@@ -143,6 +152,7 @@ private:
 	string						m_shortMessage;
 	string						m_screenMessage;
 	string						m_id;
+	string						m_mapLabel;
 	EntityId          m_trackedEntity;
 	HUDMissionStatus	m_eStatus;
 	float							m_lastTimeChanged;
@@ -187,7 +197,7 @@ public:
 	//TODO: don't return ptr into a vector! If vector changes, ptr is trash!
 	CHUDMissionObjective* GetMissionObjective(const char* id);
 
-	void Serialize(TSerialize ser,unsigned aspects);	//not tested!!
+	void Serialize(TSerialize ser);	//not tested!!
 };
 
 #endif

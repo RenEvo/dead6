@@ -25,6 +25,7 @@ public:
 
 	typedef int TTweakGroupId;
 	static const TTweakGroupId InvalidTweakGroupId = -1;
+  typedef int TValueId;
 
 public:
 
@@ -38,13 +39,14 @@ public:
 	bool RevertGroup(TTweakGroupId groupId);
 	bool RevertValues();
 
-	TTweakGroupId GetGroupId(const char* name);
-
-	void Serialize(TSerialize ser, unsigned aspects);
+	TTweakGroupId GetGroupId(const char* name);  
+  TValueId GetValueId(const char* name);
+  
+  void BlockValue(TValueId valueId, bool block);
+	
+  void Serialize(TSerialize ser, unsigned aspects);
 
 protected:
-
-	typedef int TValueId;
 
 	enum ETweakValueOperator
 	{
@@ -58,6 +60,7 @@ protected:
 		float defaultValue;
 		float* pValue;
 		bool isRestrictedToMult;
+    bool blocked;
 	};
 
 	typedef std::vector <SValue> TValueVector;
@@ -84,8 +87,7 @@ protected:
 protected:
 
 	bool AddGroup(const SmartScriptTable &table);
-	TValueId GetValueId(const char* name);
-
+	
 	void ComputeGroups();
 	void ComputeGroup(const SGroup& group);
 

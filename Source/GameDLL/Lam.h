@@ -11,6 +11,12 @@ History:
 - 16:10:2006   16:55 : Created by Benito Gangoso Rodriguez
 
 *************************************************************************/
+#ifndef LAM_H
+#define LAM_H
+
+# pragma once
+
+
 #include <IItemSystem.h>
 #include "Item.h"
 #include "ItemSharedParams.h"
@@ -146,7 +152,6 @@ public:
 
 	virtual bool Init(IGameObject * pGameObject );
   virtual bool ReadItemParams(const IItemParamsNode *root);
-	virtual void OnReset();
 	virtual void Reset();
 	virtual void PostUpdate(float frameTime);
 	virtual void ActivateLaser(bool activate, bool aiRequest = false);
@@ -159,7 +164,7 @@ public:
 
 	virtual void GetMemoryStatistics(ICrySizer * s);
 
-	virtual void Serialize(TSerialize ser, unsigned aspects );
+	virtual void FullSerialize(TSerialize ser);
 	virtual void PostSerialize();
 
 	static  inline  uint GetNumLightsActivated(){ return s_lightCount; }
@@ -184,22 +189,9 @@ protected:
 
 	void AdjustLaserFPDirection(CItem* parent, Vec3 &dir, Vec3 &pos);
 
-	void UpdateAILight(const Vec3& pos, const Vec3& dir, float range, float fov);
+	void UpdateAILightAndLaser(const Vec3& pos, const Vec3& dir, float lightRange, float fov, float laserRange);
 
 	void SetAllowUpdate() { m_allowUpdate = true; }
-
-private:
-
-	//=====
-	//Attachment positions are reset to local (0,0,0) when a character is out of screen
-	//Attaching a fake/invisible geometry to the weapon_bone of the character, will help us to prevent this issue
-	void CreateFakeLaserEntity();
-	void DestroyFakeLaserEntity();
-	void AttachFakeLaserToOwner();
-	void DetachFakeLaserFromOwner();
-
-	EntityId m_pFakeLaserEntityId;
-	//~====
 
 private:
 
@@ -223,9 +215,13 @@ private:
 	bool    m_laserWasOn;
 	Vec3		m_lastLaserHitPt;
 	bool		m_lastLaserHitSolid;
+	bool    m_lastLaserHitViewPlane;
 	bool		m_allowUpdate;
 	float		m_updateTime;
 	float		m_smoothLaserLength;
+	float   m_lastZPos;
+
+	bool m_lightActiveSerialize, m_laserActiveSerialize;
 
 	static uint s_lightCount;
 
@@ -235,3 +231,5 @@ private:
 	static int s_lastUpdateFrameId;
 	static VectorSet<CLam*> s_lasers;
 };
+
+#endif

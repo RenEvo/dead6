@@ -47,6 +47,9 @@ class CScope : public CIronSight
 	} SScopeParams;
 
 public:
+
+	CScope();
+
 	// IZoomMode
 	virtual void Update(float frameTime, uint frameId);
 
@@ -55,7 +58,6 @@ public:
 
 	virtual void Activate(bool activate);
 
-	virtual void Serialize(TSerialize ser);
 	virtual void GetMemoryStatistics(ICrySizer * s);
 
 	virtual void UpdateFPView(float frameTime) {};
@@ -64,14 +66,14 @@ public:
 
 	// CIronSight
 	virtual void OnEnterZoom();
-	virtual void OnZoomedIn();
 	virtual void OnLeaveZoom();
-	virtual void OnZoomedOut();
 	virtual void OnZoomStep(bool zoomingIn, float t);
+	virtual bool IsScope() const { return true; }
 	// ~CIronSight
 
 protected:
 	float					m_showTimer;
+	float					m_hideTimer;
 	SScopeParams	m_scopeparams;
 };
 

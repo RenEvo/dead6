@@ -20,6 +20,7 @@ History:
 #include "Game.h"
 #include "Weapon.h"
 #include "Player.h"
+#include "HUD/HUD.h"
 
 //------------------------------------------------------------------------
 bool CVehicleClient::Init()
@@ -54,7 +55,6 @@ bool CVehicleClient::Init()
   m_actionNameIds.insert(TActionNameIdMap::value_type("v_moveback", eVAI_MoveBack));
   m_actionNameIds.insert(TActionNameIdMap::value_type("v_moveup", eVAI_MoveUp));
   m_actionNameIds.insert(TActionNameIdMap::value_type("v_movedown", eVAI_MoveDown));
-  m_actionNameIds.insert(TActionNameIdMap::value_type("v_rotatedir", eVAI_RotateDir));
   m_actionNameIds.insert(TActionNameIdMap::value_type("v_turnleft", eVAI_TurnLeft));
   m_actionNameIds.insert(TActionNameIdMap::value_type("v_turnright", eVAI_TurnRight));
   m_actionNameIds.insert(TActionNameIdMap::value_type("v_strafeleft", eVAI_StrafeLeft));
@@ -75,7 +75,7 @@ bool CVehicleClient::Init()
   m_actionNameIds.insert(TActionNameIdMap::value_type("v_boost", eVAI_Boost));
 
   m_actionNameIds.insert(TActionNameIdMap::value_type("v_debug_1", eVAI_Debug_1));
-  m_actionNameIds.insert(TActionNameIdMap::value_type("v_debug_2", eVAI_Debug_2));  
+  m_actionNameIds.insert(TActionNameIdMap::value_type("v_debug_2", eVAI_Debug_2));
   
 	m_xiRotation.Set(0,0,0);
 	m_bMovementFlagForward = false;
@@ -90,6 +90,12 @@ bool CVehicleClient::Init()
 }
 
 //------------------------------------------------------------------------
+void CVehicleClient::Reset()
+{
+	m_tp = false;
+}
+
+//------------------------------------------------------------------------
 void CVehicleClient::OnAction(IVehicle* pVehicle, EntityId actorId, const ActionId& actionId, int activationMode, float value)
 {
 	assert(pVehicle);
@@ -100,50 +106,66 @@ void CVehicleClient::OnAction(IVehicle* pVehicle, EntityId actorId, const Action
 	if (ite == m_actionNameIds.end())
     return;
 
-	IActor *pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(actorId);
-	bool clientBinocs = false;
-	CWeapon *pWeapon = NULL;
-	if(pActor && pActor == g_pGame->GetIGameFramework()->GetClientActor())
-	{
-		CPlayer *pPlayer = static_cast<CPlayer*>(pActor);
-		if(pPlayer->GetInventory())
-		{
-			if(pWeapon = pPlayer->GetWeapon(pPlayer->GetInventory()->GetCurrentItem()))
-			{
-				if(pWeapon->GetEntity()->GetClass() == CItem::sBinocularsClass)
-					clientBinocs = true;
-			}
-		}
-	}
-
 	switch (ite->second)
   {
   case (eVAI_XIMoveX):	
     {
-		  if(value>0.f)
-		  {
-			  pVehicle->OnAction(eVAI_TurnRight, eAAM_OnPress, value, actorId);
-			  m_bMovementFlagRight = true;
-		  }
-		  else if(value==0.f)
-		  {
-			  if(m_bMovementFlagRight)
-			  {
-				  pVehicle->OnAction(eVAI_TurnRight, eAAM_OnRelease, 0.f, actorId);
-				  m_bMovementFlagRight = false;
-			  }
-			  else if(m_bMovementFlagLeft)
-			  {
-				  pVehicle->OnAction(eVAI_TurnLeft, eAAM_OnRelease, 0.f, actorId);
-				  m_bMovementFlagLeft = false;
-			  }
-		  }
-		  else//value<0
-		  {
-			  pVehicle->OnAction(eVAI_TurnLeft, eAAM_OnPress, -value, actorId);
-			  m_bMovementFlagLeft = true;
-		  }
-      break;
+
+			IVehicleMovement *pMovement = pVehicle->GetMovement();
+			if(pMovement && pMovement->GetMovementType() == IVehicleMovement::eVMT_Air)
+			{
+				//strafe instead of turning for air vehicles
+				if(value>0.f)
+				{
+					pVehicle->OnAction(eVAI_StrafeRight, eAAM_OnPress, value, actorId);
+					m_bMovementFlagRight = true;
+				}
+				else if(value==0.f)
+				{
+					if(m_bMovementFlagRight)
+					{
+						pVehicle->OnAction(eVAI_StrafeRight, eAAM_OnRelease, 0.f, actorId);
+						m_bMovementFlagRight = false;
+					}
+					else if(m_bMovementFlagLeft)
+					{
+						pVehicle->OnAction(eVAI_StrafeLeft, eAAM_OnRelease, 0.f, actorId);
+						m_bMovementFlagLeft = false;
+					}
+				}
+				else//value<0
+				{
+					pVehicle->OnAction(eVAI_StrafeLeft, eAAM_OnPress, -value, actorId);
+					m_bMovementFlagLeft = true;
+				}
+			}
+			else
+			{
+				if(value>0.f)
+				{
+					pVehicle->OnAction(eVAI_TurnRight, eAAM_OnPress, value, actorId);
+					m_bMovementFlagRight = true;
+				}
+				else if(value==0.f)
+				{
+					if(m_bMovementFlagRight)
+					{
+						pVehicle->OnAction(eVAI_TurnRight, eAAM_OnRelease, 0.f, actorId);
+						m_bMovementFlagRight = false;
+					}
+					else if(m_bMovementFlagLeft)
+					{
+						pVehicle->OnAction(eVAI_TurnLeft, eAAM_OnRelease, 0.f, actorId);
+						m_bMovementFlagLeft = false;
+					}
+				}
+				else//value<0
+				{
+					pVehicle->OnAction(eVAI_TurnLeft, eAAM_OnPress, -value, actorId);
+					m_bMovementFlagLeft = true;
+				}
+			}
+			break;
 		}
   case (eVAI_XIMoveY):
 		{
@@ -185,7 +207,7 @@ void CVehicleClient::OnAction(IVehicle* pVehicle, EntityId actorId, const Action
 			IVehicleMovement *pMovement = pVehicle->GetMovement();
 			if(pMovement && pMovement->GetMovementType() == IVehicleMovement::eVMT_Air)
 			{
-				pVehicle->OnAction(eVAI_RotateDir, eAAM_OnPress, value*0.3, actorId);
+				pVehicle->OnAction(eVAI_RotateYaw, eAAM_OnPress, value, actorId);
 			}
 			else
 			{
@@ -198,7 +220,7 @@ void CVehicleClient::OnAction(IVehicle* pVehicle, EntityId actorId, const Action
 			IVehicleMovement *pMovement = pVehicle->GetMovement();
 			if(pMovement && pMovement->GetMovementType() == IVehicleMovement::eVMT_Air)
 			{
-				pVehicle->OnAction(eVAI_RotatePitch, eAAM_OnPress, g_pGameCVars->cl_invertController ? -value*0.3f : value*0.3f, actorId);
+				pVehicle->OnAction(eVAI_RotatePitch, eAAM_OnPress, g_pGameCVars->cl_invertController ? -value : value, actorId);
 			}
 			else
 			{
@@ -219,6 +241,7 @@ void CVehicleClient::OnAction(IVehicle* pVehicle, EntityId actorId, const Action
     {
       if (activationMode == eAAM_OnPress || activationMode == eAAM_OnRelease)
         m_fLeftRight -= value*2.f - 1.f;
+			m_fLeftRight = CLAMP(m_fLeftRight, -1.0f, 1.0f);
       pVehicle->OnAction(ite->second, activationMode, -m_fLeftRight, actorId);
       break;
     }
@@ -226,6 +249,7 @@ void CVehicleClient::OnAction(IVehicle* pVehicle, EntityId actorId, const Action
     {
       if (activationMode == eAAM_OnPress || activationMode == eAAM_OnRelease)
         m_fLeftRight += value*2.f - 1.f;
+			m_fLeftRight = CLAMP(m_fLeftRight, -1.0f, 1.0f);
       pVehicle->OnAction(ite->second, activationMode, m_fLeftRight, actorId);
       break;
     }  
@@ -233,6 +257,11 @@ void CVehicleClient::OnAction(IVehicle* pVehicle, EntityId actorId, const Action
     {
       if (activationMode == eAAM_OnPress || activationMode == eAAM_OnRelease)
         m_fForwardBackward += value*2.f - 1.f;
+
+			if(activationMode == eAAM_OnRelease)
+				m_fForwardBackward = CLAMP(m_fForwardBackward, 0.0f, 1.0f);
+			else
+				m_fForwardBackward = CLAMP(m_fForwardBackward, -1.0f, 1.0f);
       pVehicle->OnAction(ite->second, activationMode, m_fForwardBackward, actorId);
       break;
     }
@@ -240,32 +269,18 @@ void CVehicleClient::OnAction(IVehicle* pVehicle, EntityId actorId, const Action
     {
       if (activationMode == eAAM_OnPress || activationMode == eAAM_OnRelease)
         m_fForwardBackward -= value*2.f - 1.f;
+
+			if(activationMode == eAAM_OnRelease)
+				m_fForwardBackward = CLAMP(m_fForwardBackward, -1.0f, 0.0f);
+			else
+				m_fForwardBackward = CLAMP(m_fForwardBackward, -1.0f, 1.0f);
       pVehicle->OnAction(ite->second, activationMode, -m_fForwardBackward, actorId);
       break;
     }  
-	case (eVAI_Attack1):
-	case (eVAI_Attack2):
-		if(clientBinocs)
+	case (eVAI_ZoomIn):
+	case (eVAI_ZoomOut):
+		if(SAFE_HUD_FUNC_RET(GetModalHUD()))
 			break;
-	case (eVAI_Exit):
-	case (eVAI_ChangeSeat):
-	case (eVAI_ChangeSeat1):
-	case (eVAI_ChangeSeat2):
-	case (eVAI_ChangeSeat3):
-	case (eVAI_ChangeSeat4):
-	case (eVAI_ChangeSeat5):
-		if(clientBinocs)
-		{
-			// FIXME: it does close the binoculars even if we change to the same seat we already are in
-			CPlayer *pPlayer = static_cast<CPlayer*>(pActor);
-			pPlayer->SelectLastItem(false);
-			pWeapon->Select(false);
-			if(pPlayer->GetCurrentItem(false))
-			{
-				pPlayer->GetInventory()->HolsterItem(false);
-				pPlayer->GetInventory()->HolsterItem(true);
-			}
-		}
   default:
 		pVehicle->OnAction(ite->second, activationMode, value, actorId);
     break;		
@@ -323,13 +338,24 @@ void CVehicleClient::OnEnterVehicleSeat(IVehicleSeat* pSeat)
 
 	if (viewId != InvalidVehicleViewId)
 		pSeat->SetView(viewId);
+
+	IActionMapManager* pMapManager = gEnv->pGame->GetIGameFramework()->GetIActionMapManager();
+	assert(pMapManager);
+
+	pMapManager->EnableActionMap("landvehicle", false);
+	pMapManager->EnableActionMap("seavehicle", false);
+	pMapManager->EnableActionMap("helicopter", false);
+	pMapManager->EnableActionMap("vtol", false);
 }
 
 //------------------------------------------------------------------------
 void CVehicleClient::OnExitVehicleSeat(IVehicleSeat* pSeat)
 {
-	m_bMovementFlagRight=m_bMovementFlagLeft=m_bMovementFlagForward=m_bMovementFlagBack=false;
-  m_fLeftRight = m_fForwardBackward = 0.f;
+	if(pSeat && pSeat->IsDriver())
+	{
+		m_bMovementFlagRight=m_bMovementFlagLeft=m_bMovementFlagForward=m_bMovementFlagBack=false;
+	  m_fLeftRight = m_fForwardBackward = 0.f;
+	}
   
   TVehicleViewId viewId = pSeat->GetCurrentView();
 	

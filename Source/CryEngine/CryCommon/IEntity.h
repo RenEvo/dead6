@@ -93,6 +93,8 @@ struct SEntitySpawnParams
 
 	// Entity Flags.
 	uint32        nFlags;
+	// spawn lock
+	bool					bIgnoreLock;
 	// Initial entity position (Local space).
 	Vec3          vPosition;
 	// Initial entity rotation (Local space).
@@ -103,11 +105,19 @@ struct SEntitySpawnParams
 	void*         pUserData;
 	//////////////////////////////////////////////////////////////////////////
 
+	//////////////////////////////////////////////////////////////////////////
+	// Optional properties table.
+	//////////////////////////////////////////////////////////////////////////
+	IScriptTable *pPropertiesTable;
+	IScriptTable *pPropertiesInstanceTable;
+	//////////////////////////////////////////////////////////////////////////
+
 
 	SEntitySpawnParams()
 	{
 		id = 0;
 		nFlags = 0;
+		bIgnoreLock = false;
 		pClass = NULL;
 		sName = "";
 		sLayerName = "";
@@ -117,6 +127,8 @@ struct SEntitySpawnParams
 		vScale.Set(1,1,1);
 		pUserData = 0;
 		guid = 0;
+		pPropertiesTable = 0;
+		pPropertiesInstanceTable = 0;
 	}
 };
 
@@ -180,6 +192,7 @@ enum EEntityEvent
 	
 	// Sent for unremovable entities when they are respawn.
 	ENTITY_EVENT_INIT,
+
 	// Sent before entity is removed.
 	ENTITY_EVENT_DONE,
 
@@ -291,17 +304,26 @@ enum EEntityEvent
 	// nParam[0] = pointer to the new IMaterial.
 	ENTITY_EVENT_MATERIAL,
 
+  // Called when the entitys material layer mask changes.
+  ENTITY_EVENT_MATERIAL_LAYER,
+
 	// Called when the entity gets hits by a weapon.
 	ENTITY_EVENT_ONHIT,
 
 	// Called when the entity being picked up by players.
 	// nParam[0] : 1 - Pickup.
 	//             0 - Throw after Pickup
+	// nParam[1] : EntityId of who picked it up.
+	// fParam[0] : Force of the throw.
 	ENTITY_EVENT_PICKUP,
 
 	// Called when an animation event (placed on animations in editor) is encountered
 	// nParam[0]: AnimEventInstance* pEventParameters
 	ENTITY_EVENT_ANIM_EVENT,
+
+	// Called from ScriptBind_Entity when script requests to set collidermode.
+	// nParam[0]: ColliderMode
+	ENTITY_EVENT_SCRIPT_REQUEST_COLLIDERMODE,
 
 	// Last entity event in list.
 	ENTITY_EVENT_LAST,
@@ -353,6 +375,10 @@ enum EEntityFlags
 	ENTITY_FLAG_UNREMOVABLE              = BIT(2),   // This entity cannot be removed using IEntitySystem::RemoveEntity until this flag is cleared.
 	ENTITY_FLAG_GOOD_OCCLUDER            = BIT(3),
 
+	// [D6] Special flag - Used to mark if an entity is an interface to a building
+    ENTITY_FLAG_ISINTERFACE				 = BIT(4),
+    // [/D6]
+
 	//////////////////////////////////////////////////////////////////////////
 	ENTITY_FLAG_WRITE_ONLY               = BIT(5),
 	ENTITY_FLAG_NOT_REGISTER_IN_SECTORS  = BIT(6),
@@ -376,14 +402,12 @@ enum EEntityFlags
 	ENTITY_FLAG_SPAWNED								   = BIT(24),	 // Entity was spawned dynamically without a class
 	ENTITY_FLAG_SLOTS_CHANGED					   = BIT(25),	 // Entity's slots were changed dynamically
 	ENTITY_FLAG_MODIFIED_BY_PHYSICS		   = BIT(26),  // Entity was procedurally modified by physics
-	ENTITY_FLAG_OUTDOORONLY						   = BIT(27),  // same as Brush->Outdooronly
+	ENTITY_FLAG_OUTDOORONLY						   = BIT(27),  // same as Brush->Outdoor only
 	ENTITY_FLAG_SEND_NOT_SEEN_TIMEOUT    = BIT(28),  // Entity will be sent ENTITY_EVENT_NOT_SEEN_TIMEOUT if it is not rendered for 30 seconds
   ENTITY_FLAG_RECVWIND	    				   = BIT(29),  // Receives wind
 	ENTITY_FLAG_LOCAL_PLAYER             = BIT(30),
+	ENTITY_FLAG_AI_HIDEABLE              = BIT(31),  // AI can use the object to calculate automatic hide points.
 
-	// [D6] Special flag - Used to mark if an entity is an interface to a building
-	ENTITY_FLAG_ISINTERFACE				= BIT(31),
-	// [/D6]
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -393,12 +417,13 @@ enum EEntityFlags
 enum EEntitySerializeFlags
 {
 	// serialize proxies
-	ENTITY_SERIALIZE_PROXIES    = 0x0001,
+	ENTITY_SERIALIZE_PROXIES    = BIT(1),
 	// serialize properties common to all entities (position, rotation, scale)
-	ENTITY_SERIALIZE_POSITION   = 0x0002,
-	ENTITY_SERIALIZE_ROTATION   = 0x0004,
-	ENTITY_SERIALIZE_SCALE      = 0x0008,
-	ENTITY_SERIALIZE_GEOMETRIES = 0x0010
+	ENTITY_SERIALIZE_POSITION   = BIT(2),
+	ENTITY_SERIALIZE_ROTATION   = BIT(3),
+	ENTITY_SERIALIZE_SCALE      = BIT(4),
+	ENTITY_SERIALIZE_GEOMETRIES = BIT(5),
+	ENTITY_SERIALIZE_PROPERTIES = BIT(6)
 };
 
 enum EEntityGetSetSlotFlags

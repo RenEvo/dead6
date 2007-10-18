@@ -120,19 +120,24 @@ void CVehicleActionEntityAttachment::Update(const float deltaTime)
 		return;
 
 	pe_simulation_params paramsSim;
-	pPhysEntity->GetParams(&paramsSim);
-	float gravity = abs(paramsSim.gravity.z);
+	float gravity;
+	
+	if (pPhysEntity->GetParams(&paramsSim))
+		gravity = abs(paramsSim.gravity.z);
+	else
+		gravity = 9.82f;
 
 	pe_status_dynamics dyn;
-	pPhysEntity->GetStatus(&dyn);
+	if (pPhysEntity->GetStatus(&dyn))
+	{
+		pe_action_impulse impulse;
+		impulse.impulse  = Matrix33(pEntity->GetWorldTM()) * Vec3(0.0f, 0.0f, 1.0f) * g_parachuteForce * gravity;
+		impulse.impulse = impulse.impulse - dyn.v;
+		impulse.impulse *= dyn.mass * deltaTime;
+		impulse.iSource = 3;
 
-	pe_action_impulse impulse;
-	impulse.impulse  = Matrix33(pEntity->GetWorldTM()) * Vec3(0.0f, 0.0f, 1.0f) * g_parachuteForce * gravity;
-	impulse.impulse = impulse.impulse - dyn.v;
-	impulse.impulse *= dyn.mass * deltaTime;
-	impulse.iSource = 3;
-
-	pPhysEntity->Action(&impulse);
+		pPhysEntity->Action(&impulse);
+	}
 
 	m_timer -= deltaTime;
 	if (m_timer <= 0.0f || dyn.v.z >= 0.0f)

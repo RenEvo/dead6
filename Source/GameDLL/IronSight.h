@@ -18,7 +18,7 @@ History:
 # pragma once
 #endif
 
-
+#include <IViewSystem.h>
 #include "Weapon.h"
 #include "ItemParamReader.h"
 
@@ -132,9 +132,11 @@ public:
 			ResetValue(layer, "zoom_layer");
 			ResetValue(suffix, "ironsight");
 			ResetValue(suffix_FC, "fc");
-			ResetValue(dof, false);
 			ResetValue(support_FC_IronSight,false);
+			ResetValue(alternate_dof_mask, "");
 			ResetValue(dof_mask, "");
+			ResetValue(blur_amount, 0.0f);
+			ResetValue(blur_mask, "");
 			ResetValue(sensitivity_ratio, 1.2f);
 			ResetValue(hbob_ratio, 1.75f);
 			ResetValue(recoil_ratio, 1.0f);
@@ -145,9 +147,14 @@ public:
 			ResetValue(scope_mode, false);
 			ResetValue(scope_nearFov, 60.0f);
 			ResetValue(scope_offset,Vec3(0,0,0));
-			ResetValue(reflex_aimDot, false);
-			ResetValue(reflex_dotEffect,"");
 			
+			dof = true;
+			if (dof_mask.empty() && alternate_dof_mask.empty())
+				dof = false;
+
+			if (dof && alternate_dof_mask.empty())
+				alternate_dof_mask = dof_mask;
+
 			if (defaultInit)
 			{
 				stages.resize(0);
@@ -177,17 +184,21 @@ public:
 			s->Add(layer);
 			s->Add(suffix);
 			s->Add(suffix_FC);
+			s->Add(alternate_dof_mask);
 			s->Add(dof_mask);
-			s->Add(reflex_dotEffect);
+			s->Add(blur_mask);
 		}
 
 		std::vector<float>	stages;
 		ItemString					layer;
 		ItemString					suffix;
-		string							suffix_FC;	//Secondary suffix for FarCry ironsight mode
-		bool								dof;
+		string							suffix_FC;	//Secondary suffix for Alternative ironsight
 		bool								support_FC_IronSight;
+		bool								dof;
 		string							dof_mask;
+		string							alternate_dof_mask;
+		float								blur_amount;
+		string							blur_mask;
 		float								sensitivity_ratio;
 		float								hbob_ratio;
 		float								recoil_ratio;
@@ -198,10 +209,6 @@ public:
 		bool								scope_mode;
 		Vec3								scope_offset;		//Hard code offset since we don't have "proper" animation
 		float								scope_nearFov;
-
-		bool								reflex_aimDot;
-		ItemString					reflex_dotEffect;
-
 	} SZoomParams;
 
 	typedef struct SZoomActions
@@ -228,6 +235,41 @@ public:
 		}
 	} SZoomActions;
 
+	typedef struct SZoomSway
+	{
+
+		SZoomSway() { Reset(); };
+		void Reset(const IItemParamsNode *params=0, bool defaultInit=true)
+		{
+			CItemParamReader reader(params);
+			ResetValue(maxX,			0.0f);
+			ResetValue(maxY,		  0.0f);
+			ResetValue(stabilizeTime,				3.0f);
+			ResetValue(strengthScale, 0.6f);
+			ResetValue(strengthScaleTime, 0.75f);
+			ResetValue(minScale , 0.15f);
+			ResetValue(scaleAfterFiring, 0.5f);
+			ResetValue(crouchScale, 0.8f);
+			ResetValue(proneScale, 0.6f);
+		}
+
+		float maxX;
+		float maxY;
+		float stabilizeTime;
+		float strengthScale;
+		float strengthScaleTime;
+		float minScale;
+		float scaleAfterFiring;
+
+		//Stance modifiers
+		float								crouchScale;
+		float								proneScale;
+
+		void GetMemoryStatistics(ICrySizer * s)
+		{
+		}
+	} SZoomSway;
+
 	CIronSight();
 	virtual ~CIronSight();
 	virtual void GetMemoryStatistics(ICrySizer * s);
@@ -248,6 +290,7 @@ public:
 	virtual void ExitZoom();
 
 	virtual int GetCurrentStep() const {return m_currentStep;}
+	virtual float GetZoomFoVScale(int step) const;
 
 	virtual void ZoomIn();
 	virtual bool ZoomOut();
@@ -260,13 +303,22 @@ public:
 
 	virtual void Serialize(TSerialize ser);
 
-	virtual void UpdateFPView(float frameTime);
+	virtual void UpdateFPView(float frameTime){}
 
 	virtual int  GetMaxZoomSteps() { return m_zoomparams.stages.size(); };
+
+	virtual void ApplyZoomMod(IFireMode* pFM);
+
+	virtual bool IsToggle();
+
+	virtual void FilterView(SViewParams &viewparams);
+	virtual void PostFilterView(SViewParams & viewparams);
 	// ~IZoomMode
 
 	virtual void ResetTurnOff();
 	virtual void TurnOff(bool enable, bool smooth=true, bool anim=true);
+
+	virtual bool IsScope() const { return false; }
 
 protected:
 	virtual void EnterZoom(float time, const char *zoom_layer=0, bool smooth=true, int zoomStep = 1);
@@ -283,7 +335,7 @@ protected:
 
 	virtual void OnZoomStep(bool zoomingIn, float t);
 
-	virtual void UpdateDepthOfField(float frameTime, float t);
+	virtual void UpdateDepthOfField(CActor* pActor, float frameTime, float t);
 
 	virtual void SetActorFoVScale(float fov, bool sens,bool recoil, bool hbob);
 	virtual float GetActorFoVScale() const;
@@ -300,20 +352,17 @@ protected:
   
 	virtual float GetMagFromFoVScale(float scale) const;
 	virtual float GetFoVScaleFromMag(float mag) const;
-	virtual float GetZoomFoVScale(int step) const;
 
 	void ClearDoF();
+	void ClearBlur();
 
-	void CheckFarCryIronSight();
+	bool UseAlternativeIronSight() const;
 
 	void AdjustScopePosition(float time, bool zoomIn);
 	void AdjustNearFov(float time, bool zoomIn);
 	void ResetFovAndPosition();
 
-	void CreateReflexDot();
-	void DestroyReflexDot();
-	void UpdateReflexDot(float frameTime);
-	void HideReflexDot(bool hide);
+	void ZoomSway(float time, float &x, float&y);
 
 	CWeapon				*m_pWeapon;
 
@@ -338,16 +387,17 @@ protected:
 	float					m_initialNearFov;
 
 	bool					m_enabled;
-	bool					m_FarCry_style;
 
 	SZoomParams		m_zoomparams;
 	SZoomActions	m_actions;
+	SZoomSway			m_zoomsway;
 
 	SSpreadModParams m_spreadModParams;
 	SRecoilModParams m_recoilModParams;
+	float         m_swayTime;
+	float         m_swayCycle;
 
-	EntityId			m_reflexDotEntity;
-	float					m_reflexDotOnTimer;
+	float         m_lastRecoil;
 
 };
 

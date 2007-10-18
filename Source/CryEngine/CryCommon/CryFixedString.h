@@ -225,7 +225,7 @@ public:
 
 	ILINE void _set( value_type *dest,value_type ch,size_type count )
 	{
-		wmemset( dest,ch,count*sizeof(value_type) );
+		wmemset( dest,ch,count );
 	}
 
 	ILINE int	_vsnprintf( value_type *str, size_type size, const_str format, va_list ap)

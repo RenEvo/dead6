@@ -120,6 +120,7 @@ struct IItem : public IGameObjectExtension
 	virtual bool IsDualWieldMaster() const = 0;
 	virtual bool IsDualWieldSlave() const = 0;
 	virtual bool IsTwoHand() const = 0;
+	virtual void SetDualSlaveAccessory(bool noNetwork = false) = 0;
 
 	// Summary
 	//   Specifies the item to be selectable
@@ -196,8 +197,7 @@ struct IItem : public IGameObjectExtension
 	// See Also
 	//   SetBusy
 	virtual bool IsBusy() const = 0;
-	virtual IMaterial *Cloak(bool cloak, IMaterial *cloakMat = 0) = 0;
-	virtual bool IsCloaked() const = 0;
+	virtual void Cloak(bool cloak, IMaterial *cloakMat = 0) = 0;
 
 	virtual void UpdateFPView(float frameTime) = 0;
   virtual bool FilterView(struct SViewParams &viewParams) = 0;
@@ -210,6 +210,19 @@ struct IItem : public IGameObjectExtension
 	// Returns
 	//   A pointer to the IWeapon implementation
 	virtual IWeapon *GetIWeapon() = 0;
+
+	//used to serialize item attachment when loading next level
+	virtual void SerializeLTL( TSerialize ser ) = 0;
+
+	//removes all attachments
+	virtual void RemoveAllAccessories() = 0;
+	
+	// gets the angle limits for a mounted weapon item
+	virtual Vec3 GetMountedAngleLimits() const = 0;
+
+	// gets the original (not current) direction vector of a mounted weapon
+	virtual Vec3 GetMountedDir() const = 0;
+
 };
 
 #endif // __IITEM_H__

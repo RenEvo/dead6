@@ -519,7 +519,7 @@ int CScriptBind_Weapon::AutoShoot(IFunctionHandler *pH, int shots, bool autoRelo
 				pWeapon->Reload(false);
 			else
 			{
-				pWeapon->StopFire(0);
+				pWeapon->StopFire();
 				pWeapon->RemoveEventListener(this);
 			}
 		};
@@ -527,13 +527,13 @@ int CScriptBind_Weapon::AutoShoot(IFunctionHandler *pH, int shots, bool autoRelo
 		{
 			if (!(--m_nshots))
 			{
-				pWeapon->StopFire(0);
+				pWeapon->StopFire();
 				pWeapon->RemoveEventListener(this);
 			}
 			else
 			{
-				pWeapon->StartFire(0);
-				pWeapon->StopFire(0);
+				pWeapon->StartFire();
+				pWeapon->StopFire();
 			}
 		};
 		virtual void OnPickedUp(IWeapon *pWeapon, EntityId actorId, bool destroyed){}
@@ -541,6 +541,7 @@ int CScriptBind_Weapon::AutoShoot(IFunctionHandler *pH, int shots, bool autoRelo
 		virtual void OnMelee(IWeapon* pWeapon, EntityId shooterId){}
 		virtual void OnStartTargetting(IWeapon *pWeapon) {}
 		virtual void OnStopTargetting(IWeapon *pWeapon) {}
+		virtual void OnSelected(IWeapon *pWeapon, bool select) {}
 	};
 
 	CWeapon *pWeapon = GetWeapon(pH);
@@ -548,8 +549,8 @@ int CScriptBind_Weapon::AutoShoot(IFunctionHandler *pH, int shots, bool autoRelo
 		return pH->EndFunction();
 
 	pWeapon->AddEventListener(new AutoShootHelper(shots, autoReload), __FUNCTION__); 	// FIXME: possible small memory leak here. 
-	pWeapon->StartFire(0);
-	pWeapon->StopFire(0);
+	pWeapon->StartFire();
+	pWeapon->StopFire();
 
 	return pH->EndFunction();
 }

@@ -28,10 +28,11 @@ struct SDecalOwnerInfo
 	SDecalOwnerInfo() { memset(this,0,sizeof(*this)); nRenderNodeSlotId = nRenderNodeSlotSubObjectId = -1; }
 	struct IStatObj * GetOwner(Matrix34 & objMat);
 
-	struct IRenderNode *	pRenderNode;							// Owner (decal will be rendered on this entity)
+	struct IRenderNode *	pRenderNode;							// Owner (decal will be attached to or wrapped around of this object)
 	PodArray<struct SRNInfo>*pDecalReceivers;
-	int										nRenderNodeSlotId;  // set by 3dengine
-	int										nRenderNodeSlotSubObjectId; // set by 3dengine
+	int										nRenderNodeSlotId;  // is set internally by 3dengine
+	int										nRenderNodeSlotSubObjectId; // is set internally by 3dengine
+  int                   nMatID;
 };
 
 struct CryEngineDecalInfo
@@ -43,14 +44,14 @@ struct CryEngineDecalInfo
 	float									fLifeTime;								// Decal life time (in seconds)
 	char									szTextureName[_MAX_PATH]; // texture name
 	float									fAngle;										// Angle of rotation
-	struct IStatObj *			pIStatObj;									// Decal geometry
+	struct IStatObj *			pIStatObj;							  // Decal geometry
 	Vec3                  vHitDirection;						// Direction from weapon/player position to decal position (bullet direction)
-	float									m_fGrowTime;							// Used for blood pools
+	float									fGrowTime;							  // Used for blood pools
+  unsigned int          nGroupId;                 // Used for multi-component decals
 	bool									bAdjustPos;								// Place decal on some visible surface
-	uint8									sortPrio;									
-	
+  bool									bSkipOverlappingTest;			// Always spawn decals even if there are a lot of other decals in same place
+	uint8									sortPrio;										
 	char szMaterialName[_MAX_PATH]; // name of material used for rendering the decal (in favor of szTextureName/nTid and the default decal shader)	
-	
 	bool preventDecalOnGround;				// mainly for decal placement support
 	const Matrix33* pExplicitRightUpFront;	// mainly for decal placement support
 

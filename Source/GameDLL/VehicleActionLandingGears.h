@@ -51,6 +51,7 @@ protected:
 	float m_altitudeToRetractGears;
 	float m_landingDamages;
 	float m_velocityMax;
+	float m_minTimeForChange;
 
 	bool m_isOnlyAutoForPlayer;
 
@@ -67,6 +68,7 @@ protected:
 
 	float m_animTime;
 	float m_animGoal;
+	float m_timer;
 };
 
 #endif

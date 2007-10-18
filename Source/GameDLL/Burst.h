@@ -55,8 +55,8 @@ public:
 	virtual void Activate(bool activate);
 	virtual bool CanFire(bool considerAmmo /* = true */) const;
 
-	virtual void StartFire(EntityId shooterId);
-	virtual void StopFire(EntityId shooterId);
+	virtual void StartFire();
+	virtual void StopFire();
 	virtual const char *GetType() const;
 	// ~CSingle
 

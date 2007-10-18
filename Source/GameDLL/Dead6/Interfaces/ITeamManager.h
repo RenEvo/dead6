@@ -127,6 +127,7 @@ struct STeamDef
 };
 typedef std::map<TeamID, STeamDef>	TeamMap;
 typedef std::map<TeamID, TeamPlayerList> TeamPlayerMap;
+typedef std::map<int, TeamID> ChannelMap;
 
 ////////////////////////////////////////////////////
 struct ITeamManager
@@ -433,6 +434,27 @@ struct ITeamManager
 	// Returns STeamHarvesterDef object or NULL on error
 	////////////////////////////////////////////////////
 	virtual STeamHarvesterDef *GetTeamHarvester(TeamID nID, HarvesterID nHarvesterID) = 0;
+
+	////////////////////////////////////////////////////
+	// GetChannelTeam
+	//
+	// Purpose: Get the team that owns the given channel
+	//
+	// In:	nChannelID - Channel ID
+	//
+	// Returns id of Team
+	////////////////////////////////////////////////////
+	virtual TeamID GetChannelTeam(int nChannelID) const = 0;
+
+	////////////////////////////////////////////////////
+	// GetTeamChannelCount
+	//
+	// Purpose: Returns how many channels a team has
+	//
+	// In:	nTeamID - team ID
+	//		bInGame - TRUE to only count those in the game
+	////////////////////////////////////////////////////
+	virtual int GetTeamChannelCount(TeamID nTeamID, bool bInGame = false) const = 0;
 };
 
 #endif //_D6C_ITEAMMANAGER_H_

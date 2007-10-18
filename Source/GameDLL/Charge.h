@@ -33,10 +33,14 @@ class CCharge :
 			CItemParamReader reader(params);
 			ResetValue(time,						0.5f);
 			ResetValue(max_charges,			1);
+			ResetValue(shoot_on_stop,		false);
+			ResetValue(reset_spinup,		false);
 		};
 
 		float		time;
 		int			max_charges;
+		bool		shoot_on_stop;
+		bool		reset_spinup;
 	} SChargeParams;
 
 	typedef struct SChargeActions
@@ -46,9 +50,11 @@ class CCharge :
 		{
 			CItemParamReader reader(params);
 			ResetValue(charge,	"charge");
+			ResetValue(uncharge,"uncharge");
 		};
 
 		ItemString charge;
+		ItemString uncharge;
 
 	} SChargeActions;
 
@@ -58,11 +64,13 @@ public:
 
 	virtual void Update(float frameTime, uint frameId);
 	virtual void GetMemoryStatistics(ICrySizer * s) { s->Add(*this); CSingle::GetMemoryStatistics(s); }
-	
+
 	virtual void ResetParams(const struct IItemParamsNode *params);
 	virtual void PatchParams(const struct IItemParamsNode *patch);
 
 	virtual void Activate(bool activate);
+
+	virtual void StopFire();
 
 	virtual bool Shoot(bool resetAnimation, bool autoreload, bool noSound /* =false */);
 
@@ -72,7 +80,7 @@ public:
 protected:
 
 	SEffectParams	m_chargeeffect;
-  int						m_charged;
+	int						m_charged;
 	bool					m_charging;
 	float					m_chargeTimer;
 	bool					m_autoreload;

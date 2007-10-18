@@ -24,6 +24,24 @@ namespace
 		return pWeapon;
 	}
 
+	IWeapon* GetWeapon(IActor* pActor, const char* className)
+	{
+		IInventory *pInventory = pActor->GetInventory();
+		if (!pInventory)
+			return 0;
+		IEntityClass* pEntityClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(className);
+		if (!pEntityClass)
+			return 0;
+		EntityId itemId = pInventory->GetItemByClass(pEntityClass);
+		if (itemId == 0)
+			return 0;
+		IItem* pItem = g_pGame->GetIGameFramework()->GetIItemSystem()->GetItem(itemId);
+		if (pItem == 0)
+			return 0;
+		IWeapon* pWeapon = pItem->GetIWeapon();
+		return pWeapon;
+	}
+
 	IActor* GetActor(CFlowBaseNode::SActivationInfo* pActInfo)
 	{
 		IEntity* pEntity = pActInfo->pEntity;
@@ -184,10 +202,7 @@ public:
 
 	~CFlowNode_WeaponAccessoryChanged()
 	{
-		if (g_pGame->GetHUD())
-		{
-			g_pGame->GetHUD()->UnRegisterListener(this);
-		}
+		SAFE_HUD_FUNC(UnRegisterListener(this));
 	}
 
 	IFlowNodePtr Clone(SActivationInfo* pActInfo)
@@ -222,8 +237,7 @@ public:
 		{
 		case eFE_Initialize:
 			m_actInfo = *pActInfo;
-			if (g_pGame->GetHUD())
-				g_pGame->GetHUD()->RegisterListener(this);
+			SAFE_HUD_FUNC(RegisterListener(this));
 			break;
 		case eFE_Activate:
 			{
@@ -366,6 +380,88 @@ public:
 	}
 };
 
+class CFlowNode_WeaponAccessory : public CFlowBaseNode 
+{
+public:
+	CFlowNode_WeaponAccessory( SActivationInfo * pActInfo ) { }
+
+	enum INPUTS
+	{
+		EIP_ATTACH = 0,
+		EIP_DETACH,
+		EIP_WEAPON,
+		EIP_ACCESSORY,
+	};
+
+	enum OUTPUTS
+	{
+		EOP_ATTACHED = 0,
+		EOP_DETACHED,
+	};
+
+	void GetConfiguration( SFlowNodeConfig& config )
+	{
+		static const SInputPortConfig in_ports[] = 
+		{
+			InputPortConfig_Void( "Attach", _HELP("Trigger to attach accessory on the Actor's weapon" )),
+			InputPortConfig_Void( "Detach", _HELP("Trigger to detach accessory from the Actor's weapon" )),
+			InputPortConfig<string>( "Weapon", _HELP("Name of weapon the accessory should be attached/detached"), 0, _UICONFIG("enum_global:weapon")),
+			InputPortConfig<string>( "Accessory", _HELP("Name of accessory"), 0, _UICONFIG("enum_global:item")),
+			{0}
+		};
+		static const SOutputPortConfig out_ports[] = 
+		{
+			OutputPortConfig_Void( "Attached", _HELP("Triggered if accessory was attached.")),
+			OutputPortConfig_Void( "Detached",  _HELP("Triggered if accessory was detached.")),
+			{0}
+		};
+		config.nFlags |= EFLN_TARGET_ENTITY;
+		config.pInputPorts = in_ports;
+		config.pOutputPorts = out_ports;
+		config.sDescription = _HELP("Attach/Detach [Accessory] from Actor's weapon [Weapon]. Both must be in the Inventory.");
+		config.SetCategory(EFLN_WIP);
+	}
+
+	void ProcessEvent( EFlowEvent event, SActivationInfo *pActInfo )
+	{
+		if(eFE_Activate == event)
+		{
+			const bool bAttach = IsPortActive(pActInfo, EIP_ATTACH);
+			const bool bDetach = IsPortActive(pActInfo, EIP_DETACH);
+			if (!bAttach && !bDetach)
+				return;
+
+			IActor* pActor = GetActor(pActInfo);
+			if (pActor == 0)
+				return;
+
+			const string& className = GetPortString(pActInfo, EIP_WEAPON);
+
+			CWeapon* pWeapon = static_cast<CWeapon*> ( className.empty() ? GetWeapon(pActor) : GetWeapon(pActor, className.c_str()) );
+			if (pWeapon != 0)
+			{
+				ItemString acc = ItemString(GetPortString(pActInfo, EIP_ACCESSORY));
+				if (bAttach && pWeapon->GetAccessory(acc) == 0)
+				{
+					pWeapon->SwitchAccessory(acc);
+					ActivateOutput(pActInfo, EOP_ATTACHED, true);
+				}
+				else if (bDetach && pWeapon->GetAccessory(acc) != 0)
+				{
+					pWeapon->SwitchAccessory(acc);
+					ActivateOutput(pActInfo, EOP_DETACHED, true);
+				}
+			}
+		}
+	}
+
+	virtual void GetMemoryStatistics(ICrySizer * s)
+	{
+		s->Add(*this);
+	}
+};
+
 REGISTER_FLOW_NODE("Weapon:AccessoryChanged",	CFlowNode_WeaponAccessoryChanged);
 REGISTER_FLOW_NODE_SINGLETON("Weapon:CheckAccessory",		CFlowNode_WeaponCheckAccessory);
 REGISTER_FLOW_NODE_SINGLETON("Weapon:CheckZoom",		CFlowNode_WeaponCheckZoom);
+REGISTER_FLOW_NODE_SINGLETON("Weapon:Accessory",		CFlowNode_WeaponAccessory);

@@ -25,6 +25,11 @@ struct ISaveGame
 	// 0 otherwise
 	virtual uint8* SetThumbnail(const uint8* imageData, int width, int height, int depth) = 0;
 
+	// set a thumbnail from an already present bmp file
+	// file will be read on function call 
+	// returns true if successful, false otherwise
+	virtual bool SetThumbnailFromBMP(const char* filename) = 0;
+
 	// finish - indicate success (negative success *must* remove file)
 	// also calls delete this;
 	virtual bool Complete( bool successfulSoFar ) = 0;

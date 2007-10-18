@@ -57,6 +57,7 @@ public:
 
 
 	virtual void UpdateRatio();
+	virtual void Serialize(TSerialize ser);
 
 	// Set the GOD mode
 	void SetGODMode(uint8 ucGodMode, bool forceUpdate = false);
@@ -102,19 +103,18 @@ protected:
 	int						m_width;
 	int						m_height;
 
+	// Interference
+	bool					m_bForceInterferenceUpdate;
 	float					m_distortionStrength;
 	float					m_displacementStrength;
 	float					m_alphaStrength;
 	float					m_interferenceDecay;
-
-	float					m_lastInterference;
 
 	int						m_distortionX;
 	int						m_distortionY;
 	int						m_displacementX;
 	int						m_displacementY;
 	int						m_alpha;
-	int						m_alphaBeforeInterference;
 
 	// Flash HUD visibility
 	bool m_bShow;

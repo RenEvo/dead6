@@ -96,7 +96,7 @@
 
 // checks if the heap is valid in debug; in release, this function shouldn't be called
 // returns non-0 if it's valid and 0 if not valid
-inline int IsHeapValid()
+ILINE int IsHeapValid()
 {
 #if (defined(_DEBUG) && !defined(RELEASE_RUNTIME) && !defined(PS3)) || (defined(DEBUG_MEMORY_MANAGER))
 	return _CrtCheckMemory();
@@ -163,6 +163,11 @@ CRYMEMORYMANAGER_API size_t CryGetMemSize(void *p, size_t size);
 CRYMEMORYMANAGER_API int  CryStats(char *buf);
 CRYMEMORYMANAGER_API void CryFlushAll();
 CRYMEMORYMANAGER_API void CryCleanup();
+CRYMEMORYMANAGER_API int  CryGetUsedHeapSize();
+CRYMEMORYMANAGER_API int  CryGetWastedHeapSize();
+CRYMEMORYMANAGER_API void *CrySystemCrtMalloc(size_t size);
+CRYMEMORYMANAGER_API void CrySystemCrtFree(void *p);
+
 // This function is local in every module
 /*CRYMEMORYMANAGER_API*/ void CryGetMemoryInfoForModule(CryModuleMemoryInfo * pInfo);
 #else
@@ -173,6 +178,11 @@ CRYMEMORYMANAGER_API size_t CryGetMemSize(void *p, size_t size);
 CRYMEMORYMANAGER_API int  CryStats(char *buf);
 CRYMEMORYMANAGER_API void CryFlushAll();
 CRYMEMORYMANAGER_API void CryCleanup();
+CRYMEMORYMANAGER_API int  CryGetUsedHeapSize();
+CRYMEMORYMANAGER_API int  CryGetWastedHeapSize();
+CRYMEMORYMANAGER_API void *CrySystemCrtMalloc(size_t size);
+CRYMEMORYMANAGER_API void CrySystemCrtFree(void *p);
+
 // This function is local in every module
 /*CRYMEMORYMANAGER_API*/ void CryGetMemoryInfoForModule(CryModuleMemoryInfo * pInfo);
 #endif
@@ -211,24 +221,24 @@ extern "C"
   void* CryModuleRealloc(void *memblock,size_t size, ECryModule eCM=eCryModule) throw();
   void  CryModuleFree(void *ptr, ECryModule eCM=eCryModule) throw();
 
-  inline void* _LibCryModuleMalloc(size_t size) throw() { return CryModuleMalloc(size); }
-  inline void* _LibCryModuleCalloc(size_t num,size_t size) throw() { return CryModuleCalloc(num, size); }
-  inline void* _LibCryModuleRealloc(void *memblock,size_t size) throw() { return CryModuleRealloc(memblock, size); }
-  inline void  _LibCryModuleFree(void *ptr) throw() { CryModuleFree(ptr); }
+  ILINE void* _LibCryModuleMalloc(size_t size) throw() { return CryModuleMalloc(size); }
+  ILINE void* _LibCryModuleCalloc(size_t num,size_t size) throw() { return CryModuleCalloc(num, size); }
+  ILINE void* _LibCryModuleRealloc(void *memblock,size_t size) throw() { return CryModuleRealloc(memblock, size); }
+  ILINE void  _LibCryModuleFree(void *ptr) throw() { CryModuleFree(ptr); }
 #endif
 }
 
 #ifdef _LIB
 	CRY_MEM_USAGE_API void CryModuleGetMemoryInfo( CryModuleMemoryInfo *pMemInfo, ECryModule eCM );
-	#if !defined(_DEBUG) && !defined(NOT_USE_CRY_MEMORY_MANAGER) && !defined(_SPU)
-		inline void * __cdecl operator new   (size_t size) throw (std::bad_alloc) { return CryModuleMalloc(size, eCryModule); }
-		inline void * __cdecl operator new   (size_t size, const std::nothrow_t &nothrow) throw() { return CryModuleMalloc(size, eCryModule); }
-		inline void * __cdecl operator new[] (size_t size) throw (std::bad_alloc) { return CryModuleMalloc(size, eCryModule); }
-		inline void * __cdecl operator new[] (size_t size, const std::nothrow_t &nothrow) throw() { return CryModuleMalloc(size, eCryModule); }
-		inline void __cdecl operator delete  (void *p) throw (){ CryModuleFree(p, eCryModule); };
-		inline void __cdecl operator delete[](void *p) throw (){ CryModuleFree(p, eCryModule); };
-		inline void __cdecl operator delete  (void *p, const std::nothrow_t &nothrow) throw (){ CryModuleFree(p, eCryModule); };
-		inline void __cdecl operator delete[](void *p, const std::nothrow_t &nothrow) throw (){ CryModuleFree(p, eCryModule); };
+	#if (!defined(_DEBUG) || defined(PS3)) && !defined(NOT_USE_CRY_MEMORY_MANAGER) && !defined(__SPU__)
+		ILINE void * __cdecl operator new   (size_t size) throw (std::bad_alloc) { return CryModuleMalloc(size, eCryModule); }
+		ILINE void * __cdecl operator new   (size_t size, const std::nothrow_t &nothrow) throw() { return CryModuleMalloc(size, eCryModule); }
+		ILINE void * __cdecl operator new[] (size_t size) throw (std::bad_alloc) { return CryModuleMalloc(size, eCryModule); }
+		ILINE void * __cdecl operator new[] (size_t size, const std::nothrow_t &nothrow) throw() { return CryModuleMalloc(size, eCryModule); }
+		ILINE void __cdecl operator delete  (void *p) throw (){ CryModuleFree(p, eCryModule); };
+		ILINE void __cdecl operator delete[](void *p) throw (){ CryModuleFree(p, eCryModule); };
+		ILINE void __cdecl operator delete  (void *p, const std::nothrow_t &nothrow) throw (){ CryModuleFree(p, eCryModule); };
+		ILINE void __cdecl operator delete[](void *p, const std::nothrow_t &nothrow) throw (){ CryModuleFree(p, eCryModule); };
 	#endif
 #else
 	CRY_MEM_USAGE_API void CryModuleGetMemoryInfo( CryModuleMemoryInfo *pMemInfo );
@@ -240,12 +250,13 @@ extern "C"
 // Redirect standard memory routines to CryModule functions in this module,
 // unless _DEBUG or NOT_USE_CRY_MEMORY_MANAGER
 
-#if defined(__SPU__) || (!defined(_DEBUG) && !defined(NOT_USE_CRY_MEMORY_MANAGER))
+#if defined(__SPU__) || ((!defined(_DEBUG) || defined(PS3)) && !defined(NOT_USE_CRY_MEMORY_MANAGER))
 	#undef malloc
 	#undef calloc
 	#undef realloc
 	#undef free
 	#undef memalign
+# ifndef __CRYCG__
 # ifndef _LIB
 	#define malloc        CryModuleMalloc
 	#define calloc        CryModuleCalloc
@@ -256,6 +267,7 @@ extern "C"
   #define calloc        _LibCryModuleCalloc
   #define realloc       _LibCryModuleRealloc
   #define free          _LibCryModuleFree
+# endif
 # endif
 #endif
 
@@ -273,9 +285,10 @@ extern "C"
 
 
 
+
 // Need for our allocator to avoid deadlock in cleanup
-CRYMEMORYMANAGER_API void *CryCrtMalloc(size_t size);
-CRYMEMORYMANAGER_API void CryCrtFree(void *p);
+/*CRYMEMORYMANAGER_API */void *CryCrtMalloc(size_t size);
+/*CRYMEMORYMANAGER_API */void CryCrtFree(void *p);
 
 #if !defined( NOT_USE_CRY_MEMORY_MANAGER) && !defined(__SPU__)// && !defined(_STLP_BEGIN_NAMESPACE) // Avoid non STLport version
 #include "CryMemoryAllocator.h"
@@ -287,7 +300,7 @@ CRYMEMORYMANAGER_API void CryCrtFree(void *p);
 typedef void* (*TPFAlloc)( void* ptr, size_t size );
 
 // Standard Alloc, using whichever malloc is defined in module.
-inline void* ModuleAlloc( void* ptr, size_t size )
+ILINE void* ModuleAlloc( void* ptr, size_t size )
 {
 	if (size)
 		return ptr ? realloc(ptr, size) : malloc(size);

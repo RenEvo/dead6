@@ -1,10 +1,13 @@
 #include "StdAfx.h"
 #include "HUD.h"
+#include "HUDRadar.h"
+#include "HUDSilhouettes.h"
 #include "GameFlashAnimation.h"
 #include "IRenderer.h"
 #include "../Actor.h"
-#include "IGameTokens.h"
+#include "WeaponSystem.h"
 #include "Weapon.h"
+#include "Claymore.h"
 #include "../GameRules.h"
 #include <IMaterialEffects.h>
 #include "Game.h"
@@ -17,6 +20,8 @@
 #include "IMovieSystem.h"
 #include "HUDScopes.h"
 #include "HUDCrosshair.h"
+#include "OffHand.h"
+#include "GameActions.h"
 
 void CHUD::QuickMenuSnapToMode(ENanoMode mode)
 {
@@ -80,45 +85,47 @@ void CHUD::AutoSnap()
 		Vec2 vCursor = s_vCursor;
 		vCursor.NormalizeSafe();
 
-		/*				ColorB col(255,255,255,255);
+		float fAngle;
+		if(vCursor.y < 0)
+		{
+			fAngle = RAD2DEG(acos_tpl(vCursor.x));
+		}
+		else
+		{
+			fAngle = RAD2DEG(gf_PI2-acos_tpl(vCursor.x));
+		}
+
+		char szAngle[32];
+		sprintf(szAngle,"%f",-fAngle+90.0f);
+
+/*
+		ColorB col(255,255,255,255);
 		int iW=m_pRenderer->GetWidth();
 		int iH=m_pRenderer->GetHeight();
 		m_pRenderer->Set2DMode(true,iW,iH);
 		m_pRenderer->GetIRenderAuxGeom()->DrawLine(Vec3(iW/2,iH/2,0),col,Vec3(iW/2+vCursor.x*100,iH/2+vCursor.y*100,0),col,5);
-		m_pRenderer->Set2DMode(false,0,0);*/
+		m_pRenderer->Set2DMode(false,0,0);
+*/
 
-		float fAngle;
-		if(vCursor.y < 0)
-		{
-			fAngle = RAD2DEG(acosf(vCursor.x));
-		}
-		else
-		{
-			fAngle = RAD2DEG(gf_PI2-acosf(vCursor.x));
-		}
+		m_animQuickMenu.CheckedSetVariable("Root.QuickMenu.Circle.Indicator._rotation",szAngle);
 
-		char strAngle[32];
-		sprintf(strAngle,"%f",-fAngle+90.0f);
-
-		m_animQuickMenu.CheckedSetVariable("Root.QuickMenu.Circle.Indicator._rotation",strAngle);
-
-		if(fAngle >= 340 || fAngle < 30)
+		if(fAngle >= 342 || fAngle < 52)
 		{
 			autosnapItem = "Strength";
 		}
-		else if(fAngle >= 30 && fAngle < 150)
+		else if(fAngle >= 52 && fAngle < 128)
 		{
 			autosnapItem = "Speed";
 		}
-		else if(fAngle >= 150 && fAngle < 200)
+		else if(fAngle >= 128 && fAngle < 205)
 		{
 			autosnapItem = "Defense";
 		}
-		else if(fAngle >= 200 && fAngle < 270)
+		else if(fAngle >= 205 && fAngle < 260)
 		{
 			autosnapItem = "Weapon";
 		}
-		else if(fAngle >= 270 && fAngle < 340)
+		else if(fAngle >= 260 && fAngle < 342)
 		{
 			autosnapItem = "Cloak";
 		}
@@ -127,18 +134,52 @@ void CHUD::AutoSnap()
 	m_animQuickMenu.CheckedInvoke("Root.QuickMenu.setAutosnapItem", autosnapItem);
 }
 
-void CHUD::UpdateMissionObjectiveIcon(EntityId objective, int friendly, FlashOnScreenIcon iconType)
+void CHUD::UpdateMissionObjectiveIcon(EntityId objective, int friendly, FlashOnScreenIcon iconType, bool forceNoOffset, Vec3 rotationTarget)
 {
 	IEntity *pObjectiveEntity = GetISystem()->GetIEntitySystem()->GetEntity(objective);
 	if(!pObjectiveEntity) return;
 
 	AABB box;
 	pObjectiveEntity->GetWorldBounds(box);
+	Vec3 vWorldPos = Vec3(0,0,0);
 
-	Vec3 vWorldPos = box.GetCenter();
-	vWorldPos.z += 2.0f;
+	SEntitySlotInfo info;
+	int slotCount = pObjectiveEntity->GetSlotCount();
+	for(int i=0; i<slotCount; ++i)
+	{
+		if (pObjectiveEntity->GetSlotInfo(i, info))
+		{
+			if (info.pCharacter)
+			{
+				int16 id = info.pCharacter->GetISkeletonPose()->GetJointIDByName("objectiveicon");
+				if (id >= 0)
+				{
+					//vPos = pCharacter->GetISkeleton()->GetHelperPos(helper);
+					vWorldPos = info.pCharacter->GetISkeletonPose()->GetAbsJointByID(id).t;
+					if (!vWorldPos.IsZero())
+					{
+						vWorldPos = pObjectiveEntity->GetSlotWorldTM(i).TransformPoint(vWorldPos);
+						break;
+					}
+				}
+			}
+		}
+	}
+	if(vWorldPos == Vec3(0,0,0))
+		vWorldPos = pObjectiveEntity->GetWorldPos();
+
+	if(!forceNoOffset)
+		vWorldPos.z += 2.0f;
+
 	Vec3 vEntityScreenSpace;
 	m_pRenderer->ProjectToScreen(	vWorldPos.x, vWorldPos.y,	vWorldPos.z, &vEntityScreenSpace.x, &vEntityScreenSpace.y, &vEntityScreenSpace.z);
+	Vec3 vEntityTargetSpace;
+	bool useTarget = false;
+	if(!rotationTarget.IsZero())
+	{
+		m_pRenderer->ProjectToScreen(	rotationTarget.x, rotationTarget.y,	rotationTarget.z, &vEntityTargetSpace.x, &vEntityTargetSpace.y, &vEntityTargetSpace.z);
+		useTarget = true;
+	}
 
 	CActor *pActor = (CActor*)(gEnv->pGame->GetIGameFramework()->GetClientActor());
 	bool bBack = false;
@@ -163,40 +204,37 @@ void CHUD::UpdateMissionObjectiveIcon(EntityId objective, int friendly, FlashOnS
 		vScreenDir = vCenter + (100.0f * vScreenDir.NormalizeSafe());
 		vEntityScreenSpace.y = vScreenDir.y;
 		vEntityScreenSpace.x = vScreenDir.x;
+		useTarget = false;
 	}
 	if(vEntityScreenSpace.x < 2.0f)
 	{
 		bLeft = true;
 		vEntityScreenSpace.x = 2.0f;
+		useTarget = false;
 	}
 	if(vEntityScreenSpace.x > 98.0f)
 	{
 		bRight = true;
 		vEntityScreenSpace.x = 98.0f;
+		useTarget = false;
 	}
 	if(vEntityScreenSpace.y < 2.01f)
 	{
 		bTop = true;
 		vEntityScreenSpace.y = 2.0f;
+		useTarget = false;
 	}
 	if(vEntityScreenSpace.y > 97.99f)
 	{
 		bBottom = true;
 		vEntityScreenSpace.y = 98.0f;
+		useTarget = false;
 	}
 
-	float fRendererWidth	= (float) m_pRenderer->GetWidth();
-	float fRendererHeight	= (float) m_pRenderer->GetHeight();
-
-	float fMovieWidth		= (float) m_animMissionObjective.GetFlashPlayer()->GetWidth();
-	float fMovieHeight	= (float) m_animMissionObjective.GetFlashPlayer()->GetHeight();
-
-	float fScaleX = (fMovieHeight / 100.0f) * fRendererWidth / fRendererHeight;
-	float fScaleY = fMovieHeight / 100.0f;
-
-	float fScale = fMovieHeight / fRendererHeight;
-	float fUselessSize = fMovieWidth - fRendererWidth * fScale;
-	float fHalfUselessSize = fUselessSize * 0.5f;
+	float fScaleX = 0.0f;
+	float fScaleY = 0.0f;
+	float fHalfUselessSize = 0.0f;
+	GetProjectionScale(&m_animMissionObjective,&fScaleX,&fScaleY,&fHalfUselessSize);
 
 	if(bLeft && bTop)
 	{
@@ -231,14 +269,25 @@ void CHUD::UpdateMissionObjectiveIcon(EntityId objective, int friendly, FlashOnS
 		iconType = eOS_Bottom;
 	}
 
-#if 0
-	// Note: 18 is the size of the box (coming from Flash)
-	char strX[32];
-	char strY[32];
+	float rotation = 0.0f;
+	if(useTarget)
+	{
+		float diffX = (vEntityScreenSpace.x*fScaleX+fHalfUselessSize+16.0f) - (vEntityTargetSpace.x*fScaleX+fHalfUselessSize+16.0f);
+		float diffY = (vEntityScreenSpace.y*fScaleY) - (vEntityTargetSpace.y*fScaleY);
+		Vec2 dir(diffX, diffY);
+		dir.NormalizeSafe();
 
-	sprintf(strX,"%f",vEntityScreenSpace.x*fScaleX+fHalfUselessSize+16.0f);
-	sprintf(strY,"%f",vEntityScreenSpace.y*fScaleY);
-#endif
+		float fAngle;
+		if(dir.y < 0)
+		{
+			fAngle = RAD2DEG(acos_tpl(dir.x));
+		}
+		else
+		{
+			fAngle = RAD2DEG(gf_PI2-acos_tpl(dir.x));
+		}
+		rotation = fAngle - 90.0f;
+	}
 
 	int		iMinDist = g_pGameCVars->hud_onScreenNearDistance;
 	int		iMaxDist = g_pGameCVars->hud_onScreenFarDistance;
@@ -264,7 +313,16 @@ void CHUD::UpdateMissionObjectiveIcon(EntityId objective, int friendly, FlashOnS
 		float fC = (fMinSize - fMaxSize);
 		fSize = ((fA / fB) * fC) + fMaxSize;
 	}
-	m_missionObjectiveNumEntries += FillUpMOArray(&m_missionObjectiveValues, objective, vEntityScreenSpace.x*fScaleX+fHalfUselessSize+16.0f, vEntityScreenSpace.y*fScaleY, iconType, friendly, (int)fDist, fSize*fSize);
+
+	float centerX = 50.0;
+	float centerY = 50.0;
+
+	m_missionObjectiveNumEntries += FillUpMOArray(&m_missionObjectiveValues, objective, vEntityScreenSpace.x*fScaleX+fHalfUselessSize+16.0f, vEntityScreenSpace.y*fScaleY, iconType, friendly, (int)fDist, fSize*fSize, -rotation);
+	bool nearCenter = (pow(centerX-vEntityScreenSpace.x+1.5f,2.0f)+pow(centerY-vEntityScreenSpace.y+2.5f,2.0f))<16.0f;
+	if(nearCenter && (gEnv->bMultiplayer || m_pHUDScopes->IsBinocularsShown()))
+	{
+		m_objectiveNearCenter = objective;
+	}
 }
 
 void CHUD::UpdateAllMissionObjectives()
@@ -274,8 +332,14 @@ void CHUD::UpdateAllMissionObjectives()
 		m_animMissionObjective.SetVisible(true);
 		m_animMissionObjective.GetFlashPlayer()->SetVariableArray(FVAT_Double, "m_allValues", 0, &m_missionObjectiveValues[0], m_missionObjectiveNumEntries);
 		m_animMissionObjective.Invoke("updateMissionObjectives");
+		const char* description = "";
+		if(m_pHUDRadar)
+			description = m_pHUDRadar->GetObjectiveDescription(m_objectiveNearCenter);
+		SFlashVarValue args[2] = {(int)m_objectiveNearCenter, description};
+		m_animMissionObjective.Invoke("setNearCenter",args, 2);
+		m_objectiveNearCenter = 0;
 	}
-	else
+	else if(m_animMissionObjective.GetVisible())
 	{
 		m_animMissionObjective.SetVisible(false);
 	}
@@ -285,7 +349,7 @@ void CHUD::UpdateAllMissionObjectives()
 }
 
 
-int CHUD::FillUpMOArray(std::vector<double> *doubleArray, double a, double b, double c, double d, double e, double f, double g)
+int CHUD::FillUpMOArray(std::vector<double> *doubleArray, double a, double b, double c, double d, double e, double f, double g, double h)
 {
 	doubleArray->push_back(a);
 	doubleArray->push_back(b);
@@ -294,7 +358,8 @@ int CHUD::FillUpMOArray(std::vector<double> *doubleArray, double a, double b, do
 	doubleArray->push_back(e);
 	doubleArray->push_back(f);
 	doubleArray->push_back(g);
-	return 7;
+	doubleArray->push_back(h);
+	return 8;
 }
 
 void CHUD::GrenadeDetector(CPlayer* pPlayerActor)
@@ -348,18 +413,13 @@ void CHUD::GrenadeDetector(CPlayer* pPlayerActor)
 			m_bGrenadeLeftOrRight = false;
 		}
 
-		float fRendererWidth	= (float) m_pRenderer->GetWidth();
-		float fRendererHeight	= (float) m_pRenderer->GetHeight();
+		float fScaleX = 0.0f;
+		float fScaleY = 0.0f;
+		float fHalfUselessSize = 0.0f;
+		GetProjectionScale(&m_animGrenadeDetector,&fScaleX,&fScaleY,&fHalfUselessSize);
 
-		float fMovieWidth		= (float) m_animGrenadeDetector.GetFlashPlayer()->GetWidth();
 		float fMovieHeight	= (float) m_animGrenadeDetector.GetFlashPlayer()->GetHeight();
-
-		float fScaleX = (fMovieHeight / 100.0f) * fRendererWidth / fRendererHeight;
-		float fScaleY = fMovieHeight / 100.0f;
-
-		float fScale = fMovieHeight / fRendererHeight;
-		float fUselessSize = fMovieWidth - fRendererWidth * fScale;
-		float fHalfUselessSize = fUselessSize * 0.5f;
+		float fRendererHeight	= (float) m_pRenderer->GetHeight();
 
 		// Note: 18 is the size of the box (coming from Flash)
 		float fBoxSizeX = 18.0f * fMovieHeight / fRendererHeight;
@@ -376,7 +436,9 @@ void CHUD::GrenadeDetector(CPlayer* pPlayerActor)
 		char strDistance[32];
 		sprintf(strDistance,"%.2fM",(vWorldPos-pPlayerActor->GetEntity()->GetWorldPos()).len());
 		m_animGrenadeDetector.Invoke("setDistance", strDistance);
-		m_animGrenadeDetector.Invoke("setGrenadeType", pEntityGrenadeDetector->GetClass()->GetName());
+		string grenadeName("@");
+		grenadeName.append(pEntityGrenadeDetector->GetClass()->GetName());
+		m_animGrenadeDetector.Invoke("setGrenadeType", grenadeName.c_str());
 	}
 }
 
@@ -394,8 +456,7 @@ void CHUD::IndicateDamage(EntityId weaponId, Vec3 direction, bool onVehicle)
 		if(pEntity->GetClass() == CItem::sGaussRifleClass)
 		{
 			m_animRadarCompassStealth.Invoke("GaussHit");
-			m_animAmmo.Invoke("GaussHit");
-			m_animHealthEnergy.Invoke("GaussHit");
+			m_animPlayerStats.Invoke("GaussHit");
 		}
 	}
 
@@ -464,82 +525,7 @@ void CHUD::IndicateDamage(EntityId weaponId, Vec3 direction, bool onVehicle)
 	m_fDamageIndicatorTimer = gEnv->pTimer->GetFrameStartTime().GetSeconds();
 }
 
-bool CHUD::ShowLockingBrackets(EntityId p_iObj, std::vector<double> *doubleArray)
-{
-	float fRendererWidth	= (float) m_pRenderer->GetWidth();
-	float fRendererHeight	= (float) m_pRenderer->GetHeight();
-
-	AABB box;
-	IEntity* pEntityTargetAutoaim = gEnv->pEntitySystem->GetEntity(p_iObj);
-	pEntityTargetAutoaim->GetWorldBounds(box);
-
-	// We should be outside the screen with these values
-
-	float fMinX = +100000.0f;
-	float fMinY = +100000.0f;
-	float fMinZ = +100000.0f;
-
-	float fMaxX = -100000.0f;
-	float fMaxY = -100000.0f;
-	float fMaxZ = -100000.0f;
-
-#define GETMINMAX(fX,fY,fZ)\
-	{\
-	Vec3 vEntityScreenSpace;\
-	m_pRenderer->ProjectToScreen(fX,fY,fZ,&vEntityScreenSpace.x,&vEntityScreenSpace.y,&vEntityScreenSpace.z);\
-	fMinX = MIN(fMinX,vEntityScreenSpace.x);\
-	fMinY = MIN(fMinY,vEntityScreenSpace.y);\
-	fMinZ = MIN(fMinZ,vEntityScreenSpace.z);\
-	fMaxX = MAX(fMaxX,vEntityScreenSpace.x);\
-	fMaxY = MAX(fMaxY,vEntityScreenSpace.y);\
-	fMaxZ = MAX(fMaxZ,vEntityScreenSpace.z);\
-	}
-
-	GETMINMAX(box.min.x,box.min.y,box.min.z);
-	GETMINMAX(box.min.x,box.min.y,box.max.z);
-	GETMINMAX(box.min.x,box.max.y,box.min.z);
-	GETMINMAX(box.min.x,box.max.y,box.max.z);
-	GETMINMAX(box.max.x,box.min.y,box.min.z);
-	GETMINMAX(box.max.x,box.min.y,box.max.z);
-	GETMINMAX(box.max.x,box.max.y,box.min.z);
-	GETMINMAX(box.max.x,box.max.y,box.max.z);
-
-	bool validCoords = fabs(fMinX)<=1000.0 && fabs(fMaxX)<=1000.0;
-	validCoords = validCoords && fabs(fMinY)<=1000.0 && fabs(fMaxY)<=1000.0;
-
-	float fMovieWidth		= (float) m_animTargetLock.GetFlashPlayer()->GetWidth();
-	float fMovieHeight	= (float) m_animTargetLock.GetFlashPlayer()->GetHeight();
-
-	float fScaleX = (fMovieHeight / 100.0f) * fRendererWidth / fRendererHeight;
-	float fScaleY = fMovieHeight / 100.0f;
-
-	Vec3 vEntityScreenSpace;
-	m_pRenderer->ProjectToScreen(box.GetCenter().x,box.GetCenter().y,box.GetCenter().z,&vEntityScreenSpace.x,&vEntityScreenSpace.y,&vEntityScreenSpace.z);
-
-	float fScale = fMovieHeight / fRendererHeight;
-	float fUselessSize = fMovieWidth - fRendererWidth * fScale;
-	float fHalfUselessSize = fUselessSize * 0.5f;
-
-	if(validCoords)
-	{
-		doubleArray->push_back(p_iObj);
-		doubleArray->push_back(fMinX*fScaleX+fHalfUselessSize);
-		doubleArray->push_back(fMinY*fScaleY);
-		doubleArray->push_back(fMaxX*fScaleX+fHalfUselessSize);
-		doubleArray->push_back(fMinY*fScaleY);
-		doubleArray->push_back(fMinX*fScaleX+fHalfUselessSize);
-		doubleArray->push_back(fMaxY*fScaleY);
-		doubleArray->push_back(fMaxX*fScaleX+fHalfUselessSize);
-		doubleArray->push_back(fMaxY*fScaleY);
-		doubleArray->push_back(vEntityScreenSpace.x*fScaleX+fHalfUselessSize);
-		doubleArray->push_back(vEntityScreenSpace.y*fScaleY);
-		doubleArray->push_back(vEntityScreenSpace.z < 1.0f);
-	}
-
-	return validCoords;
-}
-
-void CHUD::IndicateHit()
+void CHUD::IndicateHit(bool enemyIndicator,IEntity *pEntity)
 {
 	CPlayer *pPlayer = static_cast<CPlayer *>(gEnv->pGame->GetIGameFramework()->GetClientActor());
 	if(!pPlayer)
@@ -553,96 +539,59 @@ void CHUD::IndicateHit()
 		if(pSeat && !pSeat->IsDriver())
 			m_pHUDCrosshair->GetFlashAnim()->Invoke("indicateHit");
 		else
-			m_pHUDVehicleInterface->m_animMainWindow.Invoke("indicateHit");
+		{
+			m_pHUDVehicleInterface->m_animMainWindow.Invoke("indicateHit", enemyIndicator);
+
+			if(pEntity && !gEnv->bMultiplayer)
+			{
+				float r = ((unsigned char) ((g_pGameCVars->hud_colorLine >> 16)	& 0xFF)) / 255.0f;
+				float g = ((unsigned char) ((g_pGameCVars->hud_colorLine >> 8)	& 0xFF)) / 255.0f;
+				float b = ((unsigned char) ((g_pGameCVars->hud_colorLine >> 0)	& 0xFF)) / 255.0f;
+
+				// It should be useless to test if pEntity is an enemy (it's already done by caller func)
+				IActor *pActor = gEnv->pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEntity->GetId());
+				if(pActor)
+					m_pHUDSilhouettes->SetSilhouette(pActor,r,g,b,1.0f,5.0f,true);
+				else if(IVehicle *pVehicle = gEnv->pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(pEntity->GetId()))
+					m_pHUDSilhouettes->SetSilhouette(pVehicle,r,g,b,1.0f,5.0f);
+			}
+		}
 	}
 }
 
-void CHUD::Targetting(EntityId p_iTarget, bool p_bStatic)
+void CHUD::Targetting(EntityId pTargetEntity, bool bStatic)
 {
-	float fRendererWidth	= (float) m_pRenderer->GetWidth();
-	float fRendererHeight	= (float) m_pRenderer->GetHeight();
-
-	IEntity* pEntityTargetAutoaim = gEnv->pEntitySystem->GetEntity(m_entityTargetAutoaimId);
-	std::vector<double> entityValues;
 	if(IsAirStrikeAvailable() && GetScopes()->IsBinocularsShown())
 	{
+		float fCos = fabsf(cosf(gEnv->pTimer->GetAsyncCurTime()));
 		std::vector<EntityId>::const_iterator it = m_possibleAirStrikeTargets.begin();
 		for(; it != m_possibleAirStrikeTargets.end(); ++it)
 		{
 			IEntity* pEntity = gEnv->pEntitySystem->GetEntity(*it);
 			if(pEntity)
-				ShowLockingBrackets(*it, &entityValues);
+			{
+				m_pHUDSilhouettes->SetSilhouette(pEntity, 1.0f-0.6f*fCos, 1.0f-0.4f*fCos, 1.0f-0.20f*fCos, 0.5f, -1.0f);
+			}
 		}
 	}
 	else
 	{
-		IEntity* pEntityTargetAutoaim = gEnv->pEntitySystem->GetEntity(m_entityTargetAutoaimId);
-		if (pEntityTargetAutoaim == 0)
+		IEntity *pEntityTargetAutoaim = gEnv->pEntitySystem->GetEntity(m_entityTargetAutoaimId);
+		if(NULL == pEntityTargetAutoaim)
 		{
 			m_entityTargetAutoaimId = 0;
 		}
 		else
 		{
-			ShowLockingBrackets(m_entityTargetAutoaimId, &entityValues);
+			m_pHUDSilhouettes->SetSilhouette(pEntityTargetAutoaim, 0.8f, 0.8f, 1.0f, 0.5f, -1.0f);
 		}
-	}
-
-	if(!entityValues.empty())
-	{
-		m_animTargetAutoAim.GetFlashPlayer()->SetVariableArray(FVAT_Double, "m_allValues", 0, &entityValues[0], entityValues.size());
-		if(m_pHUDScopes->IsBinocularsShown() || m_pHUDScopes->GetCurrentScope() != CHUDScopes::ESCOPE_NONE || m_entityTargetAutoaimId)
-			m_animTargetAutoAim.Invoke("updateLockBrackets");
-	}
-
-	// Target lock
-	IEntity* pEntityTargetLock = gEnv->pEntitySystem->GetEntity(m_entityTargetLockId);
-	if (pEntityTargetLock == 0)
-	{
-		m_entityTargetLockId = 0;
-	}
-	else
-	{	
-		AABB box;
-		pEntityTargetLock->GetWorldBounds(box);
-
-		Vec3 vWorldPos = box.GetCenter();
-		Vec3 vEntityScreenSpace;
-		m_pRenderer->ProjectToScreen(	vWorldPos.x,
-			vWorldPos.y,
-			vWorldPos.z,
-			&vEntityScreenSpace.x,
-			&vEntityScreenSpace.y,
-			&vEntityScreenSpace.z);
-
-		if(vEntityScreenSpace.z > 1.0f)
-		{
-			//TODO:hide it, it's behind
-		}
-
-		float fMovieWidth		= (float) m_animTargetLock.GetFlashPlayer()->GetWidth();
-		float fMovieHeight	= (float) m_animTargetLock.GetFlashPlayer()->GetHeight();
-
-		float fScaleX = (fMovieHeight / 100.0f) * fRendererWidth / fRendererHeight;
-		float fScaleY = fMovieHeight / 100.0f;
-
-		float fScale = fMovieHeight / fRendererHeight;
-		float fUselessSize = fMovieWidth - fRendererWidth * fScale;
-		float fHalfUselessSize = fUselessSize * 0.5f;
-
-		char strX[32];
-		char strY[32];
-		sprintf(strX,"%f",vEntityScreenSpace.x*fScaleX+fHalfUselessSize);
-		sprintf(strY,"%f",vEntityScreenSpace.y*fScaleY);
-
-		m_animTargetLock.SetVariable("Root.Cursor._x",strX);
-		m_animTargetLock.SetVariable("Root.Cursor._y",strY);
 	}
 
 	// Tac lock
-	if(m_pWeapon && m_bTacLock)
+	if(GetCurrentWeapon() && m_bTacLock)
 	{
-		Vec3 vAimPos		= (static_cast<CWeapon *>(m_pWeapon))->GetAimLocation();
-		Vec3 vTargetPos	= (static_cast<CWeapon *>(m_pWeapon))->GetTargetLocation();
+		Vec3 vAimPos		= (static_cast<CWeapon *>(GetCurrentWeapon()))->GetAimLocation();
+		Vec3 vTargetPos	= (static_cast<CWeapon *>(GetCurrentWeapon()))->GetTargetLocation();
 
 		Vec3 vAimScreenSpace;		
 		m_pRenderer->ProjectToScreen(vAimPos.x,vAimPos.y,vAimPos.z,&vAimScreenSpace.x,&vAimScreenSpace.y,&vAimScreenSpace.z);
@@ -650,15 +599,10 @@ void CHUD::Targetting(EntityId p_iTarget, bool p_bStatic)
 		Vec3 vTargetScreenSpace;
 		m_pRenderer->ProjectToScreen(vTargetPos.x,vTargetPos.y,vTargetPos.z,&vTargetScreenSpace.x,&vTargetScreenSpace.y,&vTargetScreenSpace.z);
 
-		float fMovieWidth		= (float) m_animTacLock.GetFlashPlayer()->GetWidth();
-		float fMovieHeight	= (float) m_animTacLock.GetFlashPlayer()->GetHeight();
-
-		float fScaleX = (fMovieHeight / 100.0f) * fRendererWidth / fRendererHeight;
-		float fScaleY = fMovieHeight / 100.0f;
-
-		float fScale = fMovieHeight / fRendererHeight;
-		float fUselessSize = fMovieWidth - fRendererWidth * fScale;
-		float fHalfUselessSize = fUselessSize * 0.5f;
+		float fScaleX = 0.0f;
+		float fScaleY = 0.0f;
+		float fHalfUselessSize = 0.0f;
+		GetProjectionScale(&m_animTacLock,&fScaleX,&fScaleY,&fHalfUselessSize);
 
 		m_animTacLock.SetVariable("AimSpot._x",SFlashVarValue(vAimScreenSpace.x*fScaleX+fHalfUselessSize));
 		m_animTacLock.SetVariable("AimSpot._y",SFlashVarValue(vAimScreenSpace.y*fScaleY));
@@ -684,18 +628,20 @@ void CHUD::Targetting(EntityId p_iTarget, bool p_bStatic)
 		}
 		else
 		{
-			UpdateMissionObjectiveIcon(m_iPlayerOwnedVehicle,1,eOS_Purchase);
+			IVehicle *pCurrentVehicle = pActor->GetLinkedVehicle();
+			if(!(pCurrentVehicle && pCurrentVehicle->GetEntityId() == m_iPlayerOwnedVehicle))
+				UpdateMissionObjectiveIcon(m_iPlayerOwnedVehicle,1,eOS_Purchase);
 		}
 	}
 
 	if(!gEnv->bMultiplayer && GetScopes()->IsBinocularsShown() && g_pGameCVars->g_difficultyLevel < 3)
 	{
 		//draw single player mission objectives
-		std::map<EntityId, string>::const_iterator it = m_pHUDRadar->m_missionObjectives.begin();
-		std::map<EntityId, string>::const_iterator end = m_pHUDRadar->m_missionObjectives.end();
+		std::map<EntityId, CHUDRadar::RadarObjective>::const_iterator it = m_pHUDRadar->m_missionObjectives.begin();
+		std::map<EntityId, CHUDRadar::RadarObjective>::const_iterator end = m_pHUDRadar->m_missionObjectives.end();
 		for(; it != end; ++it)
 		{
-			UpdateMissionObjectiveIcon(it->first, 2, eOS_FactoryPrototypes);
+			UpdateMissionObjectiveIcon(it->first, 0, eOS_SPObjective);
 		}
 	}
 
@@ -725,6 +671,7 @@ void CHUD::Targetting(EntityId p_iTarget, bool p_bStatic)
 			{
 				if(IItem *pWeapon = gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(mEntity.entityId))
 				{
+					pEntity = gEnv->pEntitySystem->GetEntity(mEntity.entityId);
 					if(EntityId ownerId=pWeapon->GetOwnerId())
 					{
 						pEntity = gEnv->pEntitySystem->GetEntity(ownerId);
@@ -756,7 +703,7 @@ void CHUD::Targetting(EntityId p_iTarget, bool p_bStatic)
 
 			float fX(0.0f), fY(0.0f);
 
-			int friendly = m_pHUDRadar->FriendOrFoe(gEnv->bMultiplayer, pActor, team, pEntity, pGameRules);
+			int friendly = m_pHUDRadar->FriendOrFoe(gEnv->bMultiplayer,  team, pEntity, pGameRules);
 			if(vehicle)
 				UpdateMissionObjectiveIcon(pEntity->GetId(),friendly,eOS_TACTank);
 			else
@@ -804,7 +751,7 @@ void CHUD::Targetting(EntityId p_iTarget, bool p_bStatic)
 			IEntity* pEntity = gEnv->pEntitySystem->GetEntity(*it);
 			if(pEntity)
 			{
-				int friendly = m_pHUDRadar->FriendOrFoe(gEnv->bMultiplayer, pActor, team, pEntity, pGameRules);
+				int friendly = m_pHUDRadar->FriendOrFoe(gEnv->bMultiplayer, team, pEntity, pGameRules);
 				FlashRadarType type = m_pHUDRadar->ChooseType(pEntity);
 				if(friendly==1 && IsUnderAttack(pEntity))
 				{
@@ -816,9 +763,56 @@ void CHUD::Targetting(EntityId p_iTarget, bool p_bStatic)
 					// Show TAC Target icon
 					AddOnScreenMissionObjective(pEntity, friendly);
 				}
-				else if(m_bShowAllOnScreenObjectives || m_iOnScreenObjective==(*it) || g_pGameCVars->hud_showAllObjectives)
+				else if(m_bShowAllOnScreenObjectives || m_iOnScreenObjective==(*it))
 				{
 					AddOnScreenMissionObjective(pEntity, friendly);
+				}
+			}
+		}
+	}
+
+	// icons for friendly claymores and mines
+	if(gEnv->bMultiplayer && pActor && pGameRules)
+	{
+		int playerTeam = pGameRules->GetTeam(pActor->GetEntityId());
+		std::list<EntityId>::iterator next;
+		std::list<EntityId>::iterator it = m_explosiveList.begin();
+		for(; it != m_explosiveList.end(); it=next)
+		{
+			next = it; ++next;
+
+			int mineTeam = pGameRules->GetTeam(*it);
+			if(mineTeam != 0 && mineTeam == playerTeam)
+			{
+				// quick check for proximity
+				IEntity* pEntity = gEnv->pEntitySystem->GetEntity(*it);
+				if(pEntity)
+				{
+					Vec3 dir = pEntity->GetWorldPos() - pActor->GetEntity()->GetWorldPos();
+					if(dir.GetLengthSquared() <= 100.0f)
+					{
+						Vec3 targetPoint(0,0,0);
+						FlashOnScreenIcon icon = eOS_Bottom;
+						CProjectile *pProjectile = g_pGame->GetWeaponSystem()->GetProjectile(*it);
+						if(pProjectile && pProjectile->GetEntity())
+						{
+							IEntityClass* pClass = pProjectile->GetEntity()->GetClass();
+							if(pClass == m_pClaymore)
+							{
+								icon = eOS_Claymore;
+								CClaymore *pClaymore = static_cast<CClaymore *>(pProjectile);
+								if(pClaymore)
+								{
+									targetPoint = pEntity->GetWorldPos() + pClaymore->GetTriggerDirection();
+								}
+							}
+							else if(pClass == m_pAVMine)
+							{
+								icon = eOS_Mine;
+							}
+							UpdateMissionObjectiveIcon(*it, 1, icon, true, targetPoint);
+						}
+					}
 				}
 			}
 		}
@@ -919,6 +913,7 @@ void CHUD::ShowKillAreaWarning(bool active, int timer)
 			IMaterialEffects* pMaterialEffects = gEnv->pGame->GetIGameFramework()->GetIMaterialEffects();
 			SMFXRunTimeEffectParams params;
 			params.pos = pActor->GetEntity()->GetWorldPos();
+			params.soundSemantic = eSoundSemantic_HUD;
 			TMFXEffectId id = pMaterialEffects->GetEffectIdByName("player_fx", "player_boundry_damage");
 			pMaterialEffects->ExecuteEffect(id, params);
 		}
@@ -931,7 +926,7 @@ void CHUD::ShowKillAreaWarning(bool active, int timer)
 
 void CHUD::ShowDeathFX(int type)
 {
-	if(m_godMode)
+	if(m_godMode || !g_pGame->GetIGameFramework()->IsGameStarted())
 		return;
 
 	IMaterialEffects* pMaterialEffects = gEnv->pGame->GetIGameFramework()->GetIMaterialEffects();
@@ -951,6 +946,7 @@ void CHUD::ShowDeathFX(int type)
 
 	SMFXRunTimeEffectParams params;
 	params.pos = pActor->GetEntity()->GetWorldPos();
+	params.soundSemantic = eSoundSemantic_HUD;
 
 	static const char* deathType[] =
 	{
@@ -1000,6 +996,8 @@ void CHUD::UpdateVoiceChat()
 		if (!pActor->IsPlayer())
 			continue;
 
+		CGameRules* pGR = g_pGame->GetGameRules();
+
 		//IEntity *pEntity = gEnv->pEntitySystem->GetEntity(*it);
 		IEntity *pEntity = pActor->GetEntity();
 		if(pEntity)
@@ -1012,7 +1010,7 @@ void CHUD::UpdateVoiceChat()
 					someoneTalking = true;
 				}
 			}
-			else
+			else if(pGR && (pGR->GetTeamCount() == 1 || (pGR->GetTeam(pEntity->GetId()) == pGR->GetTeam(localPlayerId))))
 			{
 				if(pNetChannel->TimeSinceVoiceReceipt(pEntity->GetId()).GetSeconds() < 0.2f)
 				{
@@ -1039,25 +1037,46 @@ void CHUD::UpdateVoiceChat()
 void CHUD::UpdateCrosshairVisibility()
 {
 	// marcok: don't touch this, please
-	if (g_pGameCVars->cl_tryme)
+	if (g_pGameCVars->goc_enable)
 	{
 		m_pHUDCrosshair->GetFlashAnim()->Invoke("setVisible", 1);
 		return;
 	}
 
+	bool wasVisible = false;
+
 	if(!m_pHUDCrosshair->GetFlashAnim()->IsLoaded())
 		return;
 	if(m_pHUDCrosshair->GetFlashAnim()->GetFlashPlayer()->GetVisible())
+	{
+		wasVisible = true;
 		m_pHUDCrosshair->GetFlashAnim()->GetFlashPlayer()->SetVisible(false);
+	}
 
-	if(!m_iCursorVisibilityCounter && !m_bAutosnap && !m_bHideCrosshair && !m_bThirdPerson)
+  bool forceVehicleCrosshair = m_pHUDVehicleInterface->GetVehicle() && m_pHUDVehicleInterface->ForceCrosshair();
+	
+	if(!m_iCursorVisibilityCounter && !m_bAutosnap && !m_bHideCrosshair && (!m_bThirdPerson || forceVehicleCrosshair) && !m_pHUDScopes->IsBinocularsShown())
 	{
 		// Do not show crosshair while in vehicle
-		if((!m_pHUDVehicleInterface->GetVehicle() && !m_pHUDVehicleInterface->IsParachute()) || m_pHUDVehicleInterface->ForceCrosshair())
+		if((!m_pHUDVehicleInterface->GetVehicle() && !m_pHUDVehicleInterface->IsParachute()) || forceVehicleCrosshair)
 		{
 			m_pHUDCrosshair->GetFlashAnim()->GetFlashPlayer()->SetVisible(true);
 		}
 	}
+
+	if(wasVisible != m_pHUDCrosshair->GetFlashAnim()->GetFlashPlayer()->GetVisible())
+	{
+		//turn off damage circle
+		m_pHUDCrosshair->GetFlashAnim()->Invoke("clearDamageDirection");
+		m_pHUDCrosshair->GetFlashAnim()->GetFlashPlayer()->Advance(0.1f);
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void CHUD::UpdateCrosshair(IItem *pItem) 
+{ 
+	m_pHUDCrosshair->SelectCrosshair(pItem); 
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -1081,6 +1100,9 @@ void CHUD::OnToggleThirdPerson(IActor *pActor,bool bThirdPerson)
 
 void CHUD::ShowTargettingAI(EntityId id)
 {
+	if(gEnv->bMultiplayer)
+		return;
+
 	if(!g_pGameCVars->hud_chDamageIndicator)
 		return;
 
@@ -1088,79 +1110,18 @@ void CHUD::ShowTargettingAI(EntityId id)
 		return;
 
 	EntityId actorID = id;
-	/*if(IVehicle *pVehicle = g_pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(id))
+	if(IVehicle *pVehicle = g_pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(id))
 	{
 		if(pVehicle->GetDriver())
 			actorID = pVehicle->GetDriver()->GetEntityId();
-	}*/
+	}
 
 	if(IActor *pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(actorID))
 	{
-		m_fSetAgressorIcon = gEnv->pTimer->GetFrameStartTime().GetSeconds();
-		m_agressorIconID = actorID;
-		m_pHUDRadar->AddEntityTemporarily(actorID);
-	}
-	else if(id == m_agressorIconID)
-	{
-		m_animTargetter.SetVisible(false);
-		m_fSetAgressorIcon = 0.0f;
-	}
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-void CHUD::SetOnScreenTargetter()
-{
-	Vec3 screenPos;
-	if(IActor *pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(m_agressorIconID))
-	{
-		if(pActor->GetHealth() <= 0 || GetScopes()->IsBinocularsShown() || GetScopes()->GetCurrentScope() != CHUDScopes::ESCOPE_NONE)
+		if(pActor != g_pGame->GetIGameFramework()->GetClientActor())
 		{
-			m_animTargetter.SetVisible(false);
-			return;
-		}
-
-		AABB bbox;
-		pActor->GetEntity()->GetWorldBounds(bbox);
-		Vec3 agressorPos = bbox.GetCenter();
-		m_pRenderer->ProjectToScreen(agressorPos.x,agressorPos.y,agressorPos.z,&screenPos.x,&screenPos.y,&screenPos.z);
-
-		IActor *pPlayer = g_pGame->GetIGameFramework()->GetClientActor();
-		if(!pPlayer)
-			return;
-
-		if((pActor->GetEntity()->GetWorldPos() - pPlayer->GetEntity()->GetWorldPos()).len() < 6.0f)
-		{
-			m_animTargetter.SetVisible(false);
-			return;
-		}
-
-		float dist = (pPlayer->GetEntity()->GetWorldPos() - agressorPos).len();
-
-		float fRendererWidth	= (float) m_pRenderer->GetWidth();
-		float fRendererHeight	= (float) m_pRenderer->GetHeight();
-
-		float fMovieWidth		= (float) m_animTargetter.GetFlashPlayer()->GetWidth();
-		float fMovieHeight	= (float) m_animTargetter.GetFlashPlayer()->GetHeight();
-
-		float fScaleX = (fMovieHeight / 100.0f) * fRendererWidth / fRendererHeight;
-		float fScaleY = fMovieHeight / 100.0f;
-
-		float fScale = fMovieHeight / fRendererHeight;
-		float fUselessSize = fMovieWidth - fRendererWidth * fScale;
-		float fHalfUselessSize = fUselessSize * 0.5f;
-
-		if(screenPos.z > 1.0f)
-		{
-			m_animTargetter.SetVisible(false);
-			return;
-		}
-		else
-		{
-			m_animTargetter.SetVisible(true);
-			m_animTargetter.SetVariable("Root._x", SFlashVarValue(screenPos.x*fScaleX+fHalfUselessSize-20.0f)); //offset 16 pixel
-			m_animTargetter.SetVariable("Root._y", SFlashVarValue(screenPos.y*fScaleY-20.0f));
-			m_animTargetter.Invoke("setRecoil", 30.0f - min(max(0.0f,dist), 30.0f));
+			m_pHUDSilhouettes->SetSilhouette(pActor,0.89411f,0.10588f,0.10588f,1,2);
+			m_pHUDRadar->AddEntityTemporarily(actorID);
 		}
 	}
 }
@@ -1210,13 +1171,17 @@ bool CHUD::OnBeginCutScene(IAnimSequence* pSeq, bool bResetFX)
 	if (pSeq == 0)
 		return false;
 
-	gEnv->pGame->GetIGameFramework()->GetIActionMapManager()->EnableFilter("cutscene",true);
-	gEnv->pGame->GetIGameFramework()->GetIActionMapManager()->EnableFilter("in_vehicle_suit_menu",true);
-  if(gEnv->pSoundSystem)
-	  gEnv->pSoundSystem->Silence(true, false);
-
-	if(GetModalHUD() == &m_animPDA)
+	if(m_pModalHUD == &m_animPDA)
+	{
 		ShowPDA(false);
+	}
+	else if(m_pModalHUD == &m_animWeaponAccessories)
+	{
+		ShowWeaponAccessories(false);
+	}
+
+	if(m_bNightVisionActive)
+		OnAction(g_pGame->Actions().hud_night_vision, 1, 1.0f);	//turn off
 
 	int flags = pSeq->GetFlags();
 	if (IAnimSequence::IS_16TO9 & flags)
@@ -1224,25 +1189,65 @@ bool CHUD::OnBeginCutScene(IAnimSequence* pSeq, bool bResetFX)
 		FadeCinematicBars(g_pGameCVars->hud_panoramicHeight);
 	}
 
+	if (IAnimSequence::NO_PLAYER & flags)
+		g_pGameActions->FilterCutsceneNoPlayer()->Enable(true);
+	else
+		g_pGameActions->FilterCutscene()->Enable(true);
+
+	g_pGameActions->FilterInVehicleSuitMenu()->Enable(true);
+
 	if(IAnimSequence::NO_HUD & flags)
 	{
 		m_cineHideHUD = true;
 	}
 
-	if(IAnimSequence::NO_PLAYER & flags)
+	CActor *pPlayerActor = static_cast<CActor *>(gEnv->pGame->GetIGameFramework()->GetClientActor());
+
+	if (pPlayerActor)
 	{
-		if (CActor *pPlayerActor = static_cast<CActor *>(gEnv->pGame->GetIGameFramework()->GetClientActor()))
+		if (CPlayer* pPlayer = static_cast<CPlayer*> (pPlayerActor))
 		{
-			if (CPlayer* pPlayer = static_cast<CPlayer*> (pPlayerActor))
+			if(m_pHUDScopes->m_animBinoculars.IsLoaded())
+			{
+				if(m_pHUDScopes->IsBinocularsShown())
+					pPlayer->SelectLastItem(false);
+				m_pHUDScopes->ShowBinoculars(false,false,true);
+			}
+
+			pPlayer->StopLoopingSounds();
+
+			if(IAnimSequence::NO_PLAYER & flags)
 			{
 				if (SPlayerStats* pActorStats = static_cast<SPlayerStats*> (pPlayer->GetActorStats()))
 					pActorStats->spectatorMode = CActor::eASM_Cutscene;	// moved up to avoid conflict with the MP spectator modes
 				pPlayer->Draw(false);
 				if (pPlayer->GetPlayerInput())
 					pPlayer->GetPlayerInput()->Reset();
+				if(IItem* pItem = pPlayer->GetCurrentItem())
+				{
+					if(IWeapon *pWeapon = pItem->GetIWeapon())
+					{
+						if(pWeapon->IsZoomed() || pWeapon->IsZooming())
+							pWeapon->ExitZoom();
+					}
+				}
+				if(COffHand* pOffHand = static_cast<COffHand*>(pPlayer->GetItemByClass(CItem::sOffHandClass)))
+					pOffHand->OnBeginCutScene();
+				
+				pPlayer->HolsterItem(true);
 			}
 		}
 	}
+
+	m_fCutsceneSkipTimer = g_pGameCVars->g_cutsceneSkipDelay;
+	m_bCutscenePlaying = true;
+	m_bCutsceneAbortPressed = false;
+
+#ifdef USER_alexl
+	CryLogAlways("[CX]: BEGIN Frame=%d 0x%p Name=%s Cutscene=%d NoPlayer=%d NoHUD=%d NoAbort=%d",
+		gEnv->pRenderer->GetFrameID(false), pSeq, pSeq->GetName(), flags & IAnimSequence::CUT_SCENE, flags & IAnimSequence::NO_PLAYER, flags & IAnimSequence::NO_HUD, flags & IAnimSequence::NO_ABORT);
+#endif
+
 	return true;
 }
 
@@ -1253,8 +1258,16 @@ bool CHUD::OnEndCutScene(IAnimSequence* pSeq)
 	if (pSeq == 0)
 		return false;
 
-	gEnv->pGame->GetIGameFramework()->GetIActionMapManager()->EnableFilter("cutscene",false);
-	gEnv->pGame->GetIGameFramework()->GetIActionMapManager()->EnableFilter("in_vehicle_suit_menu", false);
+	m_pHUDCrosshair->Reset();
+
+	m_bCutscenePlaying = false;
+	if (m_bStopCutsceneNextUpdate)
+	{
+		m_bStopCutsceneNextUpdate = false; // just in case, the cutscene wasn't stopped in CHUD::OnPostUpdate, but due to some other stuff (like Serialize/Flowgraph)
+	}
+	g_pGameActions->FilterCutscene()->Enable(false);
+	g_pGameActions->FilterCutsceneNoPlayer()->Enable(false);
+	g_pGameActions->FilterInVehicleSuitMenu()->Enable(false);
 
 	int flags = pSeq->GetFlags();
 	if (IAnimSequence::IS_16TO9 & flags)
@@ -1274,9 +1287,26 @@ bool CHUD::OnEndCutScene(IAnimSequence* pSeq)
 				if (SPlayerStats* pActorStats = static_cast<SPlayerStats*> (pPlayer->GetActorStats()))
 					pActorStats->spectatorMode = CActor::eASM_None;
 				pPlayer->Draw(true);
+				if(COffHand* pOffHand = static_cast<COffHand*>(pPlayer->GetItemByClass(CItem::sOffHandClass)))
+					pOffHand->OnEndCutScene();
+
+				// restore health and nanosuit, because time has passed during cutscene
+				// and player was not-enabled
+				// -> simulate health-regen
+				pPlayer->SetHealth(pPlayer->GetMaxHealth());
+				if (pPlayer->GetNanoSuit())
+				{
+					pPlayer->GetNanoSuit()->ResetEnergy();
+				}
+				pPlayer->HolsterItem(false);
 			}
 		}
 	}
+
+#ifdef USER_alexl
+	CryLogAlways("[CX]: END Frame=%d 0x%p Name=%s Cutscene=%d NoPlayer=%d NoHUD=%d NoAbort=%d",
+		gEnv->pRenderer->GetFrameID(false), pSeq, pSeq->GetName(), flags & IAnimSequence::CUT_SCENE, flags & IAnimSequence::NO_PLAYER, flags & IAnimSequence::NO_HUD, flags & IAnimSequence::NO_ABORT);
+#endif
 
 	return true;
 }
@@ -1326,44 +1356,98 @@ void CHUD::SetSubtitleMode(HUDSubtitleMode mode)
 
 //-----------------------------------------------------------------------------------------------------
 
-void CHUD::ShowProgress(int progress, bool init /* = false */, int posX /* = 0 */, int posY /* = 0 */, const char *text, bool topText)
+void CHUD::ShowProgress(int progress, bool init /* = false */, int posX /* = 0 */, int posY /* = 0 */, const char *text, bool topText, bool lockingBar)
 {
+	CGameFlashAnimation *pAnim = &m_animProgress;
+	if(m_bProgressLocking)
+		pAnim = &m_animProgressLocking;
+
 	if(init)
 	{
-		if(!m_animProgress.IsLoaded())
-			m_animProgress.Load("Libs/UI/HUD_ProgressBar.gfx", eGFD_Center, eFAF_Visible);
+		if(lockingBar)
+		{
+			if(m_animProgress.IsLoaded())
+				m_animProgress.Unload();
+		}
+		else
+		{
+			if(m_animProgressLocking.IsLoaded())
+				m_animProgressLocking.Unload();
+		}
 
-		m_animProgress.Invoke("showProgressBar", true);
-		const wchar_t* localizedText = LocalizeWithParams(text, true);
+		m_bProgressLocking = lockingBar;
+
+		if(!pAnim->IsLoaded())
+		{
+			if(lockingBar)
+				m_animProgressLocking.Load("Libs/UI/HUD_TAC_Locking.gfx", eFD_Center, eFAF_Visible);
+			else
+				m_animProgress.Load("Libs/UI/HUD_ProgressBar.gfx", eFD_Center, eFAF_Default);
+			m_iProgressBar = 0;
+		}
+
+		pAnim->Invoke("showProgressBar", true);
+		const wchar_t* localizedText = (text)?LocalizeWithParams(text, true):L"";
 
 		SFlashVarValue args[2] = {localizedText, topText ? 1 : 2};
-		m_animProgress.Invoke("setText", args, 2);
+		pAnim->Invoke("setText", args, 2);
 		SFlashVarValue pos[2] = {posX*1024/800, posY*768/512};
-		m_animProgress.Invoke("setPosition", pos, 2);
-	}
-	else if(progress < 0 && m_animProgress.IsLoaded())
-		m_animProgress.Unload();
+		pAnim->Invoke("setPosition", pos, 2);
 
-	if(m_animProgress.IsLoaded())
-		m_animProgress.Invoke("setProgressBar", progress);
+		m_iProgressBarX = posX;
+		m_iProgressBarY = posY;
+		m_sProgressBarText = string(text);
+		m_bProgressBarTextPos = topText;
+	}
+	else if(progress < 0 && pAnim->IsLoaded())
+	{
+		pAnim->Invoke("showProgressBar", false); // for sound callback
+		pAnim->Unload();
+		m_iProgressBar = 0;
+	}
+
+	if(pAnim->IsLoaded() && (m_iProgressBar != progress || init))
+	{
+		pAnim->Invoke("setProgressBar", progress);
+		m_iProgressBar = progress;
+	}
 }
+
+//-----------------------------------------------------------------------------------------------------
 
 void CHUD::FakeDeath(bool revive)
 {
+	return; //feature disabled
+
 	CPlayer *pPlayer = static_cast<CPlayer*>(g_pGame->GetIGameFramework()->GetClientActor());
 	if(pPlayer->IsGod() || gEnv->bMultiplayer)
 		return;
+
+	if(pPlayer->GetLinkedEntity())		//not safe
+	{
+		m_fPlayerRespawnTimer = 0.0f;
+		pPlayer->SetHealth(0);
+		pPlayer->CreateScriptEvent("kill",0);
+		return;
+	}
 
 	if(revive)
 	{
 		float now = gEnv->pTimer->GetFrameStartTime().GetSeconds();
 		float diff = now - m_fPlayerRespawnTimer;
+
+		if(pPlayer->GetHealth() <= 0)
+		{
+			m_fPlayerRespawnTimer = 0.0f;
+			return;
+		}
 		
 		if(diff > -3.0f && (now - m_fLastPlayerRespawnEffect > 0.5f))
 		{
 			IMaterialEffects* pMaterialEffects = gEnv->pGame->GetIGameFramework()->GetIMaterialEffects();
 			SMFXRunTimeEffectParams params;
 			params.pos = pPlayer->GetEntity()->GetWorldPos();
+			params.soundSemantic = eSoundSemantic_HUD;
 			TMFXEffectId id = pMaterialEffects->GetEffectIdByName("player_fx", "player_damage_armormode");
 			pMaterialEffects->ExecuteEffect(id, params);
 			m_fLastPlayerRespawnEffect = now;
@@ -1387,7 +1471,7 @@ void CHUD::FakeDeath(bool revive)
 				if (pPlayer->GetEntity()->GetAI())
 					gEnv->pAISystem->SendSignal(SIGNALFILTER_SENDER,1, "OnNanoSuitUnCloak",pPlayer->GetEntity()->GetAI());
 				m_bRespawningFromFakeDeath = false;
-				DisplayFlashMessage(" ",2);
+				DisplayOverlayFlashMessage(" ");
 			}
 			else
 			{
@@ -1410,11 +1494,11 @@ void CHUD::FakeDeath(bool revive)
 	}
 	else if(!m_fPlayerRespawnTimer)
 	{
-		if(pPlayer && (g_pGameCVars->g_playerRespawns > 0 || g_pGameCVars->g_godMode == 3))
+		if(pPlayer && (/*g_pGameCVars->g_playerRespawns > 0*/ g_pGameCVars->g_difficultyLevel < 2 || g_pGameCVars->g_godMode == 3))
 		{
-			g_pGameCVars->g_playerRespawns--;
-			if (g_pGameCVars->g_playerRespawns < 0)
-				g_pGameCVars->g_playerRespawns = 0;
+			//g_pGameCVars->g_playerRespawns--;  //unlimited for now
+			//if (g_pGameCVars->g_playerRespawns < 0)
+			//	g_pGameCVars->g_playerRespawns = 0;
 
 			pPlayer->HolsterItem(true);
 			pPlayer->Fall(Vec3(0,0,0), true);
@@ -1442,7 +1526,7 @@ void CHUD::ShowDataUpload(bool active)
 	{
 		if(!m_animDataUpload.IsLoaded())
 		{
-			m_animDataUpload.Load("Libs/UI/HUD_Recording.gfx", eGFD_Right);
+			m_animDataUpload.Load("Libs/UI/HUD_Recording.gfx", eFD_Right);
 			m_animDataUpload.Invoke("showUplink", true);
 		}
 	}
@@ -1455,10 +1539,125 @@ void CHUD::ShowDataUpload(bool active)
 
 //-----------------------------------------------------------------------------------------------------
 
-void CHUD::ShowSpectate(bool active)
+void CHUD::ShowWeaponsOnGround()
 {
-	if(active)
-		m_animSpectate.Load("Libs/UI/HUD_Spectate.gfx", eGFD_Center, eFAF_Visible|eFAF_ManualRender);
+	if(!m_pHUDScopes->IsBinocularsShown())
+		return;
+
+	if(gEnv->bMultiplayer)
+		return;
+
+	if(g_pGameCVars->g_difficultyLevel > 2)
+		return;
+
+	IActor *pClientActor = g_pGame->GetIGameFramework()->GetClientActor();
+	if(!pClientActor)
+		return;
+
+	Vec3 clientPos = pClientActor->GetEntity()->GetWorldPos();
+	CCamera camera=GetISystem()->GetViewCamera();
+	IPhysicalEntity *pSkipEnt=pClientActor?pClientActor->GetEntity()->GetPhysics():0;
+
+	//go through all weapons without owner in your proximity and highlight them
+	const std::vector<EntityId> *pItems = m_pHUDRadar->GetNearbyItems();
+	if(pItems && pItems->size() > 0)
+	{
+		std::vector<EntityId>::const_iterator it = pItems->begin();
+		std::vector<EntityId>::const_iterator end = pItems->end();
+		for(; it != end; ++it)
+		{
+			EntityId id = *it;
+			IItem *pItem = g_pGame->GetIGameFramework()->GetIItemSystem()->GetItem(id);
+			if(pItem && pItem->GetIWeapon() /*&& !pItem->GetOwnerId()*/ && !pItem->GetEntity()->GetParent() && !pItem->GetEntity()->IsHidden())
+			{
+				float distance = (pItem->GetEntity()->GetWorldPos() - clientPos).len();
+				if(distance < 10.0f)
+				{
+					IPhysicalEntity *pPE = pItem->GetEntity()->GetPhysics();
+					if(pPE)
+					{
+						pe_status_dynamics dyn;
+						pPE->GetStatus(&dyn);
+						Vec3 dir=(dyn.centerOfMass-camera.GetPosition())*1.15f;
+						//raycast object
+						ray_hit hit;
+						if (gEnv->pPhysicalWorld->RayWorldIntersection(camera.GetPosition(), dir, ent_all, (13&rwi_pierceability_mask), &hit, 1, &pSkipEnt, pSkipEnt?1:0))
+						{
+							if (!hit.bTerrain && hit.pCollider==pPE)
+							{
+								//display
+//								UpdateMissionObjectiveIcon(id, 1, eOS_Bottom, true);
+
+								m_pHUDSilhouettes->SetSilhouette(pItem,0,0,1,1,-1);
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void CHUD::FireModeSwitch(bool grenades /* = false */)
+{
+	if(m_quietMode)
+		return;
+
+	if(!grenades)
+		m_animPlayerStats.Invoke("switchFireMode");
 	else
-		m_animSpectate.Unload();
+		m_animPlayerStats.Invoke("switchGrenades");
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void CHUD::DrawGroundCircle(Vec3 pos, float radius, float thickness /* = 1.0f */, float anglePerSection /* = 5.0f */, ColorB col, bool aligned /* = true */, float offset /* = 0.1f */, bool useSecondColor, ColorB colB)
+{
+	Vec3 p0,p1;
+	p0.x = pos.x + radius*sin(0.0f);
+	p0.y = pos.y + radius*cos(0.0f);
+	p0.z = pos.z;
+
+	if(aligned)
+	{
+		float terrainHeight = gEnv->p3DEngine->GetTerrainZ((int)p0.x, (int)p0.y);
+		p0.z = terrainHeight + 0.25f;
+	}
+
+	float step = anglePerSection/180*gf_PI;
+
+	bool switchColor = true;
+
+	for (float angle = 0; angle < 360.0f/180*gf_PI+step; angle += step)
+	{
+		p1.x = pos.x + radius*sin(angle);
+		p1.y = pos.y + radius*cos(angle);
+		if(aligned)
+		{
+			float terrainHeight = gEnv->p3DEngine->GetTerrainZ((int)p1.x, (int)p1.y);
+			p1.z = terrainHeight + offset;
+			if(p1.z - p0.z > 0.15f)
+				p1.z = (3.0f* p0.z + p1.z) * 0.25f;
+		}
+		else
+			p1.z = pos.z + offset;
+
+		if(angle == 0)
+			p0 = p1;
+
+		if(useSecondColor)
+		{
+			switchColor = !switchColor;
+			if(switchColor)
+				gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(p0,colB,p1,col,thickness);
+			else
+				gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(p0,col,p1,colB,thickness);
+		}
+		else
+			gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(p0,col,p1,col,thickness);
+
+		p0 = p1;
+	}   
 }

@@ -27,16 +27,12 @@ History:
 #include "Weapon.h"
 #include "AmmoParams.h"
 
-#define MIN_STICKY_POINTS					2
-#define MAX_STICKY_POINTS					2
-#define MAX_STICKY_BADCOLLISIONS	10
-#define STICKY_TIMER							125
 
 #define MIN_DAMAGE								5
 
 class CProjectile :
 	public CGameObjectExtensionHelper<CProjectile, IGameObjectExtension>,
-	public IGameObjectPhysics, public IHitListener
+	public IHitListener,	public IGameObjectProfileManager
 {
 public:
 	enum ProjectileTimer
@@ -50,24 +46,20 @@ public:
 	CProjectile();
 	virtual ~CProjectile();
 
-	// IGameObjectPhysics
-	virtual bool SetProfile( uint8 profile );
-	virtual bool SerializeProfile( TSerialize ser, uint8 profile, int pflags );
-	uint8 GetDefaultProfile() { return ePT_Particle; }
-	// ~IGameObjectPhysics
-
 	// IGameObjectExtension
 	virtual bool Init(IGameObject *pGameObject);
 	virtual void InitClient(int channelId) {};
 	virtual void PostInit(IGameObject *pGameObject);
 	virtual void PostInitClient(int channelId) {};
 	virtual void Release();
-	virtual void Serialize(TSerialize ser, unsigned aspects);
-	virtual void PostSerialize() {}
+	virtual void FullSerialize( TSerialize ser );
+	virtual bool NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int flags );
+	virtual void PostSerialize();
 	virtual void SerializeSpawnInfo( TSerialize ser );
 	virtual ISerializableInfoPtr GetSpawnInfo();
 	virtual void Update( SEntityUpdateContext &ctx, int updateSlot);
 	virtual void PostUpdate(float frameTime ) {};
+	virtual void PostRemoteSpawn();
 	virtual void HandleEvent( const SGameObjectEvent &);
 	virtual void ProcessEvent(SEntityEvent &);
 	virtual void SetChannelId(uint16 id) {};
@@ -76,10 +68,15 @@ public:
 	virtual int  GetMemorySize() { return sizeof(*this); };
 	//~IGameObjectExtension
 
+	// IGameObjectProfileManager
+	virtual bool SetAspectProfile( EEntityAspects aspect, uint8 profile );
+	virtual uint8 GetDefaultProfile( EEntityAspects aspect );
+	// ~IGameObjectProfileManager
+
 	virtual void LoadGeometry();
 	virtual void Physicalize();
 	virtual void SetVelocity(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity, float speedScale=1.0f);
-	virtual void SetParams(EntityId ownerId, EntityId hostId, EntityId weaponId, int damage, int hitTypeId, float damageDrop = 0.0f);
+	virtual void SetParams(EntityId ownerId, EntityId hostId, EntityId weaponId, int damage, int hitTypeId, float damageDrop = 0.0f, float damageDropMinR = 0.0f);
   virtual void SetDestination(const Vec3& pos){}
   virtual void SetDestination(EntityId targetId){}
 	virtual void Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity, float speedScale=1.0f);
@@ -101,19 +98,21 @@ public:
 
 	virtual int AttachEffect(bool attach, int id, const char *name=0, const Vec3 &offset=Vec3(0.0f,0.0f,0.0f), const Vec3 &dir=Vec3(0.0f,1.0f,0.0f), float scale=1.0f, bool bParticlePrime = true);
 
-	virtual void Stick(EventPhysCollision *pCollision);
-	virtual void Unstick();
-	virtual bool StickToCharacter(bool stick, IEntity* pActor);
-	virtual void IgnoreCollisions(bool ignore, IEntity *pEntity);
-
   EntityId GetOwnerId()const;
 
 	float GetSpeed() const;
+	inline float GetLifeTime() const { return m_pAmmoParams? m_pAmmoParams->lifetime : 0.0f; }
+	bool IsPredicted() const { return m_pAmmoParams? m_pAmmoParams->predictSpawn != 0 : false; }
 
 	//IHitListener
 	virtual void OnHit(const HitInfo&);
 	virtual void OnExplosion(const ExplosionInfo&);
 	virtual void OnServerExplosion(const ExplosionInfo&);
+
+	//Helper function to initialize particle params in exceptional cases
+	void SetDefaultParticleParams(pe_params_particle *pParams);
+
+	virtual void InitWithAI( );
 
 protected:
 	CWeapon *GetWeapon();
@@ -137,19 +136,12 @@ protected:
 	const SAmmoParams			*m_pAmmoParams;
 
 	IPhysicalEntity *m_pPhysicalEntity;
-	IPhysicalEntity *m_pStickyBuddy;
 
 	int				m_whizSoundId;
 	int				m_trailSoundId;
 	int				m_trailEffectId;
 	int				m_trailUnderWaterId;
 	Vec3			m_last;
-
-	bool			m_stickToActor;
-	int				m_stuck;
-	int				m_constraints[MAX_STICKY_POINTS];
-	Vec3			m_constraintspt[MAX_STICKY_POINTS];
-	int				m_stickyCollisions;
 
 	EntityId	m_ownerId;
 	EntityId	m_hostId;
@@ -159,8 +151,11 @@ protected:
 	bool			m_destroying;
   
 	float			m_damageDropPerMeter;
-	Vec3			m_initialPos;
-	Vec3			m_initialDir;	
+	float     m_damageDropMinDisSqr;
+	bool      m_firstDropApplied;
+	Vec3			m_initial_pos;
+	Vec3			m_initial_dir;	
+	Vec3			m_initial_vel;
 
 	bool			m_remote;
 
@@ -169,9 +164,9 @@ protected:
 	bool			m_scaledEffectSignaled;
 
 	int				m_hitPoints;
+	bool      m_noBulletHits;
 	bool			m_hitListener;
 
-	static EntityId m_currentlyTracked;
 	IPhysicalEntity *m_obstructObject;
 };
 

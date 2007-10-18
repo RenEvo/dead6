@@ -17,24 +17,15 @@ History:
 *************************************************************************/
 #include "StdAfx.h"
 #include "HUDObject.h"
-#include "IGameTokens.h"
 #include "IGame.h"
 #include "IGameFramework.h"
 
 //-----------------------------------------------------------------------------------------------------
 
-CHUDObject::CHUDObject(bool bVisible)
+CHUDObject::CHUDObject()
 {
 	m_fX = 0.0f;
 	m_fY = 0.0f;
-
-	m_fFadeValue = 1.0f;
-}
-
-//hack - Jan
-void CHUDObject::SetParent(void* parent)
-{
-	m_parent = (void*)parent;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -45,31 +36,8 @@ CHUDObject::~CHUDObject()
 
 //-----------------------------------------------------------------------------------------------------
 
-void CHUDObject::SetFadeValue(float fFadeValue)
-{
-	m_fFadeValue = fFadeValue;
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-void CHUDObject::Update(float fDeltaTime)
-{
-	if(m_fFadeValue > 0.0f)
-	{
-		OnUpdate(fDeltaTime,m_fFadeValue);
-	}
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-// Convenience function for accessing the GameToken system.
-IGameTokenSystem *CHUDObject::GetIGameTokenSystem() const
-{
-	return gEnv->pGame->GetIGameFramework()->GetIGameTokenSystem();
-}
-
-//-----------------------------------------------------------------------------------------------------
-
 void CHUDObject::GetHUDObjectMemoryStatistics(ICrySizer * s)
 {
 }
+
+//-----------------------------------------------------------------------------------------------------

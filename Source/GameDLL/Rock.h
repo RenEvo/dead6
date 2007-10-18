@@ -20,7 +20,9 @@ History:
 
 
 #include "Projectile.h"
+#include "VectorSet.h"
 
+#define MAX_SPAWNED_ROCKS	10
 
 class CRock : public CProjectile
 {
@@ -31,6 +33,9 @@ public:
 	// CProjectile
 	virtual void HandleEvent(const SGameObjectEvent &);
 	// ~CProjectile
+
+private:
+	static VectorSet<CRock*> s_rocks;
 };
 
 

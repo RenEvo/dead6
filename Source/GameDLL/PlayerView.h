@@ -49,6 +49,7 @@ protected:
 		bool bIsGrabbing;
 		bool stats_isRagDoll;							// ViewFollowCharacterFirstPerson (Primarily: Dead or TrackView) uses to add a small z offset to the view
 		bool stats_isFrozen;
+		bool stats_isStandingUp;
 		bool stats_isShattered;
 		uint8 stats_followCharacterHead;		// Part of selection criteria for ViewFollowCharacterFirstPerson. Also forces an update to baseMtx, viewMtx,viewMtxFinal (update the player rotation if view control is taken from somewhere else)
 		float stats_flatSpeed;
@@ -66,7 +67,6 @@ protected:
 		
 		float params_viewFoVScale;
 		Vec3 params_viewPivot;
-		float params_headBobbingMultiplier;
 		float params_viewDistance;
 		float params_weaponInertiaMultiplier;
 		Ang3 params_hudAngleOffset;
@@ -84,6 +84,7 @@ protected:
 		float thirdPersonDistance;
 		float thirdPersonYaw;
 		float stand_MaxSpeed;
+		float deathTime;
 
 		int32 health;
 
@@ -92,6 +93,7 @@ protected:
 		float standSpeed;
 		bool bSprinting;
 		bool bLookingAtFriendlyAI;
+		bool bIsGrabbed;
 	};
 
 	struct SViewStateInOut
@@ -148,6 +150,7 @@ protected:
 	void ViewFollowCharacterFirstPerson(SViewParams &viewParams);
 	void ViewFirstPersonOnLadder(SViewParams & viewParams);
 	void ViewSpectatorTarget(SViewParams &viewParams);
+	void ViewDeathCamTarget(SViewParams &viewParams);
 
 	void ViewExternalControlPostProcess(CPlayer &rPlayer,SViewParams &viewParams);
 	public:

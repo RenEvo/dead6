@@ -37,7 +37,11 @@ public:
 
 	void Lock() { EnterCriticalSection(&m_cs); }
 	void Unlock() { LeaveCriticalSection(&m_cs); }
-	//bool TryLock() { return TryEnterCriticalSection(&m_cs) != FALSE; }
+	bool TryLock() { return TryEnterCriticalSection(&m_cs) != FALSE; }
+
+#ifndef NDEBUG
+	bool IsLocked() { return m_cs.RecursionCount > 0 && (DWORD)m_cs.OwningThread == GetCurrentThreadId(); }
+#endif
 
 private:
 	CRITICAL_SECTION m_cs;
@@ -47,10 +51,11 @@ template <> class CryLock<CRYLOCK_RECURSIVE> : public CryLock_CritSection {};
 template <> class CryLock<CRYLOCK_FAST> : public CryLock_CritSection {};
 template <> class CryCondLock<CRYLOCK_RECURSIVE> : public CryLock_WinMutex {};
 template <> class CryCondLock<CRYLOCK_FAST> : public CryLock_WinMutex {};
+#define _CRYTHREAD_CONDLOCK_GLITCH 1
 
 // most of this is taken from http://www.cs.wustl.edu/~schmidt/win32-cv-1.html
 template <CryLockType typ>
-class CryCond<CryCondLock<typ>, false>
+class CryCond<CryCondLock<typ>>
 {
 public:
 	typedef CryCondLock<typ> LockType;
@@ -271,7 +276,7 @@ public:
 		m_Runnable = &runnable;
 		m_thread = (HANDLE) _beginthread( RunRunnable, 0, this );
 #ifndef XENON
-		SetThreadAffinityMask(m_thread, cpuMask);
+		//SetThreadAffinityMask(m_thread, cpuMask);
 #endif
 		assert(m_thread);
 	}
@@ -280,7 +285,7 @@ public:
 	{
 		m_thread = (HANDLE) _beginthread( RunThis, 0, this );
 #ifndef XENON
-    SetThreadAffinityMask(m_thread, cpuMask);
+    //SetThreadAffinityMask(m_thread, cpuMask);
 #endif
 		assert(m_thread);
 	}

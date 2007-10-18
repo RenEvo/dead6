@@ -20,7 +20,6 @@
 #endif // _MSC_VER > 1000
 
 #include "Cry_Math.h"
-#include "IEntity.h" // EntityId
 #include "TimeValue.h"
 #include "SerializeFwd.h"
 
@@ -39,6 +38,12 @@ struct ISoundBuffer;
 struct IMicrophone;
 struct INetworkSoundListener;
 struct IMicrophoneStream;
+struct IEntitySoundProxy;
+
+struct IVisArea;
+
+// need this explicit here to prevent circular includes to IEntity
+typedef unsigned int EntityId;	//! unique identifier for each entity instance
 
 
 // Unique ID of a sound
@@ -59,68 +64,74 @@ typedef uint32	tSoundID;
 //////////////////////////////////////////////////////////////////////
 // Valid Event Sound Flags (only use these on a event)
 //////////////////////////////////////////////////////////////////////
-//#define FLAG_SOUND_RELATIVE							0x000040	// sound position moves relative to player
-//#define FLAG_SOUND_OUTDOOR							0x000800	// play the sound only if the listener is in outdoor
-//#define FLAG_SOUND_INDOOR	 							0x001000	// play the sound only if the listener is in indoor
-//#define FLAG_SOUND_CULLING		 					0x004000	// the sound uses sound occlusion (based on VisAreas)
-//#define FLAG_SOUND_LOAD_SYNCHRONOUSLY		0x008000	// the loading of this sound will be synchronous (asynchronously by default).
-//#define FLAG_SOUND_OBSTRUCTION			    0x040000	// the sound uses sound obstruction (based on ray-world-intersects)
-//#define FLAG_SOUND_SELFMOVING		        0x080000	// sounds will be automatically moved controlled by direction vector in m/sec
-//#define FLAG_SOUND_START_PAUSED					0x100000  // start the sound paused, so an additional call to unpause is needed
-//#define FLAG_SOUND_VOICE      					0x200000  // Sound used as a voice (sub-titles and lip sync can be applied)
+//#define FLAG_SOUND_RELATIVE							0x00000040	// sound position moves relative to player
+//#define FLAG_SOUND_OUTDOOR							0x00000800	// play the sound only if the listener is in outdoor
+//#define FLAG_SOUND_INDOOR	 							0x00001000	// play the sound only if the listener is in indoor
+//#define FLAG_SOUND_CULLING		 					0x00004000	// the sound uses sound occlusion (based on VisAreas)
+//#define FLAG_SOUND_LOAD_SYNCHRONOUSLY		0x00008000	// the loading of this sound will be synchronous (asynchronously by default).
+//#define FLAG_SOUND_OBSTRUCTION			    0x00040000	// the sound uses sound obstruction (based on ray-world-intersects)
+//#define FLAG_SOUND_SELFMOVING		        0x00080000	// sounds will be automatically moved controlled by direction vector in m/sec
+//#define FLAG_SOUND_START_PAUSED					0x00100000  // start the sound paused, so an additional call to unpause is needed
+//#define FLAG_SOUND_VOICE      					0x00200000  // Sound used as a voice (sub-titles and lip sync can be applied)
 
 //////////////////////////////////////////////////////////////////////
 // Valid Wave Sound Flags
 //////////////////////////////////////////////////////////////////////
-//#define FLAG_SOUND_LOOP									0x000001	 
-//#define FLAG_SOUND_2D										0x000002	
-//#define FLAG_SOUND_3D										0x000004	 
-//#define FLAG_SOUND_STEREO								0x000008	 
-//#define FLAG_SOUND_16BITS								0x000010	 
-//#define FLAG_SOUND_STREAM								0x000020	// streamed wav 
-//#define FLAG_SOUND_RELATIVE							0x000040	// sound position moves relative to player
-//#define FLAG_SOUND_DOPPLER							0x000100	// use doppler effect for this sound	
-//#define FLAG_SOUND_NO_SW_ATTENUATION		0x000200	// doesn't use SW attenuation for this sound
-//#define FLAG_SOUND_MUSIC								0x000400	// pure music sound, to use to set pure music volume
-//#define FLAG_SOUND_OUTDOOR							0x000800	// play the sound only if the listener is in outdoor
-//#define FLAG_SOUND_INDOOR	 							0x001000	// play the sound only if the listener is in indoor
-//#define FLAG_SOUND_UNSCALABLE						0x002000	// for all sounds with this flag the volume can be scaled separately respect to the master volume
-//#define FLAG_SOUND_CULLING		 					0x004000	// the sound uses sound occlusion (based on VisAreas)
-//#define FLAG_SOUND_LOAD_SYNCHRONOUSLY		0x008000	// the loading of this sound will be synchronous (asynchronously by default).
-//#define FLAG_SOUND_MANAGED              0x010000  // Managed sounds life time is controlled by the sound system, when sound stops it will be deleted.
-//#define FLAG_SOUND_FADE_OUT_UNDERWATER	0x020000	//1<<16
-//#define FLAG_SOUND_OBSTRUCTION			    0x040000	// the sound uses sound obstruction (based on ray-world-intersects)
-//#define FLAG_SOUND_SELFMOVING		        0x080000	// sounds will be automatically moved controlled by direction vector in m/sec
-//#define FLAG_SOUND_START_PAUSED					0x100000  // start the sound paused, so an additional call to unpause is needed
-//#define FLAG_SOUND_VOICE      					0x200000  // Sound used as a voice (sub-titles and lip sync can be applied)
+//#define FLAG_SOUND_LOOP									0x00000001	 
+//#define FLAG_SOUND_2D										0x00000002	
+//#define FLAG_SOUND_3D										0x00000004	 
+//#define FLAG_SOUND_STEREO								0x00000008	 
+//#define FLAG_SOUND_16BITS								0x00000010	 
+//#define FLAG_SOUND_STREAM								0x00000020	// streamed wav 
+//#define FLAG_SOUND_RELATIVE							0x00000040	// sound position moves relative to player
+//#define FLAG_SOUND_DOPPLER							0x00000100	// use doppler effect for this sound	
+//#define FLAG_SOUND_NO_SW_ATTENUATION		0x00000200	// doesn't use SW attenuation for this sound
+//#define FLAG_SOUND_MUSIC								0x00000400	// pure music sound, to use to set pure music volume
+//#define FLAG_SOUND_OUTDOOR							0x00000800	// play the sound only if the listener is in outdoor
+//#define FLAG_SOUND_INDOOR	 							0x00001000	// play the sound only if the listener is in indoor
+//#define FLAG_SOUND_UNSCALABLE						0x00002000	// for all sounds with this flag the volume can be scaled separately respect to the master volume
+//#define FLAG_SOUND_CULLING		 					0x00004000	// the sound uses sound occlusion (based on VisAreas)
+//#define FLAG_SOUND_LOAD_SYNCHRONOUSLY		0x00008000	// the loading of this sound will be synchronous (asynchronously by default).
+//#define FLAG_SOUND_MANAGED              0x00010000  // Managed sounds life time is controlled by the sound system, when sound stops it will be deleted.
+//#define FLAG_SOUND_FADE_OUT_UNDERWATER	0x00020000	//1<<16
+//#define FLAG_SOUND_OBSTRUCTION			    0x00040000	// the sound uses sound obstruction (based on ray-world-intersects)
+//#define FLAG_SOUND_SELFMOVING		        0x00080000	// sounds will be automatically moved controlled by direction vector in m/sec
+//#define FLAG_SOUND_START_PAUSED					0x00100000  // start the sound paused, so an additional call to unpause is needed
+//#define FLAG_SOUND_VOICE      					0x00200000  // Sound used as a voice (sub-titles and lip sync can be applied)
+//#define FLAG_SOUND_EDITOR								0x01000000	// mark sound as being only used within the Editor (eg. Facial Editor)
 
 //////////////////////////////////////////////////////////////////////
 // Internal Sound Flags
 //////////////////////////////////////////////////////////////////////
-#define FLAG_SOUND_LOOP									0x000001	 
-#define FLAG_SOUND_2D										0x000002	
-#define FLAG_SOUND_3D										0x000004	 
-#define FLAG_SOUND_STEREO								0x000008	 
-#define FLAG_SOUND_16BITS								0x000010	 
-#define FLAG_SOUND_STREAM								0x000020	// streamed wav 
-#define FLAG_SOUND_RELATIVE							0x000040	// sound position moves relative to player
-#define FLAG_SOUND_RADIUS								0x000080	// sound has a radius, custom attenuation calculation
-#define FLAG_SOUND_DOPPLER							0x000100	// use doppler effect for this sound	
-#define FLAG_SOUND_NO_SW_ATTENUATION		0x000200	// doesn't use SW attenuation for this sound
-#define FLAG_SOUND_MUSIC								0x000400	// pure music sound, to use to set pure music volume
-#define FLAG_SOUND_OUTDOOR							0x000800	// play the sound only if the listener is in outdoor
-#define FLAG_SOUND_INDOOR	 							0x001000	// play the sound only if the listener is in indoor
-#define FLAG_SOUND_UNSCALABLE						0x002000	// for all sounds with this flag the volume can be scaled separately respect to the master volume
-#define FLAG_SOUND_CULLING		 					0x004000	// the sound uses sound occlusion (based on VisAreas)
-#define FLAG_SOUND_LOAD_SYNCHRONOUSLY		0x008000	// the loading of this sound will be synchronous (asynchronously by default).
-#define FLAG_SOUND_MANAGED              0x010000  // Managed sounds life time is controlled by the sound system, when sound stops it will be deleted.
-#define FLAG_SOUND_FADE_OUT_UNDERWATER	0x020000	//1<<16
-#define FLAG_SOUND_OBSTRUCTION			    0x040000	// the sound uses sound obstruction (based on ray-world-intersects)
-#define FLAG_SOUND_SELFMOVING		        0x080000	// sounds will be automatically moved controlled by direction vector in m/sec
-#define FLAG_SOUND_START_PAUSED					0x100000  // start the sound paused, so an additional call to unpause is needed
-#define FLAG_SOUND_VOICE      					0x200000  // Sound used as a voice (sub-titles and lip sync can be applied)
-#define FLAG_SOUND_EVENT								0x400000  // this sound is a sound event
-#define FLAG_SOUND_SPREAD								0x800000  // this sound has a spread parameter
+#define FLAG_SOUND_LOOP									0x00000001	 
+#define FLAG_SOUND_2D										0x00000002	
+#define FLAG_SOUND_3D										0x00000004	 
+#define FLAG_SOUND_STEREO								0x00000008	 
+#define FLAG_SOUND_16BITS								0x00000010	 
+#define FLAG_SOUND_STREAM								0x00000020	// streamed wav 
+#define FLAG_SOUND_RELATIVE							0x00000040	// sound position moves relative to player
+#define FLAG_SOUND_RADIUS								0x00000080	// sound has a radius, custom attenuation calculation
+#define FLAG_SOUND_DOPPLER							0x00000100	// use doppler effect for this sound	
+#define FLAG_SOUND_NO_SW_ATTENUATION		0x00000200	// doesn't use SW attenuation for this sound
+#define FLAG_SOUND_MUSIC								0x00000400	// pure music sound, to use to set pure music volume
+#define FLAG_SOUND_OUTDOOR							0x00000800	// play the sound only if the listener is in outdoor
+#define FLAG_SOUND_INDOOR	 							0x00001000	// play the sound only if the listener is in indoor
+#define FLAG_SOUND_UNSCALABLE						0x00002000	// for all sounds with this flag the volume can be scaled separately respect to the master volume
+#define FLAG_SOUND_CULLING		 					0x00004000	// the sound uses sound occlusion (based on VisAreas)
+#define FLAG_SOUND_LOAD_SYNCHRONOUSLY		0x00008000	// the loading of this sound will be synchronous (asynchronously by default).
+#define FLAG_SOUND_MANAGED              0x00010000  // Managed sounds life time is controlled by the sound system, when sound stops it will be deleted.
+#define FLAG_SOUND_FADE_OUT_UNDERWATER	0x00020000	//1<<16
+#define FLAG_SOUND_OBSTRUCTION			    0x00040000	// the sound uses sound obstruction (based on ray-world-intersects)
+#define FLAG_SOUND_SELFMOVING		        0x00080000	// sounds will be automatically moved controlled by direction vector in m/sec
+#define FLAG_SOUND_START_PAUSED					0x00100000  // start the sound paused, so an additional call to unpause is needed
+#define FLAG_SOUND_VOICE      					0x00200000  // Sound used as a voice (sub-titles and lip sync can be applied)
+#define FLAG_SOUND_EVENT								0x00400000  // this sound is a sound event
+#define FLAG_SOUND_EDITOR								0x00800000	// mark sound as being only used within the Editor (eg. Facial Editor)
+#define FLAG_SOUND_SPREAD								0x01000000  // this sound has a spread parameter
+#define FLAG_SOUND_DAYLIGHT							0x02000000  // this sound has a daylight parameter
+#define FLAG_SOUND_SQUELCH							0x04000000  // this sound has a radio squelch parameter
+#define FLAG_SOUND_DOPPLER_PARAM				0x08000000  // this sound has a doppler parameter
+
 
 //#define FLAG_SOUND_DEFAULT_3D (FLAG_SOUND_3D | FLAG_SOUND_RADIUS | FLAG_SOUND_CULLING | FLAG_SOUND_OBSTRUCTION )
 #define FLAG_SOUND_DEFAULT_3D ( FLAG_SOUND_CULLING | FLAG_SOUND_OBSTRUCTION )
@@ -133,8 +144,11 @@ typedef uint32	tSoundID;
 #define FLAG_SOUND_PRECACHE_LOAD_GROUP				0x000002	 
 #define FLAG_SOUND_PRECACHE_STAY_IN_MEMORY		0x000004	
 #define FLAG_SOUND_PRECACHE_UNLOAD_AFTER_PLAY	0x000008	
+#define FLAG_SOUND_PRECACHE_UNLOAD_NOW				0x000010	
 
-#define FLAG_SOUND_PRECACHE_DEFAULT (FLAG_SOUND_PRECACHE_LOAD_SOUND | FLAG_SOUND_PRECACHE_LOAD_GROUP)
+#define FLAG_SOUND_PRECACHE_EVENT_DEFAULT (FLAG_SOUND_PRECACHE_LOAD_SOUND)
+#define FLAG_SOUND_PRECACHE_DIALOG_DEFAULT (FLAG_SOUND_PRECACHE_LOAD_SOUND | FLAG_SOUND_PRECACHE_STAY_IN_MEMORY | FLAG_SOUND_PRECACHE_UNLOAD_AFTER_PLAY)
+#define FLAG_SOUND_PRECACHE_READABILITY_DEFAULT (FLAG_SOUND_PRECACHE_LOAD_SOUND | FLAG_SOUND_PRECACHE_STAY_IN_MEMORY)
 
 //////////////////////////////////////////////////////////////////////
 // group stuff
@@ -150,6 +164,53 @@ typedef uint32	tSoundID;
 #define UPDATE_AUDIO_DEVICE_IN_MS					10
 #define UPDATE_SOUNDS_IN_MS								15
 #define UPDATE_SOUND_AUDIODEVICE_IN_MS		15
+
+//////////////////////////////////////////////////////////////////////
+// Sound Semantics
+//////////////////////////////////////////////////////////////////////
+enum ESoundSemantic
+{
+	eSoundSemantic_None											= 0x00000000,
+	eSoundSemantic_OnlyVoice								= 0x00000001,
+	eSoundSemantic_NoVoice									= 0x00000002,
+	eSoundSemantic_Unused1									= 0x00000004,
+	eSoundSemantic_Unused2									= 0x00000008,
+
+	eSoundSemantic_Unused3									= 0x00000010,
+	eSoundSemantic_Unused4									= 0x00000020,
+	eSoundSemantic_Ambience									= 0x00000040, //a
+	eSoundSemantic_Ambience_OneShot					= 0x00000080, //b
+
+	eSoundSemantic_Physics_Collision				= 0x00000100, //c
+	eSoundSemantic_Dialog										= 0x00000200, //d
+	eSoundSemantic_MP_Chat									= 0x00000400, //e
+	eSoundSemantic_Physics_Footstep					= 0x00000800, //f
+
+	eSoundSemantic_Physics_General					= 0x00001000, //g
+	eSoundSemantic_HUD											= 0x00002000, //h
+	eSoundSemantic_Unused5									= 0x00004000, //i
+	eSoundSemantic_FlowGraph								= 0x00008000, //j
+
+	eSoundSemantic_Player_Foley_Voice				= 0x00010000, //k
+	eSoundSemantic_Living_Entity						= 0x00020000, //l
+	eSoundSemantic_Mechanic_Entity					= 0x00040000, //m
+	eSoundSemantic_NanoSuit									= 0x00080000, //n
+
+	eSoundSemantic_SoundSpot								= 0x00100000, //o
+	eSoundSemantic_Particle									= 0x00200000, //p
+	eSoundSemantic_AI_Pain_Death						= 0x00400000, //q
+	eSoundSemantic_AI_Readability						= 0x00800000, //r
+
+	eSoundSemantic_AI_Readability_Response	= 0x01000000, //s
+	eSoundSemantic_TrackView								= 0x02000000, //t
+	eSoundSemantic_Projectile								= 0x04000000, //u
+	eSoundSemantic_Vehicle									= 0x08000000, //v
+
+	eSoundSemantic_Weapon										= 0x10000000, //w
+	eSoundSemantic_Explosion								= 0x20000000, //x
+	eSoundSemantic_Player_Foley							= 0x40000000, //y
+	eSoundSemantic_Animation								= 0x80000000, //z
+};
 
 enum ESoundActiveState
 {
@@ -167,10 +228,28 @@ enum EFadeState
 	eFadeState_JustFinished,
 };
 
+enum ESoundStopMode
+{
+	ESoundStopMode_AtOnce,
+	ESoundStopMode_EventFade,
+	ESoundStopMode_OnSyncPoint, // fallback: will be stopped after 0.1 sec or set spSYNCTIMEOUTINSEC before
+};
+
+enum ESoundUpdateMode
+{
+	eSoundUpdateMode_None					= 0x00000000,
+	eSoundUpdateMode_Listeners    = 0x00000001,
+	eSoundUpdateMode_Sounds			  = 0x00000002,
+	eSoundUpdateMode_Rest				  = 0x00000004,
+	eSoundUpdateMode_All					= 0x0000000F
+};
+
 enum EOutputHandle
 {
 	eOUTPUT_WINMM,			// Pointer to type HWAVEOUT is returned.
 	eOUTPUT_DSOUND,			// Pointer to type DIRECTSOUND is returned.
+	eOUTPUT_WASAPI,			// Pointer to type WASAPI is returned.
+	eOUTPUT_OPENAL,			// Pointer to type OPENAL is returned.
 	eOUTPUT_ASIO,				// NULL / 0 is returned.
 	eOUTPUT_OSS,				// File handle is returned, (cast to int).
 	eOUTPUT_ESD,				// Handle of type int is returned, as returned by so_esd_open_sound (cast to int). 
@@ -215,94 +294,38 @@ typedef int32 ListenerID;
 #define LISTENERID_ALLACTIVE -1
 #define LISTENERID_INVALID -2
 
-typedef struct SListener 
+#define MAX_VIS_AREAS 256 // maximum of visarea cache
+
+
+typedef struct IListener 
 {
+	virtual ListenerID	GetID() const = 0;
+	virtual EntityId		GetEntityID() const = 0;
 	
-private:
-	Matrix34	  Transformation;
-	float				fUnderwater;
+	virtual bool GetActive() const = 0;
+	virtual void SetActive(bool bActive) = 0;
+	
+	virtual void SetRecordLevel(float fRecord) = 0;
+	virtual float GetRecordLevel() = 0;
 
-public:
-	ListenerID	nListenerID;
-	float				fRecordLevel;
-	Vec3				vVelocity;
-	EntityId    nEntityID;
-	bool				bActive;
-	bool				bMoved;
-	bool				bRotated;
+	virtual Vec3 GetPosition() const = 0;
+	virtual void SetPosition(const Vec3 Position) = 0;
 
+	virtual Vec3 GetForward() const = 0;
+	virtual Vec3 GetTop() const = 0;
+	virtual Vec3 GetVelocity() const = 0;
+	virtual void SetVelocity(Vec3 vVel) = 0;
 
-	// Constructor
-	SListener() 
-	{
-		nListenerID		= LISTENERID_INVALID;
-		vVelocity			= Vec3(0,0,0);
-		fRecordLevel	= 0.0f;
-		bActive				= false;
-		bMoved				= false;
-		bRotated			= false;
-		fUnderwater   = 1.0f;
-		nEntityID     = 0;
-		Transformation.SetIdentity();
-	}
+	virtual void SetMatrix(const Matrix34 newTransformation) = 0;
+	virtual Matrix34 GetMatrix() const = 0;
 
-	Vec3 GetPosition() const
-	{
-		return Transformation.GetColumn3();
-	}
+	virtual float GetUnderwater() const = 0;
+	virtual void	SetUnderwater(const float fUnder) = 0;
 
-	void SetPosition(const Vec3 Position)
-	{
-		Transformation.SetColumn(3, Position);
-	}
+	virtual IVisArea* GetVisArea() const = 0;
+	virtual void SetVisArea(IVisArea* pVArea) = 0;
 
-	Vec3 GetForward() const
-	{ 
-		Vec3 ForwardVec(0,1,0); // Forward.
-		ForwardVec = Transformation.TransformVector(ForwardVec);
-		ForwardVec.Normalize();
-		return ForwardVec;
-	}
-
-	Vec3 GetTop() const
-	{
-		Vec3 TopVec(0,0,1); // Up.
-		TopVec = Transformation.TransformVector(TopVec);
-		TopVec.Normalize();
-		return TopVec;
-	}
-
-	Vec3 GetVelocity() const
-	{
-		return vVelocity;
-	}
-
-	void SetMatrix(const Matrix34 matTransformation)
-	{
-		Vec3 vOldPos = Transformation.GetColumn3();
-		Vec3 vNewPos = matTransformation.GetColumn3();
-		bMoved = !vOldPos.IsEquivalent(vNewPos, 0.01f);
-		bRotated = !Transformation.IsEquivalent(matTransformation, 0.01f);
-
-		Transformation = matTransformation;
-	}
-
-	Matrix34 GetMatrix() const
-	{
-		return Transformation;
-	}
-
-	float GetUnderwater() const
-	{
-		return fUnderwater;
-	}
-
-	void SetUnderwater(const float fUnder)
-	{
-		fUnderwater = fUnder;
-	}
-
-} SListener;
+} IListener;
 
 
 
@@ -330,8 +353,11 @@ enum ESoundCallbackEvent
 	SOUND_EVENT_ON_LOAD_FAILED,				//!< Fired if sound loading is failed.
 	SOUND_EVENT_ON_START,							//!< Fired when sound is started.
 	SOUND_EVENT_ON_PLAYBACK_STARTED,	//!< Fired when sound's playback started.
+	SOUND_EVENT_ON_PLAYBACK_UNPAUSED,	//!< Fired when sound's playback unpaused.
 	SOUND_EVENT_ON_STOP,							//!< Fired when sound stops.
-	SOUND_EVENT_ON_PLAYBACK_STOPPED		//!< Fired when sound's playback stops.
+	SOUND_EVENT_ON_PLAYBACK_STOPPED,	//!< Fired when sound's playback stops.
+	SOUND_EVENT_ON_PLAYBACK_PAUSED,		//!< Fired when sound's playback paused.
+	SOUND_EVENT_ON_SYNCHPOINT					//!< Fired when sound reaches a syncpoint.
 };
 
 //! Soundsystem events sent to callback that registered to soundsystem.
@@ -342,8 +368,11 @@ enum ESoundSystemCallbackEvent
 	SOUNDSYSTEM_EVENT_ON_LOAD_FAILED,				//!< Fired if sound loading is failed.
 	SOUNDSYSTEM_EVENT_ON_START,							//!< Fired when sound is started.
 	SOUNDSYSTEM_EVENT_ON_PLAYBACK_STARTED,	//!< Fired when sound's playback started.
+	SOUNDSYSTEM_EVENT_ON_PLAYBACK_UNPAUSED,	//!< Fired when sound's playback unpaused.
 	SOUNDSYSTEM_EVENT_ON_STOP,							//!< Fired when sound stops.
-	SOUNDSYSTEM_EVENT_ON_PLAYBACK_STOPPED		//!< Fired when sound's playback stops.
+	SOUNDSYSTEM_EVENT_ON_PLAYBACK_STOPPED,	//!< Fired when sound's playback stops.
+	SOUNDSYSTEM_EVENT_ON_PLAYBACK_PAUSED,		//!< Fired when sound's playback paused.
+	SOUNDSYSTEM_EVENT_ON_SYNCHPOINT					//!< Fired when sound reaches a syncpoint.
 };
 
 
@@ -379,6 +408,7 @@ typedef struct SObstruction
 			bAssigned							= false;
 			bDelayPlayback				= false;
 			bFirstTime						= true;
+			bDontAveragePrevious	= true;
 
 
 			for (int i=0; i< SOUND_MAX_OBSTRUCTION_TESTS; ++i)
@@ -465,6 +495,7 @@ typedef struct SObstruction
 	bool bAssigned;
 	bool bDelayPlayback;
 	bool bFirstTime;
+	bool bDontAveragePrevious;
 
 private:
 	float fDirectOcclusion;				// level of obstruction from 0 = none, to 1 = full obstructed
@@ -568,7 +599,7 @@ struct ISoundSystem
 {
 	virtual bool Init() = 0; // Need to call this after the AudioDevice was set and initialized
 	virtual void Release() = 0;
-	virtual void Update() = 0;
+	virtual void Update(ESoundUpdateMode UpdateMode) = 0;
 
 	/*! Create a music-system. You should only create one music-system at a time.
 	*/
@@ -613,7 +644,17 @@ struct ISoundSystem
 	*/			
 	virtual void SetMasterVolumeScale(float fScale, bool bForceRecalc=false) = 0;
 
+	/*! GetSFXVolume
+	@param fVol volume (0.0f - 1.0f)
+	*/		
+	virtual float GetSFXVolume() = 0;
+
 	virtual void SetSoundActiveState(ISound *pSound, ESoundActiveState State) = 0;
+
+	/*! SetMasterPitch
+	@param fPitch pitch (in octaves)
+	*/		
+	virtual void SetMasterPitch(float fPitch) = 0;
 
 	/*! Get a sound interface from the sound system
 	@param nSoundId sound id
@@ -673,15 +714,15 @@ struct ISoundSystem
 
 	/*! Retrieves a pointer to a Listener struct of the Listener defined by ID
 	@param nListenerID ListenerID of a valid Listener
-	@return SListener* Pointer to Listener struct or NULL if not found
+	@return IListener* Pointer to Listener struct or NULL if not found
 	*/
-	virtual	SListener*	GetListener(ListenerID nListenerID) = 0;
+	virtual	IListener*	GetListener(ListenerID nListenerID) = 0;
 
 	/*! Retrieves a pointer to a Listener struct of the Listener who has a higher ID than provided
 	@param nListenerID ListenerID or LISTENERID_STANDARD to start
-	@return SListener* Pointer to Listener struct or NULL if no Listener has a higher ID
+	@return IListener* Pointer to Listener struct or NULL if no Listener has a higher ID
 	*/
-	virtual SListener*	GetNextListener(ListenerID nListenerID) = 0;
+	virtual IListener*	GetNextListener(ListenerID nListenerID) = 0;
 
 	/*! Retrieves the number of active Listeners
 	@return uint32 Number of active Listeners
@@ -695,7 +736,7 @@ struct ISoundSystem
 	@param	bForceRecompute forces to recompute the vis area connections even if
 					the listener didn't move (useful for moving objects that can occlude)
 	*/
-	virtual void	RecomputeSoundOcclusion(bool bRecomputeListener,bool bForceRecompute,bool bReset=false)=0;
+	virtual void	RecomputeSoundOcclusion(bool bRecomputeListener, bool bForceRecompute, bool bReset=false)=0;
 	
 	//! Check for EAX support.
 	virtual bool IsEAX(void) = 0;
@@ -708,14 +749,15 @@ struct ISoundSystem
 	virtual bool SetGroupScale(int nGroup, float fScale) = 0;
 
 	//! Stop all sounds and music
-	virtual bool	Silence(bool bStopLoopingSounds, bool bUnloadData)=0;
+	virtual bool	Silence(bool bStopLoopingSounds, bool bUnloadData) = 0;
 
 	//! calls to be able to overwrite sound files and clear any loaded dependency
 	virtual bool DeactivateAudioDevice() = 0;
 	virtual bool ActivateAudioDevice() = 0;
 
 	//! pause all sounds
-	virtual void	Pause(bool bPause, bool bResetVolume=false)=0; 
+	virtual void	Pause(bool bPause, bool bResetVolume=false) = 0; 
+	virtual bool  IsPaused() = 0;
 
 	//! Mute/unmute all sounds
 	virtual void	Mute(bool bMute)=0;
@@ -736,7 +778,7 @@ struct ISoundSystem
 	virtual float GetMusicVolume() const = 0;
 
 	//! sets parameters for directional attenuation (for directional microphone effect); set fConeInDegree to 0 to disable the effect
-	virtual void CalcDirectionalAttenuation(Vec3 &Pos, Vec3 &Dir, float fConeInRadians) = 0;
+	virtual void CalcDirectionalAttenuation(const Vec3 &Pos, const Vec3 &Dir, const float fConeInRadians) = 0;
 
 	//! returns the maximum sound-enhance-factor to use it in the binoculars as "graphical-equalizer"...
 	virtual float GetDirectionalAttenuationMaxScale() = 0;
@@ -754,7 +796,7 @@ struct ISoundSystem
 	virtual int  GetMemoryUsageInMB() = 0;
 
 	//! get the current area the listener is in
-	virtual IVisArea	*GetListenerArea()=0;
+	//virtual IVisArea	*GetListenerArea()=0;
 
 	//! returns true if sound is being debugged
 	virtual bool DebuggingSound()=0;	
@@ -832,7 +874,10 @@ enum enumSoundParamSemantics
 	spPRIORITY,
 	spFXEFFECT,
 	spAMPLITUDE,
-	spSPEAKERPAN
+	spSPEAKERPAN,
+	spREVERBWET,
+	spREVERBDRY,
+	spSYNCTIMEOUTINSEC
 };
 
 //////////////////////////////
@@ -854,13 +899,16 @@ struct ISound
 	virtual bool UnloadBuffer() = 0;
 
 	virtual void Play(float fVolumeScale=1.0f, bool bForceActiveState=true, bool bSetRatio=true, IEntitySoundProxy *pEntitySoundProxy=NULL) = 0;
-	virtual void Stop(bool bAtOnce=false) = 0;
+	virtual void Stop(ESoundStopMode eStopMode=ESoundStopMode_EventFade) = 0; // Sound will be invalid after stopped, unless being static on a soundproxy
 	virtual void SetPaused(bool bPaused) = 0;
 	virtual bool GetPaused() const = 0;
 
 	//! Fading In/Out - 0.0f is Out 1.0f is In
 	virtual void				SetFade(const float fFadeGoal, const int nFadeTimeInMS) = 0;
 	virtual EFadeState	GetFadeState() const = 0;
+
+	virtual void						SetSemantic(ESoundSemantic eSemantic) = 0;
+	virtual ESoundSemantic	GetSemantic() = 0;
 
 	//virtual void SetFadeTime(const int nFadeTimeInMS) = 0;
 	//virtual int  GetFadeTime() const = 0;
@@ -945,6 +993,7 @@ struct ISound
 
 	// modify a line sound
 	virtual void SetLineSpec(const Vec3 &vStart, const Vec3 &vEnd) = 0;
+	virtual bool GetLineSpec(  Vec3 &vStart,   Vec3 &vEnd) = 0;
 
 	// modify a sphere sound
 	virtual void SetSphereSpec(const float fRadius) = 0;
@@ -982,7 +1031,7 @@ struct ISound
 	virtual	void	FXSetParamEQ(float fCenter,float fBandwidth,float fGain)=0;
 
 	//! returns the size of the stream in ms
-	virtual int GetLengthMs() const = 0; // will soon change to:
+	virtual int GetLengthMs() const = 0; //returns 0 on looping sound or if buffer is not loaded (dialog)
 	//virtual int GetLengthInMs()=0;
 
 	//! returns the size of the stream in bytes

@@ -14,7 +14,7 @@ public:
 	virtual ~CREWaterVolume();
 	virtual void mfPrepare();
 	virtual bool mfDraw( CShader* ef, SShaderPass* sfm );
-	virtual float mfDistanceToCameraSquared( const CRenderObject& thisObject );
+	virtual float mfDistanceToCameraSquared( Matrix34& matInst );
   virtual void mfGetPlane(Plane& pl);
   virtual void mfCenter(Vec3& vCenter, CRenderObject *pObj);
 

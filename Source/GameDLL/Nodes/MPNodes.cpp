@@ -18,6 +18,8 @@ History:
 #include "Player.h"
 #include "Nodes/G2FlowBaseNode.h"
 
+#include <IVehicleSystem.h>
+
 class CFlowNode_MP : public CFlowBaseNode, public CGameRules::SGameRulesListener
 {
 	enum INPUTS
@@ -156,6 +158,14 @@ public:
 								}
 								ActivateOutput(&m_actInfo, EOP_EndGameNear, true);
 								m_endGameNear = true;
+							}
+
+							// in the case of tanks, entity isn't removed for quite some time after destruction.
+							//	Check vehicle health directly here...
+							IVehicle* pVehicle = g_pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(*it);
+							if(pVehicle && pVehicle->IsDestroyed())
+							{
+								m_MDList.erase(it);
 							}
 						}
 						else
