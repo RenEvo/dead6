@@ -564,6 +564,21 @@ public:
 		return m_actorTarget;
 	}
 
+	// [D6] Lock steering movement request
+	bool HasLockedSteering(void) const
+	{
+		return CheckFlag(eMRF_LockedSteering);
+	}
+
+	void SetLockedSteering(bool bLocked)
+	{
+		if (true == bLocked)
+			SetFlag(eMRF_LockedSteering);
+		else
+			ClearFlag(eMRF_LockedSteering);
+	}
+	// [/D6]
+
 private:
 	enum EMovementRequestFlags
 	{
@@ -600,6 +615,9 @@ private:
 		eMRF_RemovePrediction										= 0x00010000,
 		eMRF_RemoveForcedNavigation							= 0x00008000,
 		eMRF_RemoveBodyTarget                   = 0x10000000,
+
+		// [D6] Locked steering flag
+		eMRF_LockedSteering						= 0x00000080,
 	};
 
 	void ClearFlag( EMovementRequestFlags flag )

@@ -590,7 +590,10 @@ bool CTeamManager::_CreateHarvesterEntity(STeamHarvesterDef *def)
 
 	// Set ID
 	def->nEntityID = pNewEntity->GetId();
-	def->ucFlags |= HARVESTER_ALIVE;
+	def->SetFlag(HARVESTER_ALIVE, true);
+	def->SetFlag(HARVESTER_HASLOAD, false);
+	def->SetFlag(HARVESTER_ISLOADING, false);
+	def->SetFlag(HARVESTER_ISUNLOADING, false);
 
 	// Get the vehicle and turn its engine on
 	IVehicle *pVehicle = g_D6Core->pD6Game->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(def->nEntityID);
@@ -602,6 +605,11 @@ bool CTeamManager::_CreateHarvesterEntity(STeamHarvesterDef *def)
 		pVehicleMovement->StartEngine(0);
 		pVehicle->NeedsUpdate(1);
 	}
+
+	// Reset values
+	def->fPayloadTimer = 0.0f;
+	def->fPayload = 0.0f;
+	def->SignalQueue.clear();
 
 	return true;
 }
@@ -631,6 +639,19 @@ STeamHarvesterDef *CTeamManager::GetTeamHarvester(TeamID nID, HarvesterID nHarve
 	if (itHarv == list.end())
 		return NULL;
 	return itHarv->second;
+}
+
+////////////////////////////////////////////////////
+bool CTeamManager::RemakeTeamHarvester(STeamHarvesterDef *pDef, bool bLeaveEntity)
+{
+	if (NULL == pDef) return false;
+
+	// Remove the entity first?
+	if (false == bLeaveEntity)
+		gEnv->pEntitySystem->RemoveEntity(pDef->nEntityID);
+
+	// Recreate it
+	return _CreateHarvesterEntity(pDef);
 }
 
 ////////////////////////////////////////////////////
