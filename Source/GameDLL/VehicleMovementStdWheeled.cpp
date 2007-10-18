@@ -1428,6 +1428,7 @@ void CVehicleMovementStdWheeled::ProcessAI(const float deltaTime)
 		if (m_aiRequest.HasMoveTarget())
 			vMove = ( m_aiRequest.GetMoveTarget() - m_PhysPos.pos ).GetNormalizedSafe();
 	}
+	bool bLockSteer = m_aiRequest.HasLockedSteering();
 
 	//start calculation
 	if ( fabsf( inputSpeed ) < 0.0001f || m_tireBlownTimer > 1.5f )
@@ -1507,6 +1508,14 @@ void CVehicleMovementStdWheeled::ProcessAI(const float deltaTime)
 	//	char buf[1024];
 	//	sprintf(buf, "steering	%4.2f	%4.2f %4.2f	%4.2f	%4.2f	%4.2f	%d\n", deltaTime,inputSpeed - currentSpeed,angle,currentAngleSpeed, m_movementAction.rotateYaw,currentAngleSpeed-m_prevAngle,step);
 	//	OutputDebugString( buf );
+
+		// [D6] If locked steering, overwrite it
+		if (true == bLockSteer)
+		{
+			m_movementAction.rotateYaw = 0.0f;
+			m_action.steer = 0;
+		}
+		// [/D6]
 	}
 
 }
@@ -1715,6 +1724,10 @@ bool CVehicleMovementStdWheeled::RequestMovement(CMovementRequest& movementReque
 		Vec3 pos = ( end - start ) * 100.0f;
 		pos +=start;
 		m_aiRequest.SetMoveTarget( pos );
+
+		// [D6] Steering flag
+		m_aiRequest.SetLockedSteering(movementRequest.HasLockedSteering());
+		// [/D6]
 	}
 	else
 		m_aiRequest.ClearMoveTarget();

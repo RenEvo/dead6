@@ -436,6 +436,19 @@ struct ITeamManager
 	virtual STeamHarvesterDef *GetTeamHarvester(TeamID nID, HarvesterID nHarvesterID) = 0;
 
 	////////////////////////////////////////////////////
+	// RemakeTeamHarvester
+	//
+	// Purpose: Remakes the entity for the given harvester
+	//
+	// In:	pDef - Harvester definition
+	//		bLeaveEntity - TRUE if old entity should be
+	//			left in the world
+	//
+	// Returns TRUE on success, FALSE on error
+	////////////////////////////////////////////////////
+	virtual bool RemakeTeamHarvester(STeamHarvesterDef *pDef, bool bLeaveEntity = false) = 0;
+
+	////////////////////////////////////////////////////
 	// GetChannelTeam
 	//
 	// Purpose: Get the team that owns the given channel

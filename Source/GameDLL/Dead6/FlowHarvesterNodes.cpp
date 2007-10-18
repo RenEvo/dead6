@@ -44,6 +44,7 @@ protected:
 	bool m_bReportPurchase;
 	float m_fLastUpdate;
 	float m_fMakerTime;					// Set to time when harvester was marked for recreation or 0 if it doesn't need to be remade
+	TeamID m_nTeamID;
 	STeamHarvesterDef *m_pHarvester;	// Harvester definition
 
 public:
@@ -55,6 +56,7 @@ public:
 		m_fLastUpdate = 0.0f;
 		m_fMakerTime = 0.0f;
 		m_pHarvester = NULL;
+		m_nTeamID = TEAMID_NOTEAM;
 	}
 
 	////////////////////////////////////////////////////
@@ -96,6 +98,15 @@ public:
 	// Out:	config - The node's config
 	////////////////////////////////////////////////////
 	virtual void GetConfiguration(SFlowNodeConfig& config);
+
+	////////////////////////////////////////////////////
+	// RemakeHarvester
+	//
+	// Purpose: Removes the harvester from the world
+	//
+	// In:	pActInfo - Activation info
+	////////////////////////////////////////////////////
+	bool RemakeHarvester(SActivationInfo *pActInfo);
 
 	////////////////////////////////////////////////////
 	// ProcessEvent
@@ -204,6 +215,8 @@ protected:
 
 	// Params
 	bool m_bBreakPast;
+	bool m_bReverse;
+	bool m_bLockSteer;
 	float m_fMaxSpeed, m_fMinSpeed;
 	float m_fSlowDist;
 	float m_fTimeOut;
@@ -223,6 +236,8 @@ public:
 		m_fStartTime = 0.0f;
 
 		m_bBreakPast = false;
+		m_bReverse = false;
+		m_bLockSteer = false;
 		m_fMaxSpeed = m_fMinSpeed = m_fSlowDist = m_fTimeOut = 0.0f;
 		m_pHarvester = NULL;
 	}
@@ -244,13 +259,16 @@ public:
 		EIP_MinSpeed,		// Float: Low speed the harvester should move
 		EIP_SlowDist,		// Float: How far away before slowing down
 		EIP_BreakPast,		// Bool: TRUE if harvester should slam on the breaks once the point has been passed
+		EIP_Reverse,		// Bool: TRUE if harvester should drive in reverse
+		EIP_LockSteering,	// Bool: TRUE if harvester cannot steer while moving
 		EIP_TimeOut,		// Float: How long before timeout is called
 	};
 
 	// Output Ports
 	enum EOutputPorts
 	{
-		EOP_AtLoc = 0,		// Called when the harvester has made it to the location specified
+		EOP_Done = 0,		// Called when the harvester has made it to the location specified
+		EOP_Start,			// Called when the harvester begins to move
 		EOP_TimedOut,		// Called if node timed out and harvester did not make it to the location in time
 	};
 
@@ -263,6 +281,116 @@ public:
 	// Out:	config - The node's config
 	////////////////////////////////////////////////////
 	virtual void GetConfiguration(SFlowNodeConfig& config);
+
+	////////////////////////////////////////////////////
+	// Reset
+	//
+	// Purpose: Reset the node for the harvester to use
+	//
+	// In:	pActInfo - Activation info
+	////////////////////////////////////////////////////
+	virtual void Reset(SActivationInfo *pActInfo);
+
+	////////////////////////////////////////////////////
+	// ProcessEvent
+	//
+	// Purpose: Called when an event is to be processed
+	//
+	// In:	event - Flow event to process
+	//		pActInfo - Activation info for the event
+	////////////////////////////////////////////////////
+	virtual void ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo);
+
+	////////////////////////////////////////////////////
+	// GetMemoryStatistics
+	//
+	// Purpose: Used by memory management
+	//
+	// In:	s - Cry Sizer object
+	////////////////////////////////////////////////////
+	virtual void GetMemoryStatistics(ICrySizer *s)
+	{
+		s->Add(*this);
+	}
+};
+
+// CFlowHarvesterTurnNode
+//	Used to move a Harvester turn on the spot to face a new direction
+class CFlowHarvesterTurnNode : public CFlowBaseNode
+{
+protected:
+	// Set to TRUE when active
+	bool m_bIsActive;
+	bool m_bTurnNeg;
+	float m_fLastUpdate;
+	float m_fStartTime;
+
+	// Params
+	float m_fTurnAngle;
+	float m_fTurnSpeed;
+	float m_fTimeOut;
+
+	// Harvester info associated with graph
+	STeamHarvesterDef *m_pHarvester;	// Harvester definition
+
+public:
+	////////////////////////////////////////////////////
+	// Constructor
+	////////////////////////////////////////////////////
+	CFlowHarvesterTurnNode(SActivationInfo * pActInfo)
+	{
+		m_bIsActive = false;
+		m_bTurnNeg = false;
+		m_fLastUpdate = 0.0f;
+		m_fTurnAngle = 0.0f;
+		m_fTurnSpeed = 0.0f;
+		m_fTimeOut = 0.0f;
+		m_pHarvester = NULL;
+	}
+
+	////////////////////////////////////////////////////
+	// Destructor
+	////////////////////////////////////////////////////
+	virtual ~CFlowHarvesterTurnNode()
+	{
+
+	}
+
+	// Input Ports
+	enum EInputPorts
+	{
+		EIP_Turn = 0,		// Call to invoke the harvester to turn on the spot
+		EIP_FaceDeg,		// Float: Degree of angle harvester should face, with 0 degrees being local forward
+		EIP_Speed,			// Float: How fast the harvester should turn, degrees per second
+		EIP_TimeOut,		// Float: How long before timeout is called
+	};
+
+	// Output Ports
+	enum EOutputPorts
+	{
+		EOP_Done = 0,		// Called when the harvester has turned by the degree specified
+		EOP_Start,			// Called when the harvester begins to move
+		EOP_TimedOut,		// Called if node timed out
+	};
+
+	////////////////////////////////////////////////////
+	// GetConfiguration
+	//
+	// Purpose: Set up and return the configuration for
+	//	this node for the Flow Graph
+	//
+	// Out:	config - The node's config
+	////////////////////////////////////////////////////
+	virtual void GetConfiguration(SFlowNodeConfig& config);
+
+	////////////////////////////////////////////////////
+	// Reset
+	//
+	// Purpose: Reset the node for the harvester to use
+	//
+	// In:	pActInfo - Activation info
+	////////////////////////////////////////////////////
+	virtual void Reset(SActivationInfo *pActInfo);
 
 	////////////////////////////////////////////////////
 	// ProcessEvent
@@ -325,6 +453,54 @@ void CFlowHarvesterControllerNode::GetConfiguration(SFlowNodeConfig& config)
 }
 
 ////////////////////////////////////////////////////
+bool CFlowHarvesterControllerNode::RemakeHarvester(SActivationInfo *pActInfo)
+{
+	// Get factory and position settings
+	bool bUseFactory = GetPortBool(pActInfo, EIP_UseFactory);
+	Vec3 vPos(0,0,0);
+	float fDir = 0.0f;
+	if (false == bUseFactory)
+	{
+		vPos = GetPortVec3(pActInfo, EIP_CreateAt);
+		fDir = GetPortFloat(pActInfo, EIP_CreateFace);
+	}
+
+	// Destroy old harvester if it is still in the world
+	bool bNew = true;
+	if (NULL != m_pHarvester)
+	{
+		// Remake it
+		if (false == g_D6Core->pTeamManager->RemakeTeamHarvester(m_pHarvester, true))
+		{
+			// Warning...
+			GameWarning("[Harvester Controller] Failed to recreate harvester %d for team \'%s\' (%u)",
+				m_pHarvester->nID, g_D6Core->pTeamManager->GetTeamName(m_nTeamID), m_nTeamID);
+			return false;
+		}
+	}
+	else
+	{
+		// Create harvester
+		HarvesterID nHarvesterID = g_D6Core->pTeamManager->CreateTeamHarvester(m_nTeamID, 
+			bUseFactory, vPos, fDir, &m_pHarvester);
+		if (HARVESTERID_INVALID == nHarvesterID || NULL == m_pHarvester)
+		{
+			// Warning...
+			GameWarning("[Harvester Controller] Failed to create harvester for team \'%s\' (%u)",
+				g_D6Core->pTeamManager->GetTeamName(m_nTeamID), m_nTeamID);
+			return false;
+		}
+	}
+
+	// Set graph entity
+	pActInfo->pGraph->SetGraphEntity(PACK_TEAM_HARV_ID(m_nTeamID, m_pHarvester->nID), HARVESTER_GRAPH_INDEX);
+	 
+	m_fMakerTime = 0.0f;
+	m_bReportPurchase = true;
+	return true;
+}
+
+////////////////////////////////////////////////////
 void CFlowHarvesterControllerNode::ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo)
 {
 	switch (event)
@@ -334,6 +510,7 @@ void CFlowHarvesterControllerNode::ProcessEvent(EFlowEvent event, SActivationInf
 		{
 			m_bReportPurchase = false;
 			pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+			m_pHarvester = NULL;
 
 			// If we're in the editor, only go through if game has started
 			if (true == g_D6Core->pSystem->IsEditor() &&
@@ -345,36 +522,14 @@ void CFlowHarvesterControllerNode::ProcessEvent(EFlowEvent event, SActivationInf
 			{
 				// Get team ID
 				string szTeamName = GetPortString(pActInfo, EIP_Team);
-				TeamID nTeamID = g_D6Core->pTeamManager->GetTeamId(szTeamName.c_str());
+				m_nTeamID = g_D6Core->pTeamManager->GetTeamId(szTeamName.c_str());
 
-				// Get factory and position settings
-				bool bUseFactory = GetPortBool(pActInfo, EIP_UseFactory);
-				Vec3 vPos(0,0,0);
-				float fDir = 0.0f;
-				if (false == bUseFactory)
-				{
-					vPos = GetPortVec3(pActInfo, EIP_CreateAt);
-					fDir = GetPortFloat(pActInfo, EIP_CreateFace);
-				}
-
-				// Create harvester for first time
-				HarvesterID nHarvesterID = g_D6Core->pTeamManager->CreateTeamHarvester(nTeamID, 
-					bUseFactory, vPos, fDir, &m_pHarvester);
-				if (HARVESTERID_INVALID == nHarvesterID || NULL == m_pHarvester)
-				{
-					// Warning...
-					GameWarning("[Harvester Controller] Failed to create harvester for team \'%s\' (%u)",
-						szTeamName.c_str(), nTeamID);
+				if (false == RemakeHarvester(pActInfo))
 					break;
-				}
 
 				// Need updating
 				pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, true);
 				m_fLastUpdate = gEnv->pTimer->GetCurrTime();
-				m_bReportPurchase = true;
-
-				// Set graph entity
-				pActInfo->pGraph->SetGraphEntity(PACK_TEAM_HARV_ID(nTeamID, nHarvesterID), HARVESTER_GRAPH_INDEX);
 			}
 			m_fMakerTime = 0.0f;
 		}
@@ -404,7 +559,20 @@ void CFlowHarvesterControllerNode::ProcessEvent(EFlowEvent event, SActivationInf
 			const SVehicleStatus status = pVehicle->GetStatus();
 			if (status.health <= 0.0f /*|| status.flipped*/)
 			{
-				// TODO Handle
+				// Check repurchase timer
+				if (m_fMakerTime == 0.0f)
+				{
+					m_fMakerTime = gEnv->pTimer->GetCurrTime();
+				}
+				else
+				{
+					// Has enough time passed to make a new one?
+					if (gEnv->pTimer->GetCurrTime() - m_fMakerTime >= m_pHarvester->fBuildTime)
+					{
+						// Remake it
+						RemakeHarvester(pActInfo);
+					}
+				}
 				break;
 			}
 
@@ -652,6 +820,8 @@ void CFlowHarvesterGotoNode::GetConfiguration(SFlowNodeConfig& config)
 		InputPortConfig<float>("MinSpeed", 0.0f, _HELP("How fast the harvester can move (min)"), _HELP("Low Speed")),
 		InputPortConfig<float>("SlowDist", 0.0f, _HELP("How far away before harvester should start to slow down"), _HELP("Slow Distance")),
 		InputPortConfig<bool>("BreakPast", false, _HELP("Set to signal harvester to break once it passes the location"), _HELP("Break Past")),
+		InputPortConfig<bool>("Reverse", false, _HELP("Set to force harvester to drive in reverse")),
+		InputPortConfig<bool>("LockSteering", false, _HELP("Set to prevent harvester from steering while moving"), _HELP("Lock Steering")),
 		InputPortConfig<float>("TimeOut", 0.0f, _HELP("Set how long the harvester may attempt to move before timing out")),
 		{0},
 	};
@@ -659,7 +829,8 @@ void CFlowHarvesterGotoNode::GetConfiguration(SFlowNodeConfig& config)
 	// Output
 	static const SOutputPortConfig outputs[] =
 	{
-		OutputPortConfig_Void("AtLoc", _HELP("Triggered when harvester is at or passes the location"), _HELP("At Location")),
+		OutputPortConfig_Void("Done", _HELP("Triggered when harvester is at or passes the location")),
+		OutputPortConfig_Void("Start", _HELP("Triggered when harvester begins to move to the location")),
 		OutputPortConfig_Void("TimedOut", _HELP("Triggered when harvester times out and did not make it to the location"), _HELP("Timed Out")),
 		{0},
 	};
@@ -672,6 +843,17 @@ void CFlowHarvesterGotoNode::GetConfiguration(SFlowNodeConfig& config)
 }
 
 ////////////////////////////////////////////////////
+void CFlowHarvesterGotoNode::Reset(SActivationInfo *pActInfo)
+{
+	m_bIsActive = m_bHasPastPoint = m_bNeedsTurnAround = false;
+	m_fSpeedRat = 0.0f;
+
+	m_bBreakPast = m_bReverse = m_bLockSteer = false;
+	m_fMaxSpeed = m_fMinSpeed = m_fSlowDist = m_fTimeOut = 0.0f;
+	pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+}
+
+////////////////////////////////////////////////////
 void CFlowHarvesterGotoNode::ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo)
 {
 	switch (event)
@@ -679,13 +861,7 @@ void CFlowHarvesterGotoNode::ProcessEvent(EFlowEvent event, SActivationInfo *pAc
 		// eFE_Initialize - Flow node initialization
 		case eFE_Initialize:
 		{
-			m_bIsActive = m_bHasPastPoint = m_bNeedsTurnAround = false;
-			m_fSpeedRat = 0.0f;
-			m_fStartTime = gEnv->pTimer->GetCurrTime();
-
-			m_bBreakPast = false;
-			m_fMaxSpeed = m_fMinSpeed = m_fSlowDist = m_fTimeOut = 0.0f;
-			pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+			Reset(pActInfo);
 		}
 		break;
 
@@ -694,8 +870,12 @@ void CFlowHarvesterGotoNode::ProcessEvent(EFlowEvent event, SActivationInfo *pAc
 		{
 			if (true == IsPortActive(pActInfo, EIP_Move))
 			{
+				Reset(pActInfo);
+
 				// Get params
 				m_bBreakPast = GetPortBool(pActInfo, EIP_BreakPast);
+				m_bReverse = GetPortBool(pActInfo, EIP_Reverse);
+				m_bLockSteer = GetPortBool(pActInfo, EIP_LockSteering);
 				m_fMaxSpeed = GetPortFloat(pActInfo, EIP_MaxSpeed);
 				m_fMinSpeed = GetPortFloat(pActInfo, EIP_MinSpeed);
 				m_fSlowDist = GetPortFloat(pActInfo, EIP_SlowDist);
@@ -729,12 +909,15 @@ void CFlowHarvesterGotoNode::ProcessEvent(EFlowEvent event, SActivationInfo *pAc
 				vVehPos.z = 0.0f;
 				Quat orientation = pVehEntity->GetRotation();
 				Vec3 vVehForward = orientation * Vec3Constants<float>::fVec3_OneY;
+				if (true == m_bReverse) vVehForward *= -1.0f;
 				float fDot = vVehForward.Dot((m_vGotoPos-vVehPos).GetNormalized());
 				m_bNeedsTurnAround = (fDot < 0.0f);
 
 				// Start a movin'!
 				pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, true);
 				m_bIsActive = true;
+				m_fStartTime = gEnv->pTimer->GetCurrTime();
+				ActivateOutput(pActInfo, EOP_Start, true);
 			}
 		}
 		break;
@@ -752,6 +935,7 @@ void CFlowHarvesterGotoNode::ProcessEvent(EFlowEvent event, SActivationInfo *pAc
 				{
 					ActivateOutput(pActInfo, EOP_TimedOut, true);
 					m_bIsActive = false;
+					pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
 					break;
 				}
 			}
@@ -771,6 +955,7 @@ void CFlowHarvesterGotoNode::ProcessEvent(EFlowEvent event, SActivationInfo *pAc
 				{
 					Quat orientation = pVehEntity->GetRotation();
 					Vec3 vVehForward = orientation * Vec3Constants<float>::fVec3_OneY;
+					if (true == m_bReverse) vVehForward *= -1.0f;
 					float fDot = vVehForward.Dot((m_vGotoPos-vVehPos).GetNormalized());
 					if (false == m_bNeedsTurnAround && fDot <= 0.0f)
 					{
@@ -807,15 +992,208 @@ void CFlowHarvesterGotoNode::ProcessEvent(EFlowEvent event, SActivationInfo *pAc
 
 				// Request it to continue to move
 				CMovementRequest request;
-				request.SetDesiredSpeed(fRealSpeed); // Will clamp to max speed based on vehicle settings
+				request.SetDesiredSpeed((true==m_bReverse?-fRealSpeed:fRealSpeed)); // Will clamp to max speed based on vehicle settings
 				request.SetMoveTarget(m_vGotoPos);
+				request.SetLockedSteering(m_bLockSteer);
 				pVehicleMovement->RequestMovement(request);
 
 				// If we have arrived at the point, signal
 				if (true == m_bHasPastPoint)
 				{
-					ActivateOutput(pActInfo, EOP_AtLoc, true);
+					ActivateOutput(pActInfo, EOP_Done, true);
 					m_bIsActive = false;
+					pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+				}
+			}
+		}
+		break;
+	}
+}
+
+////////////////////////////////////////////////////
+void CFlowHarvesterTurnNode::GetConfiguration(SFlowNodeConfig& config)
+{
+	// Input
+	static const SInputPortConfig inputs[] =
+	{
+		InputPortConfig_Void("Turn", _HELP("Turn to face the specified degree")),
+		InputPortConfig<float>("FaceDeg", 0.0f, _HELP("Degree to face, with 0 being forward in vehicle's local space"), _HELP("Face Degree")),
+		InputPortConfig<float>("Speed", 0.0f, _HELP("How fast the harvester can turn, degrees per second")),
+		InputPortConfig<float>("TimeOut", 0.0f, _HELP("Set how long the harvester may attempt to turn before timing out")),
+		{0},
+	};
+
+	// Output
+	static const SOutputPortConfig outputs[] =
+	{
+		OutputPortConfig_Void("Done", _HELP("Triggered when harvester is at or passes the degree of facing")),
+		OutputPortConfig_Void("Start", _HELP("Triggered when harvester begins to turn")),
+		OutputPortConfig_Void("TimedOut", _HELP("Triggered when harvester times out and did not complete the turn"), _HELP("Timed Out")),
+		{0},
+	};
+
+	// Set up config
+	config.pInputPorts = inputs;
+	config.pOutputPorts = outputs;
+	config.sDescription = _HELP("Use to turn the harvester to a new facing on the spot.");
+	config.SetCategory(EFLN_WIP);
+}
+
+////////////////////////////////////////////////////
+void CFlowHarvesterTurnNode::Reset(SActivationInfo *pActInfo)
+{
+	m_bIsActive = false;
+	m_bTurnNeg = false;
+	m_fLastUpdate = 0.0f;
+	m_fTurnAngle = 0.0f;
+	m_fTurnSpeed = 0.0f;
+	m_fTimeOut = 0.0f;
+	m_pHarvester = NULL;
+	pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+}
+
+////////////////////////////////////////////////////
+void CFlowHarvesterTurnNode::ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo)
+{
+	switch (event)
+	{
+		// eFE_Initialize - Flow node initialization
+		case eFE_Initialize:
+		{
+			Reset(pActInfo);
+		}
+		break;
+
+		// eFE_Activate - A port is active, handle it
+		case eFE_Activate:
+		{
+			if (true == IsPortActive(pActInfo, EIP_Turn))
+			{
+				Reset(pActInfo);
+
+				// Get params
+				m_fTurnAngle = GetPortFloat(pActInfo, EIP_FaceDeg);
+				m_fTurnSpeed = GetPortFloat(pActInfo, EIP_Speed);
+				m_fTimeOut = GetPortFloat(pActInfo, EIP_TimeOut);
+
+				// Get harvester associated with graph
+				TeamID nTeamID = TEAMID_NOTEAM;
+				HarvesterID nHarvesterID = HARVESTERID_INVALID;
+				UNPACK_TEAM_HARV_ID(pActInfo->pGraph->GetGraphEntity(HARVESTER_GRAPH_INDEX), nTeamID, nHarvesterID);
+				m_pHarvester = (NULL == g_D6Core->pTeamManager ? NULL : 
+					g_D6Core->pTeamManager->GetTeamHarvester(nTeamID, nHarvesterID));
+				if (NULL == m_pHarvester)
+				{
+					GameWarning("[Harvester Turn %d] Failed to get harvester associated with graph", pActInfo->myID);
+					break;
+				}
+
+				// Turn off physics for this
+				IEntity *pVehEntity = gEnv->pEntitySystem->GetEntity(m_pHarvester->nEntityID);
+				IVehicle *pVehicle = g_D6Core->pD6Game->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(m_pHarvester->nEntityID);
+				IVehicleMovement *pVehicleMovement = (NULL == pVehicle ? NULL : pVehicle->GetMovement());
+				if (NULL != pVehEntity && NULL != pVehicleMovement)
+				{
+					CMovementRequest request;
+					request.SetDesiredSpeed(0.0f);
+					request.SetMoveTarget(pVehEntity->GetPos());
+					pVehicleMovement->RequestMovement(request); // Clear whatever is in there right now
+					pVehEntity->EnablePhysics(false);
+				}
+
+				// Clamp angle
+				if (m_fTurnAngle < 0.0f) m_fTurnAngle += 360.0f;
+				if (m_fTurnAngle >= 360.0f) m_fTurnAngle -= 360.0f;
+
+				// Get current angle and corret it on vehicle
+				Ang3 angles = Ang3(pVehEntity->GetRotation());
+				float fAngle = RAD2DEG(angles.z);
+				while (fAngle < 0.0f) fAngle += 360.0f;
+				while (fAngle >= 360.0f) fAngle -= 360.0f;
+				float fTestTurnAngle = m_fTurnAngle; // Don't lose clamped value
+				pVehEntity->SetRotation(Quat::CreateRotationZ(DEG2RAD(fAngle)));
+
+				// Test which way we need to rotate
+				if (fabsf(fAngle-fTestTurnAngle) > 180.0f)
+				{
+					// Go the other way
+					if (fAngle > 180.0f)
+						fTestTurnAngle += 360.0f;
+					else
+						fTestTurnAngle -= 360.0f;
+				}
+				m_bTurnNeg = (fAngle > fTestTurnAngle);
+
+				// Start a movin'!
+				m_fLastUpdate = gEnv->pTimer->GetCurrTime();
+				pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, true);
+				m_bIsActive = true;
+				m_fStartTime = gEnv->pTimer->GetCurrTime();
+				ActivateOutput(pActInfo, EOP_Start, true);
+			}
+		}
+		break;
+
+		// eFE_Update - Flow node update
+		case eFE_Update:
+		{
+			// Only update if active
+			if (false == m_bIsActive) break;
+
+			// Calculate update time
+			float fCurrTime = gEnv->pTimer->GetCurrTime();
+			float fDT = fCurrTime-m_fLastUpdate;
+			m_fLastUpdate = fCurrTime;
+
+			// Check timeout
+			if (m_fTimeOut > 0.0f)
+			{
+				if (m_fTimeOut <= (fCurrTime-m_fStartTime))
+				{
+					ActivateOutput(pActInfo, EOP_TimedOut, true);
+					m_bIsActive = false;
+					pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+					break;
+				}
+			}
+
+			// Manipulate harvester movement
+			IEntity *pVehEntity = (NULL == m_pHarvester ? NULL : gEnv->pEntitySystem->GetEntity(m_pHarvester->nEntityID));
+			if (NULL != pVehEntity)
+			{
+				// Get current facing degree
+				Ang3 angles = Ang3(pVehEntity->GetRotation());
+				float fAngle = RAD2DEG(angles.z);
+				while (fAngle < 0.0f) fAngle += 360.0f;
+				while (fAngle >= 360.0f) fAngle -= 360.0f;
+
+				// Rotate a little
+				if (false == m_bTurnNeg)
+				{
+					fAngle += m_fTurnSpeed*fDT;
+					while (fAngle >= 360.0f) fAngle -= 360.0f;
+					if (fAngle > m_fTurnAngle)
+						fAngle = m_fTurnAngle;
+				}
+				else
+				{
+					fAngle -= m_fTurnSpeed*fDT;
+					while (fAngle < 0.0f) fAngle += 360.0f;
+					if (fAngle < m_fTurnAngle)
+						fAngle = m_fTurnAngle;
+				}
+
+				// Set the angle
+				pVehEntity->SetRotation(Quat::CreateRotationZ(DEG2RAD(fAngle)));
+
+				// Are we done?
+				if (fAngle == m_fTurnAngle)
+				{
+					pVehEntity->EnablePhysics(true);
+					ActivateOutput(pActInfo, EOP_Done, true);
+					m_bIsActive = false;
+					pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+					break;
 				}
 			}
 		}
@@ -829,3 +1207,4 @@ void CFlowHarvesterGotoNode::ProcessEvent(EFlowEvent event, SActivationInfo *pAc
 REGISTER_FLOW_NODE("Harvester:Controller", CFlowHarvesterControllerNode);
 REGISTER_FLOW_NODE("Harvester:Signal", CFlowHarvesterSignalNode);
 REGISTER_FLOW_NODE("Harvester:Goto", CFlowHarvesterGotoNode);
+REGISTER_FLOW_NODE("Harvester:Turn", CFlowHarvesterTurnNode);

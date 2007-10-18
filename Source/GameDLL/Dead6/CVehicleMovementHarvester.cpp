@@ -52,6 +52,7 @@ void CVehicleMovementHarvester::ProcessMovement(const float deltaTime)
 // Note: Keep below up-to-date with what is in CVehicleMovementBase!
 	IPhysicalEntity* pPhysics = GetPhysics();
 	assert(pPhysics);
+	if (NULL == pPhysics) return;
 
 	m_movementAction.isAI = true;
 
