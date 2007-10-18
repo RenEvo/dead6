@@ -25,6 +25,7 @@
 #include "SynchedStorage.h"
 #include <queue>
 #include "Voting.h"
+#include "IViewSystem.h"
 
 class CActor;
 class CPlayer;
@@ -35,87 +36,41 @@ struct IActorSystem;
 class CRadio;
 class CMPTutorial;
 
-// [D6] Altered to work with Team Manager
-//#define GAMERULES_INVOKE_ON_TEAM(team, rmi, params)	\
-//{ \
-//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-//	if (_team!=m_playerteams.end()) \
-//	{ \
-//	const TPlayers &_players=_team->second; \
-//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-//	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
-//	} \
-//} \
-//
-//#define GAMERULES_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
-//{ \
-//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-//	if (_team!=m_playerteams.end()) \
-//	{ \
-//	const TPlayers &_players=_team->second; \
-//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-//	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
-//	} \
-//} \
-//
-//
-//#define ACTOR_INVOKE_ON_TEAM(team, rmi, params)	\
-//{ \
-//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-//	if (_team!=playerteams.end()) \
-//	{ \
-//	const TPlayers &_players=_team.second; \
-//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-//		{ \
-//		CActor *pActor=GetActorByEntityId(*_player); \
-//		if (pActor) \
-//		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
-//		} \
-//	} \
-//} \
-//
-//
-//#define ACTOR_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
-//{ \
-//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-//	if (_team!=playerteams.end()) \
-//	{ \
-//	const TPlayers &_players=_team.second; \
-//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-//		{ \
-//		CActor *pActor=GetActorByEntityId(*_player); \
-//		if (pActor) \
-//		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
-//		} \
-//	} \
-//} \
 
 #define GAMERULES_INVOKE_ON_TEAM(team, rmi, params)	\
 { \
-	CGameRules::TPlayers _players; \
-	GetTeamPlayers(team, _players); \
-	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
-		GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
-}
+	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
+	if (_team!=m_playerteams.end()) \
+	{ \
+	const TPlayers &_players=_team->second; \
+	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
+	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
+	} \
+} \
 
 #define GAMERULES_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
 { \
-	CGameRules::TPlayers _players; \
-	GetTeamPlayers(team, _players); \
-	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
-		GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
+	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
+	if (_team!=m_playerteams.end()) \
+	{ \
+	const TPlayers &_players=_team->second; \
+	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
+	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
+	} \
 } \
 
 
 #define ACTOR_INVOKE_ON_TEAM(team, rmi, params)	\
 { \
-	CGameRules::TPlayers _players; \
-	GetTeamPlayers(team, _players); \
-	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
+	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
+	if (_team!=playerteams.end()) \
 	{ \
+	const TPlayers &_players=_team.second; \
+	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
+		{ \
 		CActor *pActor=GetActorByEntityId(*_player); \
 		if (pActor) \
-			pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
+		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
 		} \
 	} \
 } \
@@ -123,20 +78,23 @@ class CMPTutorial;
 
 #define ACTOR_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
 { \
-	CGameRules::TPlayers _players; \
-	GetTeamPlayers(team, _players); \
-	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
+	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
+	if (_team!=playerteams.end()) \
 	{ \
+	const TPlayers &_players=_team.second; \
+	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
+		{ \
 		CActor *pActor=GetActorByEntityId(*_player); \
 		if (pActor) \
-			pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
+		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
 		} \
 	} \
 } \
-// [/D6]
 
 
-class CGameRules : public CGameObjectExtensionHelper<CGameRules, IGameRules, 64>, public IActionListener
+class CGameRules :	public CGameObjectExtensionHelper<CGameRules, IGameRules, 64>, 
+										public IActionListener,
+										public IViewSystemListener
 {
 public:
 
@@ -145,6 +103,7 @@ public:
 	typedef std::vector<EntityId>								TSpawnGroups;
 	typedef std::map<EntityId, TSpawnLocations>	TSpawnGroupMap;
 	typedef std::map<EntityId, int>							TBuildings;
+	typedef std::map<EntityId, CTimeValue>			TFrozenEntities;
 
 	typedef struct SMinimapEntity
 	{
@@ -187,6 +146,8 @@ public:
 	};
 	typedef std::vector<SGameRulesListener*> TGameRulesListenerVec;
 
+	typedef std::map<IEntity *, float> TExplosionAffectedEntities;
+
 	CGameRules();
 	virtual ~CGameRules();
 	//IGameObjectExtension
@@ -195,7 +156,8 @@ public:
 	virtual void InitClient(int channelId);
 	virtual void PostInitClient(int channelId);
 	virtual void Release();
-	virtual void Serialize( TSerialize ser, unsigned aspects );
+	virtual void FullSerialize( TSerialize ser );
+	virtual bool NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int flags );
 	virtual void PostSerialize();
 	virtual void SerializeSpawnInfo( TSerialize ser ) {}
 	virtual ISerializableInfoPtr GetSpawnInfo() {return 0;}
@@ -205,8 +167,16 @@ public:
 	virtual void SetChannelId(uint16 id) {};
 	virtual void SetAuthority( bool auth );
 	virtual void PostUpdate( float frameTime );
+	virtual void PostRemoteSpawn() {};
 	virtual void GetMemoryStatistics(ICrySizer * s);
 	//~IGameObjectExtension
+
+	// IViewSystemListener
+	virtual bool OnBeginCutScene(IAnimSequence* pSeq, bool bResetFX);
+	virtual bool OnEndCutScene(IAnimSequence* pSeq);
+	virtual void OnPlayCutSceneSound(IAnimSequence* pSeq, ISound* pSound) {};
+	virtual bool OnCameraChange(const SCameraParams& cameraParams){ return true; };
+	// ~IViewSystemListener
 
 	//IGameRules
 	virtual bool ShouldKeepClient(int channelId, EDisconnectionCause cause, const char *desc) const;
@@ -214,9 +184,12 @@ public:
 	virtual void OnConnect(struct INetChannel *pNetChannel);
 	virtual void OnDisconnect(EDisconnectionCause cause, const char *desc); // notification to the client that he has been disconnected
 
-	virtual bool OnClientConnect(int channelId);
+	virtual bool OnClientConnect(int channelId, bool isReset);
 	virtual void OnClientDisconnect(int channelId, EDisconnectionCause cause, const char *desc, bool keepClient);
-	virtual bool OnClientEnteredGame(int channelId);
+	virtual bool OnClientEnteredGame(int channelId, bool isReset);
+
+	virtual void OnEntitySpawn(IEntity *pEntity);
+	virtual void OnEntityRemoved(IEntity *pEntity);
 	
 	virtual void OnItemDropped(EntityId itemId, EntityId actorId);
 	virtual void OnItemPickedUp(EntityId itemId, EntityId actorId);
@@ -224,6 +197,7 @@ public:
 	virtual void SendTextMessage(ETextMessageType type, const char *msg, uint to=eRMI_ToAllClients, int channelId=-1,
 		const char *p0=0, const char *p1=0, const char *p2=0, const char *p3=0);
 	virtual void SendChatMessage(EChatMessageType type, EntityId sourceId, EntityId targetId, const char *msg);
+	virtual bool CanReceiveChatMessage(EChatMessageType type, EntityId sourceId, EntityId targetId) const;
 
 	virtual void ForbiddenAreaWarning(bool active, int timer, EntityId targetId);
 
@@ -237,6 +211,14 @@ public:
 
 	virtual void ResetPreRoundTime();
 	virtual float GetRemainingPreRoundTime() const;
+
+	virtual void ResetReviveCycleTime();
+	virtual float GetRemainingReviveCycleTime() const;
+
+	virtual void ResetGameStartTimer(float time=-1);
+	virtual float GetRemainingStartTimer() const;
+
+	virtual bool OnCollision(const SGameCollision& event);
 	//~IGameRules
 
 	virtual void RegisterConsoleCommands(IConsole *pConsole);
@@ -245,12 +227,13 @@ public:
 
 	virtual void OnRevive(CActor *pActor, const Vec3 &pos, const Quat &rot, int teamId);
 	virtual void OnReviveInVehicle(CActor *pActor, EntityId vehicleId, int seatId, int teamId);
-	virtual void OnKill(CActor *pActor, EntityId shooterId, EntityId weaponId, int damage, int material, bool headshot);
+	virtual void OnKill(CActor *pActor, EntityId shooterId, const char *weaponClassName, int damage, int material, int hit_type);
 	virtual void OnVehicleDestroyed(EntityId id);
+	virtual void OnVehicleSubmerged(EntityId id, float ratio);
 	virtual void OnTextMessage(ETextMessageType type, const char *msg,
 		const char *p0=0, const char *p1=0, const char *p2=0, const char *p3=0);
-	virtual void OnChatMessage(EChatMessageType type, EntityId sourceId, EntityId targetId, const char *msg);
-	virtual void OnKillMessage(EntityId targetId, EntityId shooterId, EntityId weaponId, float damage, int material, bool headshot);
+	virtual void OnChatMessage(EChatMessageType type, EntityId sourceId, EntityId targetId, const char *msg, bool teamChatOnly);
+	virtual void OnKillMessage(EntityId targetId, EntityId shooterId, const char *weaponClassName, float damage, int material, int hit_type);
 
 	CActor *GetActorByChannelId(int channelId) const;
 	CActor *GetActorByEntityId(EntityId entityId) const;
@@ -262,7 +245,11 @@ public:
 		return 0;
 	}
 	ILINE const char *GetActorName(CActor *pActor) const { return pActor->GetEntity()->GetName(); };
+	ILINE CVotingSystem* GetVotingSystem() const { return m_pVotingSystem; };
 	int GetChannelId(EntityId entityId) const;
+	bool IsDead(EntityId entityId) const;
+	bool IsSpectator(EntityId entityId) const;
+	void ShowScores(bool show);
 
 	//------------------------------------------------------------------------
 	// player
@@ -273,9 +260,10 @@ public:
 	virtual void RenamePlayer(CActor *pActor, const char *name);
 	virtual string VerifyName(const char *name, IEntity *pEntity=0);
 	virtual bool IsNameTaken(const char *name, IEntity *pEntity=0);
-	virtual void KillPlayer(CActor *pActor, bool dropItem, bool ragdoll, EntityId shooterId, EntityId weaponId, float damage, int material, bool headshot, const Vec3 &impulse);
+	virtual void KillPlayer(CActor *pActor, bool dropItem, bool ragdoll, EntityId shooterId, EntityId weaponId, float damage, int material, int hit_type, const Vec3 &impulse);
 	virtual void MovePlayer(CActor *pActor, const Vec3 &pos, const Ang3 &angles);
-	virtual void ChangeSpectatorMode(CActor *pActor, uint8 mode);
+	virtual void ChangeSpectatorMode(CActor *pActor, uint8 mode, EntityId target, bool resetAll);
+	virtual void RequestNextSpectatorTarget(CActor* pActor, int change);
 	virtual void ChangeTeam(CActor *pActor, int teamId);
 	virtual void ChangeTeam(CActor *pActor, const char *teamName);
 	virtual void AddTaggedEntity(EntityId shooter, EntityId targetId, bool temporary = false);
@@ -284,9 +272,10 @@ public:
 	virtual EntityId GetPlayer(int idx);
 	virtual void GetPlayers(TPlayers &players);
 	virtual bool IsPlayerInGame(EntityId playerId) const;
+	virtual bool IsPlayerActivelyPlaying(EntityId playerId) const;	// [playing / dead / waiting to respawn (inc spectating while dead): true] [not yet joined game / selected Spectate: false]
 	virtual bool IsChannelInGame(int channelId) const;
   virtual void StartVoting(CActor *pActor, EVotingState t, EntityId id, const char* param);
-  virtual void Vote(CActor *pActor);
+  virtual void Vote(CActor *pActor, bool yes);
   virtual void EndVoting(bool success);
 
 	//------------------------------------------------------------------------
@@ -297,12 +286,14 @@ public:
 	virtual int GetTeamId(const char *name) const;
 	virtual int GetTeamCount() const;
 	virtual int GetTeamPlayerCount(int teamId, bool inGame=false) const;
+	virtual int GetTeamChannelCount(int teamId, bool inGame=false) const;
 	virtual EntityId GetTeamPlayer(int teamId, int idx);
 
 	virtual void GetTeamPlayers(int teamId, TPlayers &players);
 	
 	virtual void SetTeam(int teamId, EntityId entityId);
 	virtual int GetTeam(EntityId entityId) const;
+	virtual int GetChannelTeam(int channelId) const;
 
 	//------------------------------------------------------------------------
 	// objectives
@@ -334,7 +325,7 @@ public:
 	// freezing
 	virtual bool IsFrozen(EntityId entityId) const;
 	virtual void ResetFrozen();
-	virtual void FreezeEntity(EntityId entityId, bool freeze, bool vapor, bool bForce=false);
+	virtual void FreezeEntity(EntityId entityId, bool freeze, bool vapor, bool force=false);
 	virtual void ShatterEntity(EntityId entityId, const Vec3 &pos, const Vec3 &impulse);
 
 	//------------------------------------------------------------------------
@@ -344,8 +335,10 @@ public:
 	virtual int GetSpawnLocationCount() const;
 	virtual EntityId GetSpawnLocation(int idx) const;
 	virtual void GetSpawnLocations(TSpawnLocations &locations) const;
-	virtual bool IsSpawnLocationSafe(EntityId playerId, EntityId spawnLocationId, float safeDistance, bool ignoreTeam) const;
-	virtual EntityId GetSpawnLocation(EntityId playerId, float safeDistance, bool ignoreTeam, bool includeNeutral, EntityId groupId=0) const;
+	virtual bool IsSpawnLocationSafe(EntityId playerId, EntityId spawnLocationId, float safeDistance, bool ignoreTeam, float zoffset) const;
+	virtual bool IsSpawnLocationFarEnough(EntityId spawnLocationId, float minDistance, const Vec3 &testPosition) const;
+	virtual bool TestSpawnLocationWithEnvironment(EntityId spawnLocationId, EntityId playerId, float offset=0.0f, float height=0.0f) const;
+	virtual EntityId GetSpawnLocation(EntityId playerId, bool ignoreTeam, bool includeNeutral, EntityId groupId=0, float minDistToDeath=0.0f, const Vec3 &deathPos=Vec3(0,0,0), float *pZOffset=0) const;
 	virtual EntityId GetFirstSpawnLocation(int teamId=0, EntityId groupId=0) const;
 
 	//------------------------------------------------------------------------
@@ -358,6 +351,7 @@ public:
 	virtual int GetSpawnGroupCount() const;
 	virtual EntityId GetSpawnGroup(int idx) const;
 	virtual void GetSpawnGroups(TSpawnLocations &groups) const;
+	virtual bool IsSpawnGroup(EntityId id) const;
 
 	virtual void RequestSpawnGroup(EntityId spawnGroupId);
 	virtual void SetPlayerSpawnGroup(EntityId playerId, EntityId spawnGroupId);
@@ -397,9 +391,12 @@ public:
 
 	virtual void ClientSimpleHit(const SimpleHitInfo &simpleHitInfo);
 	virtual void ServerSimpleHit(const SimpleHitInfo &simpleHitInfo);
+
   virtual void ClientHit(const HitInfo &hitInfo);
 	virtual void ServerHit(const HitInfo &hitInfo);
+	virtual void ProcessServerHit(const HitInfo &hitInfo);
 
+	void CullEntitiesInExplosion(const ExplosionInfo &explosionInfo);
 	virtual void ServerExplosion(const ExplosionInfo &explosionInfo);
 	virtual void ClientExplosion(const ExplosionInfo &explosionInfo);
 	
@@ -418,8 +415,13 @@ public:
 	virtual void ForceScoreboard(bool force);
 	virtual void FreezeInput(bool freeze);
 
+	virtual bool IsProjectile(EntityId id) const;
+
+	virtual void ShowStatus();
+
 	void SendRadioMessage(const EntityId sourceId,const int);
 	void OnRadioMessage(const EntityId sourceId,const int);
+	ILINE CRadio *GetRadio() const { return m_pRadio; }
 
 	virtual void OnAction(const ActionId& actionId, int activationMode, float value);
 
@@ -428,6 +430,11 @@ public:
 	CMPTutorial* GetMPTutorial() const;
 
 	int GetCurrentStateId() const { return m_currentStateId; }
+
+	//misc 
+	// Next time CGameRules::OnCollision is called, it will skip this entity and return false
+	// This will prevent squad mates to be hit by the player
+	void SetEntityToIgnore(EntityId id) { m_ignoreEntityNextCollision = id;}
 
 	template<typename T>
 	void SetSynchedGlobalValue(TSynchedKey key, const T &value)
@@ -473,7 +480,11 @@ public:
 		g_pGame->GetSynchedStorage()->Reset();
 	}
 
+	void ForceSynchedStorageSynch(int channel);
+
+
 	void PlayerPosForRespawn(CPlayer* pPlayer, bool save);
+	void SPNotifyPlayerKill(EntityId targetId, EntityId weaponId, bool bHeadShot);
 
 	struct ChatMessageParams
 	{
@@ -481,13 +492,15 @@ public:
 		EntityId sourceId;
 		EntityId targetId;
 		string msg;
+		bool onlyTeam;
 
 		ChatMessageParams() {};
-		ChatMessageParams(EChatMessageType _type, EntityId src, EntityId trg, const char *_msg)
+		ChatMessageParams(EChatMessageType _type, EntityId src, EntityId trg, const char *_msg, bool _onlyTeam)
 		: type(_type),
 			sourceId(src),
 			targetId(trg),
-			msg(_msg)
+			msg(_msg),
+			onlyTeam(_onlyTeam)
 		{
 		}
 
@@ -498,6 +511,7 @@ public:
 			if (type == eChatToTarget)
 				ser.Value("target", targetId, 'eid');
 			ser.Value("message", msg);
+			ser.Value("onlyTeam", onlyTeam, 'bool');
 		}
 	};
 
@@ -512,7 +526,7 @@ public:
 		void SerializeWith(TSerialize ser)
 		{
 			ser.Value("active", active, 'bool');
-			ser.Value("timer", timer, 'ui3');
+			ser.Value("timer", timer, 'ui5');
 		}
 	};
 
@@ -626,11 +640,15 @@ public:
 	{
 		EntityId	entityId;
 		uint8			mode;
+		EntityId	targetId;
+		bool			resetAll;
 
 		SpectatorModeParams() {};
-		SpectatorModeParams(EntityId _entityId, uint8 _mode)
+		SpectatorModeParams(EntityId _entityId, uint8 _mode, EntityId _target, bool _reset)
 			: entityId(_entityId),
-				mode(_mode)
+				mode(_mode),
+				targetId(_target),
+				resetAll(_reset)
 		{
 		}
 
@@ -638,6 +656,8 @@ public:
 		{
 			ser.Value("entityId", entityId, 'eid');
 			ser.Value("mode", mode, 'ui3');
+			ser.Value("targetId", targetId, 'eid');
+			ser.Value("resetAll", resetAll, 'bool');
 		}
 	};
 
@@ -702,7 +722,7 @@ public:
     void SerializeWith(TSerialize ser)
     {
       ser.EnumValue("state", state, eVS_none, eVS_last);
-      ser.Value("timeout", timeout, 'i7');
+      ser.Value("timeout", timeout, 'ui8');
       ser.Value("entityId", entityId,'eid');
       ser.Value("description", description);
     }
@@ -853,6 +873,21 @@ public:
 		}
 	};
 
+	struct DamageIndicatorParams
+	{
+		DamageIndicatorParams() {};
+		DamageIndicatorParams(EntityId shtId, EntityId wpnId): shooterId(shtId), weaponId(wpnId) {};
+
+		EntityId shooterId;
+		EntityId weaponId;
+
+		void SerializeWith(TSerialize ser)
+		{
+			ser.Value("shooterId", shooterId, 'eid');
+			ser.Value("weaponId", weaponId, 'eid');
+		}
+	};
+
 	DECLARE_SERVER_RMI_NOATTACH_FAST(SvRequestSimpleHit, SimpleHitInfo, eNRT_ReliableUnordered);
 	DECLARE_SERVER_RMI_NOATTACH_FAST(SvRequestHit, HitInfo, eNRT_ReliableUnordered);
 	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClExplosion, ExplosionInfo, eNRT_ReliableUnordered);
@@ -889,18 +924,23 @@ public:
 	DECLARE_CLIENT_RMI_NOATTACH(ClSetObjectiveEntity, SetObjectiveEntityParams, eNRT_ReliableOrdered);
 	DECLARE_CLIENT_RMI_NOATTACH(ClResetObjectives, NoParams, eNRT_ReliableOrdered);
 
-	DECLARE_CLIENT_RMI_NOATTACH(ClRequestHitIndicator, EntityParams, eNRT_ReliableUnordered);
-	DECLARE_CLIENT_RMI_NOATTACH(ClRequestDamageIndicator, EntityParams, eNRT_ReliableUnordered);
+	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClHitIndicator, NoParams, eNRT_UnreliableUnordered);
+	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClDamageIndicator, DamageIndicatorParams, eNRT_UnreliableUnordered);
 
-	DECLARE_CLIENT_RMI_NOATTACH(ClForbiddenAreaWarning, ForbiddenAreaWarningParams, eNRT_ReliableUnordered);
+	DECLARE_CLIENT_RMI_NOATTACH(ClForbiddenAreaWarning, ForbiddenAreaWarningParams, eNRT_ReliableOrdered); // needs to be ordered to respect enter->leave->enter transitions
 
-	// function where the client receives when the round will end
-	DECLARE_CLIENT_RMI_NOATTACH(ClSetGameTime, SetGameTimeParams, eNRT_ReliableUnordered);
-	DECLARE_CLIENT_RMI_NOATTACH(ClSetRoundTime, SetGameTimeParams, eNRT_ReliableUnordered);
-	DECLARE_CLIENT_RMI_NOATTACH(ClSetPreRoundTime, SetGameTimeParams, eNRT_ReliableUnordered);
-  DECLARE_SERVER_RMI_NOATTACH(SvVote, NoParams, eNRT_ReliableUnordered);
+	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClSetGameTime, SetGameTimeParams, eNRT_ReliableUnordered);
+	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClSetRoundTime, SetGameTimeParams, eNRT_ReliableUnordered);
+	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClSetPreRoundTime, SetGameTimeParams, eNRT_ReliableUnordered);
+	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClSetReviveCycleTime, SetGameTimeParams, eNRT_ReliableUnordered);
+	DECLARE_CLIENT_RMI_NOATTACH_FAST(ClSetGameStartTimer, SetGameTimeParams, eNRT_ReliableUnordered);
+
+	DECLARE_SERVER_RMI_NOATTACH(SvVote, NoParams, eNRT_ReliableUnordered);
+	DECLARE_SERVER_RMI_NOATTACH(SvVoteNo, NoParams, eNRT_ReliableUnordered);
   DECLARE_SERVER_RMI_NOATTACH(SvStartVoting, StartVotingParams, eNRT_ReliableUnordered);
   DECLARE_CLIENT_RMI_NOATTACH(ClVotingStatus, VotingStatusParams, eNRT_ReliableUnordered);
+
+	DECLARE_CLIENT_RMI_NOATTACH(ClEnteredGame, NoParams, eNRT_ReliableUnordered);
 
 	virtual void AddHitListener(IHitListener* pHitListener);
 	virtual void RemoveHitListener(IHitListener* pHitListener);
@@ -911,6 +951,7 @@ public:
 	typedef std::map<int, EntityId>				TTeamIdEntityIdMap;
 	typedef std::map<EntityId, int>				TEntityTeamIdMap;
 	typedef std::map<int, TPlayers>				TPlayerTeamIdMap;
+	typedef std::map<int, EntityId>				TChannelTeamIdMap;
 	typedef std::map<string, int>					TTeamIdMap;
 
 	typedef std::map<int, int>						THitMaterialMap;
@@ -957,8 +998,19 @@ protected:
 	static void CmdDebugTeams(IConsoleCmdArgs *pArgs);
 	static void CmdDebugObjectives(IConsoleCmdArgs *pArgs);
 
-	virtual void CreateScriptHitInfo(SmartScriptTable &scriptHitInfo, const HitInfo &hitInfo);
-	virtual void CreateScriptExplosionInfo(SmartScriptTable &scriptExplosionInfo, const ExplosionInfo &explosionInfo, const pe_explosion* pExplosion);
+	void CreateScriptHitInfo(SmartScriptTable &scriptHitInfo, const HitInfo &hitInfo);
+	void CreateScriptExplosionInfo(SmartScriptTable &scriptExplosionInfo, const ExplosionInfo &explosionInfo);
+	void UpdateAffectedEntitiesSet(TExplosionAffectedEntities &affectedEnts, const pe_explosion *pExplosion);
+	void AddOrUpdateAffectedEntity(TExplosionAffectedEntities &affectedEnts, IEntity* pEntity, float affected);
+	void CommitAffectedEntitiesSet(SmartScriptTable &scriptExplosionInfo, TExplosionAffectedEntities &affectedEnts);
+	void ChatLog(EChatMessageType type, EntityId sourceId, EntityId targetId, const char *msg);
+
+	// Some explosion processing
+	void ProcessClientExplosionScreenFX(const ExplosionInfo &explosionInfo);
+	void ProcessExplosionMaterialFX(const ExplosionInfo &explosionInfo);
+
+	// fill source/target dependent params in m_collisionTable
+	void PrepCollision(int src, int trg, const SGameCollision& event, IEntity* pTarget);
 
 	void CallScript(IScriptTable *pScript, const char *name)
 	{
@@ -1034,19 +1086,22 @@ protected:
 	SmartScriptTable		m_serverScript;
 	SmartScriptTable		m_clientStateScript;
 	SmartScriptTable		m_serverStateScript;
+	HSCRIPTFUNCTION			m_onCollisionFunc;
+	SmartScriptTable		m_collisionTable;
+	SmartScriptTable		m_collisionTableSource;
+	SmartScriptTable		m_collisionTableTarget;
 
 	INetChannel					*m_pClientNetChannel;
 
 	std::vector<int>		m_channelIds;
-	std::vector<EntityId>m_frozen;
+	TFrozenEntities			m_frozen;
 	
-	// [D6] Following items are no longer part of the GameRules class, migrated to Team Manager
-	//TTeamIdMap			m_teams;
-	//TEntityTeamIdMap		m_entityteams;
-	//TTeamIdEntityIdMap	m_teamdefaultspawns;
-	//TPlayerTeamIdMap		m_playerteams;
-	//int					m_teamIdGen;
-	// [/D6]
+	TTeamIdMap					m_teams;
+	TEntityTeamIdMap		m_entityteams;
+	TTeamIdEntityIdMap	m_teamdefaultspawns;
+	TPlayerTeamIdMap		m_playerteams;
+	TChannelTeamIdMap		m_channelteams;
+	int									m_teamIdGen;
 
 	THitMaterialMap			m_hitMaterials;
 	int									m_hitMaterialIdGen;
@@ -1059,6 +1114,10 @@ protected:
   
   typedef std::queue<ExplosionInfo> TExplosionQueue;
   TExplosionQueue     m_queuedExplosions;
+
+	typedef std::queue<HitInfo> THitQueue;
+	THitQueue						m_queuedHits;
+	int									m_processingHit;	
 
 	TEntityRespawnDataMap	m_respawndata;
 	TEntityRespawnMap			m_respawns;
@@ -1079,6 +1138,8 @@ protected:
 	CTimeValue					m_endTime;	// time the game will end. 0 for unlimited
 	CTimeValue					m_roundEndTime;	// time the round will end. 0 for unlimited
 	CTimeValue					m_preRoundEndTime;	// time the pre round will end. 0 for no preround
+	CTimeValue					m_reviveCycleEndTime; // time for reinforcements.
+	CTimeValue					m_gameStartTime; // time for game start, <= 0 means game started already
 
 	CRadio							*m_pRadio;
 
@@ -1087,6 +1148,14 @@ protected:
   CVotingSystem       *m_pVotingSystem;
 
 	TGameRulesListenerVec	m_rulesListeners;
+	static int					s_invulnID;
+	static int          s_barbWireID;
+
+	EntityId					  m_ignoreEntityNextCollision;
+
+	bool                m_timeOfDayInitialized;
+
+	bool                m_explosionScreenFX;
 };
 
 #endif //__GAMERULES_H__

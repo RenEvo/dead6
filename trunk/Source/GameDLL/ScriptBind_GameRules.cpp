@@ -59,7 +59,6 @@ void CScriptBind_GameRules::RegisterGlobals()
 	m_pSS->SetGlobalValue("TextMessageToClient", eRMI_ToClientChannel);
 
  	m_pSS->SetGlobalValue("eTE_TurretUnderAttack", eTE_TurretUnderAttack);
-	m_pSS->SetGlobalValue("eTE_TurretDestroyed", eTE_TurretDestroyed);
  	m_pSS->SetGlobalValue("eTE_GameOverWin", eTE_GameOverWin);
  	m_pSS->SetGlobalValue("eTE_GameOverLose", eTE_GameOverLose);
  	m_pSS->SetGlobalValue("eTE_TACTankStarted", eTE_TACTankStarted);
@@ -69,6 +68,11 @@ void CScriptBind_GameRules::RegisterGlobals()
  	m_pSS->SetGlobalValue("eTE_SingularityCompleted", eTE_SingularityCompleted);
 	m_pSS->SetGlobalValue("eTE_EnemyNearBase", eTE_EnemyNearBase);
 	m_pSS->SetGlobalValue("eTE_Promotion", eTE_Promotion);
+	m_pSS->SetGlobalValue("eTE_Reactor50", eTE_Reactor50);
+	m_pSS->SetGlobalValue("eTE_Reactor100", eTE_Reactor100);
+	m_pSS->SetGlobalValue("eTE_ApproachEnemyHq", eTE_ApproachEnemyHq);
+	m_pSS->SetGlobalValue("eTE_ApproachEnemySub", eTE_ApproachEnemySub);
+	m_pSS->SetGlobalValue("eTE_ApproachEnemyCarrier", eTE_ApproachEnemyCarrier);	
 }
 
 //------------------------------------------------------------------------
@@ -86,21 +90,24 @@ void CScriptBind_GameRules::RegisterMethods()
 	SCRIPT_REG_TEMPLFUNC(RevivePlayer, "playerId, pos, angles, teamId, clearInventory");
 	SCRIPT_REG_TEMPLFUNC(RevivePlayerInVehicle, "playerId, vehicleId, seatId, teamId, clearInventory");
 	SCRIPT_REG_TEMPLFUNC(RenamePlayer, "playerId, name");
-	SCRIPT_REG_TEMPLFUNC(KillPlayer, "playerId, dropItem, ragdoll, shooterId, weaponId, damage, material, headshot, impulse");
+	SCRIPT_REG_TEMPLFUNC(KillPlayer, "playerId, dropItem, ragdoll, shooterId, weaponId, damage, material, headshot, melee, impulse");
 	SCRIPT_REG_TEMPLFUNC(MovePlayer, "playerId, pos, angles");
 	SCRIPT_REG_TEMPLFUNC(GetPlayerByChannelId, "channelId");
+	SCRIPT_REG_TEMPLFUNC(GetChannelId, "playerId");
 	SCRIPT_REG_TEMPLFUNC(GetPlayerCount, "");
 	SCRIPT_REG_TEMPLFUNC(GetSpectatorCount, "");
 	SCRIPT_REG_TEMPLFUNC(GetPlayers, "");
 	SCRIPT_REG_TEMPLFUNC(IsPlayerInGame, "playerId");
+	SCRIPT_REG_TEMPLFUNC(IsProjectile, "entityId");
+	SCRIPT_REG_TEMPLFUNC(IsSameTeam, "entityId0, entityId1");
+	SCRIPT_REG_TEMPLFUNC(IsNeutral, "entityId");
 	
 	SCRIPT_REG_TEMPLFUNC(AddSpawnLocation, "entityId");
 	SCRIPT_REG_TEMPLFUNC(RemoveSpawnLocation, "id");
 	SCRIPT_REG_TEMPLFUNC(GetSpawnLocationCount, "");
 	SCRIPT_REG_TEMPLFUNC(GetSpawnLocationByIdx, "idx");
 	SCRIPT_REG_TEMPLFUNC(GetSpawnLocations, "");
-	SCRIPT_REG_TEMPLFUNC(IsSpawnLocationSafe, "playerId, spawnLocationId, safeDistance, ignoreTeam");
-	SCRIPT_REG_TEMPLFUNC(GetSpawnLocation, "playerId, teamId, safeDistance, ignoreTeam, includeNeutral");
+	SCRIPT_REG_TEMPLFUNC(GetSpawnLocation, "playerId, teamId, ignoreTeam, includeNeutral");
 	SCRIPT_REG_TEMPLFUNC(GetFirstSpawnLocation, "teamId");
 
 	SCRIPT_REG_TEMPLFUNC(AddSpawnGroup, "groupId");
@@ -109,6 +116,7 @@ void CScriptBind_GameRules::RegisterMethods()
 	SCRIPT_REG_TEMPLFUNC(RemoveSpawnGroup, "groupId");
 	SCRIPT_REG_TEMPLFUNC(GetSpawnLocationGroup, "spawnId");
 	SCRIPT_REG_TEMPLFUNC(GetSpawnGroups, "");
+	SCRIPT_REG_TEMPLFUNC(IsSpawnGroup, "entityId");
 
 	SCRIPT_REG_TEMPLFUNC(GetTeamDefaultSpawnGroup, "teamId");
 	SCRIPT_REG_TEMPLFUNC(SetTeamDefaultSpawnGroup, "teamId, groupId");
@@ -122,6 +130,8 @@ void CScriptBind_GameRules::RegisterMethods()
 	SCRIPT_REG_TEMPLFUNC(GetRandomSpectatorLocation, "");
 	SCRIPT_REG_TEMPLFUNC(GetInterestingSpectatorLocation, "");
 	SCRIPT_REG_TEMPLFUNC(GetNextSpectatorTarget, "playerId, change");
+	SCRIPT_REG_TEMPLFUNC(ChangeSpectatorMode, "playerId, mode, targetId");
+	SCRIPT_REG_TEMPLFUNC(CanChangeSpectatorMode, "playerId");
 
 	SCRIPT_REG_TEMPLFUNC(AddMinimapEntity, "entityId, type, lifetime");
 	SCRIPT_REG_TEMPLFUNC(RemoveMinimapEntity, "entityId");
@@ -139,10 +149,12 @@ void CScriptBind_GameRules::RegisterMethods()
 	SCRIPT_REG_TEMPLFUNC(GetTeamId, "teamName");
 	SCRIPT_REG_TEMPLFUNC(GetTeamCount, "");
 	SCRIPT_REG_TEMPLFUNC(GetTeamPlayerCount, "teamId");
+	SCRIPT_REG_TEMPLFUNC(GetTeamChannelCount, "teamId");
 	SCRIPT_REG_TEMPLFUNC(GetTeamPlayers, "teamId");
 
 	SCRIPT_REG_TEMPLFUNC(SetTeam, "teamId, playerId");
 	SCRIPT_REG_TEMPLFUNC(GetTeam, "playerId");
+	SCRIPT_REG_TEMPLFUNC(GetChannelTeam, "channelId");
 
 	SCRIPT_REG_TEMPLFUNC(AddObjective, "teamId, objective, status, entityId");
 	SCRIPT_REG_TEMPLFUNC(SetObjectiveStatus, "teamId, objective, status");
@@ -167,11 +179,18 @@ void CScriptBind_GameRules::RegisterMethods()
 	SCRIPT_REG_TEMPLFUNC(ResetPreRoundTime, "");
 	SCRIPT_REG_TEMPLFUNC(GetRemainingPreRoundTime, "");
 
+	SCRIPT_REG_TEMPLFUNC(ResetReviveCycleTime, "");
+	SCRIPT_REG_TEMPLFUNC(GetRemainingReviveCycleTime, "");
+
+	SCRIPT_REG_TEMPLFUNC(ResetGameStartTimer, "time");
+	SCRIPT_REG_TEMPLFUNC(GetRemainingStartTimer, "");
+
 	SCRIPT_REG_TEMPLFUNC(EndGame, "");
 	SCRIPT_REG_TEMPLFUNC(NextLevel, "");
 
 	SCRIPT_REG_TEMPLFUNC(RegisterHitMaterial, "materialName");
 	SCRIPT_REG_TEMPLFUNC(GetHitMaterialId, "materialName");
+	SCRIPT_REG_TEMPLFUNC(GetHitMaterialName, "materialId");
 	SCRIPT_REG_TEMPLFUNC(ResetHitMaterials, "");
 
 	SCRIPT_REG_TEMPLFUNC(RegisterHitType, "type");
@@ -195,12 +214,12 @@ void CScriptBind_GameRules::RegisterMethods()
 	SCRIPT_REG_TEMPLFUNC(GetSynchedEntityValue, "entityId, key");
 
 	SCRIPT_REG_TEMPLFUNC(ResetSynchedStorage, "");
+	SCRIPT_REG_TEMPLFUNC(ForceSynchedStorageSynch, "channelId");
 
 	SCRIPT_REG_TEMPLFUNC(IsDemoMode, "");
 	SCRIPT_REG_TEMPLFUNC(GetTimeLimit, "");
 	SCRIPT_REG_TEMPLFUNC(GetPreRoundTime, "");
 	SCRIPT_REG_TEMPLFUNC(GetRoundTime, "");
-	SCRIPT_REG_TEMPLFUNC(GetSuddenDeathTime, "");
 	SCRIPT_REG_TEMPLFUNC(GetRoundLimit, "");
 	SCRIPT_REG_TEMPLFUNC(GetFragLimit, "");
 	SCRIPT_REG_TEMPLFUNC(GetFragLead, "");
@@ -208,20 +227,31 @@ void CScriptBind_GameRules::RegisterMethods()
   SCRIPT_REG_TEMPLFUNC(GetReviveTime, "");
 	SCRIPT_REG_TEMPLFUNC(GetMinPlayerLimit, "");
 	SCRIPT_REG_TEMPLFUNC(GetMinTeamLimit, "");
+	SCRIPT_REG_TEMPLFUNC(GetTeamLock, "");
 
 	SCRIPT_REG_TEMPLFUNC(IsFrozen, "entityId");
 	SCRIPT_REG_TEMPLFUNC(FreezeEntity, "entityId, freeze, vapor");
 	SCRIPT_REG_TEMPLFUNC(ShatterEntity, "entityId, pos, impulse");
 
   SCRIPT_REG_TEMPLFUNC(DebugCollisionDamage, "");
+	SCRIPT_REG_TEMPLFUNC(DebugHits, "");
 
-	SCRIPT_REG_TEMPLFUNC(RequestHitIndicator, "shooterId");
-	SCRIPT_REG_TEMPLFUNC(RequestDamageIndicator, "shooterId");
+	SCRIPT_REG_TEMPLFUNC(SendHitIndicator, "shooterId");
+	SCRIPT_REG_TEMPLFUNC(SendDamageIndicator, "shooterId");
+
+	SCRIPT_REG_TEMPLFUNC(IsInvulnerable, "playerId");
+	SCRIPT_REG_TEMPLFUNC(SetInvulnerability, "playerId, invulnerable");
+
 	SCRIPT_REG_TEMPLFUNC(TutorialEvent, "type");
 
 	SCRIPT_REG_TEMPLFUNC(GameOver, "localWinner");
 	SCRIPT_REG_TEMPLFUNC(EnteredGame, "");
 	SCRIPT_REG_TEMPLFUNC(EndGameNear, "entityId");
+
+	SCRIPT_REG_TEMPLFUNC(SPNotifyPlayerKill, "targetId, weaponId, headShot");
+
+	SCRIPT_REG_TEMPLFUNC(ProcessEMPEffect, "targetId, timeScale");
+	SCRIPT_REG_TEMPLFUNC(PerformDeadHit, "");
 }
 
 //------------------------------------------------------------------------
@@ -365,7 +395,7 @@ int CScriptBind_GameRules::RenamePlayer(IFunctionHandler *pH, ScriptHandle playe
 
 //------------------------------------------------------------------------
 int CScriptBind_GameRules::KillPlayer(IFunctionHandler *pH, ScriptHandle playerId, bool dropItem, bool ragdoll,
-																			ScriptHandle shooterId, ScriptHandle weaponId, float damage, int material, bool headshot, Vec3 impulse)
+																			ScriptHandle shooterId, ScriptHandle weaponId, float damage, int material, int hit_type, Vec3 impulse)
 {
 	CGameRules *pGameRules=GetGameRules(pH);
 
@@ -375,7 +405,7 @@ int CScriptBind_GameRules::KillPlayer(IFunctionHandler *pH, ScriptHandle playerI
 	CActor *pActor = GetActor((EntityId)playerId.n);
 
 	if (pActor)
-		pGameRules->KillPlayer(pActor, dropItem, ragdoll, (EntityId)shooterId.n, (EntityId)weaponId.n, damage, material, headshot, impulse);
+		pGameRules->KillPlayer(pActor, dropItem, ragdoll, (EntityId)shooterId.n, (EntityId)weaponId.n, damage, material, hit_type, impulse);
 
 	return pH->EndFunction();
 }
@@ -409,6 +439,18 @@ int CScriptBind_GameRules::GetPlayerByChannelId(IFunctionHandler *pH, int channe
 		return pH->EndFunction(pActor->GetEntity()->GetScriptTable());
 
 	return pH->EndFunction();
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::GetChannelId(IFunctionHandler *pH, ScriptHandle playerId)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+	if (!pGameRules)
+		return pH->EndFunction();
+
+	int channelId=pGameRules->GetChannelId((EntityId)playerId.n);
+
+	return pH->EndFunction(channelId);
 }
 
 //------------------------------------------------------------------------
@@ -456,6 +498,7 @@ int CScriptBind_GameRules::GetPlayers(IFunctionHandler *pH)
 	int tcount=m_players->Count();
 
 	int i=0;
+	int k=0;
 	while(i<count)
 	{
 		IEntity *pEntity=gEnv->pEntitySystem->GetEntity(pGameRules->GetPlayer(i));
@@ -463,15 +506,16 @@ int CScriptBind_GameRules::GetPlayers(IFunctionHandler *pH)
 		{
 			IScriptTable *pEntityScript=pEntity->GetScriptTable();
 			if (pEntityScript)
-				m_players->SetAt(i+1, pEntityScript);
-			else
-				m_players->SetNullAt(i+1);
+			{
+				m_players->SetAt(k+1, pEntityScript);
+				++k;
+			}
 		}
 		++i;
 	}
 
-	while(i<tcount)
-		m_players->SetNullAt(++i);
+	while(k<tcount)
+		m_players->SetNullAt(++k);
 
 	return pH->EndFunction(m_players);
 }
@@ -486,6 +530,42 @@ int CScriptBind_GameRules::IsPlayerInGame(IFunctionHandler *pH, ScriptHandle pla
 
 	return pH->EndFunction();
 }
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::IsProjectile(IFunctionHandler *pH, ScriptHandle entityId)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	return pH->EndFunction(pGameRules->IsProjectile((EntityId)entityId.n));
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::IsSameTeam(IFunctionHandler *pH, ScriptHandle entityId0, ScriptHandle entityId1)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	int t0=pGameRules->GetTeam((EntityId)entityId0.n);
+	int t1=pGameRules->GetTeam((EntityId)entityId1.n);
+
+	if (t0==t1)
+		return pH->EndFunction(true);
+
+	return pH->EndFunction();
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::IsNeutral(IFunctionHandler *pH, ScriptHandle entityId)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	int t=pGameRules->GetTeam((EntityId)entityId.n);
+
+	if (t==0)
+		return pH->EndFunction(true);
+
+	return pH->EndFunction();
+}
+
 
 //------------------------------------------------------------------------
 int CScriptBind_GameRules::AddSpawnLocation(IFunctionHandler *pH, ScriptHandle entityId)
@@ -563,35 +643,33 @@ int CScriptBind_GameRules::GetSpawnLocations(IFunctionHandler *pH)
 }
 
 //------------------------------------------------------------------------
-int CScriptBind_GameRules::IsSpawnLocationSafe(IFunctionHandler *pH, ScriptHandle playerId, ScriptHandle spawnLocationId, float safeDistance, bool ignoreTeam)
-{
-	CGameRules *pGameRules=GetGameRules(pH);
-
-	if (pGameRules)
-		return pH->EndFunction(pGameRules->IsSpawnLocationSafe(
-			(EntityId)playerId.n, (EntityId)spawnLocationId.n, safeDistance, ignoreTeam));
-	
-	return pH->EndFunction();
-}
-
-//------------------------------------------------------------------------
-int CScriptBind_GameRules::GetSpawnLocation(IFunctionHandler *pH, ScriptHandle playerId, float safeDistance, bool ignoreTeam, bool includeNeutral)
+int CScriptBind_GameRules::GetSpawnLocation(IFunctionHandler *pH, ScriptHandle playerId, bool ignoreTeam, bool includeNeutral)
 {
 	CGameRules *pGameRules=GetGameRules(pH);
 
 	if (pGameRules)
 	{
 		EntityId groupId=0;
-		if (pH->GetParamCount()>4 && pH->GetParamType(5)==svtPointer)
+		float minDistanceToDeath=0.0f;
+		float zOffset=0.0f;
+		Vec3 deathPos(ZERO);
+
+		if (pH->GetParamCount()>3 && pH->GetParamType(4)==svtPointer)
 		{
 			ScriptHandle groupIdHdl;
-			pH->GetParam(5, groupIdHdl);
+			pH->GetParam(4, groupIdHdl);
 			groupId=(EntityId)groupIdHdl.n;
 		}
 
-		EntityId id=pGameRules->GetSpawnLocation((EntityId)playerId.n, safeDistance, ignoreTeam, includeNeutral, groupId);
+		if (pH->GetParamCount()>5 && pH->GetParamType(5)==svtNumber && pH->GetParamType(6)==svtObject)
+		{
+			pH->GetParam(5, minDistanceToDeath);
+			pH->GetParam(6, deathPos);
+		}
+
+		EntityId id=pGameRules->GetSpawnLocation((EntityId)playerId.n, ignoreTeam, includeNeutral, groupId, minDistanceToDeath, deathPos, &zOffset);
 		if (id)
-			return pH->EndFunction(ScriptHandle(id));
+			return pH->EndFunction(ScriptHandle(id), zOffset);
 	}
 
 	return pH->EndFunction();
@@ -703,6 +781,20 @@ int CScriptBind_GameRules::GetSpawnGroups(IFunctionHandler *pH)
 		m_spawngroups->SetNullAt(++i);
 
 	return pH->EndFunction(m_spawngroups);
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::IsSpawnGroup(IFunctionHandler *pH, ScriptHandle entityId)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	if (!pGameRules)
+		return pH->EndFunction();
+
+	if (pGameRules->IsSpawnGroup((EntityId)entityId.n))
+		return pH->EndFunction(true);
+
+	return pH->EndFunction();
 }
 
 //------------------------------------------------------------------------
@@ -852,13 +944,13 @@ int CScriptBind_GameRules::GetNextSpectatorTarget(IFunctionHandler *pH, ScriptHa
 		{
 			// get list of possible players (team mates or all players)
 			CGameRules::TPlayers players;
-			if(g_pGame->GetCVars()->g_spectate_TeamOnly == 0 || pGameRules->GetTeamCount() == 0)
+			int team = pGameRules->GetTeam((EntityId)playerId.n);
+			if(g_pGame->GetCVars()->g_spectate_TeamOnly == 0 || pGameRules->GetTeamCount() == 0 || team == 0)
 			{
 				pGameRules->GetPlayers(players);
 			}
 			else
 			{
-				int team = pGameRules->GetTeam((EntityId)playerId.n);
 				pGameRules->GetTeamPlayers(team, players);
 			}
 			int numPlayers = players.size();
@@ -892,7 +984,7 @@ int CScriptBind_GameRules::GetNextSpectatorTarget(IFunctionHandler *pH, ScriptHa
 
 					// skip dead players
 					IActor* pActor = gEnv->pGame->GetIGameFramework()->GetIActorSystem()->GetActor(players[newTargetIndex]);
-					if(!pActor || pActor->GetHealth() == 0)
+					if(!pActor || pActor->GetHealth() <= 0)
 						continue;				
 
 					// skip spectating players
@@ -904,11 +996,37 @@ int CScriptBind_GameRules::GetNextSpectatorTarget(IFunctionHandler *pH, ScriptHa
 				} while(!found && numAttempts > 0);
 
 				if(found)
-					return pH->EndFunction(players[newTargetIndex]);
+					return pH->EndFunction(ScriptHandle(players[newTargetIndex]));
 			}
 		}
 	}
 	return pH->EndFunction(0);
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::ChangeSpectatorMode(IFunctionHandler* pH, ScriptHandle playerId, int mode, ScriptHandle targetId)
+{
+	CGameRules *pGameRules = GetGameRules(pH);
+	CActor* pActor = (CActor*)g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor((EntityId)playerId.n);
+
+	if(pGameRules && pActor)
+		pGameRules->ChangeSpectatorMode(pActor, mode, (EntityId)targetId.n, false);
+
+	return pH->EndFunction();
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::CanChangeSpectatorMode(IFunctionHandler* pH, ScriptHandle playerId)
+{
+	IActor* pActor = g_pGame->GetIGameFramework()->GetClientActor();
+	CHUD* pHUD = g_pGame->GetHUD();
+	if(gEnv->bMultiplayer && pHUD && pActor && pActor->GetEntityId() == playerId.n)
+	{
+		if(pHUD->IsBuyMenuActive() || pHUD->IsScoreboardActive() || pHUD->IsPDAActive())
+			return pH->EndFunction(false);
+	}
+
+	return pH->EndFunction(true);
 }
 
 //------------------------------------------------------------------------
@@ -988,8 +1106,6 @@ int CScriptBind_GameRules::ServerExplosion(IFunctionHandler *pH, ScriptHandle sh
 	if (!gEnv->bServer)
 		return pH->EndFunction();
 
-	ExplosionInfo info(shooterId.n, weaponId.n, dmg, pos, dir.GetNormalized(), radius, angle, pressure, holesize, 0);
-
 	const char *effect="";
 	float effectScale=1.0f;
 	int type=0;
@@ -1002,6 +1118,18 @@ int CScriptBind_GameRules::ServerExplosion(IFunctionHandler *pH, ScriptHandle sh
 
 	if (pH->GetParamCount()>11 && pH->GetParamType(12)!=svtNull)
 		pH->GetParam(12, type);
+
+	float minRadius = radius/2.0f;
+	float minPhysRadius = radius/2.0f;
+	float physRadius = radius;
+	if (pH->GetParamCount()>12 && pH->GetParamType(13)!=svtNull)
+		pH->GetParam(13, minRadius);
+	if (pH->GetParamCount()>13 && pH->GetParamType(14)!=svtNull)
+		pH->GetParam(14, minPhysRadius);
+	if (pH->GetParamCount()>14 && pH->GetParamType(15)!=svtNull)
+		pH->GetParam(15, physRadius);
+
+	ExplosionInfo info(shooterId.n, weaponId.n, dmg, pos, dir.GetNormalized(), minRadius, radius, minPhysRadius, physRadius, angle, pressure, holesize, 0);
 
 	IParticleEffect* pParticleEffect = gEnv->p3DEngine->FindParticleEffect(effect);
 	info.SetEffect(pParticleEffect, effectScale, 0.0f);
@@ -1118,6 +1246,21 @@ int CScriptBind_GameRules::GetTeamPlayerCount(IFunctionHandler *pH, int teamId)
 }
 
 //------------------------------------------------------------------------
+int CScriptBind_GameRules::GetTeamChannelCount(IFunctionHandler *pH, int teamId)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	if (!pGameRules)
+		return pH->EndFunction();
+
+	bool inGame=false;
+	if (pH->GetParamCount()>1)
+		pH->GetParam(2, inGame);
+
+	return pH->EndFunction(pGameRules->GetTeamChannelCount(teamId, inGame));
+}
+
+//------------------------------------------------------------------------
 int CScriptBind_GameRules::GetTeamPlayers(IFunctionHandler *pH, int teamId)
 {
 	CGameRules *pGameRules=GetGameRules(pH);
@@ -1174,6 +1317,17 @@ int CScriptBind_GameRules::GetTeam(IFunctionHandler *pH, ScriptHandle playerId)
 		return pH->EndFunction();
 
 	return pH->EndFunction(pGameRules->GetTeam((EntityId)playerId.n));
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::GetChannelTeam(IFunctionHandler *pH, int channelId)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	if (!pGameRules)
+		return pH->EndFunction();
+
+	return pH->EndFunction(pGameRules->GetChannelTeam(channelId));
 }
 
 //------------------------------------------------------------------------
@@ -1500,6 +1654,53 @@ int CScriptBind_GameRules::GetRemainingPreRoundTime(IFunctionHandler *pH)
 	return pH->EndFunction(pGameRules->GetRemainingPreRoundTime());
 }
 
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::ResetReviveCycleTime(IFunctionHandler *pH)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	if (!pGameRules)
+		return pH->EndFunction();
+
+	pGameRules->ResetReviveCycleTime();
+
+	return pH->EndFunction();
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::GetRemainingReviveCycleTime(IFunctionHandler *pH)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	if (!pGameRules)
+		return pH->EndFunction();
+
+	return pH->EndFunction(pGameRules->GetRemainingReviveCycleTime());
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::ResetGameStartTimer(IFunctionHandler *pH, float time)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	if (!pGameRules)
+		return pH->EndFunction();
+
+	pGameRules->ResetGameStartTimer(time);
+
+	return pH->EndFunction();
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::GetRemainingStartTimer(IFunctionHandler *pH)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	if (!pGameRules)
+		return pH->EndFunction();
+
+	return pH->EndFunction(pGameRules->GetRemainingStartTimer());
+}
 
 //------------------------------------------------------------------------
 int	CScriptBind_GameRules::EndGame(IFunctionHandler *pH)
@@ -1537,6 +1738,17 @@ int CScriptBind_GameRules::GetHitMaterialId(IFunctionHandler *pH, const char *ma
 	CGameRules *pGameRules=GetGameRules(pH);
 
 	return pH->EndFunction(pGameRules->GetHitMaterialId(materialName));
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::GetHitMaterialName(IFunctionHandler *pH, int materialId)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+
+	if (ISurfaceType *pSurfaceType=pGameRules->GetHitMaterial(materialId))
+		return pH->EndFunction(pSurfaceType->GetName());
+
+	return pH->EndFunction();
 }
 
 //------------------------------------------------------------------------
@@ -1853,9 +2065,18 @@ int CScriptBind_GameRules::ResetSynchedStorage(IFunctionHandler *pH)
 }
 
 //------------------------------------------------------------------------
+int CScriptBind_GameRules::ForceSynchedStorageSynch(IFunctionHandler *pH, int channelId)
+{
+	CGameRules *pGameRules=GetGameRules(pH);
+	pGameRules->ForceSynchedStorageSynch(channelId);
+
+	return pH->EndFunction();
+}
+
+//------------------------------------------------------------------------
 int CScriptBind_GameRules::IsDemoMode(IFunctionHandler *pH)
 {
-	int demoMode = GetISystem()->IsDemoMode();
+	int demoMode = IsDemoPlayback();
 	return pH->EndFunction(demoMode);
 }
 
@@ -1875,12 +2096,6 @@ int CScriptBind_GameRules::GetRoundTime(IFunctionHandler *pH)
 int CScriptBind_GameRules::GetPreRoundTime(IFunctionHandler *pH)
 {
 	return pH->EndFunction(g_pGameCVars->g_preroundtime);
-}
-
-//------------------------------------------------------------------------
-int CScriptBind_GameRules::GetSuddenDeathTime(IFunctionHandler *pH)
-{
-	return pH->EndFunction(g_pGameCVars->g_suddendeathtime);
 }
 
 //------------------------------------------------------------------------
@@ -1925,6 +2140,12 @@ int CScriptBind_GameRules::GetMinTeamLimit(IFunctionHandler *pH)
 }
 
 //------------------------------------------------------------------------
+int CScriptBind_GameRules::GetTeamLock(IFunctionHandler *pH)
+{
+	return pH->EndFunction(g_pGameCVars->g_teamlock);
+}
+
+//------------------------------------------------------------------------
 int CScriptBind_GameRules::IsFrozen(IFunctionHandler *pH, ScriptHandle entityId)
 {
 	CGameRules *pGameRules=GetGameRules(pH);
@@ -1937,7 +2158,11 @@ int CScriptBind_GameRules::IsFrozen(IFunctionHandler *pH, ScriptHandle entityId)
 int CScriptBind_GameRules::FreezeEntity(IFunctionHandler *pH, ScriptHandle entityId, bool freeze, bool vapor)
 {
 	CGameRules *pGameRules=GetGameRules(pH);
-	pGameRules->FreezeEntity((EntityId)entityId.n, freeze, vapor);
+	bool force=false;
+	if (pH->GetParamCount()>3 && pH->GetParamType(4)==svtBool)
+		pH->GetParam(4, force);
+
+	pGameRules->FreezeEntity((EntityId)entityId.n, freeze, vapor, force);
 
 	return pH->EndFunction();
 }
@@ -1958,41 +2183,102 @@ int CScriptBind_GameRules::DebugCollisionDamage(IFunctionHandler *pH)
 }
 
 //------------------------------------------------------------------------
-int CScriptBind_GameRules::RequestHitIndicator(IFunctionHandler* pH, ScriptHandle shooterId)
+int CScriptBind_GameRules::DebugHits(IFunctionHandler *pH)
 {
-	EntityId id = EntityId(shooterId.n);
-	if(!id)
-		return pH->EndFunction();
-	CGameRules *pGameRules = GetGameRules(pH);
+	return pH->EndFunction(g_pGameCVars->g_debugHits);
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::SendHitIndicator(IFunctionHandler* pH, ScriptHandle shooterId)
+{
 	if(!gEnv->bServer)
 		return pH->EndFunction();
 
-	CActor* pActor = pGameRules->GetActorByEntityId(id);
-	if ( !pActor || !pActor->IsPlayer() )
+	EntityId id = EntityId(shooterId.n);
+	if(!id)
 		return pH->EndFunction();
 
-	CGameRules::EntityParams params(id);
-	pGameRules->GetGameObject()->InvokeRMIWithDependentObject(CGameRules::ClRequestHitIndicator(), params, eRMI_ToClientChannel, id, pGameRules->GetChannelId(id));
+	CGameRules *pGameRules = GetGameRules(pH);
+
+	CActor* pActor = pGameRules->GetActorByEntityId(id);
+	if (!pActor || !pActor->IsPlayer())
+		return pH->EndFunction();
+
+	pGameRules->GetGameObject()->InvokeRMI(CGameRules::ClHitIndicator(), CGameRules::NoParams(), eRMI_ToClientChannel, pGameRules->GetChannelId(id));
 
 	return pH->EndFunction();
 }
 
 //------------------------------------------------------------------------
-int CScriptBind_GameRules::RequestDamageIndicator(IFunctionHandler* pH, ScriptHandle shooterId)
+int CScriptBind_GameRules::SendDamageIndicator(IFunctionHandler* pH, ScriptHandle targetId, ScriptHandle shooterId, ScriptHandle weaponId)
 {
-	EntityId id = EntityId(shooterId.n);
-	if(!id)
-		return pH->EndFunction();
-	CGameRules *pGameRules = GetGameRules(pH);
 	if(!gEnv->bServer)
 		return pH->EndFunction();
 
-	CActor* pActor = pGameRules->GetActorByEntityId(id);
-	if ( !pActor || !pActor->IsPlayer() )
+	CGameRules *pGameRules = GetGameRules(pH);
+
+	EntityId tId = EntityId(targetId.n);
+	EntityId sId= EntityId(shooterId.n);
+	EntityId wId= EntityId(weaponId.n);
+
+	if (!tId)
 		return pH->EndFunction();
 
-	CGameRules::EntityParams params(id);
-	pGameRules->GetGameObject()->InvokeRMIWithDependentObject(CGameRules::ClRequestDamageIndicator(), params, eRMI_ToClientChannel, id, pGameRules->GetChannelId(id));
+	CActor* pActor = pGameRules->GetActorByEntityId(tId);
+	if (!pActor || !pActor->IsPlayer())
+		return pH->EndFunction();
+
+	pGameRules->GetGameObject()->InvokeRMIWithDependentObject(CGameRules::ClDamageIndicator(), CGameRules::DamageIndicatorParams(sId, wId), eRMI_ToClientChannel, sId, pGameRules->GetChannelId(tId));
+
+	return pH->EndFunction();
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::IsInvulnerable(IFunctionHandler* pH, ScriptHandle playerId)
+{
+	CGameRules *pGameRules = GetGameRules(pH);
+
+	CActor* pActor = pGameRules->GetActorByEntityId((EntityId)playerId.n);
+	if (!pActor || !pActor->IsPlayer())
+		return pH->EndFunction();
+
+	if (pActor->GetActorClass() != CPlayer::GetActorClassType())
+		return pH->EndFunction();
+
+	CPlayer *pPlayer=static_cast<CPlayer *>(pActor);
+	if (CNanoSuit *pNanoSuit=pPlayer->GetNanoSuit())
+		return pH->EndFunction(pNanoSuit->IsInvulnerable());
+
+	return pH->EndFunction();
+}
+
+//------------------------------------------------------------------------
+int CScriptBind_GameRules::SetInvulnerability(IFunctionHandler* pH, ScriptHandle playerId, bool invulnerable)
+{
+	if(!gEnv->bServer)
+		return pH->EndFunction();
+
+	CGameRules *pGameRules = GetGameRules(pH);
+
+	CActor* pActor = pGameRules->GetActorByEntityId((EntityId)playerId.n);
+	if (!pActor || !pActor->IsPlayer())
+		return pH->EndFunction();
+
+	if (pActor->GetActorClass() != CPlayer::GetActorClassType())
+		return pH->EndFunction();
+
+	CPlayer *pPlayer=static_cast<CPlayer *>(pActor);
+	if (CNanoSuit *pNanoSuit=pPlayer->GetNanoSuit())
+	{
+		pNanoSuit->SetInvulnerability(invulnerable);
+
+		float timeout=-1.0f;
+		if (pH->GetParamCount()>2 && pH->GetParamType(3)==svtNumber)
+			pH->GetParam(3, timeout);
+
+		if (timeout>0.0f)
+			pNanoSuit->SetInvulnerabilityTimeout(timeout);
+	}
 
 	return pH->EndFunction();
 }
@@ -2037,4 +2323,47 @@ int CScriptBind_GameRules::EndGameNear(IFunctionHandler* pH, ScriptHandle entity
 		pGameRules->EndGameNear(EntityId(entityId.n));
 
 	return pH->EndFunction();
+}
+
+int CScriptBind_GameRules::SPNotifyPlayerKill(IFunctionHandler* pH, ScriptHandle targetId, ScriptHandle weaponId, bool bHeadShot)
+{
+	CGameRules* pGameRules = g_pGame->GetGameRules();
+	if(pGameRules)
+		pGameRules->SPNotifyPlayerKill((EntityId)targetId.n, (EntityId)weaponId.n, bHeadShot);
+	return pH->EndFunction();
+}
+
+//-----------------------------------------------------------------------------
+int CScriptBind_GameRules::ProcessEMPEffect(IFunctionHandler* pH, ScriptHandle targetId, float timeScale)
+{
+	if(timeScale>0.0f)
+	{
+		CActor* pActor = static_cast<CActor*>(g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(EntityId(targetId.n)));
+		if (pActor && (pActor->GetSpectatorMode() == 0) && (pActor->GetActorClass() == CPlayer::GetActorClassType()))
+		{
+			CPlayer* pPlayer = static_cast<CPlayer*>(pActor);
+			if (CNanoSuit* pSuit = pPlayer->GetNanoSuit())
+			{
+				const float baseTime = 15.0f;
+				float time = max(3.0f, baseTime*timeScale);
+				pSuit->Activate(false);
+				pSuit->SetSuitEnergy(0.0f);
+				pSuit->Activate(true, time);
+			
+				pPlayer->GetGameObject()->InvokeRMI(CPlayer::ClEMP(), CPlayer::EMPParams(time), eRMI_ToClientChannel, pPlayer->GetChannelId());
+			}
+		}
+	}
+
+	return pH->EndFunction();
+}
+
+//-----------------------------------------------------------------------------
+int CScriptBind_GameRules::PerformDeadHit(IFunctionHandler* pH)
+{
+#ifdef CRAPDOLLS
+	return pH->EndFunction(false);
+#else
+	return pH->EndFunction(true);
+#endif // CRAPDOLLS
 }

@@ -13,8 +13,13 @@
 
 #include "stdafx.h"
 #include "CTeamManager.h"
-#include "..\HUD\HUDMissionObjectiveSystem.h"
+
 #include "IVehicleSystem.h"
+#include "IWorldQuery.h"
+#include "..\HUD\HUDMissionObjectiveSystem.h"
+#include "..\HUD\HUD.h"
+#include "..\HUD\HUDCrosshair.h"
+#include "Radio.h"
 
 ////////////////////////////////////////////////////
 CTeamManager::CTeamManager(void)
@@ -58,6 +63,7 @@ void CTeamManager::Reset(void)
 	{
 		RemoveTeam(m_TeamMap.begin()->first);
 	}
+	m_ChannelMap.clear();
 
 	// Reset ID gens
 	m_nTeamIDGen = TEAMID_NOTEAM;
@@ -379,7 +385,8 @@ bool CTeamManager::SetTeam(TeamID nTeamID, EntityId nEntityID)
 		return true;
 
 	// If it is a player, remove it from the map
-	bool bIsPlayer = (0 != g_D6Core->pD6Game->GetIGameFramework()->GetIActorSystem()->GetActor(nEntityID));
+	IActor *pActor = g_D6Core->pD6Game->GetIGameFramework()->GetIActorSystem()->GetActor(nEntityID);
+	bool bIsPlayer = (0 != pActor);
 	if (false == bIsPlayer) return false;
 	if (true == bIsPlayer && nOldTeam)
 	{
@@ -397,8 +404,48 @@ bool CTeamManager::SetTeam(TeamID nTeamID, EntityId nEntityID)
 		if (itTeam != m_TeamMap.end())
 		{
 			itTeam->second.PlayerList.push_back(nEntityID);
+			g_D6Core->pD6GameRules->UpdateObjectivesForPlayer(g_D6Core->pD6GameRules->GetChannelId(nEntityID), nTeamID);
 		}
 	}
+
+	if(IActor *pClient = g_pGame->GetIGameFramework()->GetClientActor())
+	{
+		if(GetTeam(pClient->GetEntityId()) == nTeamID)
+		{
+			if(nEntityID == pClient->GetGameObject()->GetWorldQuery()->GetLookAtEntityId())
+			{
+				if(g_pGame->GetHUD())
+				{
+					g_pGame->GetHUD()->GetCrosshair()->SetUsability(0);
+					g_pGame->GetHUD()->GetCrosshair()->SetUsability(1);
+				}
+			}
+		}
+	}
+
+	if(bIsPlayer)
+	{
+		// Handle voice channel for player
+		g_D6Core->pD6GameRules->ReconfigureVoiceGroups(nEntityID, nOldTeam, nTeamID);
+
+		int nChannelId = g_D6Core->pD6GameRules->GetChannelId(nEntityID);
+		ChannelMap::iterator itChannel = m_ChannelMap.find(nChannelId);
+		if (itChannel != m_ChannelMap.end())
+		{
+			// Update team or get rid of it if player has no team
+			if (!nTeamID)
+				m_ChannelMap.erase(itChannel);
+			else
+				itChannel->second = nTeamID;
+		}
+		else if(nTeamID)
+			m_ChannelMap.insert(ChannelMap::value_type(nChannelId, nTeamID));
+
+		// Let radio handle the rest
+		if (pActor->IsClient())
+			g_D6Core->pD6GameRules->GetRadio()->SetTeam(GetTeamName(nTeamID));
+	}
+
 	return true;
 }
 
@@ -584,6 +631,31 @@ STeamHarvesterDef *CTeamManager::GetTeamHarvester(TeamID nID, HarvesterID nHarve
 	if (itHarv == list.end())
 		return NULL;
 	return itHarv->second;
+}
+
+////////////////////////////////////////////////////
+TeamID CTeamManager::GetChannelTeam(int nChannelID) const
+{
+	// Look through all teams
+	ChannelMap::const_iterator itI = m_ChannelMap.find(nChannelID);
+	if (itI != m_ChannelMap.end())
+		return itI->second;
+	return TEAMID_NOTEAM;
+}
+
+////////////////////////////////////////////////////
+int CTeamManager::GetTeamChannelCount(TeamID nTeamID, bool bInGame) const
+{
+	int nCount = 0;
+	for (ChannelMap::const_iterator itI = m_ChannelMap.begin(); itI != m_ChannelMap.end(); itI++)
+	{
+		if (nTeamID == itI->second)
+		{
+			if (false == bInGame || g_D6Core->pD6GameRules->IsChannelInGame(itI->first))
+				nCount++;
+		}
+	}
+	return nCount;
 }
 
 ////////////////////////////////////////////////////

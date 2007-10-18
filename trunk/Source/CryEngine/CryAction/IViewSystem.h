@@ -26,17 +26,40 @@
 #define VIEWID_VEHICLE 2
 #define VIEWID_RAGDOLL 3
 
+enum EMotionBlurType
+{
+	eMBT_None = 0,
+	eMBT_Accumulation = 1,
+	eMBT_Velocity = 2
+};
+
 struct SViewParams
 {
-	SViewParams()
+	SViewParams() :
+		position(ZERO),
+		rotation(IDENTITY),
+		nearplane(0.0f),
+		fov(0.0f),
+		viewID(0),
+		groundOnly(false),
+		shakingRatio(0.0f),
+		currentShakeQuat(IDENTITY),
+		currentShakeShift(ZERO),
+		idTarget(0),
+		targetPos(ZERO),
+		frameTime(0.0f),
+		angleVel(0.0f),
+		vel(0.0f),
+		dist(0.0f),
+		blend(true),
+		blendPosSpeed(5.0f),
+		blendRotSpeed(10.0f),
+		blendPosOffset(ZERO),
+		blendRotOffset(IDENTITY),
+		viewIDLast(0),
+		positionLast(ZERO),
+		rotationLast(IDENTITY)
 	{
-		memset(this,0,sizeof(SViewParams));
-
-		rotation.SetIdentity();
-    rotationLast.SetIdentity();
-		currentShakeQuat.SetIdentity();
-		blendRotOffset.SetIdentity();
-		blend=true;
 	}
 
 	void SetViewID(uint8 id,bool blend=true)
@@ -46,7 +69,7 @@ struct SViewParams
 			viewIDLast = id;
 	}
 
-	void UpdateBlending(float frameTime,float rotSpeed = 3.5f,float posSpeed = 7.5f)
+	void UpdateBlending(float frameTime)
 	{
 		//if necessary blend the view
 		if (blend)
@@ -58,8 +81,8 @@ struct SViewParams
 			}
 			else
 			{
-				blendPosOffset -= blendPosOffset * min(1.0f,posSpeed * frameTime);
-				blendRotOffset = Quat::CreateSlerp(blendRotOffset, IDENTITY, frameTime * rotSpeed );
+				blendPosOffset -= blendPosOffset * min(1.0f,blendPosSpeed * frameTime);
+				blendRotOffset = Quat::CreateSlerp(blendRotOffset, IDENTITY, frameTime * blendRotSpeed);
 			}
 
 			position += blendPosOffset;
@@ -74,10 +97,25 @@ struct SViewParams
 		viewIDLast = viewID;
 	}
 
+	void BlendFrom(const SViewParams& params)
+	{
+		positionLast = params.position;
+		rotationLast = params.rotation;
+		blend = true;
+		viewIDLast = 0xff;
+	}
+
 	void SaveLast()
 	{
-		positionLast = position;
-		rotationLast = rotation;
+		if (viewIDLast != 0xff)
+		{
+			positionLast = position;
+			rotationLast = rotation;
+		}
+		else
+		{
+			viewIDLast = 0xfe;
+		}
 	}
 
 	void ResetBlending()
@@ -96,6 +134,7 @@ struct SViewParams
 	uint8 viewID;
 	
 	//view shake status
+	bool  groundOnly;
 	float shakingRatio;//whats the ammount of shake, from 0.0 to 1.0
 	Quat currentShakeQuat;//what the current angular shake
 	Vec3 currentShakeShift;//what is the current translational shake
@@ -108,16 +147,15 @@ struct SViewParams
   float vel;          // previous rate of change of dist between target and camera.
   float dist;         // previous dist of cam from target
 
-	bool blend;
-
 	//blending
-	Vec3 blendPosOffset;
-	Quat blendRotOffset;
+	bool	blend;
+	float blendPosSpeed;
+	float blendRotSpeed;
+	Vec3	blendPosOffset;
+	Quat	blendRotOffset;
 
 private:
-
 	uint8 viewIDLast;
-
 	Vec3 positionLast;//last view position
 	Quat rotationLast;//last view orientation
 };
@@ -137,7 +175,7 @@ struct IView
 
 	virtual void SetCurrentParams( SViewParams &params ) = 0;
 	virtual const SViewParams * GetCurrentParams() = 0;
-	virtual void SetViewShake(Ang3 shakeAngle,Vec3 shakeShift,float duration,float frequency,float randomness,int shakeID, bool do_flip = true, bool bUpdateOnly=false) = 0;
+	virtual void SetViewShake(Ang3 shakeAngle,Vec3 shakeShift,float duration,float frequency,float randomness,int shakeID, bool bFlipVec = true, bool bUpdateOnly=false, bool bGroundOnly=false) = 0;
 	virtual void ResetShaking() = 0;
 };
 
@@ -170,8 +208,15 @@ struct IViewSystem
 
 	virtual void Serialize(TSerialize ser) = 0;
 
+	// Get default distance to near clipping plane.
+	virtual float GetDefaultZNear() = 0;
+
+	virtual void SetBlendParams(float fBlendPosSpeed, float fBlendRotSpeed, bool performBlendOut) = 0;
+
 	// Used by time demo playback.
 	virtual void SetOverrideCameraRotation( bool bOverride,Quat rotation ) = 0;
+
+	virtual bool IsPlayingCutScene() const = 0;
 };
 
 #endif //__IVIEWSYSTEM_H__

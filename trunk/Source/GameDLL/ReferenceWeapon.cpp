@@ -23,7 +23,7 @@ void CReferenceWeapon::OnAction(EntityId actorId, const ActionId& actionId, int 
 		}
 		else if(activationMode == eAAM_OnRelease)
 		{
-			GetEntity()->GetCharacter(eIGS_FirstPerson)->GetISkeleton()->StopAnimationInLayer(0,0.0f);
+			GetEntity()->GetCharacter(eIGS_FirstPerson)->GetISkeletonAnim()->StopAnimationInLayer(0,0.0f);
 			PlayAction(g_pItemStrings->idle, 0, true);
 		}
 	}

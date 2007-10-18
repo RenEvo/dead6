@@ -20,7 +20,8 @@ public:
 	virtual void InitClient(int channelId);
 	virtual void PostInitClient(int channelId);
 	virtual void Release();
-	virtual void Serialize( TSerialize ser, unsigned aspects );
+	virtual void FullSerialize( TSerialize ser ) {}
+	virtual bool NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int flags ) { return true; }
 	virtual void PostSerialize() {}
 	virtual void SerializeSpawnInfo( TSerialize ser ) {}
 	virtual ISerializableInfoPtr GetSpawnInfo() {return 0;}
@@ -30,6 +31,7 @@ public:
 	virtual void SetChannelId(uint16 id) {};
 	virtual void SetAuthority( bool auth );
 	virtual void PostUpdate( float frameTime );
+	virtual void PostRemoteSpawn() {};
 	virtual void GetMemoryStatistics(ICrySizer * s) { s->Add(*this); s->AddContainer(m_testData); }
 	// ~IGameObjectExtension
 

@@ -264,7 +264,8 @@ public:
 	virtual ~CGunTurret(){}
 
 	// IGameObjectExtension
-	virtual void Serialize(TSerialize ser, unsigned aspects);
+	virtual void FullSerialize( TSerialize ser );
+	virtual bool NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int flags );
 	//~ IGameObjectExtension
 
 	// IItem
@@ -276,16 +277,17 @@ public:
 	virtual void OnRepaired();
 	virtual void DestroyedGeometry(bool use);
   virtual void SetCharacterAttachmentLocalTM(int slot, const char *name, const Matrix34 &tm);
-  virtual bool SetProfile( uint8 profile );
+  virtual bool SetAspectProfile( EEntityAspects aspect, uint8 profile );
   virtual void HandleEvent(const SGameObjectEvent&);
 	virtual void PostInit(IGameObject * pGameObject);
+	virtual bool CanPickUp(EntityId userId) const { return false; };
   // ~IItem
 
 	// IWeapon
 	virtual void StartFire(bool sec);
 	virtual void StopFire(bool sec);
-	virtual void StartFire(EntityId shooterId) { CWeapon::StartFire(shooterId); };
-	virtual void StopFire(EntityId shooterId) { CWeapon::StopFire(shooterId); };
+	virtual void StartFire() { CWeapon::StartFire(); };
+	virtual void StopFire() { CWeapon::StopFire(); };
 	virtual bool IsFiring(bool sec);
 	virtual Vec3 GetFiringPos(const Vec3 &probableHit) const;
 
@@ -307,14 +309,13 @@ protected:
 private:
 	bool IsOperational();
 	Vec3 GetTargetPos(IEntity* pEntity) const;
-	Vec3 GetTargetPos(IActor* pActor) const;
-  void GetTargetBounds(IEntity* pEntity, AABB& bounds) const;
 	Vec3 PredictTargetPos(IEntity* pTarget, bool sec);//sec - weapon to use
   Vec3 GetSweepPos(IEntity* pTarget, const Vec3& shootPos);
 	bool GetTargetAngles(const Vec3& targetPos, float& z, float& x) const;
 
 	bool IsTargetDead(IActor* pTarget) const;
 	bool IsTargetHostile(IActor *pTarget) const;
+	bool IsTargetSpectating(IActor* pTarget) const;
 	bool IsTACBullet(IEntity* pTarget) const;
 	ETargetClass GetTargetClass(IEntity* pTarget)const;
 
@@ -327,6 +328,7 @@ private:
 	bool IsTargetRocketable(const Vec3 &pos) const;
 	bool IsTargetMGable(const Vec3 &pos) const;
 	bool IsAiming(const Vec3& pos, float treshold) const;
+	IEntity *ResolveTarget(IEntity *pTarget) const;
 
 	IEntity *GetClosestTarget();
 	IEntity *GetClosestTACShell();
@@ -334,6 +336,7 @@ private:
 	void    OnTargetLocked(IEntity* pTarget);
 	void    Activate(bool active);
 	void    ServerUpdate(SEntityUpdateContext& ctx, int update);
+	void		UpdateEntityProperties();
 	void    UpdateGoal(IEntity* pTarget, float deltaTime);
 	void    UpdateOrientation(float deltaTime);
 	void    UpdateSearchingGoal(float deltaTime);
@@ -386,7 +389,12 @@ private:
   string m_fireHelper;
   string m_rocketHelper;
 
-  bool   m_destroyed;
+	Vec3   m_radarHelperPos;
+	Vec3   m_barrelHelperPos;
+	Vec3   m_fireHelperPos;
+	Vec3   m_rocketHelperPos;
+
+	bool   m_destroyed;
   bool   m_canShoot;
 };
 

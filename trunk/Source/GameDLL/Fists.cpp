@@ -23,19 +23,28 @@ History:
 
 #include "HUD/HUD.h"
 
+TActionHandler<CFists>	CFists::s_actionHandler;
+
+#define TIMEOUT			2.5f
 //------------------------------------------------------------------------
 CFists::CFists()
 :m_underWater(false)
 ,m_currentAnimState(eFAS_FIGHT)
 ,m_inFreeFall(false)
+,m_timeOut(0.0f)
 {
-	const SGameActions& actions = g_pGame->Actions();
+	m_useFPCamSpacePP = true; //Overwritten by OffHand
 
-	m_actionHandler.SetThis(this);
-#define ADD_HANDLER(action, func) m_actionHandler.AddHandler(actions.action, &CFists::func)
-	ADD_HANDLER(attack1, OnActionAttack);
-	ADD_HANDLER(attack2, OnActionAttack);
-	ADD_HANDLER(special, OnActionSpecial);
+	if (s_actionHandler.GetNumHandlers() == 0)
+	{
+	#define ADD_HANDLER(action, func) s_actionHandler.AddHandler(actions.action, &CFists::func)
+		const CGameActions& actions = g_pGame->Actions();
+
+		ADD_HANDLER(attack1, OnActionAttack);
+		ADD_HANDLER(attack2, OnActionAttack);
+		ADD_HANDLER(special, OnActionSpecial);
+		#undef ADD_HANDLER
+	}
 }
 
 
@@ -71,9 +80,9 @@ void CFists::UpdateFPView(float frameTime)
 //------------------------------------------------------------------------
 void CFists::OnAction(EntityId actorId, const ActionId& actionId, int activationMode, float value)
 {
-	if (IsSelected() && (GetCurrentAnimState()!=eFAS_RUNNING) && !m_underWater)
+	if (IsSelected() && !m_underWater)
 	{
-		if (!m_actionHandler.Dispatch(actorId, actionId, activationMode, value))
+		if (!s_actionHandler.Dispatch(this, actorId, actionId, activationMode, value))
 		{
 			CWeapon::OnAction(actorId, actionId, activationMode, value);
 		}
@@ -166,7 +175,7 @@ void CFists::RequestAnimState(EFistAnimState eFAS, bool force /*=false*/)
 															 }
 																break;
 
-					case eFAS_FIGHT:		if(m_currentAnimState!=eFAS_RUNNING)
+					case eFAS_FIGHT:		//if(m_currentAnimState!=eFAS_RUNNING)
 															{
 																SetDefaultIdleAnimation(CItem::eIGS_FirstPerson,g_pItemStrings->idle);
 																m_currentAnimState = eFAS_FIGHT;
@@ -174,10 +183,9 @@ void CFists::RequestAnimState(EFistAnimState eFAS, bool force /*=false*/)
 															}
 															break;
 
-					case eFAS_RUNNING:	if(m_currentAnimState==eFAS_RELAXED || /*m_currentAnimState==eFAS_RUNNING ||*/ (m_currentAnimState==eFAS_FIGHT && force))
+					case eFAS_RUNNING:	if(m_currentAnimState==eFAS_RELAXED || CanMeleeAttack())
 															{
 																PlayAction(g_pItemStrings->run_forward,0,true);
-																//SetDefaultIdleAnimation(CItem::eIGS_FirstPerson,g_pItemStrings->run_forward);
 																m_currentAnimState = eFAS_RUNNING;
 															}
 															break;
@@ -278,6 +286,9 @@ void CFists::RaiseWeapon(bool raise, bool faster /*= false*/)
 	//Only when colliding something while running
 	if(raise && (GetCurrentAnimState()==eFAS_RUNNING || GetCurrentAnimState()==eFAS_JUMPING) && !IsWeaponRaised())
 	{
+		if((m_fm && m_fm->IsFiring())||(m_melee && m_melee->IsFiring()))
+			return;
+
 		//If NANO speed selected...
 		float speedOverride = -1.0f;
 
@@ -327,11 +338,13 @@ void CFists::RaiseWeapon(bool raise, bool faster /*= false*/)
 			}
 		}
 
-		GetScheduler()->TimerAction(GetCurrentAnimationTime(eIGS_FirstPerson), CSchedulerAction<EndRaiseWeaponAction>::Create(EndRaiseWeaponAction(this)), false);
+		GetScheduler()->TimerAction(GetCurrentAnimationTime(eIGS_FirstPerson), CSchedulerAction<EndRaiseWeaponAction>::Create(EndRaiseWeaponAction(this)), true);
 
 		//Sound and FX feedback
 		CollisionFeeback(pos,m_currentAnimState);
 	}
+	else if(!raise)
+		SetWeaponRaised(false);
 
 }
 
@@ -369,29 +382,37 @@ void CFists::CollisionFeeback(Vec3 &pos, int eFAS)
 //---------------------------------------------------------------
 bool CFists::OnActionAttack(EntityId actorId, const ActionId& actionId, int activationMode, float value)
 {
-	SetCurrentFireMode(0);
+	//SetCurrentFireMode(0);
 	CWeapon::OnAction(actorId, actionId, activationMode, value);
-	RequestAnimState(eFAS_FIGHT);
+	if(m_fm && m_fm->IsFiring())
+		RequestAnimState(eFAS_FIGHT);
 	return false;
 }
 
 bool CFists::OnActionSpecial(EntityId actorId, const ActionId& actionId, int activationMode, float value)
 {
 	CWeapon::OnAction(actorId, actionId, activationMode, value);
-	RequestAnimState(eFAS_FIGHT);
+	if(m_melee && m_melee->IsFiring())
+		RequestAnimState(eFAS_FIGHT);
 	return false;
 }
 
-//-----------------------------------------------------------------
-void CFists::MeleeAttack()
+//------------------------------------------------------------------------
+void CFists::NetStartMeleeAttack(bool weaponMelee)
 {
-	CWeapon::MeleeAttack();
+	RequestAnimState(eFAS_FIGHT);
+	CWeapon::NetStartMeleeAttack(weaponMelee);
 }
 
 //------------------------------------------------------------------------
-void CFists::NetStartMeleeAttack(EntityId shooterId, bool weaponMelee)
+void CFists::FullSerialize(TSerialize ser)
 {
-	RequestAnimState(eFAS_FIGHT);
-	CWeapon::NetStartMeleeAttack(shooterId, weaponMelee);
-}
+	CWeapon::FullSerialize(ser);
 
+	if(ser.GetSerializationTarget() != eST_Network)
+	{
+		ser.Value("underWater", m_underWater);
+		ser.Value("inFreeFall", m_inFreeFall);
+		ser.Value("m_timeOut", m_timeOut);
+	}
+}

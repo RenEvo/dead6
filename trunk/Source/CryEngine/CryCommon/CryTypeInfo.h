@@ -1,5 +1,18 @@
-#ifndef __TYPEINFO_H
-#define __TYPEINFO_H
+//////////////////////////////////////////////////////////////////////////
+//
+//  Crytek Engine Source File.
+//  Copyright (C), Crytek Studios, 2001-2007.
+// -------------------------------------------------------------------------
+//  File name:   TypeInfo.h
+//  Version:     v1.00
+//  Created:     03/05/2005 by Scott.
+//  Description: Declaration of CTypeInfo and related types.
+// -------------------------------------------------------------------------
+//
+////////////////////////////////////////////////////////////////////////////
+
+#ifndef __CRY_TYPEINFO_H
+#define __CRY_TYPEINFO_H
 #pragma once
 
 #include <platform.h>
@@ -10,16 +23,8 @@
 typedef const char*	cstr;
 
 //---------------------------------------------------------------------------
-
-//---------------------------------------------------------------------------
-// Type info base class
-
-// Although this pragma is also set from platform.h, for some reason it doesn't "take", 
-// and we need it here again.
-#if defined(XENON) || defined(PS3)
-	#pragma bitfield_order( lsb_to_msb )
-#endif
-
+// Allocator using fixed pool, no heap memory.
+// Suitable for app-init-time allocations.
 
 template<size_t SIZE>
 struct FStaticAlloc
@@ -43,6 +48,34 @@ struct FStaticAlloc
 	}
 };
 
+template<class INT>
+inline INT ToInt(size_t size, const void* data)
+{
+	switch (size)
+	{
+		case sizeof(int8): return static_cast<INT>(*(const int8*)data);
+		case sizeof(int16): return static_cast<INT>(*(const int16*)data);
+		case sizeof(int32): return static_cast<INT>(*(const int32*)data);
+		case sizeof(int64): return static_cast<INT>(*(const int64*)data);
+		default: assert(0); return 0;
+	}
+}
+
+template<class INT>
+inline bool FromInt(size_t size, void* data, INT val)
+{
+	switch (size)
+	{
+		case sizeof(int8):	*(int8*)data = static_cast<int8>(val); return *(int8*)data == val;
+		case sizeof(int16): *(int16*)data = static_cast<int16>(val); return *(int16*)data == val;
+		case sizeof(int32): *(int32*)data = static_cast<int32>(val); return *(int32*)data == val;
+		case sizeof(int64): *(int64*)data = val; return true;
+		default: assert(0); return false;
+	}
+}
+
+//---------------------------------------------------------------------------
+// Type info base class
 
 struct CTypeInfo
 {
@@ -95,26 +128,20 @@ struct CTypeInfo
 	{
 		cstr								Name;
 		const CTypeInfo&		Type;
-		size_t							ArrayDim: 30,
-												bBitfield: 1,				// How appropriate.
+		size_t							ArrayDim: 29,				
+												bBitfield: 1,				// ArrayDim is number of bits.
+												bBaseClass: 1,			// Sub-var is actually a base class.
 												bUnionAlias: 1;			// If 2nd or greater element of a union.
-		size_t							Offset;
+		size_t							Offset: 24,					// Offset in bytes from struct start.
+												BitOffset: 6,				// Additional offset in bits for bitfields.
+																						// Bit offset is computed in declaration order; on some platforms, it goes high to low.
+												BitWordWidth: 2;		// Word width of bitfield, bits = 8 << BitWordWidth
 
-		struct CVarAttr
-		{
-			cstr	Name;
-			float	fValue;
-			cstr	sValue;
-		};
-		DynArray< CVarAttr, FStaticAlloc<0x4000> >	Attrs;
+		explicit CVarInfo( const CTypeInfo& type, int dim = 1, bool bBase = false)
+			: Type(type), ArrayDim(dim), bBaseClass(bBase), bBitfield(0), bUnionAlias(0), Offset(0), BitOffset(0), BitWordWidth(0), Name("")
+		{}
 
-		explicit CVarInfo( const CTypeInfo& type, int dim = 1, cstr name = "" )
-			: Type(type), ArrayDim(dim), bBitfield(0), bUnionAlias(0), Offset(0)
-		{
-			SetName(name);
-		}
-
-		// Manipulators, to easily modify type info.
+		// Manipulators and accessors.
 		CVarInfo& SetName(cstr name)					
 		{ 
 			// Skip prefixes in Name.
@@ -130,38 +157,15 @@ struct CTypeInfo
 		CVarInfo& SetOffset(size_t offset)		{ Offset = offset; return *this; }
 		CVarInfo& SetArray(int dim)						{ ArrayDim *= dim; return *this; }
 		CVarInfo& SetBitfield(int bits)				{ bBitfield = 1; ArrayDim = bits; return *this; }
+		CVarInfo& SetBaseClass()							{ bBaseClass = 1; return *this; }
 
-		CVarInfo& AddAttr(cstr name, float val)	{ CVarAttr attr = { name, val, 0 }; Attrs.push_back(attr); return *this; }
-		CVarInfo& AddAttr(cstr name, int val)		{ CVarAttr attr = { name, f32(val), 0 }; Attrs.push_back(attr); return *this; }
-		CVarInfo& AddAttr(cstr name, cstr text)	{ CVarAttr attr = { name, 0, text }; Attrs.push_back(attr); return *this; }
-
-		// Access.
-		cstr GetDisplayName() const
-		{ 
-			return Name; 
-		}
-		size_t GetDim() const
-		{
-			return bBitfield ? 1 : ArrayDim;
-		}
-		size_t GetSize() const
-		{
-			return Type.Size * (bBitfield ? 1 : ArrayDim);
-		}
-		size_t GetBits() const
-		{
-			return bBitfield ? ArrayDim : ArrayDim * Type.Size * 8;
-		}
+		cstr GetDisplayName() const						{ assert(*Name || bBaseClass); return Name; }
+		size_t GetDim() const									{ return bBitfield ? 1 : ArrayDim; }
+		size_t GetSize() const								{ return bBitfield? (size_t)1 << BitWordWidth : Type.Size * ArrayDim; }
+		size_t GetElemSize() const						{ return bBitfield? (size_t)1 << BitWordWidth : Type.Size; }
+		size_t GetBits() const								{ return bBitfield ? ArrayDim : ArrayDim * Type.Size * 8; }
+		bool IsBaseClass() const							{ return bBaseClass; }
 	
-		// Attribute access.
-		bool GetAttr(cstr name) const
-		{
-			float val;
-			return GetAttr(name, val) && val != 0.f;
-		}
-		bool GetAttr(cstr name, float& val) const;
-		bool GetAttr(cstr name, cstr& val) const;
-
 		// Useful functions.
 		void* GetAddress(void* base) const
 		{
@@ -169,19 +173,44 @@ struct CTypeInfo
 		}
 		bool FromString(void* base, cstr str, int flags = 0) const
 		{
+			assert(!bBitfield);
 			return Type.FromString( (char*)base + Offset, str, flags );
 		}
 		string ToString(void* base, int flags = 0) const
 		{
+			assert(!bBitfield);
 			return Type.ToString( (char*)base + Offset, flags );
 		}
+
+		// Variable attrs.
+		CVarInfo& AddAttr(cstr name, float val)	{ CVarAttr attr = { name, val, 0 }; Attrs.push_back(attr); return *this; }
+		CVarInfo& AddAttr(cstr name, int val)		{ CVarAttr attr = { name, f32(val), 0 }; Attrs.push_back(attr); return *this; }
+		CVarInfo& AddAttr(cstr name, cstr text)	{ CVarAttr attr = { name, 0, text }; Attrs.push_back(attr); return *this; }
+
+		bool GetAttr(cstr name) const								{ float _num; cstr _str; return GetAttr(name, _num, _str); }
+		bool GetAttr(cstr name, float& val) const		{ cstr _str; return GetAttr(name, val, _str); }
+		bool GetAttr(cstr name, cstr& val) const		{ float _num; return GetAttr(name, _num, val); }
+
+	protected:
+
+		struct CVarAttr
+		{
+			cstr	Name;
+			float	fValue;
+			cstr	sValue;
+		};
+		DynArray< CVarAttr, FStaticAlloc<0x4000> >	Attrs;
+
+		bool GetAttr(cstr name, float& num, cstr& str) const;
 	};
 
 	// Structure var iteration:
 	virtual const CVarInfo* NextSubVar(const CVarInfo* pPrev) const		{ return 0; }
-	virtual const CVarInfo* FindSubVar(cstr name) const  { return 0; }
 	inline bool HasSubVars() const  { return NextSubVar(0) != 0; }
-	#define AllSubVars( pVar, Info ) (const CTypeInfo::CVarInfo* pVar = 0; pVar = Info.NextSubVar(pVar); )
+	#define AllSubVars( pVar, Info ) (const CTypeInfo::CVarInfo* pVar = 0; pVar = (Info).NextSubVar(pVar); )
+
+	// Named var search.
+	virtual const CVarInfo* FindSubVar(cstr name) const  { return 0; }
 
 	//
 	// Enumeration interface.
@@ -194,19 +223,7 @@ struct CTypeInfo
 	};
 	virtual int EnumElemCount() const										{ return 0; }
 	virtual CEnumElem const* EnumElem(int nIndex) const { return 0; }
-
-protected:
-	int ToInt(const void* data) const;
-	bool FromInt(void* data, int val) const;
 };
-
-//---------------------------------------------------------------------------
-// Define TypeInfo for a primitive type, without string conversion.
-#define TYPE_INFO_PLAIN(T)													\
-	template<> const CTypeInfo& TypeInfo(T*) {				\
-		static CTypeInfo Info(#T, sizeof(T));						\
-		return Info;																		\
-	}																									\
 
 //---------------------------------------------------------------------------
 // Template for base types, using global To/FromString functions.
@@ -221,7 +238,7 @@ struct TTypeInfo: CTypeInfo
 	{
 		if (def_data)
 		{
-			// Convert and comapre default values separately.
+			// Convert and compare default values separately.
 			string val = ::ToString(*(const T*)data, flags & ~WRITE_SKIP_DEFAULT);
 			if (val.length())
 			{
@@ -251,13 +268,6 @@ struct TTypeInfo: CTypeInfo
 };
 
 //---------------------------------------------------------------------------
-// Define TypeInfo for a basic type (undecomposable as far as TypeInfo cares), with external string converters.
-#define TYPE_INFO_BASIC(T)													\
-	template<> const CTypeInfo& TypeInfo(T*) {				\
-		static TTypeInfo< T > Info(#T);									\
-		return Info;																		\
-	}																									\
-
 // Memory usage override.
 template<> 
 size_t TTypeInfo<string>::GetMemoryUsage(ICrySizer* pSizer, void const* data) const;
@@ -286,100 +296,26 @@ protected:
 };
 
 //---------------------------------------------------------------------------
-// Macros for constructing StructInfos (invoked by AutoTypeInfo.h)
+// TypeInfo for enums
 
-#define STRUCT_INFO_EMPTY_BODY(T)									\
-	{																								\
-		static CStructInfo Info(#T, sizeof(T));				\
-		return Info;																	\
-	}																								\
-
-#define STRUCT_INFO_EMPTY(T)											\
-	const CTypeInfo& T::TypeInfo()									\
-		STRUCT_INFO_EMPTY_BODY(T)											\
-
-#define STRUCT_INFO_BEGIN(T)											\
-	const CTypeInfo& T::TypeInfo() {								\
-		typedef T STRUCTYPE;													\
-		static CStructInfo::CVarInfo Vars[] = {				\
-
-// Version of offsetof that takes the address of base classes.
-// In Visual C++ at least, the fake address of 0 will NOT work;
-// the compiler shifts ALL base classes to 0.
-#define base_offsetof(s, b)			(size_t( static_cast<b*>( reinterpret_cast<s*>(0x100) )) - 0x100)
-
-#define STRUCT_BASE_INFO(BaseType)																					\
-			TYPE_INFO(BaseType) .SetOffset(base_offsetof(STRUCTYPE, BaseType)),		\
-
-#define STRUCT_VAR_INFO(VarName, VarType)																		\
-			VarType.SetName(#VarName) .SetOffset(offsetof(STRUCTYPE, VarName)),		\
-
-#define ATTR_INFO(Name,Val)			.AddAttr(#Name,Val)
-#define TYPE_INFO(t)						CStructInfo::CVarInfo(::TypeInfo((t*)0))
-#define TYPE_ARRAY(n, info)			(info).SetArray(n)
-#define	TYPE_POINTER(info)			CStructInfo::CVarInfo(::TypeInfo((void**)0))
-#define TYPE_REF(info)					CStructInfo::CVarInfo(::TypeInfo((void**)0))
-
-#define STRUCT_BITFIELD_INFO(VarName, VarType, Bits)																						\
-			CStructInfo::CVarInfo( ::TypeInfo((VarType*)0) ) .SetName(#VarName) .SetBitfield(Bits),	\
-
-#define STRUCT_INFO_END(T)																										\
-	};																																					\
-	static CStructInfo Info(#T, sizeof(T), sizeof Vars / sizeof *Vars, Vars);		\
-	return Info;																																\
-}																																							\
-
-// Template versions
-
-#define STRUCT_INFO_T_EMPTY(T, TArgs, TDecl)	\
-	template TDecl STRUCT_INFO_EMPTY(T TArgs)
-
-#define STRUCT_INFO_T_BEGIN(T, TArgs, TDecl)	\
-	template TDecl STRUCT_INFO_BEGIN(T TArgs)
-
-#define STRUCT_INFO_T_END(T, TArgs, TDecl)		\
-	STRUCT_INFO_END(T TArgs)
-
-#define STRUCT_INFO_T_INSTANTIATE(T, TArgs)		\
-	template T TArgs;
-
-// External versions
-
-#define STRUCT_INFO_TYPE_EMPTY(T)							\
-	template<> const CTypeInfo& TypeInfo(T*)		\
-		STRUCT_INFO_EMPTY_BODY(T)									\
-
-#define STRUCT_INFO_TYPE_BEGIN(T)							\
-	template<> const CTypeInfo& TypeInfo(T*) {	\
-		typedef T STRUCTYPE;											\
-		static CStructInfo::CVarInfo Vars[] = {		\
-
-#define STRUCT_INFO_TYPE_END(T)								\
-	STRUCT_INFO_END(T)
-
-
-// Template versions
-
-#define STRUCT_INFO_TYPE_T_EMPTY(T, TArgs, TDecl)			\
-	template TDecl const CTypeInfo& TypeInfo(T TArgs*)	\
-		STRUCT_INFO_EMPTY_BODY(T TArgs)										\
-
-//---------------------------------------------------------------------------
-// Enum info
 struct CEnumInfo: CTypeInfo
 {
 	CEnumInfo( cstr name, size_t size, size_t num_elems = 0, CEnumElem* elems = 0 );
 
 	virtual string ToString(const void* data, int flags = 0, const void* def_data = 0) const
 	{
-		if (def_data && ToInt(def_data) == ToInt(data))
-			return "";
-		return ToString(ToInt(data), flags);
+		if (flags & WRITE_SKIP_DEFAULT)
+		{
+			if (def_data && ToInt<int>(Size, def_data) == ToInt<int>(Size, data))
+				return "";
+			flags &= ~WRITE_SKIP_DEFAULT;
+		}
+		return ToString(ToInt<int>(Size, data), flags);
 	}
 	virtual bool FromString(void* data, cstr str, int flags = 0) const
 	{
 		int val;
-		return FromString(val, str, flags) && FromInt(data, val);
+		return FromString(val, str, flags) && FromInt(Size, data, val);
 	}
 	virtual int EnumElemCount() const
 	{
@@ -399,19 +335,6 @@ protected:
 	bool FromString(int& val, cstr str, int flags = 0) const;
 };
 
-#define ENUM_INFO_BEGIN(T)											\
-	template<> const CTypeInfo& TypeInfo(T*) {		\
-		static CEnumInfo::CEnumElem Elems[] = {			\
-
-#define ENUM_ELEM_INFO(Scope, Elem)							\
-			{ Scope Elem, #Elem },
-
-#define ENUM_INFO_END(T)												\
-		};																																						\
-		static CEnumInfo Info(#T, sizeof(T), sizeof Elems / sizeof *Elems, Elems);		\
-		return Info;																																	\
-	}																																								\
-
 #include "CryStructPack.h"
 
-#endif // __TYPEINFO_H
+#endif // __CRY_TYPEINFO_H

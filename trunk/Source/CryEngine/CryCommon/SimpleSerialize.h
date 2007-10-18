@@ -62,6 +62,7 @@ public:
 	{
 		return TARGET;
 	}
+	ILINE void FlagPartialRead() {}
 
 	ILINE bool Ok() const
 	{
@@ -121,11 +122,11 @@ public:
 		return m_impl.GetSerializationTarget();
 	}
 
-	void WriteStringValue( const char * name, string& value, uint32 policy )
+	void WriteStringValue( const char * name, SSerializeString& value, uint32 policy )
 	{
 		m_impl.Value( name, value, policy );
 	}
-	void ReadStringValue( const char * name, string &curValue, uint32 policy )
+	void ReadStringValue( const char * name, SSerializeString &curValue, uint32 policy )
 	{
 		m_impl.Value( name, curValue, policy );
 	}
@@ -133,6 +134,11 @@ public:
 	bool Ok() const
 	{
 		return m_impl.Ok();
+	}
+
+	void FlagPartialRead()
+	{
+		m_impl.FlagPartialRead();
 	}
 
 #define SERIALIZATION_TYPE(T) \

@@ -513,8 +513,7 @@ struct IFlowNode
 		eFE_FinalActivate,   // must be eFE_Activate+1 (same as activate, but at the end of FlowSystem:Update)
 		eFE_Initialize,      // Sent once after level has been loaded. Is NOT called on Serialization!
 		eFE_FinalInitialize, // must be eFE_Initialize+1
-		eFE_SetEntityId,     // This event is send to set the entity of the FlowNode. Might also be sent in conjunction (pre) other events (like eFE_PostSerialize)
-		eFE_PostSerialize,   // Sent after level has been serialized (on reading) (can be used similar to initialize).
+		eFE_SetEntityId,     // This event is send to set the entity of the FlowNode. Might also be sent in conjunction (pre) other events (like eFE_Initialize)
 		eFE_Suspend,
 		eFE_Resume,
 		eFE_ConnectInputPort,
@@ -760,9 +759,6 @@ struct IFlowSystem
 
 	// Reset the flowsystem
 	virtual void Reset() = 0;
-
-	// Called after Game has been serialized
-	virtual void PostSerialize(bool bReading=true) = 0;
 
 	// Flowgraph creation
 	virtual IFlowGraphPtr CreateFlowGraph() = 0;

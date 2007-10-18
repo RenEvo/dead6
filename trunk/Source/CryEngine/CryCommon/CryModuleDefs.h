@@ -4,7 +4,7 @@
 
 enum ECryModule
 {
-  eCryM_3DEngine,
+  eCryM_3DEngine = 0,
   eCryM_Action,
   eCryM_AISystem,
   eCryM_Animation,

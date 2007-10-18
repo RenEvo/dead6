@@ -30,6 +30,10 @@ History:
 	#define CRY_ASSERT(condition) assert(condition)
 	#define CRY_ASSERT_MESSAGE(condition,message) assert(condition)
 	#define CRY_ASSERT_TRACE(condition,parenthese_message) assert(condition)
+	#if defined __CRYCG__
+		// FIXME: Find a way to tunnel asserts through CryCG.
+		#define assert(cond) ((void)0)
+	#endif
 
 #else
 
@@ -49,26 +53,26 @@ History:
 
 	#define CRY_ASSERT_MESSAGE(condition,message) CRY_ASSERT_TRACE(condition,(message))
 
-	#define CRY_ASSERT_TRACE(condition,parenthese_message)								\
-		do																																	\
-		{																																		\
-			static bool s_bAssertDontCare = false;														\
-			if(!s_bAssertDontCare && !(condition))														\
-			{																																	\
-				CryAssertTrace parenthese_message;															\
-				if(CryAssert(#condition,__FILE__,__LINE__,&s_bAssertDontCare))	\
-				{																																\
-					DEBUG_BREAK;																									\
-				}																																\
-			}																																	\
+	#define CRY_ASSERT_TRACE(condition,parenthese_message)							\
+		do																																\
+		{																																	\
+			static bool s_bIgnoreAssert = false;														\
+			if(!s_bIgnoreAssert && !(condition))														\
+			{																																\
+				CryAssertTrace parenthese_message;														\
+				if(CryAssert(#condition,__FILE__,__LINE__,&s_bIgnoreAssert))	\
+				{																															\
+					DEBUG_BREAK;																								\
+				}																															\
+			}																																\
 		} while(0)
 
 #else
 
-	#if defined(PS3) && defined(_DEBUG)
+	#if defined(PS3) && defined(_DEBUG) && !defined(JOB_LIB_COMP)
 		//method logs assert to a log file and enables setting of breakpoints easily
 		//implemented in WinBase.cpp
-		extern void HandleAssert(const char* cpMessage, const char* cpFile, const int cLine);
+		extern void HandleAssert(const char* cpMessage, const char* cpFunc, const char* cpFile, const int cLine);
 		#undef assert
 		#define CRY_ASSERT(condition) CRY_ASSERT_MESSAGE(condition,NULL)
 		#define CRY_ASSERT_MESSAGE(condition,message) CRY_ASSERT_TRACE(condition,(message))
@@ -76,7 +80,7 @@ History:
 		do \
 				{ \
 					if (!(cond)) \
-						HandleAssert(message?message:#cond, __FILE__, __LINE__); \
+						HandleAssert(#cond, __func__, __FILE__, __LINE__); \
 				} while (false)
 
 		#define assert CRY_ASSERT

@@ -50,71 +50,134 @@ void CBullet::HandleEvent(const SGameObjectEvent &event)
         
 		IEntity *pTarget = pCollision->iForeignData[1]==PHYS_FOREIGN_ID_ENTITY ? (IEntity*)pCollision->pForeignData[1]:0;
 
-		Vec3 dir(0, 0, 0);
-		if (pCollision->vloc[0].GetLengthSquared() > 1e-6f)
-			dir = pCollision->vloc[0].GetNormalized();
-
-		CGameRules *pGameRules = g_pGame->GetGameRules();
-
-		HitInfo hitInfo(m_ownerId, pTarget?pTarget->GetId():0, m_weaponId,
-			m_damage, 0.0f, pGameRules->GetHitMaterialIdFromSurfaceId(pCollision->idmat[1]), pCollision->partid[1],
-			m_hitTypeId, pCollision->pt, dir, pCollision->n);
-
-		hitInfo.remote = IsRemote();
-		hitInfo.projectileId = GetEntityId();
-		hitInfo.bulletType = m_pAmmoParams->bulletType;
-
-		if (m_weaponId)
+		//Only process hits that have a target
+		if(pTarget)
 		{
-			CWeapon *pWeapon=GetWeapon();
-			if (pWeapon && pWeapon->GetForcedHitMaterial() != -1)
-				hitInfo.material=pGameRules->GetHitMaterialIdFromSurfaceId(pWeapon->GetForcedHitMaterial());
+			Vec3 dir(0, 0, 0);
+			if (pCollision->vloc[0].GetLengthSquared() > 1e-6f)
+				dir = pCollision->vloc[0].GetNormalized();
+
+			CGameRules *pGameRules = g_pGame->GetGameRules();
+
+			IActor* pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(m_ownerId);
+
+			bool ok = true;
+
+			if(!gEnv->bMultiplayer && pActor && pActor->IsPlayer())
+			{
+				IActor* pAITarget = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pTarget->GetId());
+				if(pAITarget && pTarget->GetAI() && !pTarget->GetAI()->IsHostile(pActor->GetEntity()->GetAI(),false))
+				{
+					pGameRules->SetEntityToIgnore(pTarget->GetId());
+					ok = false;
+				}
+			}
+
+			if(ok)
+			{
+				HitInfo hitInfo(m_ownerId, pTarget->GetId(), m_weaponId,
+					m_damage, 0.0f, pGameRules->GetHitMaterialIdFromSurfaceId(pCollision->idmat[1]), pCollision->partid[1],
+					m_hitTypeId, pCollision->pt, dir, pCollision->n);
+
+				hitInfo.remote = IsRemote();
+				hitInfo.projectileId = GetEntityId();
+				hitInfo.bulletType = m_pAmmoParams->bulletType;
+
+				if (m_weaponId)
+				{
+					CWeapon *pWeapon=GetWeapon();
+					if (pWeapon && pWeapon->GetForcedHitMaterial() != -1)
+						hitInfo.material=pGameRules->GetHitMaterialIdFromSurfaceId(pWeapon->GetForcedHitMaterial());
+				}
+
+				pGameRules->ClientHit(hitInfo);
+
+				// Notify AI
+				if (gEnv->pAISystem && !gEnv->bMultiplayer)
+				{
+					IEntity* pShooter = gEnv->pEntitySystem->GetEntity(m_ownerId);
+					if (pShooter)
+					{
+						static int htMelee = pGameRules->GetHitTypeId("melee");
+						if (pShooter && m_hitTypeId != htMelee)
+						{
+							ISurfaceType *pSurfaceType = pGameRules->GetHitMaterial(hitInfo.material);
+							const ISurfaceType::SSurfaceTypeAIParams* pParams = pSurfaceType ? pSurfaceType->GetAIParams() : 0;
+							const float radius = pParams ? pParams->fImpactRadius : 2.5f;
+							const float soundRadius = pParams ? pParams->fImpactSoundRadius : 20.0f;
+							gEnv->pAISystem->BulletHitEvent(pCollision->pt, radius, soundRadius, pShooter->GetAI());
+						}
+					}
+				}
+
+			}
+		}
+		else
+		{
+			// Notify AI
+			// The above case only catches entity vs. entity hits, the AI is interested in all hits.
+			if (gEnv->pAISystem && !gEnv->bMultiplayer)
+			{
+				IEntity* pShooter = gEnv->pEntitySystem->GetEntity(m_ownerId);
+				if (pShooter)
+				{
+					CGameRules *pGameRules = g_pGame->GetGameRules();
+					static int htMelee = pGameRules->GetHitTypeId("melee");
+					if (pShooter && m_hitTypeId != htMelee)
+					{
+						int material = pGameRules->GetHitMaterialIdFromSurfaceId(pCollision->idmat[1]);
+						ISurfaceType *pSurfaceType = pGameRules->GetHitMaterial(material);
+						const ISurfaceType::SSurfaceTypeAIParams* pParams = pSurfaceType ? pSurfaceType->GetAIParams() : 0;
+						const float radius = pParams ? pParams->fImpactRadius : 2.5f;
+						const float soundRadius = pParams ? pParams->fImpactSoundRadius : 20.0f;
+						gEnv->pAISystem->BulletHitEvent(pCollision->pt, radius, soundRadius, pShooter->GetAI());
+					}
+				}
+			}
 		}
 
-//        Vec3 p = GetEntity()->GetWorldPos();
-//        CryLog("BulletHit %.3f %.3f %.3f",p.x,p.y,p.z);
-		pGameRules->ClientHit(hitInfo);
 
 		if (pCollision->pEntity[0]->GetType() == PE_PARTICLE)
 		{
 			float bouncy, friction;
 			uint	pierceabilityMat;
 			gEnv->pPhysicalWorld->GetSurfaceParameters(pCollision->idmat[1], bouncy, friction, pierceabilityMat);
+			pierceabilityMat&=sf_pierceable_mask;
 			
 			pe_params_particle params;
-			pCollision->pEntity[0]->GetParams(&params);
+			if(pCollision->pEntity[0]->GetParams(&params)==0)
+				SetDefaultParticleParams(&params);
 
 			//Under water trail
-			m_underWater = false;
 			Vec3 pos=pCollision->pt;
-			if ((pCollision->idmat[1] == CBullet::m_waterMaterialId) && (gEnv->p3DEngine->GetWaterLevel(&pos)>=pCollision->pt.z))
+			if ((pCollision->idmat[1] == CBullet::m_waterMaterialId) && 
+					(pCollision->pEntity[1]!=gEnv->pPhysicalWorld->AddGlobalArea() || !gEnv->p3DEngine->GetVisAreaFromPos(pos)))
 			{
 				//Reduce drastically bullet velocity (to be able to see the trail effect)
-				pe_params_particle pparams;
-				m_pPhysicalEntity->GetParams(&pparams);
-				pparams.velocity = 25.0f;
+				//pe_params_particle pparams;
+				//if(m_pPhysicalEntity->GetParams(&pparams)==0)
+					//SetDefaultParticleParams(&pparams);
+				//pparams.velocity = 25.0f;
 
-				m_pPhysicalEntity->SetParams(&pparams);
+				//m_pPhysicalEntity->SetParams(&pparams);
 
-				m_underWater = true;
+				if(m_trailUnderWaterId<0)
+				{
+					//Check terrain/against water level
+					float terrainHeight = gEnv->p3DEngine->GetTerrainElevation(pCollision->pt.x,pCollision->pt.y);
+					float waterLevel = gEnv->p3DEngine->GetWaterLevel(&(pCollision->pt));
+					if(waterLevel>terrainHeight)
+					{
+						TrailEffect(true,true);
+						return;
+					}
+				}
 			}
 
-			if (pierceabilityMat<params.iPierceability) //Do not destroy if collides water
+			if (pierceabilityMat<=params.iPierceability || pCollision->idCollider==-1) //Do not destroy if collides water
 				Destroy();
-
 		}
 	}
-}
-
-void CBullet::Update(SEntityUpdateContext &ctx, int updateSlot)
-{
-	FUNCTION_PROFILER(GetISystem(), PROFILE_GAME);
-
-	CProjectile::Update(ctx,updateSlot);
-
-	//Underwater trails
-	if(m_underWater && m_trailUnderWaterId<0)
-		TrailEffect(true,true);
 }
 
 void CBullet::SetWaterMaterialId()

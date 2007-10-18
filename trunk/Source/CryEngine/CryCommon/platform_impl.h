@@ -44,14 +44,30 @@ wstring::StrHeader* wstring::m_emptyStringData = (wstring::StrHeader*)&sEmptyStr
 #endif //CRY_STRING
 */
 
+#if defined(WIN32) || defined(WIN64)
+void CryPureCallHandler()
+{
+	CryError("Pure function call");
+}
+
+void InitPureCallHandler()
+{
+	_set_purecall_handler(CryPureCallHandler);
+}
+#else
+void InitPureCallHandler() {}
+#endif
+
 void ModuleInitISystem( ISystem *pSystem )
 {
+	InitPureCallHandler();
 	gEnv = 0;
 	if (pSystem)
 		gEnv = pSystem->GetGlobalEnvironment();
 }
 
 bool g_bProfilerEnabled = false;
+bool g_bTraceAllocations = false;
 
 //////////////////////////////////////////////////////////////////////////
 extern "C" {
@@ -188,6 +204,8 @@ void* CryCreateCriticalSection()
 void  CryDeleteCriticalSection( void *cs )
 {
 	CRITICAL_SECTION *pCS = (CRITICAL_SECTION*)cs;
+	if (pCS->LockCount >= 0)
+		CryError("Critical Section hanging lock" );
 	DeleteCriticalSection(pCS);
 	delete pCS;
 }
@@ -290,6 +308,7 @@ int64 CryQueryPerformanceCounter()
 	#define THR_INLINE 
 #endif
 
+#if !defined __CRYCG__
 THR_INLINE CCryThread::CCryThread( void (*func)(void *), void * p )
 {
 	//we should really use the platform code here rather than hardcode windows functionality
@@ -312,8 +331,10 @@ THR_INLINE CCryThread::CCryThread( void (*func)(void *), void * p )
 	m_handle = (THREAD_HANDLE) _beginthread(func, 0, p);
 #endif
 }
+#endif // __CRYCG__
 
 //////////////////////////////////////////////////////////////////////////
+#if !defined __CRYCG__
 THR_INLINE CCryThread::~CCryThread()
 {
 #if defined(PS3)
@@ -327,8 +348,10 @@ THR_INLINE CCryThread::~CCryThread()
 	WaitForSingleObject( m_handle, INFINITE );
 #endif
 }
+#endif // __CRYCG__
 
 //////////////////////////////////////////////////////////////////////////
+#if !defined __CRYCG__
 THR_INLINE void CCryThread::SetName( const char * name )
 {
 #if !defined(PS3) && !defined (WIN64) && !defined(LINUX)
@@ -356,6 +379,7 @@ THR_INLINE void CCryThread::SetName( const char * name )
 	}
 #endif
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////////
 inline void CryDebugStr( const char *format,... )

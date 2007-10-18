@@ -43,6 +43,39 @@ static void BroadcastChangeSafeMode( ICVar * )
 	}
 }
 
+void CmdBulletTimeMode( IConsoleCmdArgs* cmdArgs)
+{
+	g_pGameCVars->goc_enable = 0;
+	g_pGameCVars->goc_tpcrosshair = 0;
+
+	g_pGameCVars->bt_ironsight = 1;
+	g_pGameCVars->bt_speed = 0;
+	g_pGameCVars->bt_energy_decay = 2.5;
+	g_pGameCVars->bt_end_reload = 1;
+	g_pGameCVars->bt_end_select = 1;
+	g_pGameCVars->bt_end_melee = 0;
+}
+
+void CmdGOCMode( IConsoleCmdArgs* cmdArgs)
+{
+	g_pGameCVars->goc_enable = 1;
+	g_pGameCVars->goc_tpcrosshair = 1;
+	
+	g_pGameCVars->bt_ironsight = 1;
+	g_pGameCVars->bt_speed = 0;
+	g_pGameCVars->bt_energy_decay = 0;
+	g_pGameCVars->bt_end_reload = 1;
+	g_pGameCVars->bt_end_select = 1;
+	g_pGameCVars->bt_end_melee = 0;
+
+	//
+	CPlayer *pPlayer = static_cast<CPlayer *>(gEnv->pGame->GetIGameFramework()->GetClientActor());
+	if(pPlayer && !pPlayer->IsThirdPerson())
+	{
+		pPlayer->ToggleThirdPerson();
+	}
+}
+
 // game related cvars must start with an g_
 // game server related cvars must start with sv_
 // game client related cvars must start with cl_
@@ -53,24 +86,47 @@ void SCVars::InitCVars(IConsole *pConsole)
 	pConsole->Register("cl_hud",&cl_hud,1,VF_READONLY,"Show/Hide the HUD", CHUDCommon::HUD);
 	pConsole->Register("cl_fov", &cl_fov, 60.0f, 0, "field of view.");
 	pConsole->Register("cl_bob", &cl_bob, 1.0f, 0, "view/weapon bobbing multiplier");
+	pConsole->Register("cl_headBob", &cl_headBob, 1.0f, 0, "head bobbing multiplier");
+	pConsole->Register("cl_headBobLimit", &cl_headBobLimit, 0.06f, 0, "head bobbing distance limit");
 	pConsole->Register("cl_tpvDist", &cl_tpvDist, 3.5f, 0, "camera distance in 3rd person view");
 	pConsole->Register("cl_tpvYaw", &cl_tpvYaw, 0, 0, "camera angle offset in 3rd person view");
 	pConsole->Register("cl_nearPlane", &cl_nearPlane, 0, 0, "overrides the near clipping plane if != 0, just for testing.");
 	pConsole->Register("cl_sprintShake", &cl_sprintShake, 0.0f, 0, "sprint shake");
-	pConsole->Register("cl_sensitivityZeroG", &cl_sensitivityZeroG, 22.5f, VF_DUMPTODISK, "Set mouse sensitivity in ZeroG!");
-	pConsole->Register("cl_sensitivity", &cl_sensitivity, 15.0f, VF_DUMPTODISK, "Set mouse sensitivity!");
+	pConsole->Register("cl_sensitivityZeroG", &cl_sensitivityZeroG, 70.0f, VF_DUMPTODISK, "Set mouse sensitivity in ZeroG!");
+	pConsole->Register("cl_sensitivity", &cl_sensitivity, 45.0f, VF_DUMPTODISK, "Set mouse sensitivity!");
 	pConsole->Register("cl_invertMouse", &cl_invertMouse, 0, VF_DUMPTODISK, "mouse invert?");
 	pConsole->Register("cl_invertController", &cl_invertController, 0, VF_DUMPTODISK, "Controller Look Up-Down invert");
 	pConsole->Register("cl_crouchToggle", &cl_crouchToggle, 0, VF_DUMPTODISK, "To make the crouch key work as a toggle");
 	pConsole->Register("cl_fpBody", &cl_fpBody, 2, 0, "first person body");
 	//FIXME:just for testing
 	pConsole->Register("cl_strengthscale", &cl_strengthscale, 1.0f, 0, "nanosuit strength scale");
-	pConsole->Register("cl_tryme", &cl_tryme, 0, VF_CHEAT, "surprise");
-	pConsole->Register("cl_tryme_bt_speed", &cl_tryme_bt_speed, 0, VF_CHEAT, "surprise");
-	pConsole->Register("cl_tryme_bt_ironsight", &cl_tryme_bt_ironsight, 0, VF_CHEAT, "surprise");
-	pConsole->Register("cl_tryme_targetx", &cl_tryme_targetx, 0.5f, VF_CHEAT, "surprise");
-	pConsole->Register("cl_tryme_targety", &cl_tryme_targety, -2.5f, VF_CHEAT, "surprise");
-	pConsole->Register("cl_tryme_targetz", &cl_tryme_targetz, 0.2f, VF_CHEAT, "surprise");
+
+	/*
+	// GOC
+	pConsole->Register("goc_enable", &goc_enable, 0, VF_CHEAT, "gears of crysis");
+	pConsole->Register("goc_tpcrosshair", &goc_tpcrosshair, 0, VF_CHEAT, "keep crosshair in third person");
+	pConsole->Register("goc_targetx", &goc_targetx, 0.5f, VF_CHEAT, "target position of camera");
+	pConsole->Register("goc_targety", &goc_targety, -2.5f, VF_CHEAT, "target position of camera");
+	pConsole->Register("goc_targetz", &goc_targetz, 0.2f, VF_CHEAT, "target position of camera");
+	pConsole->AddCommand("GOCMode", CmdGOCMode, VF_CHEAT, "Enable GOC mode");
+	
+	// BulletTime
+	pConsole->Register("bt_speed", &bt_speed, 0, VF_CHEAT, "bullet-time when in speed mode");
+	pConsole->Register("bt_ironsight", &bt_ironsight, 0, VF_CHEAT, "bullet-time when in ironsight");
+	pConsole->Register("bt_end_reload", &bt_end_reload, 0, VF_CHEAT, "end bullet-time when reloading");
+	pConsole->Register("bt_end_select", &bt_end_select, 0, VF_CHEAT, "end bullet-time when selecting a new weapon");
+	pConsole->Register("bt_end_melee", &bt_end_melee, 0, VF_CHEAT, "end bullet-time when melee");
+	pConsole->Register("bt_time_scale", &bt_time_scale, 0.2f, VF_CHEAT, "bullet-time time scale to apply");
+	pConsole->Register("bt_pitch", &bt_pitch, -0.4f, VF_CHEAT, "sound pitch shift for bullet-time");
+	pConsole->Register("bt_energy_max", &bt_energy_max, 1.0f, VF_CHEAT, "maximum bullet-time energy");
+	pConsole->Register("bt_energy_decay", &bt_energy_decay, 2.5f, VF_CHEAT, "bullet time energy decay rate");
+	pConsole->Register("bt_energy_regen", &bt_energy_regen, 0.5f, VF_CHEAT, "bullet time energy regeneration rate");
+	pConsole->AddCommand("bulletTimeMode", CmdBulletTimeMode, VF_CHEAT, "Enable bullet time mode");
+	*/
+
+	pConsole->Register("dt_enable", &dt_enable, 0, 0, "suit actions activated by double-tapping");
+	pConsole->Register("dt_time", &dt_time, 0.25f, 0, "time in seconds between double taps");
+	pConsole->Register("dt_meleeTime", &dt_meleeTime, 0.3f, 0, "time in seconds between double taps for melee");
 
 	pConsole->Register("i_staticfiresounds", &i_staticfiresounds, 1, VF_DUMPTODISK, "Enable/Disable static fire sounds. Static sounds are not unloaded when idle.");
 	pConsole->Register("i_soundeffects", &i_soundeffects,	1, VF_DUMPTODISK, "Enable/Disable playing item sound effects.");
@@ -81,6 +137,7 @@ void SCVars::InitCVars(IConsole *pConsole)
 	pConsole->Register("i_offset_up", &i_offset_up, 0.0f, 0, "Item position up offset");
 	pConsole->Register("i_offset_right", &i_offset_right, 0.0f, 0, "Item position right offset");
 	pConsole->Register("i_unlimitedammo", &i_unlimitedammo, 0, VF_CHEAT, "unlimited ammo");
+	pConsole->Register("i_iceeffects", &i_iceeffects, 0, VF_CHEAT, "Enable/Disable specific weapon effects for ice environments");
 
 	// marcok TODO: seem to be only used on script side ... 
 	pConsole->RegisterFloat("cl_motionBlur", 2, 0, "motion blur type (0=off, 1=accumulation-based, 2=velocity-based)");
@@ -90,10 +147,19 @@ void SCVars::InitCVars(IConsole *pConsole)
 
 	pConsole->RegisterInt("cl_righthand", 1, 0, "Select right-handed weapon!");
 	pConsole->RegisterInt("cl_screeneffects", 1, 0, "Enable player screen effects (depth-of-field, motion blur, ...).");
+	
 	pConsole->Register("cl_debugSwimming", &cl_debugSwimming, 0, VF_CHEAT, "enable swimming debugging");
-  pConsole->RegisterInt("g_grabLog", 0, 0, "verbosity for grab logging (0-2)");
 
-	pConsole->Register("cl_enableGyroFade", &cl_enableGyroFade, 2, VF_CHEAT, "Enable fadeout of gyro-stabilizer for vertical view angles (2=disable speed fade as well).");
+	ca_GameControlledStrafingPtr = pConsole->GetCVar("ca_GameControlledStrafing");
+	pConsole->Register("pl_curvingSlowdownSpeedScale", &pl_curvingSlowdownSpeedScale, 0.5f, VF_CHEAT, "Player only slowdown speedscale when curving/leaning extremely.");
+	pConsole->Register("ac_enableProceduralLeaning", &ac_enableProceduralLeaning, 1.0f, VF_CHEAT, "Enable procedural leaning (disabled asset leaning and curving slowdown).");
+
+	pConsole->Register("cl_shallowWaterSpeedMulPlayer", &cl_shallowWaterSpeedMulPlayer, 0.6f, VF_CHEAT, "shallow water speed multiplier (Players only)");
+	pConsole->Register("cl_shallowWaterSpeedMulAI", &cl_shallowWaterSpeedMulAI, 0.8f, VF_CHEAT, "Shallow water speed multiplier (AI only)");
+	pConsole->Register("cl_shallowWaterDepthLo", &cl_shallowWaterDepthLo, 0.3f, VF_CHEAT, "Shallow water depth low (below has zero slowdown)");
+	pConsole->Register("cl_shallowWaterDepthHi", &cl_shallowWaterDepthHi, 1.0f, VF_CHEAT, "Shallow water depth high (above has full slowdown)");
+
+	pConsole->RegisterInt("g_grabLog", 0, 0, "verbosity for grab logging (0-2)");
 
 	pConsole->Register("pl_inputAccel", &pl_inputAccel, 30.0f, 0, "Movement input acceleration");
 
@@ -126,30 +192,52 @@ void SCVars::InitCVars(IConsole *pConsole)
 	pConsole->Register("cl_frozenMouseMult", &cl_frozenMouseMult, 0.00015f, VF_CHEAT, "Frozen mouseshake multiplier");
   pConsole->Register("cl_frozenKeyMult", &cl_frozenKeyMult, 0.02f, VF_CHEAT, "Frozen movement keys multiplier");
 	pConsole->Register("cl_frozenSoundDelta", &cl_frozenSoundDelta, 0.004f, VF_CHEAT, "Threshold for unfreeze shake to trigger a crack sound");
-	pConsole->Register("cl_frozenShakeScreenMult", &cl_frozenShakeScreenMult, 1.7f, VF_CHEAT, "Frozen shake screenfrost multiplier");
-
-	pConsole->Register("g_frostDecay", &g_frostDecay, 0.2f, VF_CHEAT, "Frost decay speed when freezing actors");
+	
+	pConsole->Register("g_frostDecay", &g_frostDecay, 0.25f, VF_CHEAT, "Frost decay speed when freezing actors");
 
 	pConsole->Register("g_stanceTransitionSpeed", &g_stanceTransitionSpeed, 15.0f, VF_CHEAT, "Set speed of camera transition from stance to stance");
 
-	pConsole->Register("g_walkMultiplier", &g_walkMultiplier, 1, VF_CHEAT, "Modify walk speed");
-	pConsole->Register("g_suitSpeedMult", &g_suitSpeedMult, 1.5f, 0, "Modify speed mode effect.");
-	pConsole->Register("g_suitSpeedMultMultiplayer", &g_suitSpeedMultMultiplayer, 1.0f, 0, "Modify speed mode effect for Multiplayer.");
+	pConsole->Register("g_playerHealthValue", &g_playerHealthValue, 100, VF_CHEAT, "Maximum player health.");
+	pConsole->Register("g_walkMultiplier", &g_walkMultiplier, 1, VF_SAVEGAME, "Modify movement speed");
+	pConsole->Register("g_suitRecoilEnergyCost", &g_suitRecoilEnergyCost, 15.0f, VF_CHEAT, "Subtracted energy when weapon is fired in strength mode.");
+	pConsole->Register("g_suitSpeedMult", &g_suitSpeedMult, 1.85f, 0, "Modify speed mode effect.");
+	pConsole->Register("g_suitSpeedMultMultiplayer", &g_suitSpeedMultMultiplayer, 0.35f, 0, "Modify speed mode effect for Multiplayer.");
 	pConsole->Register("g_suitArmorHealthValue", &g_suitArmorHealthValue, 200.0f, 0, "This defines how much damage is reduced by 100% energy, not considering recharge. The value should be between 1 and <SuitMaxEnergy>.");
-	pConsole->Register("g_suitSpeedEnergyConsumption", &g_suitSpeedEnergyConsumption, 100.0f, 0, "Energy reduction in speed mode per second.");
+	pConsole->Register("g_suitSpeedEnergyConsumption", &g_suitSpeedEnergyConsumption, 110.0f, 0, "Energy reduction in speed mode per second.");
+	pConsole->Register("g_suitSpeedEnergyConsumptionMultiplayer", &g_suitSpeedEnergyConsumptionMultiplayer, 50.0f, 0, "Energy reduction in speed mode per second in multiplayer.");
 	pConsole->Register("g_suitCloakEnergyDrainAdjuster", &g_suitCloakEnergyDrainAdjuster, 1.0f, 0, "Multiplier for energy reduction in cloak mode.");
+	pConsole->Register("g_mpSpeedRechargeDelay", &g_mpSpeedRechargeDelay, 1, VF_CHEAT, "Toggles delay when sprinting below 20% energy.");
 	pConsole->Register("g_AiSuitEnergyRechargeTime", &g_AiSuitEnergyRechargeTime, 10.0f, VF_CHEAT, "Modify suit energy recharge for AI.");
+	pConsole->Register("g_AiSuitStrengthMeleeMult", &g_AiSuitStrengthMeleeMult, 0.4f, VF_CHEAT, "Modify AI strength mode melee damage relative to player damage.");
 	pConsole->Register("g_AiSuitHealthRegenTime", &g_AiSuitHealthRegenTime, 33.3f, VF_CHEAT, "Modify suit health recharge for AI.");
 	pConsole->Register("g_AiSuitArmorModeHealthRegenTime", &g_AiSuitArmorModeHealthRegenTime, 20.0f, VF_CHEAT, "Modify suit health recharge for AI in armor mode.");
 	pConsole->Register("g_playerSuitEnergyRechargeTime", &g_playerSuitEnergyRechargeTime, 10.0f, VF_CHEAT, "Modify suit energy recharge for Player.");
-	pConsole->Register("g_playerSuitHealthRegenTime", &g_playerSuitHealthRegenTime, 33.3f, VF_CHEAT, "Modify suit health recharge for Player.");
-	pConsole->Register("g_playerSuitArmorModeHealthRegenTime", &g_playerSuitArmorModeHealthRegenTime, 20.0, VF_CHEAT, "Modify suit health recharge for Player in armor mode.");
+	pConsole->Register("g_playerSuitEnergyRechargeTimeArmor", &g_playerSuitEnergyRechargeTimeArmor, 10.0f, VF_CHEAT, "Modify suit energy recharge for Player in singleplayer in armor mode.");
+	pConsole->Register("g_playerSuitEnergyRechargeTimeArmorMoving", &g_playerSuitEnergyRechargeTimeArmorMoving, 10.0f, VF_CHEAT, "Modify suit energy recharge for Player in singleplayer in armor mode while moving.");
+	pConsole->Register("g_playerSuitEnergyRechargeTimeMultiplayer", &g_playerSuitEnergyRechargeTimeMultiplayer, 20.0f, VF_CHEAT, "Modify suit energy recharge for Player in multiplayer.");
+	pConsole->Register("g_playerSuitEnergyRechargeDelay", &g_playerSuitEnergyRechargeDelay, 0.0f, VF_CHEAT, "Delay of energy recharge after the player has been hit.");
+	pConsole->Register("g_playerSuitHealthRegenTime", &g_playerSuitHealthRegenTime, 35.0f, VF_CHEAT, "Modify suit health recharge for Player.");
+	pConsole->Register("g_playerSuitHealthRegenTimeMoving", &g_playerSuitHealthRegenTimeMoving, 35.0f, VF_CHEAT, "Modify suit health recharge for moving Player.");
+	pConsole->Register("g_playerSuitArmorModeHealthRegenTime", &g_playerSuitArmorModeHealthRegenTime, 15.0f, VF_CHEAT, "Modify suit health recharge for Player in armor mode.");
+	pConsole->Register("g_playerSuitArmorModeHealthRegenTimeMoving", &g_playerSuitArmorModeHealthRegenTimeMoving, 30.0f, VF_CHEAT, "Modify suit health recharge for Player moving in armor mode.");
+	pConsole->Register("g_playerSuitHealthRegenDelay", &g_playerSuitHealthRegenDelay, 0.0f, VF_CHEAT, "Delay of health regeneration after the player has been hit.");
 	pConsole->Register("g_difficultyLevel", &g_difficultyLevel, 0, VF_CHEAT|VF_READONLY, "Difficulty level");
+	pConsole->Register("g_difficultyHintSystem", &g_difficultyHintSystem, 2, VF_CHEAT|VF_READONLY, "Lower difficulty hint system (0 is off, 1 is radius based, 2 is save-game based)");
+	pConsole->Register("g_difficultyRadius", &g_difficultyRadius, 300, VF_CHEAT|VF_READONLY, "Radius in which player needs to die to display lower difficulty level hint.");
+	pConsole->Register("g_difficultyRadiusThreshold", &g_difficultyRadiusThreshold, 5, VF_CHEAT|VF_READONLY, "Number of times player has to die within radius to trigger difficulty hint.");
+	pConsole->Register("g_difficultySaveThreshold", &g_difficultySaveThreshold, 5, VF_CHEAT|VF_READONLY, "Number of times player has to die with same savegame active to trigger difficulty hint.");
 	pConsole->Register("g_pp_scale_income", &g_pp_scale_income, 1, VF_CHEAT, "Scales incoming PP.");
 	pConsole->Register("g_pp_scale_price", &g_pp_scale_price, 1, VF_CHEAT, "Scales PP prices.");
+	pConsole->Register("g_energy_scale_price", &g_energy_scale_price, 0, VF_CHEAT, "Scales energy prices.");
+	pConsole->Register("g_energy_scale_income", &g_energy_scale_income, 1, VF_CHEAT, "Scales incoming energy.");
+	pConsole->Register("g_enableFriendlyFallAndPlay", &g_enableFriendlyFallAndPlay, 0, 0, "Enables fall&play feedback for friendly actors.");
+	
 	pConsole->Register("g_playerRespawns", &g_playerRespawns, 0, VF_SAVEGAME, "Sets the player lives.");
 	pConsole->Register("g_playerLowHealthThreshold", &g_playerLowHealthThreshold, 40.0f, VF_CHEAT, "The player health threshold when the low health effect kicks in.");
 	pConsole->Register("g_punishFriendlyDeaths", &g_punishFriendlyDeaths, 1, VF_CHEAT, "The player gets punished by death when killing a friendly unit.");
+	pConsole->Register("g_enableMPStealthOMeter", &g_enableMPStealthOMeter, 0, VF_CHEAT, "Enables the stealth-o-meter to detect enemies in MP matches.");
+	pConsole->Register("g_meleeWhileSprinting", &g_meleeWhileSprinting, 0, 0, "Enables option to melee while sprinting, using left mouse button.");
+	pConsole->Register("g_fallAndPlayThreshold", &g_fallAndPlayThreshold, 50, VF_CHEAT, "Minimum damage for fall and play.");
 
 	// Depth of Field control
 	pConsole->Register("g_dofset_minScale", &g_dofset_minScale, 1.0f, VF_CHEAT, "Scale Dof_FocusMin param when it gets set Default = 1");
@@ -164,56 +252,80 @@ void SCVars::InitCVars(IConsole *pConsole)
 	pConsole->Register("g_dof_distAppart", &g_dof_distAppart, 10.0f, VF_CHEAT, "Minimum distance that max and min can be apart. Default = 10");
 	pConsole->Register("g_dof_ironsight", &g_dof_ironsight, 1, VF_CHEAT, "Enable ironsight dof. Default = 1");
 
+	// explosion culling
+	pConsole->Register("g_ec_enable", &g_ec_enable, 1, VF_CHEAT, "Enable/Disable explosion culling of small objects. Default = 1");
+	pConsole->Register("g_ec_radiusScale", &g_ec_radiusScale, 2.0f, VF_CHEAT, "Explosion culling scale to apply to explosion radius for object query.");
+	pConsole->Register("g_ec_volume", &g_ec_volume, 5.0f, VF_CHEAT, "Explosion culling volume which needs to be exceed for objects to not be culled.");
+	pConsole->Register("g_ec_extent", &g_ec_extent, 2.0f, VF_CHEAT, "Explosion culling length of an AABB side which needs to be exceed for objects to not be culled.");
+	pConsole->Register("g_ec_removeThreshold", &g_ec_removeThreshold, 20, VF_CHEAT, "At how many items in exploding area will it start removing items.");
 
 	pConsole->Register("g_radialBlur", &g_radialBlur, 1.0f, VF_CHEAT, "Radial blur on explosions. Default = 1, 0 to disable");
 	pConsole->Register("g_playerFallAndPlay", &g_playerFallAndPlay, 0, 0, "When enabled, the player doesn't die from direct damage, but goes to fall and play.");
 	
 	pConsole->Register("g_enableTracers", &g_enableTracers, 1, 0, "Enable/Disable tracers.");
-	pConsole->Register("g_enableAlternateIronSight", &g_enableAlternateIronSight, 0, 0, "Enable/Disable far cry alternate mode");
+	pConsole->Register("g_enableAlternateIronSight", &g_enableAlternateIronSight, 0, 0, "Enable/Disable alternate ironsight mode");
+	pConsole->Register("g_ragdollMinTime", &g_ragdollMinTime, 10.0f, 0, "minimum time in seconds that a ragdoll will be visible");
+	pConsole->Register("g_ragdollUnseenTime", &g_ragdollUnseenTime, 2.0f, 0, "time in seconds that the player has to look away from the ragdoll before it disappears");
+	pConsole->Register("g_ragdollPollTime", &g_ragdollPollTime, 0.5f, 0, "time in seconds where 'unseen' polling is done");
+	pConsole->Register("g_ragdollDistance", &g_ragdollDistance, 10.0f, 0, "distance in meters that the player has to be away from the ragdoll before it can disappear");
 	pConsole->Register("g_debugaimlook", &g_debugaimlook, 0, VF_CHEAT, "Debug aim/look direction");
 	pConsole->Register("g_enableIdleCheck", &g_enableIdleCheck, 1, 0);
 
 	// Crysis supported gamemode CVars
-	pConsole->Register("g_timelimit", &g_timelimit, 60.0f, VF_CHEAT, "Duration of a time-limited game (in minutes). Default is 0, 0 means no time-limit.");
-	pConsole->Register("g_roundtime", &g_roundtime, 2.0f, VF_CHEAT, "Duration of a round (in minutes). Default is 0, 0 means no time-limit.");
-	pConsole->Register("g_preroundtime", &g_preroundtime, 8, VF_CHEAT, "Frozen time before round starts. Default is 8, 0 Disables freeze time.");
-	pConsole->Register("g_suddendeathtime", &g_suddendeathtime, 30, VF_CHEAT, "Number of seconds before round end to start sudden death. Default if 30. 0 Disables sudden death.");
-	pConsole->Register("g_roundlimit", &g_roundlimit, 30.0f, VF_CHEAT, "Maximum numbers of rounds to be played. Default is 0, 0 means no limit.");
-	pConsole->Register("g_fraglimit", &g_fraglimit, 0, VF_CHEAT, "Number of frags before a round restarts. Default is 0, 0 means no frag-limit.");
-  pConsole->Register("g_fraglead", &g_fraglead, 1, VF_CHEAT, "Number of frags a player has to be ahead of other players once g_fraglimit is reached. Default is 1.");
-  pConsole->Register("g_friendlyfireratio", &g_friendlyfireratio, 1.0f, VF_CHEAT, "Sets friendly damage ratio.");
-  pConsole->Register("g_revivetime", &g_revivetime, 20, VF_DUMPTODISK, "Revive wave timer.");
-  pConsole->Register("g_teamkillstokick", &g_teamkillstokick, 0, VF_DUMPTODISK, "Kicks player automatically when he reaches team kills limit, 0 - disable.");
-  pConsole->Register("g_autoteambalance", &g_autoteambalance, 0, VF_DUMPTODISK, "Enables auto team balance.");
-	pConsole->Register("g_minplayerlimit", &g_minplayerlimit, 2, VF_DUMPTODISK, "Minimum number of players to start a match.");
-	pConsole->Register("g_minteamlimit", &g_minteamlimit, 1, VF_DUMPTODISK, "Minimum number of players in each team to start a match.");
+	pConsole->Register("g_timelimit", &g_timelimit, 60.0f, 0, "Duration of a time-limited game (in minutes). Default is 0, 0 means no time-limit.");
+	pConsole->Register("g_roundtime", &g_roundtime, 2.0f, 0, "Duration of a round (in minutes). Default is 0, 0 means no time-limit.");
+	pConsole->Register("g_preroundtime", &g_preroundtime, 8, 0, "Frozen time before round starts. Default is 8, 0 Disables freeze time.");
+	pConsole->Register("g_suddendeathtime", &g_suddendeathtime, 30, 0, "Number of seconds before round end to start sudden death. Default if 30. 0 Disables sudden death.");
+	pConsole->Register("g_roundlimit", &g_roundlimit, 30, 0, "Maximum numbers of rounds to be played. Default is 0, 0 means no limit.");
+	pConsole->Register("g_fraglimit", &g_fraglimit, 0, 0, "Number of frags before a round restarts. Default is 0, 0 means no frag-limit.");
+  pConsole->Register("g_fraglead", &g_fraglead, 1, 0, "Number of frags a player has to be ahead of other players once g_fraglimit is reached. Default is 1.");
+  pConsole->Register("g_friendlyfireratio", &g_friendlyfireratio, 1.0f, 0, "Sets friendly damage ratio.");
+  pConsole->Register("g_revivetime", &g_revivetime, 20, 0, "Revive wave timer.");
+  pConsole->Register("g_autoteambalance", &g_autoteambalance, 0, 0, "Enables auto team balance.");
+	pConsole->Register("g_minplayerlimit", &g_minplayerlimit, 2, 0, "Minimum number of players to start a match.");
+	pConsole->Register("g_minteamlimit", &g_minteamlimit, 1, 0, "Minimum number of players in each team to start a match.");
+	pConsole->Register("g_tk_punish", &g_tk_punish, 1, 0, "Turns on punishment for team kills");
+	pConsole->Register("g_tk_punish_limit", &g_tk_punish_limit, 5, 0, "Number of team kills user will be banned for");
+	pConsole->Register("g_teamlock", &g_teamlock, 2, 0, "Number of players one team needs to have over the other, for the game to deny joining it. 0 disables.");
 
 	pConsole->Register("g_debugNetPlayerInput", &g_debugNetPlayerInput, 0, VF_CHEAT, "Show some debug for player input");
 	pConsole->Register("g_debug_fscommand", &g_debug_fscommand, 0, 0, "Print incoming fscommands to console");
 	pConsole->Register("g_debugDirectMPMenu", &g_debugDirectMPMenu, 0, 0, "Jump directly to MP menu on application start.");
-	pConsole->Register("g_skipIntro", &g_skipIntro, 0, 0, "Skip all the intro videos.");
-	pConsole->Register("g_useProfile", &g_useProfile, 0, 0, "Don't save anything to or load anything from profile.");
+	pConsole->Register("g_skipIntro", &g_skipIntro, 0, VF_CHEAT, "Skip all the intro videos.");
+	pConsole->Register("g_resetActionmapOnStart", &g_resetActionmapOnStart, 0, 0, "Resets Keyboard mapping on application start.");
+	pConsole->Register("g_useProfile", &g_useProfile, 1, 0, "Don't save anything to or load anything from profile.");
+	pConsole->Register("g_startFirstTime", &g_startFirstTime, 1, VF_DUMPTODISK, "1 before the game was started first time ever.");
+	pConsole->Register("g_cutsceneSkipDelay", &g_cutsceneSkipDelay, 0.0f, 0, "Skip Delay for Cutscenes.");
 
 	//
   pConsole->Register("g_godMode", &g_godMode, 0, VF_CHEAT, "God Mode");
   pConsole->Register("g_detachCamera", &g_detachCamera, 0, VF_CHEAT, "Detach camera");
-  
+
   pConsole->Register("g_debugCollisionDamage", &g_debugCollisionDamage, 0, VF_DUMPTODISK, "Log collision damage");
+	pConsole->Register("g_debugHits", &g_debugHits, 0, VF_DUMPTODISK, "Log hits");
   pConsole->Register("g_trooperProneMinDistance", &g_trooperProneMinDistance, 10, VF_DUMPTODISK, "Distance to move for trooper to switch to prone stance");
 //	pConsole->Register("g_trooperMaxPhysicsAnimBlend", &g_trooperMaxPhysicAnimBlend, 0, VF_DUMPTODISK, "Max value for trooper tentacle dynamic physics/anim blending");
 //	pConsole->Register("g_trooperPhysicsAnimBlendSpeed", &g_trooperPhysicAnimBlendSpeed, 100.f, VF_DUMPTODISK, "Trooper tentacle dynamic physics/anim blending speed");
 	pConsole->Register("g_trooperTentacleAnimBlend", &g_trooperTentacleAnimBlend, 0, VF_DUMPTODISK, "Trooper tentacle physic_anim blend (0..1) - overrides the physic_blend AG parameter when it's not 0");
+	pConsole->Register("g_trooperBankingMultiplier", &g_trooperBankingMultiplier, 1, VF_DUMPTODISK, "Trooper banking multiplier coeff (0..x)");
 	pConsole->Register("g_alienPhysicsAnimRatio", &g_alienPhysicsAnimRatio, 0.0f, VF_CHEAT );  
   
-	pConsole->Register("i_debug_ladders", &i_debug_ladders, 0, VF_CHEAT);
+	pConsole->Register("pl_debug_ladders", &pl_debug_ladders, 0, VF_CHEAT);
 	pConsole->Register("pl_debug_movement", &pl_debug_movement, 0, VF_CHEAT);
+	pConsole->Register("pl_debug_jumping", &pl_debug_jumping, 0, VF_CHEAT);
 	pl_debug_filter = pConsole->RegisterString("pl_debug_filter","",VF_CHEAT);
 
+	pConsole->Register("aln_debug_movement", &aln_debug_movement, 0, VF_CHEAT);
+	aln_debug_filter = pConsole->RegisterString("aln_debug_filter","",VF_CHEAT);
+
+	// emp grenade
+	pConsole->Register("g_emp_style", &g_empStyle, 0, VF_CHEAT, "");
+	pConsole->Register("g_emp_nanosuit_downtime", &g_empNanosuitDowntime, 10.0f, VF_CHEAT, "Time that the nanosuit is deactivated after leaving the EMP field.");
 
 	// hud cvars
 	pConsole->Register("hud_mpNamesDuration", &hud_mpNamesDuration, 2, 0, "MP names will fade after this duration.");
-	pConsole->Register("hud_mpNamesNearDistance", &hud_mpNamesNearDistance, 50, 0, "MP names will be fully visible when nearer than this.");
-	pConsole->Register("hud_mpNamesFarDistance", &hud_mpNamesFarDistance, 200, 0, "MP names will be fully invisible when farther than this.");
+	pConsole->Register("hud_mpNamesNearDistance", &hud_mpNamesNearDistance, 1, 0, "MP names will be fully visible when nearer than this.");
+	pConsole->Register("hud_mpNamesFarDistance", &hud_mpNamesFarDistance, 100, 0, "MP names will be fully invisible when farther than this.");
 	pConsole->Register("hud_onScreenNearDistance", &hud_onScreenNearDistance, 10, 0, "On screen icons won't scale anymore, when nearer than this.");
 	pConsole->Register("hud_onScreenFarDistance", &hud_onScreenFarDistance, 500, 0, "On screen icons won't scale anymore, when farther than this.");
 	pConsole->Register("hud_onScreenNearSize", &hud_onScreenNearSize, 1.4f, 0, "On screen icon size when nearest.");
@@ -221,24 +333,34 @@ void SCVars::InitCVars(IConsole *pConsole)
 	pConsole->Register("hud_colorLine", &hud_colorLine, 4481854, 0, "HUD line color.");
 	pConsole->Register("hud_colorOver", &hud_colorOver, 14125840, 0, "HUD hovered color.");
 	pConsole->Register("hud_colorText", &hud_colorText, 12386209, 0, "HUD text color.");
-	pConsole->Register("hud_voicemode", &hud_voicemode, 0, 0, "Defines the voice playback mode (0-2) of the HUD / Nanosuit.");
+	pConsole->Register("hud_voicemode", &hud_voicemode, 1, 0, "Usage of the voice when switching of Nanosuit mode.");
 	pConsole->Register("hud_enableAlienInterference", &hud_enableAlienInterference, 1, VF_SAVEGAME, "Switched the alien interference effect.");
-	pConsole->Register("hud_alienInterferenceStrength", &hud_alienInterferenceStrength, 1.5f, VF_SAVEGAME, "Scales alien interference effect strength.");
+	pConsole->Register("hud_alienInterferenceStrength", &hud_alienInterferenceStrength, 0.8f, VF_SAVEGAME, "Scales alien interference effect strength.");
 	pConsole->Register("hud_godFadeTime", &hud_godFadeTime, 3, VF_CHEAT, "sets the fade time of the god mode message");
-	pConsole->Register("hud_crosshair_enable", &hud_enablecrosshair, 1,0, "Toggls general crosshair visibility.", CHUD::OnCrosshairCVarChanged);
+	pConsole->Register("hud_crosshair_enable", &hud_crosshair_enable, 1,0, "Toggles singleplayer crosshair visibility.", CHUD::OnCrosshairCVarChanged);
 	pConsole->Register("hud_crosshair", &hud_crosshair, 1,0, "Select the crosshair (1-8)", CHUD::OnCrosshairCVarChanged);
 	pConsole->Register("hud_chDamageIndicator", &hud_chDamageIndicator, 1,0,"Switch crosshair-damage indicator... (1 on, 0 off)");
 	pConsole->Register("hud_showAllObjectives", &hud_showAllObjectives, 0, 0, "Show all on screen objectives, not only the active one.");
 	pConsole->Register("hud_panoramicHeight", &hud_panoramicHeight, 10,0,"Set screen border for 'cinematic view' in percent.", CHUD::OnSubtitlePanoramicHeightCVarChanged);
 	pConsole->Register("hud_subtitles", &hud_subtitles, 0,0,"Subtitle mode. 0==Off, 1=All, 2=CutscenesOnly", CHUD::OnSubtitleCVarChanged);
+	pConsole->Register("hud_subtitlesDebug", &hud_subtitlesDebug, 0,0,"Debug subtitles");
 	pConsole->Register("hud_subtitlesRenderMode", &hud_subtitlesRenderMode, 0,0,"Subtitle RenderMode. 0==Flash, 1=3DEngine");
 	pConsole->Register("hud_subtitlesFontSize", &hud_subtitlesFontSize, 16, 0, "FontSize for Subtitles.");
-	pConsole->Register("hud_subtitlesHeight", &hud_subtitlesHeight, 10,0,"Height of Subtitles in Percent. Normally same as hud_PanoramicHeight");
-
+	pConsole->Register("hud_subtitlesHeight", &hud_subtitlesHeight, 10, 0,"Height of Subtitles in Percent. Normally same as hud_PanoramicHeight");
+	pConsole->Register("hud_subtitlesShowCharName", &hud_subtitlesShowCharName, 1, 0,"Show Character talking along with Subtitle");
+	pConsole->Register("hud_subtitlesQueueCount", &hud_subtitlesQueueCount, 1, 0,"Maximum amount of subtitles in Update Queue");
+	pConsole->Register("hud_subtitlesVisibleCount", &hud_subtitlesVisibleCount, 1, 0,"Maximum amount of subtitles in Visible Queue");
+	pConsole->Register("hud_attachBoughEquipment", &hud_attachBoughtEquipment, 0,VF_CHEAT,"Attach equipment in PS equipment packs to the last bought/selected weapon.");
 	pConsole->Register("hud_radarBackground", &hud_radarBackground, 1, 0, "Switches the miniMap-background for the radar.");
-	pConsole->Register("hud_radarAbsolute", &hud_radarAbsolute, 0, 0, "Switches the radar to be abolute.");
-
+	pConsole->Register("hud_radarJammingEffectScale", &hud_radarJammingEffectScale, 0.75f, 0, "Scales the intensity of the radar jamming effect.");
+	pConsole->Register("hud_radarJammingThreshold", &hud_radarJammingThreshold, 0.85f, 0, "Threshold to disable the radar (independent from effect).");
+	pConsole->Register("hud_startPaused", &hud_startPaused, 1, 0, "The game starts paused, waiting for user input.");
 	pConsole->Register("hud_faderDebug", &hud_faderDebug, 0, 0, "Show Debug Information for FullScreen Faders.");
+	pConsole->Register("hud_nightVisionConsumption", &hud_nightVisionConsumption, 0.5f, VF_CHEAT, "Scales the energy consumption of the night vision.");
+	pConsole->Register("hud_nightVisionRecharge", &hud_nightVisionRecharge, 2.0f, VF_CHEAT, "Scales the energy recharge of the night vision.");
+	pConsole->Register("hud_showBigVehicleReload", &hud_showBigVehicleReload, 0, 0, "Enables an additional reload bar around the crosshair in big vehicles.");
+	pConsole->Register("hud_radarScanningDelay", &hud_binocsScanningDelay, 0.55f, VF_CHEAT, "Defines the delay in seconds the binoculars take to scan an object.");
+	pConsole->Register("hud_binocsScanningWidth", &hud_binocsScanningWidth, 0.3f, VF_CHEAT, "Defines the width/height in which the binocular raycasts are offset from the center to scan objects.");
 
 	// Controller aim helper cvars
 	pConsole->Register("aim_assistSearchBox", &aim_assistSearchBox, 100.0f, 0, "The area autoaim looks for enemies within");
@@ -248,6 +370,8 @@ void SCVars::InitCVars(IConsole *pConsole)
 	pConsole->Register("aim_assistSingleCoeff", &aim_assistSingleCoeff, 1.0f, 0, "The scale of single-shot weapons' aim assistance");
 	pConsole->Register("aim_assistAutoCoeff", &aim_assistAutoCoeff, 0.5f, 0, "The scale of auto weapons' aim assistance at continuous fire");
 	pConsole->Register("aim_assistRestrictionTimeout", &aim_assistRestrictionTimeout, 20.0f, 0, "The restriction timeout on aim assistance after user uses a mouse");
+
+
 	
 	// Controller control
 	pConsole->Register("hud_aspectCorrection", &hud_aspectCorrection, 2, 0, "Aspect ratio corrections for controller rotation: 0-off, 1-direct, 2-inverse");
@@ -278,37 +402,64 @@ void SCVars::InitCVars(IConsole *pConsole)
   pConsole->Register("v_rockBoats", &v_rockBoats, 1, 0, "Enable/disable boats idle rocking");  
   pConsole->Register("v_dumpFriction", &v_dumpFriction, 0, 0, "Dump vehicle friction status");
   pConsole->Register("v_debugSounds", &v_debugSounds, 0, 0, "Enable/disable vehicle sound debug drawing");
+  pConsole->Register("v_debugMountedWeapon", &v_debugMountedWeapon, 0, 0, "Enable/disable vehicle mounted weapon camera debug draw");
 
-	pConsole->Register("v_altitudeLimit", &v_altitudeLimit, 0.0f, VF_CHEAT, "Used to restrict the helicopter and VTOL movement from going higher than a set altitude. If set to zero, the altitude limit is disabled.");
-	pConsole->Register("v_altitudeLimitLowerOffset", &v_altitudeLimitLowerOffset, 0.1f, VF_CHEAT, "Used in conjunction with v_altitudeLimit to set the zone when gaining altitude start to be more difficult.");
+	pAltitudeLimitCVar = pConsole->Register("v_altitudeLimit", &v_altitudeLimit, v_altitudeLimitDefault(), VF_CHEAT, "Used to restrict the helicopter and VTOL movement from going higher than a set altitude. If set to zero, the altitude limit is disabled.");
+	pAltitudeLimitLowerOffsetCVar = pConsole->Register("v_altitudeLimitLowerOffset", &v_altitudeLimitLowerOffset, 0.1f, VF_CHEAT, "Used in conjunction with v_altitudeLimit to set the zone when gaining altitude start to be more difficult.");
   pConsole->Register("v_help_tank_steering", &v_help_tank_steering, 0, 0, "Enable tank steering help for AI");
 
-	pConsole->Register("v_airControlSensivity", &v_airControlSensivity, 1.0f, VF_DUMPTODISK, "Adjusts the mouse sensitivity for the air controls");
 	pConsole->Register("v_stabilizeVTOL", &v_stabilizeVTOL, 0.35f, VF_DUMPTODISK, "Specifies if the air movements should automatically stabilize");
 
   	
-  pConsole->Register("v_zeroGSpeedMultSpeed", &v_zeroGSpeedMultSpeed, 0.15f, VF_CHEAT, "Modify movement speed in zeroG.");
-	pConsole->Register("v_zeroGSpeedMultSpeedSprint", &v_zeroGSpeedMultSpeedSprint, 1.8f, VF_CHEAT, "Modify movement speed in zeroG.");
-	pConsole->Register("v_zeroGSpeedMultNormal", &v_zeroGSpeedMultNormal, 0.2f, VF_CHEAT, "Modify movement speed in zeroG.");
-	pConsole->Register("v_zeroGSpeedMultNormalSprint", &v_zeroGSpeedMultNormalSprint, 0.3f, VF_CHEAT, "Modify movement speed in zeroG.");
-	pConsole->Register("v_zeroGUpDown", &v_zeroGUpDown, 1.0f, 0, "Scales the z-axis movement speed in zeroG.");
-	pConsole->Register("v_zeroGMaxSpeed", &v_zeroGMaxSpeed, 20.0f, 0, "Maximum player speed request limit for zeroG.");
-	pConsole->Register("v_zeroGSpeedMaxSpeed", &v_zeroGSpeedMaxSpeed, 60.0f, 0, "Maximum player speed request limit for zeroG while in speed mode.");
-	pConsole->Register("v_zeroGSpeedModeEnergyConsumption", &v_zeroGSpeedModeEnergyConsumption, 1.0f, 0, "Scales the energy speed mode uses in zeroG.");
-	pConsole->Register("v_zeroGSwitchableGyro", &v_zeroGSwitchableGyro, 0, 0, "Make gyroscope switchable if button is assigned.");
-	pConsole->Register("v_zeroGEnableGBoots", &v_zeroGEnableGBoots, 0, 0, "Switch G-Boots action on/off (if button assigned).");
+	pConsole->Register("pl_swimBaseSpeed", &pl_swimBaseSpeed, 4.0f, VF_CHEAT, "Swimming base speed.");
+	pConsole->Register("pl_swimBackSpeedMul", &pl_swimBackSpeedMul, 0.8f, VF_CHEAT, "Swimming backwards speed mul.");
+	pConsole->Register("pl_swimSideSpeedMul", &pl_swimSideSpeedMul, 0.9f, VF_CHEAT, "Swimming sideways speed mul.");
+	pConsole->Register("pl_swimVertSpeedMul", &pl_swimVertSpeedMul, 0.5f, VF_CHEAT, "Swimming vertical speed mul.");
+	pConsole->Register("pl_swimNormalSprintSpeedMul", &pl_swimNormalSprintSpeedMul, 1.5f, VF_CHEAT, "Swimming Non-Speed sprint speed mul.");
+	pConsole->Register("pl_swimSpeedSprintSpeedMul", &pl_swimSpeedSprintSpeedMul, 2.5f, VF_CHEAT, "Swimming Speed sprint speed mul.");
+	pConsole->Register("pl_swimUpSprintSpeedMul", &pl_swimUpSprintSpeedMul, 2.0f, VF_CHEAT, "Swimming sprint while looking up (dolphin rocket).");
+	pConsole->Register("pl_swimJumpStrengthCost", &pl_swimJumpStrengthCost, 50.0f, VF_CHEAT, "Swimming strength shift+jump energy cost (dolphin rocket).");
+	pConsole->Register("pl_swimJumpStrengthSprintMul", &pl_swimJumpStrengthSprintMul, 2.5f, VF_CHEAT, "Swimming strength shift+jump velocity mul (dolphin rocket).");
+	pConsole->Register("pl_swimJumpStrengthBaseMul", &pl_swimJumpStrengthBaseMul, 1.0f, VF_CHEAT, "Swimming strength normal jump velocity mul (dolphin rocket).");
+	pConsole->Register("pl_swimJumpSpeedCost", &pl_swimJumpSpeedCost, 50.0f, VF_CHEAT, "Swimming speed shift+jump energy cost (dolphin rocket).");
+	pConsole->Register("pl_swimJumpSpeedSprintMul", &pl_swimJumpSpeedSprintMul, 2.5f, VF_CHEAT, "Swimming speed shift+jump velocity mul (dolphin rocket).");
+	pConsole->Register("pl_swimJumpSpeedBaseMul", &pl_swimJumpSpeedBaseMul, 1.0f, VF_CHEAT, "Swimming speed normal jump velocity mul (dolphin rocket).");
+
+	pConsole->Register("pl_fallDamage_SpeedSafe", &pl_fallDamage_Normal_SpeedSafe, 8.0f, VF_CHEAT, "Safe fall speed (in all modes, including strength jump on flat ground).");
+	pConsole->Register("pl_fallDamage_SpeedFatal", &pl_fallDamage_Normal_SpeedFatal, 13.7f, VF_CHEAT, "Fatal fall speed in armor mode (13.5 m/s after falling freely for ca 20m).");
+	pConsole->Register("pl_fallDamage_SpeedBias", &pl_fallDamage_SpeedBias, 1.5f, VF_CHEAT, "Damage bias for medium fall speed: =1 linear, <1 more damage, >1 less damage.");
+	pConsole->Register("pl_debugFallDamage", &pl_debugFallDamage, 0, VF_CHEAT, "Enables console output of fall damage information.");
 	
+
+	pConsole->Register("pl_zeroGSpeedMultNormal", &pl_zeroGSpeedMultNormal, 1.2f, VF_CHEAT, "Modify movement speed in zeroG, in normal mode.");
+	pConsole->Register("pl_zeroGSpeedMultNormalSprint", &pl_zeroGSpeedMultNormalSprint, 1.7f, VF_CHEAT, "Modify movement speed in zeroG, in normal sprint.");
+  pConsole->Register("pl_zeroGSpeedMultSpeed", &pl_zeroGSpeedMultSpeed, 1.7f, VF_CHEAT, "Modify movement speed in zeroG, in speed mode.");
+	pConsole->Register("pl_zeroGSpeedMultSpeedSprint", &pl_zeroGSpeedMultSpeedSprint, 5.0f, VF_CHEAT, "Modify movement speed in zeroG, in speed sprint.");
+	pConsole->Register("pl_zeroGUpDown", &pl_zeroGUpDown, 1.0f, 0, "Scales the z-axis movement speed in zeroG.");
+	pConsole->Register("pl_zeroGBaseSpeed", &pl_zeroGBaseSpeed, 3.0f, 0, "Maximum player speed request limit for zeroG.");
+	pConsole->Register("pl_zeroGSpeedMaxSpeed", &pl_zeroGSpeedMaxSpeed, -1.0f, 0, "(DEPRECATED) Maximum player speed request limit for zeroG while in speed mode.");
+	pConsole->Register("pl_zeroGSpeedModeEnergyConsumption", &pl_zeroGSpeedModeEnergyConsumption, 0.5f, 0, "Percentage consumed per second while speed sprinting in ZeroG.");
+	pConsole->Register("pl_zeroGDashEnergyConsumption", &pl_zeroGDashEnergyConsumption, 0.25f, 0, "Percentage consumed when doing a dash in ZeroG.");
+	pConsole->Register("pl_zeroGSwitchableGyro", &pl_zeroGSwitchableGyro, 0, 0, "MERGE/REVERT");
+	pConsole->Register("pl_zeroGEnableGBoots", &pl_zeroGEnableGBoots, 0, 0, "Switch G-Boots action on/off (if button assigned).");
+	pConsole->Register("pl_zeroGThrusterResponsiveness", &pl_zeroGThrusterResponsiveness, 0.3f, VF_CHEAT, "Thrusting responsiveness.");
+	pConsole->Register("pl_zeroGFloatDuration", &pl_zeroGFloatDuration, 1.25f, VF_CHEAT, "Floating duration until full stop (after stopped thrusting).");
+	pConsole->Register("pl_zeroGParticleTrail", &pl_zeroGParticleTrail, 0, 0, "Enable particle trail when in zerog.");
+	pConsole->Register("pl_zeroGEnableGyroFade", &pl_zeroGEnableGyroFade, 2, VF_CHEAT, "Enable fadeout of gyro-stabilizer for vertical view angles (2=disable speed fade as well).");
+	pConsole->Register("pl_zeroGGyroFadeAngleInner", &pl_zeroGGyroFadeAngleInner, 20.0f, VF_CHEAT, "ZeroG gyro inner angle (default is 20).");
+	pConsole->Register("pl_zeroGGyroFadeAngleOuter", &pl_zeroGGyroFadeAngleOuter, 60.0f, VF_CHEAT, "ZeroG gyro outer angle (default is 60).");
+	pConsole->Register("pl_zeroGGyroFadeExp", &pl_zeroGGyroFadeExp, 2.0f, VF_CHEAT, "ZeroG gyro angle bias (default is 2.0).");
+	pConsole->Register("pl_zeroGGyroStrength", &pl_zeroGGyroStrength, 1.0f, VF_CHEAT, "ZeroG gyro strength (default is 1.0).");
+	pConsole->Register("pl_zeroGAimResponsiveness", &pl_zeroGAimResponsiveness, 8.0f, VF_CHEAT, "ZeroG aim responsiveness vs. inertia (default is 8.0).");
+
 	// weapon system
 	i_debuggun_1 = pConsole->RegisterString("i_debuggun_1", "ai_statsTarget", VF_DUMPTODISK, "Command to execute on primary DebugGun fire");
 	i_debuggun_2 = pConsole->RegisterString("i_debuggun_2", "ag_debug", VF_DUMPTODISK, "Command to execute on secondary DebugGun fire");
 
 	pConsole->Register("tracer_min_distance", &tracer_min_distance, 4.0f, 0, "Distance at which to start scaling/lengthening tracers.");
-	pConsole->Register("tracer_max_distance", &tracer_max_distance, 40.0f, 0, "Distance at which to stop scaling/lengthening tracers.");
-	pConsole->Register("tracer_min_length", &tracer_min_length, 2.0f, 0, "Length at min distance.");
-	pConsole->Register("tracer_max_length", &tracer_max_length, 10.0f, 0, "Length at max distance.");
-	pConsole->Register("tracer_min_scale", &tracer_min_scale, 0.2f, 0, "Scale at min distance.");
-	pConsole->Register("tracer_max_scale", &tracer_max_scale, 1.2f, 0, "Scale at max distance.");
-	pConsole->Register("tracer_speed_scale", &tracer_speed_scale, 3.1f, 0, "Global speed scale.");
+	pConsole->Register("tracer_max_distance", &tracer_max_distance, 50.0f, 0, "Distance at which to stop scaling/lengthening tracers.");
+	pConsole->Register("tracer_min_scale", &tracer_min_scale, 0.5f, 0, "Scale at min distance.");
+	pConsole->Register("tracer_max_scale", &tracer_max_scale, 5.0f, 0, "Scale at max distance.");
 	pConsole->Register("tracer_max_count", &tracer_max_count, 32, 0, "Max number of active tracers.");
 	pConsole->Register("tracer_player_radiusSqr", &tracer_player_radiusSqr, 400.0f, 0, "Sqr Distance around player at which to start decelerate/acelerate tracer speed.");
 
@@ -350,12 +501,7 @@ void SCVars::InitCVars(IConsole *pConsole)
 
 	pConsole->RegisterInt("g_showIdleStats", 0, 0);
 	
-	// save game intermediate stuff
-	p_pp_UserDataFolder = pConsole->RegisterString("pp_UserDataFolder", "", VF_NOT_NET_SYNCED, "User Data Folder");
-	p_pp_UserSaveGameFolder = pConsole->RegisterString("pp_UserSaveGameFolder", "", VF_NOT_NET_SYNCED, "User SaveGame Folder");
-	p_pp_GUID = pConsole->RegisterString("pp_GUID", "", VF_NOT_NET_SYNCED);
-
-	pConsole->Register("g_PSTutorial_Enabled", &g_PSTutorial_Enabled, 1, VF_NOT_NET_SYNCED, "Enable/disable powerstruggle tutorial");
+	pConsole->Register("g_PSTutorial_Enabled", &g_PSTutorial_Enabled, 1, 0, "Enable/disable powerstruggle tutorial");
 
 	pConsole->Register("g_proneNotUsableWeapon_FixType", &g_proneNotUsableWeapon_FixType, 1, 0, "Test various fixes for not selecting hurricane while prone");
 	pConsole->Register("g_proneAimAngleRestrict_Enable", &g_proneAimAngleRestrict_Enable, 1, 0, "Test fix for matching aim restrictions between 1st and 3rd person");
@@ -368,6 +514,18 @@ void SCVars::InitCVars(IConsole *pConsole)
 	pConsole->Register("sv_input_timeout",&sv_input_timeout, 0, 0, "Experimental timeout in ms to stop interpolating client inputs since last update.");
 
 	pConsole->Register("g_spectate_TeamOnly", &g_spectate_TeamOnly, 1, 0, "If true, you can only spectate players on your team");
+	pConsole->Register("g_claymore_limit", &g_claymore_limit, 3, 0, "Max claymores a player can place (recycled above this value)");
+	pConsole->Register("g_avmine_limit", &g_avmine_limit, 3, 0, "Max avmines a player can place (recycled above this value)");
+	pConsole->Register("g_debugMines", &g_debugMines, 0, 0, "Enable debug output for mines and claymores");
+
+  pConsole->Register("aim_assistCrosshairSize", &aim_assistCrosshairSize, 25, VF_CHEAT, "screen size used for crosshair aim assistance");
+  pConsole->Register("aim_assistCrosshairDebug", &aim_assistCrosshairDebug, 0, VF_CHEAT, "debug crosshair aim assistance");
+
+	pConsole->Register("g_MPDeathCam", &g_deathCam, 1, 0, "Enables / disables the MP death camera (shows the killer's location)");
+
+	pConsole->Register("sv_pacifist", &sv_pacifist, 0, 0, "Pacifist mode (only works on dedicated server)");
+ 
+	pVehicleQuality = pConsole->GetCVar("v_vehicle_quality");		assert(pVehicleQuality);
 
   NetInputChainInitCVars();
 }
@@ -399,6 +557,7 @@ void SCVars::ReleaseCVars()
 	pConsole->UnregisterVariable("i_offset_up", true);
 	pConsole->UnregisterVariable("i_offset_right", true);
 	pConsole->UnregisterVariable("i_unlimitedammo", true);
+	pConsole->UnregisterVariable("i_iceeffects", true);
 
 	pConsole->UnregisterVariable("cl_strengthscale", true);
 
@@ -439,35 +598,46 @@ void SCVars::ReleaseCVars()
 	pConsole->UnregisterVariable("cl_frozenMouseMult", true);
 	pConsole->UnregisterVariable("cl_frozenKeyMult", true);
 	pConsole->UnregisterVariable("cl_frozenSoundDelta", true);
-	pConsole->UnregisterVariable("cl_frozenShakeScreenMult", true);
-
+	
 	pConsole->UnregisterVariable("g_frostDecay", true);
 
 	pConsole->UnregisterVariable("g_stanceTransitionSpeed", true);
 
+	pConsole->UnregisterVariable("g_playerHealthValue", true);
 	pConsole->UnregisterVariable("g_walkMultiplier", true);
 	pConsole->UnregisterVariable("g_suitSpeedMult", true);
+	pConsole->UnregisterVariable("g_suitRecoilEnergyCost", true);
 	pConsole->UnregisterVariable("g_suitSpeedMultMultiplayer", true);
 	pConsole->UnregisterVariable("g_suitArmorHealthValue", true);
 	pConsole->UnregisterVariable("g_suitSpeedEnergyConsumption", true);
+	pConsole->UnregisterVariable("g_suitSpeedEnergyConsumptionMultiplayer", true);
 
 	pConsole->UnregisterVariable("g_AiSuitEnergyRechargeTime", true);
 	pConsole->UnregisterVariable("g_AiSuitHealthRechargeTime", true);
 	pConsole->UnregisterVariable("g_AiSuitArmorModeHealthRegenTime", true);
+	pConsole->UnregisterVariable("g_AiSuitStrengthMeleeMult", true);
 	pConsole->UnregisterVariable("g_playerSuitEnergyRechargeTime", true);
+	pConsole->UnregisterVariable("g_playerSuitEnergyRechargeTimeArmor", true);
+	pConsole->UnregisterVariable("g_playerSuitEnergyRechargeTimeArmorMoving", true);
+	pConsole->UnregisterVariable("g_playerSuitEnergyRechargeTimeMultiplayer", true);
 	pConsole->UnregisterVariable("g_playerSuitHealthRechargeTime", true);
 	pConsole->UnregisterVariable("g_playerSuitArmorModeHealthRegenTime", true);
+	pConsole->UnregisterVariable("g_playerSuitHealthRechargeTimeMoving", true);
+	pConsole->UnregisterVariable("g_playerSuitArmorModeHealthRegenTimeMoving", true);
 
 	pConsole->UnregisterVariable("g_pp_scale_income", true);
 	pConsole->UnregisterVariable("g_pp_scale_price", true);
 
 	pConsole->UnregisterVariable("g_radialBlur", true);
 	pConsole->UnregisterVariable("g_PlayerFallAndPlay", true);
+	pConsole->UnregisterVariable("g_fallAndPlayThreshold", true);
 
 	pConsole->UnregisterVariable("g_enableAlternateIronSight",true);
 	pConsole->UnregisterVariable("g_enableTracers", true);
+	pConsole->UnregisterVariable("g_meleeWhileSprinting", true);
 
 	pConsole->UnregisterVariable("g_timelimit", true);
+	pConsole->UnregisterVariable("g_teamlock", true);
 	pConsole->UnregisterVariable("g_roundlimit", true);
 	pConsole->UnregisterVariable("g_preroundtime", true);
 	pConsole->UnregisterVariable("g_suddendeathtime", true);
@@ -478,14 +648,21 @@ void SCVars::ReleaseCVars()
 	pConsole->UnregisterVariable("g_debug_fscommand", true);
 	pConsole->UnregisterVariable("g_debugDirectMPMenu", true);
 	pConsole->UnregisterVariable("g_skipIntro", true);
+	pConsole->UnregisterVariable("g_resetActionmapOnStart", true);
 	pConsole->UnregisterVariable("g_useProfile", true);
+	pConsole->UnregisterVariable("g_startFirstTime", true);
+
+	pConsole->UnregisterVariable("g_tk_punish", true);
+	pConsole->UnregisterVariable("g_tk_punish_limit", true);
 
 	pConsole->UnregisterVariable("g_godMode", true);
 	pConsole->UnregisterVariable("g_detachCamera", true);
 
 	pConsole->UnregisterVariable("g_debugCollisionDamage", true);
+	pConsole->UnregisterVariable("g_debugHits", true);
 	pConsole->UnregisterVariable("g_trooperProneMinDistance", true);
 	pConsole->UnregisterVariable("g_trooperTentacleAnimBlend", true);
+	pConsole->UnregisterVariable("g_trooperBankingMultiplier", true);
 
 	pConsole->UnregisterVariable("v_profileMovement", true);    
 	pConsole->UnregisterVariable("v_pa_surface", true);
@@ -495,6 +672,7 @@ void SCVars::ReleaseCVars()
 	pConsole->UnregisterVariable("v_invertPitchControl", true);
 	pConsole->UnregisterVariable("v_sprintSpeed", true);
 	pConsole->UnregisterVariable("v_rockBoats", true);  
+  pConsole->UnregisterVariable("v_debugMountedWeapon", true);  
 	pConsole->UnregisterVariable("v_zeroGSpeedMultSpeed", true);
 	pConsole->UnregisterVariable("v_zeroGSpeedMultSpeedSprint", true);
 	pConsole->UnregisterVariable("v_zeroGSpeedMultNormal", true);
@@ -515,9 +693,13 @@ void SCVars::ReleaseCVars()
 	pConsole->UnregisterVariable("player_DrawIK", true);
 	pConsole->UnregisterVariable("player_NoIK", true);
 	pConsole->UnregisterVariable("g_enableIdleCheck", true);
-	pConsole->UnregisterVariable("i_debug_ladders", true);
+	pConsole->UnregisterVariable("pl_debug_ladders", true);
 	pConsole->UnregisterVariable("pl_debug_movement", true);
 	pConsole->UnregisterVariable("pl_debug_filter", true);
+
+	// alien debugging
+	pConsole->UnregisterVariable("aln_debug_movement", true);
+	pConsole->UnregisterVariable("aln_debug_filter", true);
 
 	// variables from CPlayerMovementController
 	pConsole->UnregisterVariable("g_showIdleStats", true);
@@ -545,10 +727,24 @@ void SCVars::ReleaseCVars()
 	pConsole->UnregisterVariable("hud_voicemode", true);
 	pConsole->UnregisterVariable("hud_enableAlienInterference", true);
 	pConsole->UnregisterVariable("hud_alienInterferenceStrength", true);
-
+	pConsole->UnregisterVariable("hud_crosshair_enable", true);
+	pConsole->UnregisterVariable("hud_attachBoughEquipment", true);
+	pConsole->UnregisterVariable("hud_subtitlesRenderMode", true);
+	pConsole->UnregisterVariable("hud_panoramicHeight", true);
+	pConsole->UnregisterVariable("hud_subtitles", true);
+	pConsole->UnregisterVariable("hud_subtitlesFontSize", true);
+	pConsole->UnregisterVariable("hud_subtitlesHeight", true);
+	pConsole->UnregisterVariable("hud_startPaused", true);
+	pConsole->UnregisterVariable("hud_nightVisionRecharge", true);
+	pConsole->UnregisterVariable("hud_nightVisionConsumption", true);
+	pConsole->UnregisterVariable("hud_showBigVehicleReload", true);
+	pConsole->UnregisterVariable("hud_binocsScanningDelay", true);
+	pConsole->UnregisterVariable("hud_binocsScanningWidth", true);
+	
 	// variables from CHUDRadar
 	pConsole->UnregisterVariable("hud_radarBackground", true);
-	pConsole->UnregisterVariable("hud_radarAbsolute", true);
+	pConsole->UnregisterVariable("hud_radarJammingThreshold", true);
+	pConsole->UnregisterVariable("hud_radarJammingEffectScale", true);
 
 	// Controller aim helper cvars
 	pConsole->UnregisterVariable("aim_assistSearchBox", true);
@@ -578,12 +774,10 @@ void SCVars::ReleaseCVars()
 
 	pConsole->UnregisterVariable("tracer_min_distance", true);
 	pConsole->UnregisterVariable("tracer_max_distance", true);
-	pConsole->UnregisterVariable("tracer_min_length", true);
-	pConsole->UnregisterVariable("tracer_max_length", true);
 	pConsole->UnregisterVariable("tracer_min_scale", true);
 	pConsole->UnregisterVariable("tracer_max_scale", true);
-	pConsole->UnregisterVariable("tracer_speed_scale", true);
 	pConsole->UnregisterVariable("tracer_max_count", true);
+	pConsole->UnregisterVariable("tracer_player_radiusSqr", true);
 
 	pConsole->UnregisterVariable("i_debug_projectiles", true);
 	pConsole->UnregisterVariable("i_auto_turret_target", true);
@@ -608,6 +802,7 @@ void SCVars::ReleaseCVars()
 
   pConsole->UnregisterVariable("g_battleDust_enable", true);
   pConsole->UnregisterVariable("g_battleDust_debug", true);
+	pConsole->UnregisterVariable("g_battleDust_effect", true);
 
   pConsole->UnregisterVariable("g_PSTutorial_Enabled", true);
   pConsole->UnregisterVariable("g_proneNotUsableWeapon_FixType", true);
@@ -619,6 +814,12 @@ void SCVars::ReleaseCVars()
   pConsole->UnregisterVariable("sv_voting_team_ratio",true);
 
 	pConsole->UnregisterVariable("g_spectate_TeamOnly", true);
+	pConsole->UnregisterVariable("g_claymore_limit", true);
+	pConsole->UnregisterVariable("g_avmine_limit", true);
+	pConsole->UnregisterVariable("g_debugMines", true);
+
+ pConsole->UnregisterVariable("aim_assistCrosshairSize", true);
+  pConsole->UnregisterVariable("aim_assistCrosshairDebug", true);
 }
 
 //------------------------------------------------------------------------
@@ -650,12 +851,14 @@ void CGame::RegisterConsoleCommands()
 	assert(m_pConsole);
 
 	m_pConsole->AddCommand("quit", "System.Quit()", 0, "Quits the game");
-	m_pConsole->AddCommand("goto", "g_localActor:SetWorldPos({x=%1, y=%2, z=%3})", 0, "Sets current player position.");
+	m_pConsole->AddCommand("goto", "g_localActor:SetWorldPos({x=%1, y=%2, z=%3})", VF_CHEAT, "Sets current player position.");
+	m_pConsole->AddCommand("gotoe", "local e=System.GetEntityByName(%1); if (e) then g_localActor:SetWorldPos(e:GetWorldPos()); end", VF_CHEAT, "Sets current player position.");
 	m_pConsole->AddCommand("freeze", "g_gameRules:SetFrozenAmount(g_localActor,1)", 0, "Freezes player");
 
 	m_pConsole->AddCommand("loadactionmap", CmdLoadActionmap, 0, "Loads a key configuration file");
 	m_pConsole->AddCommand("restartgame", CmdRestartGame, 0, "Restarts Crysis completely.");
 
+	m_pConsole->AddCommand("lastinv", CmdLastInv, 0, "Selects last inventory item used.");
 	m_pConsole->AddCommand("name", CmdName, 0, "Sets player name.");
 	m_pConsole->AddCommand("team", CmdTeam, 0, "Sets player team.");
 	m_pConsole->AddCommand("loadLastSave", CmdLoadLastSave, 0, "Loads the last savegame if available.");
@@ -680,7 +883,9 @@ void CGame::RegisterConsoleCommands()
   m_pConsole->AddCommand("g_startNextMapVoting",CmdStartNextMapVoting, 0, "Initiate voting.");
 
   m_pConsole->AddCommand("login",CmdLogin,0,"Log in as to CryNetwork using nickname and password as arguments");
-  m_pConsole->AddCommand("connect_crynet",CmdCryNetConnect,0,"Connect to online game server");
+	m_pConsole->AddCommand("login_profile",CmdLoginProfile,0,"Log in as to CryNetwork using email, profile and password as arguments");
+	m_pConsole->AddCommand("connect_crynet",CmdCryNetConnect,0,"Connect to online game server");
+	m_pConsole->AddCommand("preloadforstats","PreloadForStats()",VF_CHEAT,"Preload multiplayer assets for memory statistics.");
 }
 
 //------------------------------------------------------------------------
@@ -715,9 +920,21 @@ void CGame::UnregisterConsoleCommands()
   m_pConsole->RemoveCommand("g_startNextMapVoting");
 
 
+	m_pConsole->RemoveCommand("bulletTimeMode");
+	m_pConsole->RemoveCommand("GOCMode");
 
 	// variables from CHUDCommon
 	m_pConsole->RemoveCommand("ShowGODMode");
+}
+
+//------------------------------------------------------------------------
+void CGame::CmdLastInv(IConsoleCmdArgs *pArgs)
+{
+	if (!gEnv->bClient)
+		return;
+
+	if (CActor *pClientActor=static_cast<CActor *>(g_pGame->GetIGameFramework()->GetClientActor()))
+		pClientActor->SelectLastItem(true);
 }
 
 //------------------------------------------------------------------------
@@ -756,7 +973,10 @@ void CGame::CmdLoadLastSave(IConsoleCmdArgs *pArgs)
 	if (!gEnv->bClient || gEnv->bMultiplayer)
 		return;
 
-	string file = g_pGame->GetLastSaveGame();
+	if(g_pGame->GetMenu() && g_pGame->GetMenu()->IsActive())
+		return;
+
+	const string& file = g_pGame->GetLastSaveGame();
 	if(file.length())
 	{
 		if(!g_pGame->GetIGameFramework()->LoadGame(file.c_str(), true))
@@ -780,7 +1000,7 @@ void CGame::CmdSpectator(IConsoleCmdArgs *pArgs)
 		int mode=2;
 		if (pArgs->GetArgCount()==2)
 			mode=atoi(pArgs->GetArg(1));
-		pGameRules->ChangeSpectatorMode(pGameRules->GetActorByEntityId(pClientActor->GetEntityId()), mode);
+		pGameRules->ChangeSpectatorMode(pGameRules->GetActorByEntityId(pClientActor->GetEntityId()), mode, 0, true);
 	}
 }
 
@@ -799,7 +1019,7 @@ void CGame::CmdJoinGame(IConsoleCmdArgs *pArgs)
 	
 	CGameRules *pGameRules = g_pGame->GetGameRules();
 	if (pGameRules)
-		pGameRules->ChangeSpectatorMode(pGameRules->GetActorByEntityId(pClientActor->GetEntityId()), 0);
+		pGameRules->ChangeSpectatorMode(pGameRules->GetActorByEntityId(pClientActor->GetEntityId()), 0, 0, true);
 }
 
 //------------------------------------------------------------------------
@@ -847,7 +1067,8 @@ void CGame::CmdVehicleKill(IConsoleCmdArgs *pArgs)
 //------------------------------------------------------------------------
 void CGame::CmdRestart(IConsoleCmdArgs *pArgs)
 {
-	g_pGame->GetGameRules()->Restart();
+	if(g_pGame && g_pGame->GetGameRules())
+		g_pGame->GetGameRules()->Restart();
 }
 
 //------------------------------------------------------------------------
@@ -920,7 +1141,7 @@ void CGame::CmdNextLevel(IConsoleCmdArgs* pArgs)
 {
   ILevelRotation *pLevelRotation = g_pGame->GetIGameFramework()->GetILevelSystem()->GetLevelRotation();
   if (pLevelRotation->GetLength())
-    pLevelRotation->ChangeLevel();
+    pLevelRotation->ChangeLevel(pArgs);
 }
 
 void CGame::CmdStartKickVoting(IConsoleCmdArgs* pArgs)
@@ -982,7 +1203,7 @@ void CGame::CmdVote(IConsoleCmdArgs* pArgs)
   CGameRules *pGameRules = g_pGame->GetGameRules();
   if (pGameRules)
   {
-    pGameRules->Vote(pGameRules->GetActorByEntityId(pClientActor->GetEntityId()));
+    pGameRules->Vote(pGameRules->GetActorByEntityId(pClientActor->GetEntityId()), true);
   }
 }
 
@@ -1017,12 +1238,40 @@ void CGame::CmdLogin(IConsoleCmdArgs* pArgs)
     INetworkService* serv = gEnv->pNetwork->GetService("GameSpy");
     if(!serv || serv->GetState() != eNSS_Ok)
       return;
-    g_pGame->GetMenu()->GetMPHub()->DoLogin(pArgs->GetArg(1),pArgs->GetArg(2));
-
-    g_pGame->BlockingProcess(&GSLoggingIn);
+		if(gEnv->pSystem->IsDedicated())
+		{
+			if(INetworkProfile* profile = serv->GetNetworkProfile())
+			{
+				profile->Login(pArgs->GetArg(1),pArgs->GetArg(2));
+			}			
+		}
+		else
+		{
+			if(g_pGame->GetMenu() && g_pGame->GetMenu()->GetMPHub())
+			{
+				g_pGame->GetMenu()->GetMPHub()->DoLogin(pArgs->GetArg(1),pArgs->GetArg(2));
+				g_pGame->BlockingProcess(&GSLoggingIn);
+			}
+		}
   }
   else
-    CryError("Invalid parameters.");
+    GameWarning("Invalid parameters.");
+}
+
+void CGame::CmdLoginProfile(IConsoleCmdArgs* pArgs)
+{
+	if(pArgs->GetArgCount()>3)
+	{
+		g_pGame->BlockingProcess(&GSCheckComplete);
+		INetworkService* serv = gEnv->pNetwork->GetService("GameSpy");
+		if(!serv || serv->GetState() != eNSS_Ok)
+			return;
+		g_pGame->GetMenu()->GetMPHub()->DoLoginProfile(pArgs->GetArg(1),pArgs->GetArg(2),pArgs->GetArg(3));
+
+		g_pGame->BlockingProcess(&GSLoggingIn);
+	}
+	else
+		GameWarning("Invalid parameters.");
 }
 
 static bool gGSConnecting = false;
@@ -1068,7 +1317,7 @@ struct SCryNetConnectListener : public IServerListener
     if(neednat)
     {
       int cookie = rand() + (rand()<<16);
-      connect.Format("connect <nat>%d",cookie);
+      connect.Format("connect <nat>%d|%d.%d.%d.%d:%d",cookie,ip&0xFF,(ip>>8)&0xFF,(ip>>16)&0xFF,(ip>>24)&0xFF,port);
       m_browser->SendNatCookie(ip,port,cookie);
     }
     else
@@ -1129,5 +1378,5 @@ void CGame::CmdCryNetConnect(IConsoleCmdArgs* pArgs)
     g_pGame->BlockingProcess(&GSConnect);
   }
   else
-    CryError("Invalid parameters.");
+    GameWarning("Invalid parameters.");
 }

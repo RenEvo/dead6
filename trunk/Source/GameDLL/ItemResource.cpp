@@ -107,7 +107,7 @@ const char *CItem::GetCharacterAttachmentBone(int slot, const char *name)
 		return 0;
 	}
 
-	return pCharacter->GetISkeleton()->GetJointNameByID(pAttachment->GetBoneID());
+	return pCharacter->GetISkeletonPose()->GetJointNameByID(pAttachment->GetBoneID());
 }
 
 //------------------------------------------------------------------------
@@ -237,7 +237,7 @@ void CItem::SetCharacterAttachmentLocalTM(int slot, const char *name, const Matr
 		return;
 	}
 
-	pAttachment->SetRelativeQuat( QuatT(tm));
+	pAttachment->SetAttRelativeDefault( QuatT(tm));
 }
 
 //------------------------------------------------------------------------
@@ -257,10 +257,10 @@ void CItem::SetCharacterAttachmentWorldTM(int slot, const char *name, const Matr
 	}
 
 //	Matrix34 boneWorldMatrix = GetEntity()->GetSlotWorldTM(slot) *	pCharacter->GetISkeleton()->GetAbsJMatrixByID(pAttachment->GetBoneID());
-	Matrix34 boneWorldMatrix = GetEntity()->GetSlotWorldTM(slot) *	Matrix34(pCharacter->GetISkeleton()->GetAbsJQuatByID(pAttachment->GetBoneID()) );
+	Matrix34 boneWorldMatrix = GetEntity()->GetSlotWorldTM(slot) *	Matrix34(pCharacter->GetISkeletonPose()->GetAbsJointByID(pAttachment->GetBoneID()) );
 
 	Matrix34 localAttachmentMatrix = (boneWorldMatrix.GetInverted()*tm);
-	pAttachment->SetRelativeQuat(QuatT(localAttachmentMatrix));
+	pAttachment->SetAttRelativeDefault(QuatT(localAttachmentMatrix));
 }
 
 //------------------------------------------------------------------------
@@ -279,7 +279,7 @@ Matrix34 CItem::GetCharacterAttachmentLocalTM(int slot, const char *name)
 		return Matrix34::CreateIdentity();
 	}
 
-	return Matrix34(pAttachment->GetRelativeQuat());
+	return Matrix34(pAttachment->GetAttRelativeDefault());
 }
 
 //------------------------------------------------------------------------
@@ -298,7 +298,7 @@ Matrix34 CItem::GetCharacterAttachmentWorldTM(int slot, const char *name)
 		return Matrix34::CreateIdentity();
 	}
 
-	return Matrix34(pAttachment->GetWQuatT());
+	return Matrix34(pAttachment->GetAttWorldAbsolute());
 }
 
 //------------------------------------------------------------------------
@@ -348,7 +348,7 @@ void CItem::CreateAttachmentHelpers(int slot)
 //------------------------------------------------------------------------
 void CItem::DestroyAttachmentHelpers(int slot)
 {
-	for (THelperVector::iterator it = m_sharedparams->helpers.begin(); it != m_sharedparams->helpers.end(); it++)
+	for (THelperVector::iterator it = m_sharedparams->helpers.begin(); it != m_sharedparams->helpers.end(); ++it)
 	{
 		if (it->slot != slot)
 			continue;
@@ -364,7 +364,7 @@ const CItem::THelperVector& CItem::GetAttachmentHelpers()
 }
 
 //------------------------------------------------------------------------
-bool CItem::SetGeometry(int slot, const ItemString& name, const Vec3 &poffset, const Vec3 &aoffset, float scale, bool forceReload)
+bool CItem::SetGeometry(int slot, const ItemString& name, const Vec3& poffset, const Ang3& aoffset, float scale, bool forceReload)
 {
 	bool changedfp=false;
 	switch(slot)
@@ -464,16 +464,20 @@ bool CItem::SetGeometry(int slot, const ItemString& name, const Vec3 &poffset, c
 	slotTM.SetTranslation(poffset);
 	GetEntity()->SetSlotLocalTM(slot, slotTM);
 
-	if (changedfp && !m_mountparams.pivot.empty())
+	if (changedfp && m_stats.mounted)
 	{
 		PlayAction(m_idleAnimation[eIGS_FirstPerson], 0, true);
 		ForceSkinning(true);
 
-		Matrix34 tm=GetEntity()->GetSlotLocalTM(eIGS_FirstPerson, false);
-		Vec3 pivot = GetSlotHelperPos(eIGS_FirstPerson, m_mountparams.pivot.c_str(), false);
-		tm.AddTranslation(pivot);
+		if (!m_mountparams.pivot.empty())
+		{
+			Matrix34 tm=GetEntity()->GetSlotLocalTM(eIGS_FirstPerson, false);
+			Vec3 pivot = GetSlotHelperPos(eIGS_FirstPerson, m_mountparams.pivot.c_str(), false);
+			tm.AddTranslation(pivot);
 
-		GetEntity()->SetSlotLocalTM(eIGS_FirstPerson, tm);
+			GetEntity()->SetSlotLocalTM(eIGS_FirstPerson, tm);
+		}
+
 		GetEntity()->InvalidateTM();
 	}
 
@@ -523,11 +527,11 @@ void CItem::ForceSkinning(bool always)
 
 			Vec3 CharOffset = GetEntity()->GetSlotLocalTM(slot,false).GetTranslation();
 
-			pCharacter->GetISkeleton()->SetForceSkeletonUpdate(7);
-			pCharacter->SkeletonPreProcess(renderLocation, renderLocation, GetISystem()->GetViewCamera() );
-			pCharacter->SkeletonPostProcess(renderLocation, renderLocation, 0 );
+			pCharacter->GetISkeletonPose()->SetForceSkeletonUpdate(7);
+			pCharacter->SkeletonPreProcess(renderLocation, renderLocation, GetISystem()->GetViewCamera(),0x55 );
+			pCharacter->SkeletonPostProcess(renderLocation, renderLocation, 0, 0.0f, 0x55 );
 			if (!always)
-				pCharacter->GetISkeleton()->SetForceSkeletonUpdate(0);
+				pCharacter->GetISkeletonPose()->SetForceSkeletonUpdate(0);
 		}
 	}
 }
@@ -673,7 +677,8 @@ tSoundID CItem::PlayAction(const ItemString& actionName, int layer, bool loop, u
 	tSoundID result = INVALID_SOUNDID;
 	if ((flags&eIPAF_Sound) && !action.sound[sid].name.empty() && IsSoundEnabled() && g_pGameCVars->i_soundeffects)
 	{
-		int nSoundFlags = (flags&eIPAF_SoundStartPaused?FLAG_SOUND_START_PAUSED:0) | (flags&eIPAF_SoundLooped?FLAG_SOUND_LOOP:0);
+		int nSoundFlags = FLAG_SOUND_DEFAULT_3D;
+		nSoundFlags |= flags&eIPAF_SoundStartPaused?FLAG_SOUND_START_PAUSED:0;
 		IEntitySoundProxy *pSoundProxy = GetSoundProxy(true);
 
 		//GetSound proxy from dualwield master if neccesary
@@ -708,7 +713,6 @@ tSoundID CItem::PlayAction(const ItemString& actionName, int layer, bool loop, u
 			
 			TempResourceName name;
 			FixResourceName(action.sound[sid].name, name, flags);
-			nSoundFlags = nSoundFlags | (fp?FLAG_SOUND_2D:FLAG_SOUND_DEFAULT_3D);
 			//nSoundFlags = nSoundFlags | (fp?FLAG_SOUND_DEFAULT_3D|FLAG_SOUND_RELATIVE:FLAG_SOUND_DEFAULT_3D);
 			Vec3 vOffset(0,0,0);
 			if (fp)
@@ -716,15 +720,11 @@ tSoundID CItem::PlayAction(const ItemString& actionName, int layer, bool loop, u
 
 			if (!g_pGameCVars->i_staticfiresounds)
 			{
-				//result = pSoundProxy->PlaySound(name, vOffset, FORWARD_DIRECTION, nSoundFlags, pSkipEnts, nSkipEnts);
-        result = pSoundProxy->PlaySoundEx(name, vOffset, FORWARD_DIRECTION, nSoundFlags, 1.0f, 0, 0, pSkipEnts, nSkipEnts);
+				result = pSoundProxy->PlaySoundEx(name, vOffset, FORWARD_DIRECTION, nSoundFlags, 1.0f, 0, 0, eSoundSemantic_Weapon, pSkipEnts, nSkipEnts);
+				ISound *pSound = pSoundProxy->GetSound(result);
 
-				if (action.sound[sid].sphere>0.0f)
-				{
-					ISound *pSound = pSoundProxy->GetSound(result);
-					if (pSound)
-						pSound->SetSphereSpec(action.sound[sid].sphere);
-				}
+				if (pSound && action.sound[sid].sphere>0.0f)
+					pSound->SetSphereSpec(action.sound[sid].sphere);
 			}
 			else
 			{
@@ -747,14 +747,11 @@ tSoundID CItem::PlayAction(const ItemString& actionName, int layer, bool loop, u
 
 				if (!pInstanceAudio || pInstanceAudio->id == INVALID_SOUNDID)
 				{
-          result = pSoundProxy->PlaySoundEx(name, vOffset, FORWARD_DIRECTION, nSoundFlags, 1.0f, 0, 0, pSkipEnts, nSkipEnts);
+          result = pSoundProxy->PlaySoundEx(name, vOffset, FORWARD_DIRECTION, nSoundFlags, 1.0f, 0, 0, eSoundSemantic_Weapon, pSkipEnts, nSkipEnts);
+					ISound *pSound = pSoundProxy->GetSound(result);
 					
-					if (action.sound[sid].sphere>0.0f)
-					{
-						ISound *pSound = pSoundProxy->GetSound(result);
-						if (pSound)
-							pSound->SetSphereSpec(action.sound[sid].sphere);
-					}
+					if (pSound && action.sound[sid].sphere>0.0f)
+						pSound->SetSphereSpec(action.sound[sid].sphere);
 				}
 
 				if (action.sound[sid].isstatic)
@@ -765,6 +762,7 @@ tSoundID CItem::PlayAction(const ItemString& actionName, int layer, bool loop, u
 						{
 							pInstanceAudio->id = result;
 							pInstanceAudio->static_name = name;
+							pInstanceAudio->synch = action.sound[sid].issynched;
 						}
 					}
 					else
@@ -798,6 +796,9 @@ tSoundID CItem::PlayAction(const ItemString& actionName, int layer, bool loop, u
 	if (flags&eIPAF_Animation)
 	{
 		TempResourceName name;
+		// generate random number only once per call to allow animations to
+		// match across geometry slots (like first person and third person)
+		float randomNumber = Random();
 		for (int i=0; i<eIGS_Last; i++)
 		{
 			if (!(flags&(1<<i)))
@@ -805,7 +806,7 @@ tSoundID CItem::PlayAction(const ItemString& actionName, int layer, bool loop, u
 			int nanimations=action.animation[i].size();
 			if (nanimations <= 0)
 				continue;
-			int anim=Random(nanimations);
+			int anim = int( randomNumber * float(nanimations) );
 			if (action.animation[i][anim].name.empty())
 				continue;
 
@@ -861,7 +862,7 @@ tSoundID CItem::PlayAction(const ItemString& actionName, int layer, bool loop, u
 					PlayAnimationEx(name, i, layer, loop, blend, animation.speed, flags);
 			}
 
-			if (m_stats.fp && i==eIGS_FirstPerson && !animation.camera_helper.empty())
+			if ((m_stats.fp || m_stats.viewmode&eIVM_FirstPerson) && i==eIGS_FirstPerson && !animation.camera_helper.empty())
 			{
 				m_camerastats.animating=true;
 				m_camerastats.helper=animation.camera_helper;
@@ -931,13 +932,13 @@ void CItem::PlayAnimationEx(const char* animationName, int slot, int layer, bool
 
 	if (pCharacter && animationName)
 	{
-		ISkeleton *pSkeleton = pCharacter->GetISkeleton();
+		ISkeletonAnim* pSkeletonAnim = pCharacter->GetISkeletonAnim();
 
 		if (flags&eIPAF_CleanBlending)
 		{
-			while(pSkeleton->GetNumAnimsInFIFO(layer)>1)
+			while(pSkeletonAnim->GetNumAnimsInFIFO(layer)>1)
 			{
-				if (!pSkeleton->RemoveAnimFromFIFO(layer, pSkeleton->GetNumAnimsInFIFO(layer)-1))
+				if (!pSkeletonAnim->RemoveAnimFromFIFO(layer, pSkeletonAnim->GetNumAnimsInFIFO(layer)-1))
 					break;
 			}
 		}
@@ -951,14 +952,14 @@ void CItem::PlayAnimationEx(const char* animationName, int slot, int layer, bool
 			params.m_fTransTime = blend;
 			params.m_nLayerID = layer;
 			params.m_nFlags = (loop?CA_LOOP_ANIMATION:0)|(flags&eIPAF_RestartAnimation?CA_ALLOW_ANIM_RESTART:0)|(flags&eIPAF_RepeatLastFrame?CA_REPEAT_LAST_KEY:0);
-			pSkeleton->StartAnimation(animationName, 0, 0,0,  params);
-			pSkeleton->SetLayerUpdateMultiplier(layer, speed);
+			pSkeletonAnim->StartAnimation(animationName, 0, 0,0,  params);
+			pSkeletonAnim->SetLayerUpdateMultiplier(layer, speed);
 
 			//pCharacter->GetISkeleton()->SetDebugging( true );
 		}
 
 		float duration=0.0f;
-		int animationId = pCharacter->GetIAnimationSet()->GetIDByName(animationName);
+		int animationId = pCharacter->GetIAnimationSet()->GetAnimIDByName(animationName);
 		if (animationId>=0)
 			duration = pCharacter->GetIAnimationSet()->GetDuration_sec(animationId);
 		
@@ -1001,19 +1002,19 @@ void CItem::PlayLayer(const ItemString& layerName, int flags, bool record)
 				
 				FixResourceName(layer.name[i], tempResourceName, flags);
 
-				ISkeleton *pSkeleton=pCharacter->GetISkeleton();
+				ISkeletonAnim* pSkeletonAnim=pCharacter->GetISkeletonAnim();
 			//	pSkeleton->SetRedirectToLayer0(1);
-				pSkeleton->StartAnimation(tempResourceName, 0, 0,0,  params);
+				pSkeletonAnim->StartAnimation(tempResourceName, 0, 0,0,  params);
 
 				if (layer.bones.empty())
 				{
-					pCharacter->GetISkeleton()->SetLayerMask(layer.id[i], 1);
+					pCharacter->GetISkeletonPose()->SetLayerMask(layer.id[i], 1);
 				}
 				else
 				{
-					pCharacter->GetISkeleton()->SetLayerMask(layer.id[i], 0);
+					pCharacter->GetISkeletonPose()->SetLayerMask(layer.id[i], 0);
 					for (std::vector<ItemString>::iterator bit = layer.bones.begin(); bit != layer.bones.end(); bit++)
-						pCharacter->GetISkeleton()->SetJointMask(bit->c_str(), layer.id[i], 1);
+						pCharacter->GetISkeletonPose()->SetJointMask(bit->c_str(), layer.id[i], 1);
 				}
 			}
 		}
@@ -1041,7 +1042,7 @@ void CItem::StopLayer(const ItemString& layerName, int flags, bool record)
 
 		ICharacterInstance *pCharacter = GetEntity()->GetCharacter(i);
 		if (pCharacter)
-			pCharacter->GetISkeleton()->StopAnimationInLayer(it->second.id[i],0.0f);
+			pCharacter->GetISkeletonAnim()->StopAnimationInLayer(it->second.id[i],0.0f);
 	}
 
 	if (record)
@@ -1078,7 +1079,7 @@ void CItem::ResetAnimation(int layer, uint flags)
 
 		ICharacterInstance *pCharacter = GetEntity()->GetCharacter(i);
 		if (pCharacter)
-			pCharacter->GetISkeleton()->StopAnimationsAllLayers();
+			pCharacter->GetISkeletonAnim()->StopAnimationsAllLayers();
 	}
 }
 
@@ -1138,13 +1139,13 @@ Vec3 CItem::GetSlotHelperPos(int slot, const char *helper, bool worldSpace, bool
 		else if (info.pCharacter)
 		{
 			ICharacterInstance *pCharacter = info.pCharacter;
-			int16 id = pCharacter->GetISkeleton()->GetIDByName(helper);
+			int16 id = pCharacter->GetISkeletonPose()->GetJointIDByName(helper);
 			if (id > -1)
 			{
 				if (relative)
-					position = pCharacter->GetISkeleton()->GetRelJQuatByID(id).t;
+					position = pCharacter->GetISkeletonPose()->GetRelJointByID(id).t;
 				else
-					position = pCharacter->GetISkeleton()->GetAbsJQuatByID(id).t;
+					position = pCharacter->GetISkeletonPose()->GetAbsJointByID(id).t;
 			}
 
 			if (!relative)
@@ -1187,14 +1188,14 @@ const Matrix33 &CItem::GetSlotHelperRotation(int slot, const char *helper, bool 
 			ICharacterInstance *pCharacter = info.pCharacter;
 			if(!pCharacter)
 				return rotation;
-			int16 id = pCharacter->GetISkeleton()->GetIDByName(helper);
+			int16 id = pCharacter->GetISkeletonPose()->GetJointIDByName(helper);
 		//	if (id > -1) rotation = Matrix33(pCharacter->GetISkeleton()->GetAbsJMatrixByID(id));
 			if (id > -1)
 			{
 				if (relative)
-					rotation = Matrix33(pCharacter->GetISkeleton()->GetRelJQuatByID(id).q);
+					rotation = Matrix33(pCharacter->GetISkeletonPose()->GetRelJointByID(id).q);
 				else
-					rotation = Matrix33(pCharacter->GetISkeleton()->GetAbsJQuatByID(id).q);
+					rotation = Matrix33(pCharacter->GetISkeletonPose()->GetAbsJointByID(id).q);
 			}
 
 			if (!relative)
@@ -1214,6 +1215,7 @@ void CItem::StopSound(tSoundID id)
   if (id == INVALID_SOUNDID)
     return;
 
+	bool synchSound = false;
 	IEntitySoundProxy *pSoundProxy = GetSoundProxy(false);
 	if (pSoundProxy)
 	{
@@ -1226,11 +1228,15 @@ void CItem::StopSound(tSoundID id)
 				{
 					pSoundProxy->SetStaticSound(id, false);
 					action.sound[i].id = INVALID_SOUNDID;
+					synchSound = action.sound[i].synch;
 					break;
 				}
 			}
 		}
-		pSoundProxy->StopSound(id);
+		if(synchSound)
+			pSoundProxy->StopSound(id, ESoundStopMode_OnSyncPoint);
+		else
+			pSoundProxy->StopSound(id);
 	}
 }
 
@@ -1276,7 +1282,10 @@ void CItem::ReleaseStaticSound(SInstanceAudio *sound)
 		if (pSoundProxy)
 		{
 			pSoundProxy->SetStaticSound(sound->id, false);
-			pSoundProxy->StopSound(sound->id);
+			if(sound->synch)
+				pSoundProxy->StopSound(sound->id,ESoundStopMode_OnSyncPoint);
+			else
+				pSoundProxy->StopSound(sound->id);
 			sound->id = INVALID_SOUNDID;
 #ifndef ITEM_USE_SHAREDSTRING
 			sound->static_name.resize(0);

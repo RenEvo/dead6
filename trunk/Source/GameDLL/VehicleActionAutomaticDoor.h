@@ -53,12 +53,15 @@ protected:
 	TVehicleAnimStateId m_doorClosedStateId;
 
 	float m_timeMax;
+	float m_eventSamplingTime;
+	bool m_isTouchingGroundBase;
 
 	float m_timeOnTheGround;
 	float m_timeInTheAir;
 	bool m_isTouchingGround;
 	bool m_isOpenRequested;
 	bool m_isBlocked;
+	bool m_isDisabled;
 
 	float m_animGoal;
 	float m_animTime;

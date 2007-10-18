@@ -20,11 +20,7 @@
 #pragma once
 #endif // _MSC_VER > 1000
 
-// For PS3, USE_FRAME_PROFILER is defined on the compiler command line.
-#if !defined(PS3)
 #define USE_FRAME_PROFILER      // comment this define to remove most profiler related code in the engine
-#endif
-
 
 enum EProfiledSubsystem
 {
@@ -46,6 +42,7 @@ enum EProfiledSubsystem
 	PROFILE_SYSTEM,
 	PROFILE_GAME,
 	PROFILE_INPUT,
+	PROFILE_SYNC,
 
 	//////////////////////////////////////////////////////////////////////////
 	// This enumes used for Network traffic profilers.
@@ -71,6 +68,17 @@ struct IFrameProfilePeakCallback
 	//! Called when peak is detected for this profiler.
 	//! @param fPeakTime peak time in milliseconds.
 	virtual void OnFrameProfilerPeak( CFrameProfiler *pProfiler,float fPeakTime ) = 0;
+};
+
+struct SPeakRecord
+{
+	CFrameProfiler *pProfiler;
+	float peakValue;
+	float avarageValue;
+	float variance;
+	int pageFaults; // Number of page faults at this frame.
+	int count;  // Number of times called for peak.
+	float when; // when it added.
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -103,6 +111,11 @@ struct IFrameProfileSystem
 	//! Get frame profiler at specified index.
 	//! @param index must be 0 <= index < GetProfileCount() 
 	virtual CFrameProfiler* GetProfiler( int index ) const = 0;
+	//! Get number of registered peak records.
+	virtual int GetPeaksCount() const = 0;
+	//! Get peak record at specified index.
+	//! @param index must be 0 <= index < GetPeaksCount() 
+	virtual const SPeakRecord* GetPeak(int index) const = 0;
 	//! Gets the bottom active section.
 	virtual CFrameProfilerSection const* GetCurrentProfilerSection() = 0;
 
@@ -354,7 +367,8 @@ public:
 		m_name = sCollectorName;
 		m_threadId = 0;
 		m_pNextThread = 0;
-		m_pISystem->GetIProfileSystem()->AddFrameProfiler( this );
+		if(IFrameProfileSystem * pFrameProfileSystem = m_pISystem->GetIProfileSystem())
+      pFrameProfileSystem->AddFrameProfiler( this );
 	}
 };
 

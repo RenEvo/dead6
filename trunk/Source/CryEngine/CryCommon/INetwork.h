@@ -152,20 +152,30 @@ enum EDisconnectionCause
 	eDC_Timeout = 0,
 	// incompatible protocols
 	eDC_ProtocolError,
+	// failed to resolve an address
+	eDC_ResolveFailed,
 	// versions mismatch
 	eDC_VersionMismatch,
+	// server is full
+	eDC_ServerFull,
 	// user initiated kick
 	eDC_Kicked,
+	// teamkill ban/ admin ban
+	eDC_Banned,
 	// context database mismatch
 	eDC_ContextCorruption,
 	// password mismatch, cdkey bad, etc
 	eDC_AuthenticationFailed,
 	// misc. game error
 	eDC_GameError,
+	// dx10 not found
+	eDC_NotDX10Capable,
 	// the nub has been destroyed
 	eDC_NubDestroyed,
 	// icmp reported error
 	eDC_ICMPError,
+	// NAT negotiation error
+	eDC_NatNegError,
 	// punk buster detected something bad
 	eDC_PunkDetected,
 	// demo playback finished
@@ -174,6 +184,10 @@ enum EDisconnectionCause
 	eDC_DemoPlaybackFileNotFound,
   // user decided to stop playing
   eDC_UserRequested,
+	// user should have controller connected
+	eDC_NoController,
+	// unable to connect to server
+	eDC_CantConnect,
 	// this cause must be last! - unknown cause
 	eDC_Unknown
 };
@@ -376,6 +390,8 @@ struct SNetGameInfo
 //    Main access point for creating Network objects
 struct INetwork
 {
+	virtual bool HasNetworkConnectivity() = 0;
+
 	virtual void SetNetGameInfo( SNetGameInfo ) = 0;
 	virtual SNetGameInfo GetNetGameInfo() = 0;
 
@@ -459,6 +475,12 @@ struct INetwork
 	virtual void PbClientAutoComplete(const char*, int length) = 0;  // EvenBalance - M. Quinn
 
 	virtual bool IsPbClEnabled() = 0;
+	virtual bool IsPbSvEnabled() = 0;
+
+	virtual void StartupPunkBuster(bool server) = 0;
+	virtual void CleanupPunkBuster() = 0;
+
+	virtual bool IsPbInstalled() = 0;
 };
 
 // This interface is implemented by CryNetwork, and is used by 
@@ -530,6 +552,10 @@ struct IVoiceContext
 	virtual bool IsEnabled() = 0;
 
 	virtual void GetMemoryStatistics(ICrySizer* pSizer) = 0;
+
+	// Description:
+	//	Force recreation of routing table (when players change voice group, for instance)
+	virtual void InvalidateRoutingTable() = 0;
 };
 
 // Description:
@@ -543,10 +569,13 @@ struct INetContext
 	
 	// Description:
 	//    Record this context as a demo file
-	virtual void RecordContext( const char * filename, bool compress ) = 0;
+	virtual void ActivateDemoRecorder( const char * filename ) = 0;
 	// Description:
 	//    Record this context as a demo file
-	virtual void PlaybackContext( const char * filename, INetChannel * pClient, INetChannel * pServer ) = 0;
+	virtual void ActivateDemoPlayback( const char * filename, INetChannel * pClient, INetChannel * pServer ) = 0;
+	// Description:
+	//		Are we playing back a demo session?
+	virtual bool IsDemoPlayback() const = 0;
 	// Description:
 	//    If we're recording, log an RMI call to a file
 	virtual void LogRMI( const char * function, ISerializable * pParams ) = 0;
@@ -612,15 +641,6 @@ struct INetContext
 	virtual void ChangedTransform( EntityId id, const Vec3& pos, const Quat& rot, float drawDist ) = 0;
 	virtual void ChangedFov( EntityId id, float fov ) = 0;
 	// Description:
-	//    Disable reading of updates from an entity until some other entity has been
-	//    updated (a full round trip) on a particular channel
-	// Arguments:
-	//    idDisable - the entity to disable reads for
-	//    aspectBits - the aspects to disable reading
-	//    idReference - the entity to wait for an update round trip
-	//    pChannel - which channel must the update take place on
-	virtual void DisableAspectsUntilObjectUpdated( EntityId idDisable, uint8 aspectBits, EntityId idReference, INetChannel * pChannel ) = 0;
-	// Description:
 	//    Pass authority for updating an object to some remote channel;
 	//    This channel must have had SetServer() called on it at construction time
 	//    (only those aspects marked as eAF_Delegatable are passed on)
@@ -654,6 +674,8 @@ struct INetContext
 	//    - child objects are spawned after the parent object is
 	virtual void SetParentObject( EntityId objId, EntityId parentId ) = 0;
 
+	virtual void RequestRemoteUpdate( EntityId id, uint8 aspects ) = 0;
+
 	virtual void LogBreak( const SNetBreakDescription& des ) = 0;
 
 	virtual bool SetSchedulingParams( EntityId objId, uint32 normal, uint32 owned ) = 0;
@@ -676,10 +698,31 @@ struct INetSender
 		this->isServer = isServer;
 	}
 	virtual void BeginMessage( const SNetMessageDef * pDef ) = 0;
+	virtual void BeginUpdateMessage( SNetObjectID ) = 0;
+	virtual void EndUpdateMessage() = 0;
 	TSerialize ser;
 	bool isServer;
 	uint32 nCurrentSeq;
 	uint32 nBasisSeq;
+};
+
+class CSendUpdateMessageHelper
+{
+public:
+	CSendUpdateMessageHelper( INetSender * pSender, SNetObjectID id ) : m_pSender(pSender)
+	{
+		m_pSender->BeginUpdateMessage(id);
+	}
+	~CSendUpdateMessageHelper()
+	{
+		m_pSender->EndUpdateMessage();
+	}
+
+private:
+	CSendUpdateMessageHelper( const CSendUpdateMessageHelper& );
+	CSendUpdateMessageHelper& operator=( const CSendUpdateMessageHelper& );
+
+	INetSender * m_pSender;
 };
 
 struct INetBaseSendable
@@ -769,6 +812,7 @@ struct SMessagePositionInfo
 	bool haveDrawDistance;
 	Vec3 position;
 	float drawDistance;
+	SNetObjectID obj;
 };
 
 struct INetSendable : public INetBaseSendable
@@ -794,6 +838,8 @@ public:
 	// should only be called by the network engine
 	void SetPulses( CPriorityPulseStatePtr pulses ) { m_pulses = pulses; }
 	const CPriorityPulseState * GetPulses() { return m_pulses; }
+
+	uint32 GetFlags() const { return m_flags; }
 
 private:
 	uint32 m_flags;
@@ -837,7 +883,7 @@ struct IGameContext
 	// Description:
 	//    Synchronize a single aspect of an entity (nAspect will have exactly one bit set
 	//    describing which aspect to synch)
-	virtual ESynchObjectResult SynchObject( EntityId id, uint8 nAspect, uint8 nCurrentProfile, TSerialize ser ) = 0;
+	virtual ESynchObjectResult SynchObject( EntityId id, uint8 nAspect, uint8 nCurrentProfile, TSerialize ser, bool verboseLogging ) = 0;
 	// Description:
 	//    Change the current profile of an object (game code should ensure that things work out correctly - ie change physicalization)
 	virtual bool SetAspectProfile( EntityId id, uint8 nAspect, uint8 nProfile ) = 0;
@@ -874,10 +920,15 @@ struct IGameContext
 	virtual void GetMemoryStatistics(ICrySizer* pSizer) = 0;
 };
 
-enum EConnectionFailureCause 
+
+static const int CREATE_CHANNEL_ERROR_SIZE = 256;
+struct SCreateChannelResult
 {
-  eCFC_Timeout,
-  eCFC_Refused
+	explicit SCreateChannelResult(IGameChannel* ch):pChannel(ch){errorMsg[0] = 0;}
+	explicit SCreateChannelResult(EDisconnectionCause dc):pChannel(0),cause(dc){errorMsg[0] = 0;}
+	IGameChannel*				pChannel;
+	EDisconnectionCause cause;
+	char								errorMsg[CREATE_CHANNEL_ERROR_SIZE];
 };
 
 struct IGameNub
@@ -892,15 +943,16 @@ struct IGameNub
 	//    connectionString - NULL if we're creating a channel in response to a call to ConnectTo
 	//               locally, otherwise it's the connectionString passed to ConnectTo remotely
 	// Return:
+	//
 	//    Pointer to the new game channel; Release() will be called on it by the network
 	//    engine when it's no longer required
-	virtual IGameChannel * CreateChannel( INetChannel * pChannel, const char * connectionString ) = 0;
+	virtual SCreateChannelResult CreateChannel( INetChannel * pChannel, const char * connectionString ) = 0;
 
 	// Description:
 	//		Notifies the GameNub that an active connection attempt failed (before a NetChannel is created)
 	//		By implementing this interface function, the game can effectively capture pre-channel connection failures
 	//		NOTE: the GameNub should be prepared to be destroyed shortly after this call is finished
-	virtual void FailedActiveConnect( EConnectionFailureCause cause, const char * description ) = 0;
+	virtual void FailedActiveConnect( EDisconnectionCause cause, const char * description ) = 0;
 };
 
 struct IGameChannel : public INetMessageSink
@@ -959,6 +1011,9 @@ struct INetNub
   // Description:
   //  Collect memory usage info
 	virtual void GetMemoryStatistics(ICrySizer* pSizer) = 0;
+	// Description:
+	//    Add all files in a given pak file to the list of protected files
+	virtual void AddProtectedFolder( const char * filename, bool recurse ) = 0;
 };
 
 struct INetChannel : public INetMessageSink
@@ -1013,11 +1068,6 @@ struct INetChannel : public INetMessageSink
 	//    pMetrics - An SPerformanceMetrics structure describing these tolerances
 	virtual void SetPerformanceMetrics( SPerformanceMetrics * pMetrics ) = 0;
 	// Description:
-	//    Set the timeout for inactivity from the network channel
-	// Arguments:
-	//    fTimeout - how long should the timeout be (0.0f == no timeout)
-	virtual void SetInactivityTimeout( float fTimeout ) = 0;
-	// Description:
 	//    Disconnect this channel
 	virtual void Disconnect( EDisconnectionCause cause, const char * description ) = 0;
 	// Description:
@@ -1054,6 +1104,10 @@ struct INetChannel : public INetMessageSink
 	//    Is this channel connected locally?
 	virtual bool IsLocal() const = 0;
 	// Description:
+	//    Is this channel a fake one? (e.g. demorecording, debug channel etc.)
+	//    ContextView extensions will not be created for fake channels
+	virtual bool IsFakeChannel() const = 0;
+	// Description:
 	//    Has this connection been successfully established?
 	virtual bool IsConnectionEstablished() const = 0;
   // Description:
@@ -1063,6 +1117,9 @@ struct INetChannel : public INetMessageSink
   //    Get a descriptive string describing the channel
   virtual const char*  GetNickname() = 0;
 	// Description:
+	//    Set a persistent nickname for this channel (MP playername)
+	virtual void SetNickname(const char* name) = 0;
+	// Description:
 	//    Get the local channel ID
 	virtual TNetChannelID GetLocalChannelID() = 0;
 	// Description:
@@ -1070,6 +1127,8 @@ struct INetChannel : public INetMessageSink
 	virtual TNetChannelID GetRemoteChannelID() = 0;
 
 	virtual IGameChannel * GetGameChannel() = 0;
+
+	virtual bool IsInTransition() = 0;
 
 	virtual EChannelConnectionState GetChannelConnectionState() const = 0;
 	virtual EContextViewState GetContextViewState() const = 0;
@@ -1084,10 +1143,11 @@ struct INetChannel : public INetMessageSink
   // Description:
   //    Does remote channel have pre-ordered copy?
   virtual bool IsPreordered() const = 0;
+	
 	// Description:
 	//    Get the unique and persistent profile id for this client (profile id is associated with the user account)
 	virtual int GetProfileId() const = 0;
-
+	
 	virtual void GetMemoryStatistics(ICrySizer* pSizer, bool countingThis = false) = 0;
 };
 
@@ -1156,7 +1216,7 @@ public:
 };
 
 // this class defines a remote procedure call message
-struct IRMIMessageBody : public CMultiThreadRefCount
+struct IRMIMessageBody
 {
 	IRMIMessageBody( 
 		ENetReliabilityType reliability_, 
@@ -1166,6 +1226,7 @@ struct IRMIMessageBody : public CMultiThreadRefCount
 		IRMIListener * pListener_, 
 		int userId_,
 		EntityId dependentId_ ) :
+		m_cnt(0),
 		reliability(reliability_), 
 		attachment(attachment_), 
 		objId(objId_),
@@ -1184,6 +1245,7 @@ struct IRMIMessageBody : public CMultiThreadRefCount
 		IRMIListener * pListener_, 
 		int userId_,
 		EntityId dependentId_ ) :
+		m_cnt(0),
 		reliability(reliability_), 
 		attachment(attachment_), 
 		objId(objId_),
@@ -1207,6 +1269,24 @@ struct IRMIMessageBody : public CMultiThreadRefCount
 	// these two define a listening interface for really advance user stuff
 	const int userId;
 	IRMIListener * pListener;
+
+	void AddRef()
+	{
+		CryInterlockedIncrement(&m_cnt);
+	}
+	void Release()
+	{
+		if (CryInterlockedDecrement(&m_cnt) <= 0)
+			DeleteThis();
+	}
+
+private:
+	volatile int m_cnt;
+
+	virtual void DeleteThis()
+	{
+		delete this;
+	}
 };
 
 // this class provides a mechanism for the network library to obtain information
@@ -1308,8 +1388,8 @@ struct IContextEstablisher
 
 // exports;
 extern "C"{
-	CRYNETWORK_API INetwork *CreateNetwork(ISystem *pSystem);
-	typedef INetwork *(*PFNCREATENETWORK)(ISystem *pSystem);
+	CRYNETWORK_API INetwork *CreateNetwork(ISystem *pSystem, int ncpu);
+	typedef INetwork *(*PFNCREATENETWORK)(ISystem *pSystem, int ncpu);
 }
 
 #endif //_INETWORK_H_

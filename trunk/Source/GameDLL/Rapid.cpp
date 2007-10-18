@@ -110,8 +110,10 @@ void CRapid::Update(float frameTime, uint frameId)
 
 	if ((m_speed >= m_rapidparams.min_speed) && (!m_decelerating))
 	{
-		float dt = m_speed/m_rapidparams.max_speed;
-		m_next_shot_dt = 60.0f/(m_fireparams.rate*(dt+0.0001f));
+		float dt = 1.0f;
+		if (cry_fabsf(m_speed)>0.001f && cry_fabsf(m_rapidparams.max_speed>0.001f))
+			dt=m_speed/m_rapidparams.max_speed;
+		m_next_shot_dt = 60.0f/(m_fireparams.rate*dt);
 
 		bool canShoot = CanFire(false);
 
@@ -132,9 +134,8 @@ void CRapid::Update(float frameTime, uint frameId)
 						CPlayer *plr = (CPlayer *)act;
 						IView *pView = g_pGame->GetIGameFramework()->GetIViewSystem()->GetActiveView();
 						if (pView)            
-							pView->SetViewShake(m_rapidparams.camshake_rotate, m_rapidparams.camshake_shift, m_next_shot_dt/m_rapidparams.camshake_perShot, m_next_shot_dt/m_rapidparams.camshake_perShot, 0, 1);            
+							pView->SetViewShake(Ang3(m_rapidparams.camshake_rotate), m_rapidparams.camshake_shift, m_next_shot_dt/m_rapidparams.camshake_perShot, m_next_shot_dt/m_rapidparams.camshake_perShot, 0, 1);            
 					}
-					
 				}
 			}
 			else
@@ -142,7 +143,10 @@ void CRapid::Update(float frameTime, uint frameId)
 				Firing(false);
 				Accelerate(m_rapidparams.deceleration);
 				if (m_pWeapon->GetOwnerActor() && m_pWeapon->GetOwnerActor()->IsPlayer())
+				{
+					SmokeEffect();
 					m_pWeapon->Reload();
+				}
 			}
 		}
 	}
@@ -150,7 +154,10 @@ void CRapid::Update(float frameTime, uint frameId)
 	{
 		Firing(false);
 		if (OutOfAmmo() && m_pWeapon->GetOwnerActor() && m_pWeapon->GetOwnerActor()->IsPlayer())
+		{
+			SmokeEffect();
 			m_pWeapon->Reload();
+		}
 	}
 
 	if ((m_speed < m_rapidparams.min_speed) && (m_acceleration < 0.0f) && (!m_decelerating))
@@ -171,7 +178,7 @@ void CRapid::StartReload(int zoomed)
 }
 
 //------------------------------------------------------------------------
-void CRapid::StartFire(EntityId shooterId)
+void CRapid::StartFire()
 {
 	if (m_pWeapon->IsBusy() || !CanFire(true))
 	{
@@ -194,12 +201,11 @@ void CRapid::StartFire(EntityId shooterId)
 	}
 	else if(m_pWeapon->IsWeaponLowered())
 	{
-		m_pWeapon->PlayAction(m_actions.empty_clip);
+		m_pWeapon->PlayAction(m_actions.null_fire);
 		return;
 	}
 
 	m_netshooting = false;
-	m_shooterId = shooterId;
 
 	m_pWeapon->EnableUpdate(true, eIUS_FireMode);
 
@@ -212,7 +218,7 @@ void CRapid::StartFire(EntityId shooterId)
 }
 
 //------------------------------------------------------------------------
-void CRapid::StopFire(EntityId shooterId)
+void CRapid::StopFire()
 {
 	m_startedToFire = false;
 
@@ -234,7 +240,7 @@ void CRapid::StopFire(EntityId shooterId)
 		m_zoomtimeout = 0.0f;
 	}
 	
-  if((m_speed > 0.0f) && (m_acceleration >= 0.0f))
+  if(m_acceleration >= 0.0f)
   {
 		Accelerate(m_rapidparams.deceleration);
 
@@ -244,14 +250,16 @@ void CRapid::StopFire(EntityId shooterId)
 
   SpinUpEffect(false);
 
+	if(m_firing)
+		SmokeEffect();
+
 	m_pWeapon->RequestStopFire();
 }
 
 //------------------------------------------------------------------------
-void CRapid::NetStartFire(EntityId shooterId)
+void CRapid::NetStartFire()
 {
 	m_netshooting = true;
-	m_shooterId = shooterId;
 	
 	m_pWeapon->EnableUpdate(true, eIUS_FireMode);
 
@@ -260,15 +268,20 @@ void CRapid::NetStartFire(EntityId shooterId)
 }
 
 //------------------------------------------------------------------------
-void CRapid::NetStopFire(EntityId shooterId)
+void CRapid::NetStopFire()
 {
-	if((m_speed > 0.0f) && (m_acceleration >= 0.0f))
+	if(m_acceleration >= 0.0f)
+	{
 		Accelerate(m_rapidparams.deceleration);
 
-  SpinUpEffect(false);
+	  if (m_pWeapon->IsDestroyed())
+		  FinishDeceleration();
+	}
+	
+	SpinUpEffect(false);
 
-  if (m_pWeapon->IsDestroyed())
-    FinishDeceleration();
+	if(m_firing)
+		SmokeEffect();
 }
 
 //------------------------------------------------------------------------
@@ -301,7 +314,12 @@ void CRapid::Accelerate(float acc)
 	{
 		m_accelerating = false;
 		m_decelerating = true;
-		m_pWeapon->PlayAction(m_actions.spin_down, 0, false, CItem::eIPAF_Default|CItem::eIPAF_CleanBlending);
+		if(m_speed>0.0f)
+		{
+			m_pWeapon->PlayAction(m_actions.spin_down, 0, false, CItem::eIPAF_Default|CItem::eIPAF_CleanBlending);
+			if(m_firing)
+				m_pWeapon->PlayAction(m_actions.spin_down_tail);
+		}
 
 		if (m_spinUpSoundId != INVALID_SOUNDID)
 		{
@@ -321,7 +339,7 @@ void CRapid::FinishDeceleration()
   m_speed = 0.0f;
   m_acceleration = 0.0f;
   
-  if (m_soundId)
+  if (m_soundId != INVALID_SOUNDID)
   {
     m_pWeapon->StopSound(m_soundId);
     m_soundId = INVALID_SOUNDID;

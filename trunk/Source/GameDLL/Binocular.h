@@ -23,13 +23,29 @@ History:
 #include "Weapon.h"
 
 
-class CBinocular :
-	public CWeapon
+class CBinocular :	public CWeapon
 {
+public:
+
+	CBinocular();
+
 	virtual void OnAction(EntityId actorId, const ActionId& actionId, int activationMode, float value);
 	
 	virtual void Select(bool select);
+	virtual void UpdateFPView(float frameTime);
+
 	virtual void GetMemoryStatistics(ICrySizer * s) { s->Add(*this); CWeapon::GetMemoryStatistics(s); }
+
+private:
+
+	~CBinocular();
+
+	static TActionHandler<CBinocular> s_actionHandler;
+
+	bool OnActionZoomIn(EntityId actorId, const ActionId& actionId, int activationMode, float value);
+	bool OnActionZoomOut(EntityId actorId, const ActionId& actionId, int activationMode, float value);
+	bool OnActionZoom(EntityId actorId, const ActionId& actionId, int activationMode, float value);
+	bool OnActionAttack(EntityId actorId, const ActionId& actionId, int activationMode, float value);
 };
 
 #endif // __BINOCULAR_H__

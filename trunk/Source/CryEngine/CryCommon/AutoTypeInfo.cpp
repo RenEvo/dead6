@@ -2,7 +2,7 @@
 
 #ifdef ENABLE_TYPE_INFO
 
-#include <CryTypeInfo.h>
+#include "TypeInfo_impl.h"
 
 // Includes needed for Auto-defined types.
 #include "Cry_Math.h"
@@ -27,19 +27,25 @@ using namespace primitives;
 #include "../Cry3DEngine/VoxMan.h"
 #include "../Cry3DEngine/LMSerializationManager.h"
 #include "../Cry3DEngine/SkyLightNishita.h"
-#include "../Cry3DEngine/3DSamplerOctree.h"
 #include "../CryPhysics/bvtree.h"
 #include "../CryPhysics/aabbtree.h"
 #include "../CryPhysics/obbtree.h"
 #include "../CryPhysics/geoman.h"
 #include "../CryAction/IAnimationGraph.h"
+#include "../CryAction/AnimationGraph/StateIndex.h"
 #include "../CryAISystem/AutoTypeStructs.h"
 #include "../CrySoundSystem/MusicSystem/Decoder/ADPCMDecoder.h"
 #include "../CrySoundSystem/MusicSystem/Decoder/PatternDecoder.h"
 #include "../RenderDll/Common/ResFile.h"
-//#ifdef PS3
-//#include "../RenderDll/Common/Shaders/CShaderBin.h"
-//#endif
+
+#ifndef NULL_RENDERER
+	#define NULL_RENDERER
+#endif
+#undef STATS
+#define STATS 0
+#include "../RenderDll/Common/CommonRender.h"
+#include "../RenderDll/Common/Shaders/Shader.h"
+#include "../RenderDll/Common/Shaders/CShaderBin.h"
 #include "../CryAction/PlayerProfiles/RichSaveGameTypes.h"
 
 // The auto-generated info file.
@@ -50,10 +56,6 @@ using namespace primitives;
 
 TYPE_INFO_PLAIN(primitives::getHeightCallback)
 TYPE_INFO_PLAIN(primitives::getSurfTypeCallback)
-
-#undef STRUCT_INFO_T_INSTANTIATE
-#define STRUCT_INFO_T_INSTANTIATE(T, TArgs)	\
-	template const CTypeInfo& T TArgs::TypeInfo();
 
 STRUCT_INFO_T_INSTANTIATE(Color_tpl, <float>)
 STRUCT_INFO_T_INSTANTIATE(Ang3_tpl, <float>)

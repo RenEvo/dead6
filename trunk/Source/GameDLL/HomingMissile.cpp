@@ -16,6 +16,10 @@ History:
 #include "Game.h"
 #include "GameCVars.h"
 #include "WeaponSystem.h"
+#include "Single.h"
+#include "NetInputChainDebug.h"
+#include <IVehicleSystem.h>
+#include <IViewSystem.h>
 
 #define HM_TIME_TO_UPDATE 0.0f
 
@@ -30,8 +34,10 @@ CHomingMissile::CHomingMissile()
   m_destination.zero();
   m_targetId = 0;
 	m_maxTargetDistance = 200.0f;		//Default
-	m_turnMod = 0.35f;
-	m_turnModCruise = 0.7f;
+	m_lazyness = 0.35f;
+	m_controlledTimer=0.15f;
+	m_lockedTimer=0.2f;
+	m_detonationRadius = 0.0f;
 }
 
 //------------------------------------------------------------------------
@@ -56,8 +62,9 @@ bool CHomingMissile::Init(IGameObject *pGameObject)
 		m_cruise = GetParam("cruise", m_cruise);
 		m_controlled = GetParam("controlled", m_controlled);
 		m_autoControlled = GetParam("autoControlled",m_autoControlled);
-		m_turnMod = GetParam("turnMod",m_turnMod);
-		m_turnModCruise = GetParam("turnModCruise", m_turnModCruise);
+		m_lazyness = GetParam("lazyness",m_lazyness);
+		m_lockedTimer = GetParam("initial_delay",m_lockedTimer);
+		m_detonationRadius = GetParam("detonation_radius",m_detonationRadius);
 
 		return true;
 	}
@@ -69,6 +76,13 @@ bool CHomingMissile::Init(IGameObject *pGameObject)
 void CHomingMissile::Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity, float speedScale)
 {
   CRocket::Launch(pos, dir, velocity, speedScale);
+
+	if (m_controlled)
+	{
+		Vec3 dest(pos+dir*1000.0f);
+
+		SetDestination(dest);
+	}
 }
 
 //------------------------------------------------------------------------
@@ -78,7 +92,7 @@ void CHomingMissile::Update(SEntityUpdateContext &ctx, int updateSlot)
 	FUNCTION_PROFILER(GetISystem(), PROFILE_GAME);
 
   CRocket::Update(ctx, updateSlot);
-  
+
   // update destination if required
   if (!m_cruise)
 		UpdateControlledMissile(ctx.fFrameTime);
@@ -89,42 +103,55 @@ void CHomingMissile::Update(SEntityUpdateContext &ctx, int updateSlot)
 //-----------------------------------------------------------------------------
 void CHomingMissile::UpdateControlledMissile(float frameTime)
 {
-
 	bool isServer = gEnv->bServer;
+	bool isClient = gEnv->bClient;
 
-	//IRenderer* pRenderer = gEnv->pRenderer;
-	//IRenderAuxGeom* pGeom = pRenderer->GetIRenderAuxGeom();
-	//float color[4] = {1,1,1,1};
-	//const static float step = 15.f;  
-	//float y = 20.f;    
+	CActor *pClientActor=0;
+	if (gEnv->bClient)
+		pClientActor=static_cast<CActor *>(g_pGame->GetIGameFramework()->GetClientActor());
+	bool isOwner = ((!m_ownerId && isServer) || (isClient && pClientActor && (pClientActor->GetEntityId() == m_ownerId) && pClientActor->IsPlayer()));
 
-	//bool bDebug = g_pGameCVars->i_debug_projectiles > 0;
+	IRenderer* pRenderer = gEnv->pRenderer;
+	IRenderAuxGeom* pGeom = pRenderer->GetIRenderAuxGeom();
+	float color[4] = {1,1,1,1};
+	const static float step = 15.f;  
+	float y = 20.f;    
 
-	float	turnMod = 0.35f;
+	bool bDebug = g_pGameCVars->i_debug_projectiles > 0;
 
-	if (isServer)
+	if (isOwner || isServer)
 	{
-		SetDestination(Vec3Constants<float>::fVec3_Zero);
-
 		//If there's a target, follow the target
-		if(m_targetId)
+		if(isServer)
 		{
-			turnMod = m_turnModCruise;
-			// If we are here, there's a target
-			IEntity* pTarget = gEnv->pEntitySystem->GetEntity(m_targetId);
-			if (pTarget)
+			if (m_targetId)
 			{
-				AABB box;
-				pTarget->GetWorldBounds(box);
-				Vec3 finalDes = 0.5f*(box.GetCenter()+pTarget->GetWorldPos());
-				SetDestination(finalDes);
-				//SetDestination( box.GetCenter() );
+				if (m_lockedTimer>0.0f)
+					m_lockedTimer=m_lockedTimer-frameTime;
+				else
+				{
+					// If we are here, there's a target
+					IEntity* pTarget = gEnv->pEntitySystem->GetEntity(m_targetId);
+					if (pTarget)
+					{
+						AABB box;
+						pTarget->GetWorldBounds(box);
+						Vec3 finalDes = box.GetCenter();
+						SetDestination(finalDes);
+						//SetDestination( box.GetCenter() );
 
-				//if (bDebug)
-					//pRenderer->Draw2dLabel(5.0f, y+=step, 1.5f, color, false, "Target Entity: %s", pTarget->GetName());
+						if (bDebug)
+							pRenderer->Draw2dLabel(5.0f, y+=step, 1.5f, color, false, "Target Entity: %s", pTarget->GetName());
+					}
+
+					m_lockedTimer+=0.05f;
+				}
 			}
+			else if(m_autoControlled)
+				return;
 		} 
-		else if (m_controlled && !m_autoControlled)
+
+		if (m_controlled && !m_autoControlled && isOwner && !m_targetId)
 		{
 			//Check if the weapon is still selected
 			CWeapon *pWeapon = GetWeapon();
@@ -132,38 +159,64 @@ void CHomingMissile::UpdateControlledMissile(float frameTime)
 			if(!pWeapon || !pWeapon->IsSelected())
 				return;
 
-			//Follow the crosshair
-			CActor *pActor=static_cast<CActor *>(g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(GetOwnerId()));
-			if (pActor && pActor->IsPlayer())
+			if (m_controlledTimer>0.0f)
+				m_controlledTimer=m_controlledTimer-frameTime;
+			else if (pClientActor && pClientActor->IsPlayer()) 	//Follow the crosshair
 			{
-				if (IMovementController *pMC=pActor->GetMovementController())
+				if (IMovementController *pMC=pClientActor->GetMovementController())
 				{
-					turnMod = m_turnMod;
-					SMovementState state;
-					pMC->GetMovementState(state);
+					Vec3 eyePos(ZERO);
+					Vec3 eyeDir(ZERO);
 
-					static const int objTypes = ent_all;    
-					static const unsigned int flags = rwi_stop_at_pierceable|rwi_colltype_any;                      
+					IVehicle* pVehicle = pClientActor->GetLinkedVehicle();
+					if(!pVehicle)
+					{
+						SMovementState state;
+						pMC->GetMovementState(state);
+
+						eyePos = state.eyePosition;
+						eyeDir = state.eyeDirection;
+					}
+					else
+					{	
+						SViewParams viewParams;
+						pVehicle->UpdateView(viewParams, pClientActor->GetEntityId());
+
+						eyePos = viewParams.position;
+						eyeDir = viewParams.rotation * Vec3(0,1,0);
+						//eyeDir = (viewParams.targetPos - viewParams.position).GetNormalizedSafe();
+					}
+
+					static const int objTypes = ent_all;
+					static const int flags = (geom_colltype_ray << rwi_colltype_bit) | rwi_colltype_any | (7 & rwi_pierceability_mask) | (geom_colltype14 << rwi_colltype_bit);
 
 					IPhysicalWorld* pWorld = gEnv->pPhysicalWorld;
-					IPhysicalEntity *pSkip = GetEntity()->GetPhysics();
+					static IPhysicalEntity* pSkipEnts[10];
+					int numSkip = CSingle::GetSkipEntities(pWeapon, pSkipEnts, 10);
+
 					ray_hit hit;
 					int hits = 0;
 
-					hits = pWorld->RayWorldIntersection(state.eyePosition + 1.5f*state.eyeDirection, state.eyeDirection*m_maxTargetDistance, objTypes, flags, &hit, 1, &pSkip, 1);
+					hits = pWorld->RayWorldIntersection(eyePos + 1.5f*eyeDir, eyeDir*m_maxTargetDistance, objTypes, flags, &hit, 1, pSkipEnts, numSkip);
+
+					DestinationParams params;
 
 					if(hits)
-						SetDestination(hit.pt);
+						params.pt=hit.pt;
 					else
-						SetDestination(state.eyePosition + m_maxTargetDistance*state.eyeDirection);	//Some point in the sky...
+						params.pt=(eyePos+m_maxTargetDistance*eyeDir);	//Some point in the sky...
 
+					GetGameObject()->InvokeRMI(SvRequestDestination(), params, eRMI_ToServer);
 
-					//if (bDebug)
-					//{
-						//pRenderer->Draw2dLabel(5.0f, y+=step, 1.5f, color, false, "PlayerView Target: %.0f %.0f %.0f", hit.pt.x, hit.pt.y, hit.pt.z);
-						//pRenderer->GetIRenderAuxGeom()->DrawCone(m_destination, Vec3(0,0,-1), 2.5f, 7.f, ColorB(255,0,0,255));
-					//}
+					if (bDebug)
+					{
+						pRenderer->Draw2dLabel(5.0f, y+=step, 1.5f, color, false, "PlayerView eye direction: %.3f %.3f %.3f", eyeDir.x, eyeDir.y, eyeDir.z);
+						pRenderer->Draw2dLabel(5.0f, y+=step, 1.5f, color, false, "PlayerView Target: %.3f %.3f %.3f", hit.pt.x, hit.pt.y, hit.pt.z);
+						pRenderer->GetIRenderAuxGeom()->DrawCone(m_destination, Vec3(0,0,-1), 2.5f, 7.f, ColorB(255,0,0,255));
+					}
 				}
+
+				m_controlledTimer+=0.0f;
 			}
 		}
 	}
@@ -173,47 +226,77 @@ void CHomingMissile::UpdateControlledMissile(float frameTime)
 	{
 		pe_status_dynamics status;
 		if (!GetEntity()->GetPhysics()->GetStatus(&status))
-			return;
-
-		float currentSpeed = status.v.len();
-		Vec3 currentVel = status.v;
-		Vec3 currentPos = GetEntity()->GetWorldPos();
-		Vec3 goalDir(ZERO);
-
-		//Just a security check
-		if(currentSpeed<1.0f)
 		{
-			Explode(true,false);
+			CryLogAlways("couldn't get physics status!");
 			return;
 		}
 
-		goalDir = m_destination - currentPos;
-		goalDir.Normalize();
+		pe_status_pos pos;
+		if (!GetEntity()->GetPhysics()->GetStatus(&pos))
+		{
+			CryLogAlways("couldn't get physics pos!");
+			return;
+		}
 
-		//Turn more slowly...
-		currentVel.Normalize();
+		float currentSpeed = status.v.len();
 
-		//if(bDebug)
-		//{
-			//pRenderer->Draw2dLabel(50,55,2.0f,color,false,"Current Dir: %f, %f, %f",currentVel.x,currentVel.y,currentVel.z);
-			//pRenderer->Draw2dLabel(50,80,2.0f,color,false,"Goal    Dir: %f, %f, %f",goalDir.x,goalDir.y,goalDir.z);
-		//}					
+		if (currentSpeed>0.001f)
+		{
+			Vec3 currentVel = status.v;
+			Vec3 currentPos = pos.pos;
+			Vec3 goalDir(ZERO);
 
-		float cosine = max(min(currentVel.Dot(goalDir), 0.999f), -0.999f);
-		float goalAngle = RAD2DEG(acos_tpl(cosine));
-		float maxAngle = m_turnSpeed * frameTime;
+			assert(!_isnan(currentSpeed));
+			assert(!_isnan(currentVel.x) && !_isnan(currentVel.y) && !_isnan(currentVel.z));
 
-		if (goalAngle > maxAngle+0.05f)
-			goalAngle = maxAngle;
+			//Just a security check
+			if((currentPos-m_destination).len2()<(m_detonationRadius*m_detonationRadius))
+			{
+				Explode(true, true, m_destination, -currentVel.normalized(), currentVel, m_targetId);
 
-		goalDir = Vec3::CreateLerp(currentVel,goalDir, (maxAngle/goalAngle)*turnMod);
+				return;
+			}
 
-		//if(bDebug)
-			//pRenderer->Draw2dLabel(50,105,2.0f,color,false,"Corrected Dir: %f, %f, %f",goalDir.x,goalDir.y,goalDir.z);
+			goalDir = m_destination - currentPos;
+			goalDir.Normalize();
 
-		pe_action_set_velocity action;
-		action.v = goalDir * currentSpeed;
-		GetEntity()->GetPhysics()->Action(&action);
+			//Turn more slowly...
+			currentVel.Normalize();
+
+			if(bDebug)
+			{
+
+				pRenderer->Draw2dLabel(50,55,2.0f,color,false, "  Destination: %.3f, %.3f, %.3f",m_destination.x,m_destination.y,m_destination.z);
+				pRenderer->Draw2dLabel(50,80,2.0f,color,false, "  Current Dir: %.3f, %.3f, %.3f",currentVel.x,currentVel.y,currentVel.z);
+				pRenderer->Draw2dLabel(50,105,2.0f,color,false,"  Goal    Dir: %.3f, %.3f, %.3f",goalDir.x,goalDir.y,goalDir.z);
+			}
+
+			float cosine = currentVel.Dot(goalDir);
+			cosine = CLAMP(cosine,-1.0f,1.0f);
+			float totalAngle = RAD2DEG(cry_acosf(cosine));
+
+			assert(totalAngle>=0);
+
+			if (cosine<0.99)
+			{
+				float maxAngle = m_turnSpeed*frameTime;
+				if (maxAngle>totalAngle)
+					maxAngle=totalAngle;
+				float t=(maxAngle/totalAngle)*m_lazyness;
+
+				assert(t>=0.0 && t<=1.0);
+
+				goalDir = Vec3::CreateSlerp(currentVel, goalDir, t);
+				goalDir.Normalize();
+			}
+
+			if(bDebug)
+				pRenderer->Draw2dLabel(50,180,2.0f,color,false,"Corrected Dir: %.3f, %.3f, %.3f",goalDir.x,goalDir.y,goalDir.z);
+
+			pe_action_set_velocity action;
+			action.v = goalDir * currentSpeed;
+			GetEntity()->GetPhysics()->Action(&action);
+		}
 	}
 }
 
@@ -348,10 +431,11 @@ void CHomingMissile::UpdateCruiseMissile(float frameTime)
 		{ 
 			pGeom->DrawCone( currentPos, goalDir, 0.4f, 12.f, ColorB(255,0,0,255) );
 			pRenderer->Draw2dLabel(5.0f,  y+=step, 1.5f, color, false, "[HomingMissile] goalAngle: %.2f", goalAngle); 
+
 		}
 
 		if (goalAngle > maxAngle+0.05f)    
-			dir = (Vec3::CreateLerp(currentDir, goalDir, maxAngle/goalAngle)).normalize();
+			dir = (Vec3::CreateSlerp(currentDir, goalDir, maxAngle/goalAngle)).normalize();
 		else //if (goalAngle < 0.005f)
 			dir = goalDir;
 	}
@@ -367,17 +451,33 @@ void CHomingMissile::UpdateCruiseMissile(float frameTime)
 	}
 }
 //-------------------------------------------------------------------------------
-void CHomingMissile::Serialize(TSerialize ser, unsigned int aspects)
+void CHomingMissile::FullSerialize(TSerialize ser)
 {
-	CRocket::Serialize(ser, aspects);
+	CRocket::FullSerialize(ser);
+	SerializeDestination(ser);
+}
 
-	if (aspects & eEA_GameServerDynamic)
+void CHomingMissile::SerializeDestination( TSerialize ser )
+{
+	bool gotdestination=!m_destination.IsZero();
+	if (ser.BeginOptionalGroup("gotdestination", gotdestination))
 	{
-		bool gotdestination=!m_destination.IsZero();
-		if (ser.BeginOptionalGroup("gotdestination", gotdestination))
-		{
-			ser.Value("destination", m_destination, 'wrld');
-			ser.EndGroup();
-		}
+		ser.Value("destination", m_destination, 'wrl3');
+		ser.EndGroup();
 	}
+}
+
+bool CHomingMissile::NetSerialize(TSerialize ser, EEntityAspects aspect, uint8 profile, int flags)
+{
+	if (aspect == eEA_GameServerDynamic)
+		SerializeDestination(ser);
+	return CRocket::NetSerialize(ser, aspect, profile, flags);
+}
+
+//------------------------------------------------------------------------
+IMPLEMENT_RMI(CHomingMissile, SvRequestDestination)
+{
+	SetDestination(params.pt);
+
+	return true;
 }

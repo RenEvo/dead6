@@ -323,21 +323,22 @@ struct pe_params_buoyancy : pe_params {
 
 enum phentity_flags {
 	particle_single_contact=0x01,particle_constant_orientation=0x02,particle_no_roll=0x04,particle_no_path_alignment=0x08,particle_no_spin=0x10,
-	lef_push_objects=0x01, lef_push_players=0x02,	lef_snap_velocities=0x04,	lef_loosen_stuck_checks=0x08,
+	lef_push_objects=0x01, lef_push_players=0x02,	lef_snap_velocities=0x04,	lef_loosen_stuck_checks=0x08, lef_report_sliding_contacts=0x10,
 	rope_findiff_attached_vel=0x01, rope_no_solver=0x02, rope_ignore_attachments=0x4,	rope_target_vtx_rel0=0x08, rope_target_vtx_rel1=0x10,
 	rope_subdivide_segs=0x100,
 	se_skip_longest_edges=0x01,
-	ref_use_simple_solver=0x01,	ref_checksum_received=0x04, ref_checksum_outofsync=0x08,
+	ref_use_simple_solver=0x01,	ref_no_splashes=0x04, ref_checksum_received=0x04, ref_checksum_outofsync=0x08,
 	aef_recorded_physics = 0x02,
 	wwef_fake_inner_wheels = 0x10,
 	pef_disabled=0x20, pef_never_break=0x40, pef_deforming=0x80, pef_pushable_by_players=0x200,	
 	pef_traceable=0x400, particle_traceable=0x400, rope_traceable=0x400, pef_update=0x800,
-	pef_monitor_state_changes=0x1000, pef_monitor_collisions=0x2000, pef_monitor_impulses=0x4000, pef_never_affect_triggers=0x8000,
+	pef_monitor_state_changes=0x1000, pef_monitor_collisions=0x2000, pef_monitor_env_changes=0x4000, pef_never_affect_triggers=0x8000,
 	pef_invisible=0x10000, pef_ignore_ocean=0x20000, pef_fixed_damping=0x40000,	pef_custom_poststep=0x80000, pef_monitor_poststep=0x80000,
 	pef_always_notify_on_deletion=0x100000,
 	rope_collides=0x200000, rope_collides_with_terrain=0x400000, rope_no_stiffness_when_colliding=0x10000000,
+	pef_override_impulse_scale=0x200000, pef_players_can_break=0x400000, pef_cannot_squash_players=0x10000000,
 	pef_ignore_areas=0x800000,
-	pef_log_state_changes=0x1000000, pef_log_collisions=0x2000000, pef_log_impulses=0x4000000, pef_log_poststep=0x8000000,
+	pef_log_state_changes=0x1000000, pef_log_collisions=0x2000000, pef_log_env_changes=0x4000000, pef_log_poststep=0x8000000,
 };
 
 struct pe_params_flags : pe_params {
@@ -359,7 +360,8 @@ struct pe_params_structural_joint : pe_params {
 	enum entype { type_id=21 };
 	pe_params_structural_joint() { 
 		type=type_id; id=0; bReplaceExisting=0; 
-		MARK_UNUSED idx,partid[0],partid[1],pt,n,maxForcePush,maxForcePull,maxForceShift,maxTorqueBend,maxTorqueTwist,bBreakable,szSensor,bBroken;
+		MARK_UNUSED idx,partid[0],partid[1],pt,n,maxForcePush,maxForcePull,maxForceShift,maxTorqueBend,maxTorqueTwist,
+			bBreakable,szSensor,bBroken,partidEpicenter;
 	}
 
 	int id,idx;
@@ -372,6 +374,7 @@ struct pe_params_structural_joint : pe_params {
 	int bBreakable;
 	float szSensor;
 	int bBroken;
+	int partidEpicenter;
 };
 
 struct pe_params_timeout : pe_params {
@@ -600,7 +603,7 @@ struct pe_params_car : pe_params {
 struct pe_params_wheel : pe_params {
 	enum entype { type_id=16 };
 	pe_params_wheel() {
-		type=type_id; iWheel=0; MARK_UNUSED bDriving,iAxle,suspLenMax,minFriction,maxFriction,surface_idx,bCanBrake,bBlocked,
+		type=type_id; iWheel=0; MARK_UNUSED bDriving,iAxle,suspLenMax,suspLenInitial,minFriction,maxFriction,surface_idx,bCanBrake,bBlocked,
 			bRayCast,kStiffness,kDamping,kLatFriction,Tscale;
 	}
 
@@ -610,6 +613,7 @@ struct pe_params_wheel : pe_params {
 	int bCanBrake;
   int bBlocked;
 	float suspLenMax;
+	float suspLenInitial;
 	float minFriction;
 	float maxFriction;
 	int surface_idx;
@@ -628,7 +632,8 @@ struct pe_params_rope : pe_params {
 		type=type_id; MARK_UNUSED length,mass,bCheckCollisions,collDist,surface_idx,friction,nSegments,pPoints.data,pVelocities.data;
 		MARK_UNUSED pEntTiedTo[0],ptTiedTo[0],idPartTiedTo[0],pEntTiedTo[1],ptTiedTo[1],idPartTiedTo[1],stiffnessAnim,maxForce,
 			flagsCollider,nMaxSubVtx,stiffnessDecayAnim,dampingAnim,bTargetPoseActive,wind,windVariance,airResistance,waterResistance,density,
-			jointLimit,sensorRadius,frictionPull,stiffness;
+			jointLimit,sensorRadius,frictionPull,stiffness,collisionBBox[0];
+		bLocalPtTied = 0;
 	}
 
 	float length;
@@ -654,10 +659,12 @@ struct pe_params_rope : pe_params {
 	int nSegments;
 	int flagsCollider;
 	int nMaxSubVtx;
+	Vec3 collisionBBox[2];
 	strided_pointer<Vec3> pPoints;
 	strided_pointer<Vec3> pVelocities;
 
 	IPhysicalEntity *pEntTiedTo[2];
+	int bLocalPtTied;
 	Vec3 ptTiedTo[2];
 	int idPartTiedTo[2];
 };
@@ -784,11 +791,13 @@ struct pe_action_add_constraint : pe_action {
 
 struct pe_action_update_constraint : pe_action {
 	enum entype { type_id=6 };
-	pe_action_update_constraint() { type=type_id; MARK_UNUSED idConstraint; flagsOR=0;flagsAND=(unsigned int)-1;bRemove=0; }
+	pe_action_update_constraint() { type=type_id; MARK_UNUSED idConstraint,pt[0],pt[1]; flagsOR=0;flagsAND=(unsigned int)-1;bRemove=0; flags=world_frames; }
 	int idConstraint;
 	unsigned int flagsOR;
 	unsigned int flagsAND;
 	int bRemove;
+	Vec3 pt[2];
+	int flags;
 };
 
 struct pe_action_register_coll_event : pe_action {
@@ -847,6 +856,15 @@ struct pe_action_auto_part_detachment : pe_action {
 	pe_action_auto_part_detachment() { type=type_id; MARK_UNUSED threshold,autoDetachmentDist; }
 	float threshold;
 	float autoDetachmentDist;
+};
+
+struct pe_action_move_parts : pe_action {
+	enum entype { type_id=16 };
+	int idStart,idEnd;
+	int idOffset;
+	IPhysicalEntity *pTarget;
+	Matrix34 mtxRel;
+	pe_action_move_parts() { type=type_id; idStart=0; idEnd=1<<30; idOffset=0; mtxRel.SetIdentity(); pTarget=0; }
 };
 
 ////////// living entity actions
@@ -910,7 +928,7 @@ struct pe_status {
 	int type;
 };
 
-enum status_pos_flags { status_local=1,status_thread_safe=2 };
+enum status_pos_flags { status_local=1,status_thread_safe=2,status_addref_geoms=4 };
 
 struct pe_status_pos : pe_status {
 	enum entype { type_id=1 };
@@ -958,7 +976,7 @@ struct pe_status_sensors : pe_status { // Requests status of attached to the ent
 struct pe_status_dynamics : pe_status {
 	enum entype { type_id=8 };
 	pe_status_dynamics() : v(ZERO),w(ZERO),a(ZERO),wa(ZERO),centerOfMass(ZERO) {
-		MARK_UNUSED partid,ipart; type=type_id; mass=energy=0; nContacts=0; time_interval=0; submergedFraction=0; waterResistance=0;
+		MARK_UNUSED partid,ipart; type=type_id; mass=energy=0; nContacts=0; time_interval=0; submergedFraction=0; 
 	}
 
 	int partid;
@@ -969,7 +987,6 @@ struct pe_status_dynamics : pe_status {
 	Vec3 wa; // angular acceleration
 	Vec3 centerOfMass;
 	float submergedFraction;
-	float waterResistance;
 	float mass;
 	float energy;
 	int nContacts;
@@ -1097,12 +1114,15 @@ struct pe_status_living : pe_status {
 	float groundHeight; // position where the last contact with the ground occured
 	Vec3 groundSlope;
 	int groundSurfaceIdx;
+	int groundSurfaceIdxAux;
 	IPhysicalEntity *pGroundCollider;
 	int iGroundColliderPart;
 	float timeSinceStanceChange;
 	int bOnStairs;
+	int bStuck;
 	volatile int *pLockStep;
 	int iCurTime;
+	int bSquashed;
 };
 
 struct pe_status_check_stance : pe_status {
@@ -1186,7 +1206,7 @@ struct pe_status_joint : pe_status {
 
 struct pe_status_rope : pe_status {
 	enum entype { type_id=14 };
-	pe_status_rope() { type=type_id; pPoints=pVelocities=pVtx=0; nCollStat=nCollDyn=bTargetPoseActive=0; 
+	pe_status_rope() { type=type_id; pPoints=pVelocities=pVtx=pContactNorms=0; nCollStat=nCollDyn=bTargetPoseActive=0; 
 		pContactEnts=0; stiffnessAnim=timeLastActive=0; nVtx=0; }
 
 	int nSegments;
@@ -1198,6 +1218,7 @@ struct pe_status_rope : pe_status {
 	strided_pointer<IPhysicalEntity*> pContactEnts;
 	int nVtx;
 	Vec3 *pVtx;
+	Vec3 *pContactNorms;
 	float timeLastActive;
 };
 
@@ -1297,7 +1318,8 @@ struct pe_articgeomparams : pe_geomparams {
 		type=type_id;	density=src.density; mass=src.mass; pos=src.pos; q=src.q; scale=src.scale; surface_idx=src.surface_idx;	
 		pLattice=src.pLattice; pMatMapping=src.pMatMapping; nMats=src.nMats;
 		pMtx3x4=src.pMtx3x4;pMtx3x3=src.pMtx3x3; flags=src.flags; flagsCollider=src.flagsCollider;
-		idbody=0;	minContactDist=src.minContactDist; idmatBreakable=src.idmatBreakable; bRecalcBBox=src.bRecalcBBox;
+		idbody=0;	idmatBreakable=src.idmatBreakable; bRecalcBBox=src.bRecalcBBox;
+		if (!is_unused(src.minContactDist)) minContactDist=src.minContactDist; else MARK_UNUSED minContactDist;
 	}
 	int idbody; // id of the subbody this geometry is attached to, the 1st add geometry specifies frame CS of this subbody
 };
@@ -1580,6 +1602,7 @@ struct IGeometry {
 	virtual void Load(CMemStream &stm, strided_pointer<const Vec3> pVertices, strided_pointer<unsigned short> pIndices, char *pIds) = 0;
 	virtual int GetPrimitiveCount() = 0;
 	virtual const primitives::primitive *GetData() = 0;
+	virtual void SetData(const primitives::primitive*) = 0;
 	virtual float GetVolume() = 0;
 	virtual Vec3 GetCenter() = 0;
 	virtual int Subtract(IGeometry *pGeom, geom_world_data *pdata1,geom_world_data *pdata2, int bLogUpdates=1) = 0;
@@ -1676,7 +1699,7 @@ struct IPhysUtils {
 //////////////////////////// IPhysicalEntity Interface //////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////
 
-enum snapshot_flags { ssf_compensate_time_diff=1, ssf_checksum_only=2, ssf_no_update=4 };
+enum snapshot_flags { ssf_compensate_time_diff=1, ssf_checksum_only=2, ssf_no_update=4, ssf_from_child_class=8 };
 
 struct IPhysicalEntity {
 	/*! Retrieves entity type
@@ -1747,13 +1770,10 @@ struct IPhysicalEntity {
 	virtual int GetStateSnapshotTxt(char *txtbuf,int szbuf, float time_back=0) = 0;
 	virtual void SetStateFromSnapshotTxt(const char *txtbuf,int szbuf) = 0;
 	virtual unsigned int GetStateChecksum() = 0;
-	/*! StartStep should be called before step with the full time interval (if the step will be split into substeps)
-	*/
-	virtual void StartStep(float time_interval) = 0;
 	/*! Evolves entity in time. Normally this is called from PhysicalWorld::TimeStep
 		@param time_interval time step
 	*/
-	virtual int Step(float time_interval) = 0;
+	virtual int DoStep(float time_interval, int iCaller=1) = 0;
 	/*! Restores previous entity state that corresponds to time -time_interval from now, interpolating when
 			necessary. This can be used for	manual client-server synchronization. Outside of PhysicalWorld::TimeStep
 			should be called only for living entities
@@ -1790,16 +1810,16 @@ enum draw_helper_flags { pe_helper_collisions=1, pe_helper_geometry=2, pe_helper
 enum surface_flags { sf_pierceable_mask=0x0F, sf_max_pierceable=0x0F, sf_important=0x200, sf_manually_breakable=0x400, sf_matbreakable_bit=16 };
 #define sf_pierceability(i) (i)
 #define sf_matbreakable(i) (((i)+1)<<sf_matbreakable_bit)
-enum rwi_flags { rwi_ignore_terrain_holes=0x20, rwi_ignore_noncolliding=0x40, rwi_ignore_back_faces=0x80, rwi_any_hit=0x100,
+enum rwi_flags { rwi_ignore_terrain_holes=0x20, rwi_ignore_noncolliding=0x40, rwi_ignore_back_faces=0x80, rwi_ignore_solid_back_faces=0x100,
 								 rwi_pierceability_mask=0x0F, rwi_pierceability0=0, rwi_stop_at_pierceable=0x0F, rwi_separate_important_hits=sf_important,
 								 rwi_colltype_bit=16, rwi_colltype_any=0x400, rwi_queue=0x800, rwi_force_pierceable_noncoll=0x1000,
-								 rwi_reuse_last_hit=0x2000, rwi_update_last_hit=0x4000 };
+								 rwi_reuse_last_hit=0x2000, rwi_update_last_hit=0x4000, rwi_any_hit=0x8000 };
 #define rwi_pierceability(pty) (pty)
 enum entity_query_flags { ent_static=1, ent_sleeping_rigid=2, ent_rigid=4, ent_living=8, ent_independent=16, ent_deleted=128, ent_terrain=0x100,
 													ent_all=ent_static | ent_sleeping_rigid | ent_rigid | ent_living | ent_independent | ent_terrain,
 													ent_flagged_only = pef_update, ent_skip_flagged = pef_update*2, ent_areas = 32, ent_triggers = 64,
 													ent_ignore_noncolliding = 0x10000, ent_sort_by_mass = 0x20000, ent_allocate_list = 0x40000,
-													ent_water = 0x200 // can only be used in RayWorldIntersection
+													ent_water = 0x200, ent_no_ondemand_activation = 0x80000 // can only be used in RayWorldIntersection
 												};
 enum phys_locks { PLOCK_WORLD_STEP=1, PLOCK_CALLER0, PLOCK_CALLER1, PLOCK_QUEUE, PLOCK_AREAS };
 
@@ -1893,6 +1913,18 @@ struct PhysicsVars : SolverSettings {
 	float massLimitDebris;
 	int flagsColliderDebris;
 	int flagsANDDebris;
+	int maxSplashesPerObj;
+	float splashDist0,minSplashForce0,minSplashVel0;
+	float splashDist1,minSplashForce1,minSplashVel1;
+	int bDebugExplosions;
+	float timeScalePlayers;
+	float threadLag;
+	// net-synchronization related
+	float netMinSnapDist;
+	float netVelSnapMul;
+	float netMinSnapDot;
+	float netAngSnapMul;
+	float netSmoothTime;
 };
 
 struct ray_hit {
@@ -1970,7 +2002,7 @@ struct EventPhysBBoxOverlap : EventPhysStereo {
 
 struct EventPhysCollision : EventPhysStereo {
 	enum entype { id=1, flagsCall=pef_monitor_collisions, flagsLog=pef_log_collisions };
-	EventPhysCollision() { idval=id; }
+	EventPhysCollision() { idval=id; pEntContact=0; }
 	int idCollider;
 	Vec3 pt;
 	Vec3 n;
@@ -1990,10 +2022,13 @@ struct EventPhysStateChange : EventPhysMono {
 	int iSimClass[2];
 };
 
-struct EventPhysImpulse : EventPhysMono {
-	enum entype { id=3, flagsCall=pef_monitor_impulses, flagsLog=pef_log_impulses };
-	EventPhysImpulse() { idval=id; }
-	pe_action_impulse ai;
+struct EventPhysEnvChange : EventPhysMono {
+	enum entype { id=3, flagsCall=pef_monitor_env_changes, flagsLog=pef_log_env_changes };
+	enum encode { EntStructureChange=0 };
+	EventPhysEnvChange() { idval=id; }
+	int iCode;
+	IPhysicalEntity *pentSrc;
+	IPhysicalEntity *pentNew;
 };
 
 struct EventPhysPostStep : EventPhysMono {
@@ -2047,6 +2082,7 @@ struct EventPhysJointBroken : EventPhysStereo {
 	EventPhysJointBroken() { idval=id; }
 	int idJoint;
 	int bJoint; // otherwise it's a constraint
+	int partidEpicenter;
 	Vec3 pt;
 	Vec3 n;
 	int partid[2];
@@ -2120,6 +2156,7 @@ struct IPhysicalWorld {
 	virtual void SetupEntityGrid(int axisz, Vec3 org, int nx,int ny, float stepx,float stepy) = 0;
 	virtual void DeactivateOnDemandGrid() = 0;
 	virtual void RegisterBBoxInPODGrid(const Vec3 *BBox) = 0;
+	virtual int AddRefEntInPODGrid(IPhysicalEntity *pent, const Vec3 *BBox=0) = 0;
 	/*! Sets heightfield data
 		@param phf
 	*/
@@ -2262,6 +2299,7 @@ struct IPhysicalWorld {
 	}
 	virtual int DeformPhysicalEntity(IPhysicalEntity *pent, const Vec3 &ptHit,const Vec3 &dirHit,float r, int flags=0) = 0;
 	virtual void UpdateDeformingEntities(float time_interval=0.01f) = 0;
+	virtual float CalculateExplosionExposure(pe_explosion *pexpl, IPhysicalEntity *pient) = 0;
 
 	/*! Returns fraction of pent (0-1) that was exposed to the last explosion
 	*/
@@ -2310,11 +2348,11 @@ struct IPhysicalWorld {
 	virtual void ClearLoggedEvents() = 0;
 
 	virtual IPhysicalEntity *AddGlobalArea() = 0;
-	virtual IPhysicalEntity *AddArea(Vec3 *pt,int npt, float zmin,float zmax, const Vec3 &pos=Vec3(0,0,0), const quaternionf &q=quaternionf(),
+	virtual IPhysicalEntity *AddArea(Vec3 *pt,int npt, float zmin,float zmax, const Vec3 &pos=Vec3(0,0,0), const quaternionf &q=quaternionf(IDENTITY),
 		float scale=1.0f, const Vec3 &normal=Vec3(ZERO), int *pTessIdx=0,int nTessTris=0,Vec3 *pFlows=0) = 0;
 	virtual IPhysicalEntity *AddArea(IGeometry *pGeom, const Vec3& pos,const quaternionf &q,float scale) = 0;
 	virtual void RemoveArea(IPhysicalEntity *pArea) = 0;
-	virtual IPhysicalEntity *AddArea(Vec3 *pt,int npt, float r, const Vec3 &pos=Vec3(0,0,0),const quaternionf &q=quaternionf(1,0,0,0),float scale=1) = 0;
+	virtual IPhysicalEntity *AddArea(Vec3 *pt,int npt, float r, const Vec3 &pos=Vec3(0,0,0),const quaternionf &q=quaternionf(IDENTITY),float scale=1) = 0;
 	// GetNextArea: iterates through all registered areas, if prevarea==0 returns the global area
 	virtual IPhysicalEntity *GetNextArea(IPhysicalEntity *pPrevArea=0) = 0;
 	// Checks areas for a given point

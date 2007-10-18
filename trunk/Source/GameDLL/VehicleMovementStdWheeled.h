@@ -59,7 +59,9 @@ struct SWheelStats
   float lateralSlip;
   float suspLen;
   float compression;
+  float torqueScale;
   bool handBraking;
+  bool bContact;
   
   // for debugging
   float friction;
@@ -71,7 +73,9 @@ struct SWheelStats
     friction = 0.f;
     suspLen = 0.f;
     compression = 0.f;
+    torqueScale = 0.f;
     handBraking = false;
+    bContact = false;
   }
 };
 
@@ -97,7 +101,9 @@ public:
   virtual bool StartEngine(EntityId driverId);  
 	virtual void StopEngine();
 	virtual void OnEvent(EVehicleMovementEvent event, const SVehicleMovementEventParams& params);
+	virtual void OnAction(const TVehicleActionId actionId, int activationMode, float value);
 
+	virtual void ProcessAI(const float deltaTime);
 	virtual void ProcessMovement(const float deltaTime);
 	virtual void Update(const float deltaTime);  
   virtual void UpdateSounds(const float deltaTime);
@@ -131,23 +137,27 @@ protected:
   virtual void InitSurfaceEffects();  
   
   virtual void UpdateSuspension(const float deltaTime);
+  void UpdateSuspensionSound(const float deltaTime);
   virtual void UpdateAxleFriction(float pedal, bool backwardMax, const float deltaTime);
   void UpdateBrakes(const float deltaTime);
-
+  
   virtual void UpdateSurfaceEffects(const float deltaTime);
   virtual void UpdateGameTokens(const float deltaTime);
   
   virtual void Boost(bool enable);
   virtual void ApplyBoost(float speed, float maxSpeed, float strength, float deltaTime);
-
+  
   virtual bool DoGearSound();
   virtual float GetMinRPMSoundRatio() { return 0.f; }
-  
+    
   virtual void DebugDrawMovement(const float deltaTime);
 
   float GetMaxSteer(float speedRel);
   float GetSteerSpeed(float speedRel);
   
+  virtual float GetWheelCondition() const;
+  void SetEngineRPMMult(float mult, int threadSafe=0);
+
 protected:
 
   pe_params_car m_carParams;
@@ -185,8 +195,7 @@ protected:
   float m_suspDampingMin, m_suspDampingMax, m_suspDamping, m_suspDampingMaxSpeed;  
   float m_stabiMin, m_stabiMax, m_stabi;
   float m_speedSuspUpdated;    
-  
-    
+	    
 	// Network related
 	CNetActionSync<CNetworkMovementStdWheeled> m_netActionSync;
   
@@ -196,10 +205,12 @@ protected:
   typedef std::vector<SWheelStats> TWheelStats;
   TWheelStats m_wheelStats;
   
-  float m_pullModUpdate;
   float m_lostContactTimer;
   float m_tireBlownTimer;
-	
+  int   m_blownTires;
+  float m_forceSleepTimer;
+  bool  m_bForceSleep;
+
 	float m_gearRatios[16];
   float m_latFriction;
   float m_avgLateralSlip;  
@@ -207,17 +218,19 @@ protected:
   int   m_wheelContacts;
   int   m_wheelContactsLeft;
   int   m_wheelContactsRight;
-  
+  int	m_passengerCount;
   int   m_lastDebugFrame;
 
 	//------------------------------------------------------------------------------
 	// AI related
 	// PID controller for speed control.	
-	float	m_direction;
-	SPID	m_dirPID;
+
 	float	m_steering;
-  float m_prevAngle;
-  CTimeValue m_lastSteerUpdateTime;
+	float	m_prevAngle;
+
+	CMovementRequest m_aiRequest;
+
+	float m_submergedRatioMax;	// to avoid calling vehicle functions in ProcessMovement()
 };
 
 

@@ -38,9 +38,10 @@ bool  CVotingSystem::StartVoting(int id, const CTimeValue& start, EVotingState s
   v.startTime = start;
   m_votings.push_back(v);
   m_votes.resize(0);
+	m_numVotes = 0;
   m_teamVotes = 0;
 
-  m_subject = subj?subj:"";
+	m_subject = subj?subj:"";
   m_state = st;
   m_id = eid;
   m_team = team;
@@ -54,6 +55,7 @@ void  CVotingSystem::EndVoting()
   m_votes.resize(0);
   m_subject.resize(0);
   m_team = 0;
+	m_numVotes = 0;
   m_teamVotes = 0;
   m_state = eVS_none;
   m_id = 0;
@@ -77,7 +79,7 @@ bool  CVotingSystem::IsInProgress()const
 
 int   CVotingSystem::GetNumVotes()const
 {
-  return m_votes.size();
+  return m_numVotes;
 }
 
 int   CVotingSystem::GetTeam()const
@@ -117,13 +119,17 @@ void  CVotingSystem::Reset()
 }
 
 //clients can vote
-void  CVotingSystem::Vote(int id, int team)
+void  CVotingSystem::Vote(int id, int team, bool yes)
 {
   if(CanVote(id))
   {
     m_votes.push_back(id);
-    if(m_team == team)
-      ++m_teamVotes;
+		if(yes)
+		{
+			++m_numVotes;
+			if(m_team == team)
+				++m_teamVotes;
+		}
   }
 }
 

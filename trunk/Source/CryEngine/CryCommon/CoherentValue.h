@@ -66,6 +66,14 @@ public:
 			m_dirty = true;
 		}
 	}
+	operator bool() const 
+	{
+		return m_val != NULL;
+	};
+	bool operator !() const 
+	{
+		return m_val == NULL;
+	};
 private:
 	T			m_val;
 	bool	m_dirty;

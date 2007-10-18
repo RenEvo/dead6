@@ -12,7 +12,7 @@
 
 #define CRY_STL_ALLOC
 
-#if defined (__OS400__) || defined (_WIN64) || defined (XENON) || defined(PS3)
+#if defined (__OS400__) || defined (_WIN64) || defined (XENON) || (defined(PS3) && !defined(NOT_USE_CRY_MEMORY_MANAGER))
 enum {_ALIGN = 16, _ALIGN_SHIFT = 4, _MAX_BYTES = 512, NFREELISTS=32};
 #else
 //enum {_ALIGN = 8, _ALIGN_SHIFT = 3, _MAX_BYTES = 128};
@@ -63,7 +63,7 @@ struct Node_Allocator
 	};
 	inline void * cleanup_alloc(size_t size) 
 	{
-		return CryModuleMalloc(size);
+		return CryCrtMalloc(size);
 	};
 	inline void pool_free(void * ptr) 
 	{
@@ -71,7 +71,7 @@ struct Node_Allocator
 	};
 	inline void cleanup_free(void * ptr)
 	{
-		CryModuleFree(ptr);
+		CryCrtFree(ptr);
 	};
 };
 
@@ -131,54 +131,88 @@ public:
 	{
 	}
 
+	inline static bool ATOMIC_CAS(long volatile *dst, long val, long old_val) 
+	{
+		return (*dst = val) == val;
+	}
+
+	inline static long ATOMIC_INCREMENT(long volatile * x) 
+	{
+		return ++(*x);
+	}
+
+	inline static long ATOMIC_DECREMENT(long volatile * x) 
+	{
+		return --(*x);
+	}
+
+
+	inline static long	ATOMIC_EXCHANGE_ADD(long volatile * x, long y) 
+	{
+		return *x += y;
+	}
+
+//#define ATOMIC_CAS(__dst, __val, __old_val) (CryInterlockedCompareExchange((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)/*(InterlockedCompareExchange64((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)*/
+//#  ifndef ATOMIC_INCREMENT
+//#    define ATOMIC_INCREMENT(__x)           CryInterlockedIncrement((int volatile*)__x)
+//#    define ATOMIC_DECREMENT(__x)           CryInterlockedDecrement((int volatile*)__x)
+//#    define ATOMIC_EXCHANGE(__x, __y)       CryInterlockedExchangeAdd((long*)__x, (long)__y)
+//#    define ATOMIC_EXCHANGE_ADD(__x, __y)   CryInterlockedExchangeAdd((long*)__x, (long)__y)
+//#	 endif
+//#endif/*_WIN64*/
+
+
 	WriteLock lock;
 	static volatile int g_lockMemMan;
 };
 
 template <bool __threads, int _Size>
 volatile int Node_Alloc_Lock<__threads, _Size>::g_lockMemMan = 0;
-/*
-template <int _Size>
-class Node_Alloc_Lock<true,_Size> 
-{
-public:
-	Node_Alloc_Lock : lock(g_lockMemMan)
-	{ 
-	}
 
-	~Node_Alloc_Lock() 
-	{
-	}
-	WriteLock lock;
-};
-*/
 template <int _Size>
 class Node_Alloc_Lock<false,_Size> 
 {
 public:
 	Node_Alloc_Lock() { }  
 	~Node_Alloc_Lock() { }
+	
+	inline static bool ATOMIC_CAS(long volatile *dst, long val, long old_val) 
+	{
+		return CryInterlockedCompareExchange(dst, val, old_val) == old_val;
+	}
+
+	inline static long ATOMIC_INCREMENT(long volatile * x) 
+	{
+#  if defined(_WIN64) || defined(WIN64)
+		return _InterlockedIncrement((long*)x);
+#else
+		return CryInterlockedIncrement((int volatile *)x);
+#endif
+	}
+
+	inline static long ATOMIC_DECREMENT(long volatile * x) 
+	{
+#  if defined(_WIN64) || defined(WIN64)
+		return _InterlockedDecrement((long*)x);
+#else
+		return CryInterlockedDecrement((int volatile *)x);
+#endif
+	}
+
+	inline static long	ATOMIC_EXCHANGE_ADD(long volatile * x, long y) 
+	{
+		return CryInterlockedExchangeAdd(x, y);
+	}
+
+//#  ifndef ATOMIC_INCREMENT
+//#    define ATOMIC_INCREMENT(__x)           (++(*__x))
+//#    define ATOMIC_DECREMENT(__x)           (--(*__x))
+//#    define ATOMIC_EXCHANGE(__x, __y)       (*__x = *__y)
+//#    define ATOMIC_EXCHANGE_ADD(__x, __y)   (*__x += __y)
+//#	 endif
+//#else /*_WIN64*/
 };
 
-//#define _PARANOID
-// avoid lock here. Just use safe atomic operations
-//#ifndef _PARANOID
-//template <int _Size>
-//class Node_Alloc_Lock<true,_Size> 
-//{
-//public:
-//	Node_Alloc_Lock() { }  
-//	~Node_Alloc_Lock() { }
-//};
-//#endif
-
-
-//struct _Node_alloc_Mem_block {
-//	//Pointer to the end of the memory block
-//	char *_M_end;
-//	//Pointer to the next memory block
-//	_Node_alloc_Mem_block *_M_next;
-//};
 
 #define _malloc ::malloc
 #define _free ::free
@@ -294,42 +328,49 @@ public:
 };
 
 
-#  if defined(_WIN64) || defined(WIN64)
-#define ATOMIC_CAS(__dst, __val, __old_val) (_InterlockedCompareExchange((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)
-#  ifndef ATOMIC_INCREMENT
-#    define ATOMIC_INCREMENT(__x)           _InterlockedIncrement((long*)__x)
-#    define ATOMIC_DECREMENT(__x)           _InterlockedDecrement((long*)__x)
-#    define ATOMIC_EXCHANGE(__x, __y)       _InterlockedExchange((long*)__x, (long)__y)
-#    define ATOMIC_EXCHANGE_ADD(__x, __y)   CryInterlockedExchangeAdd((long*)__x, (long)__y)
-#	 endif
-#else /*_WIN32*/
-#if defined(_WIN32) || defined(WIN32) || defined(XENON)
-#define ATOMIC_CAS(__dst, __val, __old_val) (InterlockedCompareExchange((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)
-#  ifndef ATOMIC_INCREMENT
-#    define ATOMIC_INCREMENT(__x)           InterlockedIncrement((long*)__x)
-#    define ATOMIC_DECREMENT(__x)           InterlockedDecrement((long*)__x)
-#    define ATOMIC_EXCHANGE(__x, __y)       InterlockedExchange((long*)__x, (long)__y)
-#    define ATOMIC_EXCHANGE_ADD(__x, __y)   CryInterlockedExchangeAdd((long*)__x, (long)__y)
-#	 endif
-#else /*_WIN64*/
-#define ATOMIC_CAS(__dst, __val, __old_val) (CryInterlockedCompareExchange((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)/*(InterlockedCompareExchange64((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)*/
-#  ifndef ATOMIC_INCREMENT
-#    define ATOMIC_INCREMENT(__x)           CryInterlockedIncrement((int volatile*)__x)
-#    define ATOMIC_DECREMENT(__x)           CryInterlockedDecrement((int volatile*)__x)
-#    define ATOMIC_EXCHANGE(__x, __y)       CryInterlockedExchangeAdd((long*)__x, (long)__y)
-#    define ATOMIC_EXCHANGE_ADD(__x, __y)   CryInterlockedExchangeAdd((long*)__x, (long)__y)
-#	 endif
-#endif/*_WIN64*/
-#endif/*_WIN32*/
+//#  if defined(_WIN64) || defined(WIN64)
+//#define ATOMIC_CAS(__dst, __val, __old_val) (_InterlockedCompareExchange((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)
+//#  ifndef ATOMIC_INCREMENT
+//#    define ATOMIC_INCREMENT(__x)           _InterlockedIncrement((long*)__x)
+//#    define ATOMIC_DECREMENT(__x)           _InterlockedDecrement((long*)__x)
+//#    define ATOMIC_EXCHANGE(__x, __y)       _InterlockedExchange((long*)__x, (long)__y)
+//#    define ATOMIC_EXCHANGE_ADD(__x, __y)   CryInterlockedExchangeAdd((long*)__x, (long)__y)
+//#	 endif
+//#else /*_WIN32*/
+//#if defined(_WIN32) || defined(WIN32) || defined(XENON)
+//#define ATOMIC_CAS(__dst, __val, __old_val) (InterlockedCompareExchange((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)
+//#  ifndef ATOMIC_INCREMENT
+//#    define ATOMIC_INCREMENT(__x)           InterlockedIncrement((long*)__x)
+//#    define ATOMIC_DECREMENT(__x)           InterlockedDecrement((long*)__x)
+//#    define ATOMIC_EXCHANGE(__x, __y)       InterlockedExchange((long*)__x, (long)__y)
+//#    define ATOMIC_EXCHANGE_ADD(__x, __y)   CryInterlockedExchangeAdd((long*)__x, (long)__y)
+//#	 endif
+//#define ATOMIC_CAS(__dst, __val, __old_val)  ((*__dst = __val) == __val)
+//#  ifndef ATOMIC_INCREMENT
+//#    define ATOMIC_INCREMENT(__x)           (++(*__x))
+//#    define ATOMIC_DECREMENT(__x)           (--(*__x))
+//#    define ATOMIC_EXCHANGE(__x, __y)       (*__x = *__y)
+//#    define ATOMIC_EXCHANGE_ADD(__x, __y)   (*__x += __y)
+//#	 endif
+//#else /*_WIN64*/
+//#define ATOMIC_CAS(__dst, __val, __old_val) (CryInterlockedCompareExchange((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)/*(InterlockedCompareExchange64((long volatile*)__dst, (long)__val, (long)__old_val) == (long)__old_val)*/
+//#  ifndef ATOMIC_INCREMENT
+//#    define ATOMIC_INCREMENT(__x)           CryInterlockedIncrement((int volatile*)__x)
+//#    define ATOMIC_DECREMENT(__x)           CryInterlockedDecrement((int volatile*)__x)
+//#    define ATOMIC_EXCHANGE(__x, __y)       CryInterlockedExchangeAdd((long*)__x, (long)__y)
+//#    define ATOMIC_EXCHANGE_ADD(__x, __y)   CryInterlockedExchangeAdd((long*)__x, (long)__y)
+//#	 endif
+//#endif/*_WIN64*/
+//#endif/*_WIN32*/
 
 
-template <class _ListElem>
+template <class _ListElem, bool __threads, int __size>
 inline void __cas_new_head (_ListElem * volatile *__free_list, _ListElem *__new_head) {
 	_ListElem *__old_head;
 	do {
 		__old_head = *__free_list;
 		__new_head->_M_next = __old_head;
-	} while (!ATOMIC_CAS(__free_list, __new_head, __old_head));
+	} while (!Node_Alloc_Lock<__threads, __size>::ATOMIC_CAS((long volatile*)__free_list, (long)__new_head, (long)__old_head));
 }
 
 
@@ -349,12 +390,12 @@ void* node_alloc<_alloc, __threads, _Size>::_M_allocate(size_t __n)
 			break;
 		}
 	}
-	while (!ATOMIC_CAS(__my_free_list, __r->_M_next, __r));
+	while (!Node_Alloc_Lock<__threads, _Size>::ATOMIC_CAS((long volatile*)__my_free_list, (long)__r->_M_next, (long)__r));
 
-	ATOMIC_EXCHANGE_ADD(&_S_wasted_in_allocation,allocated - __n);
-	ATOMIC_EXCHANGE_ADD(&_S_wasted_in_blocks,-allocated);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_EXCHANGE_ADD(&_S_wasted_in_allocation,((allocated + 1) << _ALIGN_SHIFT) - __n);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_EXCHANGE_ADD(&_S_wasted_in_blocks,-((allocated + 1) << _ALIGN_SHIFT));
 	long volatile * counter = _S_freelist_counter + S_FREELIST_INDEX(__n);
-	ATOMIC_DECREMENT(counter);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_DECREMENT(counter);
 
 	//_S_wasted_in_allocation += allocated - __n;
 	//_S_wasted_in_blocks -= allocated;
@@ -380,13 +421,13 @@ void node_alloc<_alloc, __threads, _Size>::_M_deallocate(void *__p, size_t __n)
 	long allocated = S_FREELIST_INDEX(__n);
 	_Obj * volatile * __my_free_list = _S_free_list + allocated;
 	_Obj *__pobj = __STATIC_CAST(_Obj*, __p);
-	__cas_new_head(__my_free_list, __pobj);
+	__cas_new_head<_Obj, __threads, _Size>(__my_free_list, __pobj);
 
-	ATOMIC_EXCHANGE_ADD(&_S_wasted_in_allocation,-allocated + __n);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_EXCHANGE_ADD(&_S_wasted_in_allocation,-((allocated + 1) << _ALIGN_SHIFT) + __n);
 
-	ATOMIC_EXCHANGE_ADD(&_S_wasted_in_blocks,+allocated);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_EXCHANGE_ADD(&_S_wasted_in_blocks,((allocated + 1) << _ALIGN_SHIFT));
 	long volatile * counter = _S_freelist_counter + S_FREELIST_INDEX(__n);
-	ATOMIC_INCREMENT(counter);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_INCREMENT(counter);
 
 	//_S_wasted_in_allocation -= allocated - __n;
 	//_S_wasted_in_blocks += allocated;
@@ -411,7 +452,7 @@ _Node_alloc_obj* node_alloc<_alloc,__threads, _Size>::_S_refill(size_t __n) {
 	{
 		//++_S_freelist_counter[S_FREELIST_INDEX(__n)];
 		long volatile* counter = _S_freelist_counter + S_FREELIST_INDEX(__n);
-		ATOMIC_INCREMENT(counter);
+		Node_Alloc_Lock<__threads, _Size>::ATOMIC_INCREMENT(counter);
 		__pCurrentHugeBlock->_M_count += 1;
 		return (_Obj*)__chunk;
 	}
@@ -426,9 +467,9 @@ _Node_alloc_obj* node_alloc<_alloc,__threads, _Size>::_S_refill(size_t __n) {
 
 //	_S_freelist_counter[S_FREELIST_INDEX(__n)] += __nobjs;
 	long volatile * counter = _S_freelist_counter +S_FREELIST_INDEX(__n);
-	ATOMIC_EXCHANGE_ADD(counter,__nobjs);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_EXCHANGE_ADD(counter,__nobjs);
 
-	ATOMIC_EXCHANGE_ADD(&__pCurrentHugeBlock->_M_count, __nobjs);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_EXCHANGE_ADD((long volatile*)&__pCurrentHugeBlock->_M_count, __nobjs);
 	//__pCurrentHugeBlock->_M_count += __nobjs;
 	__result = (_Obj*)__chunk;
 	__new_head = __next_obj = (_Obj*)(__chunk + __n);
@@ -445,7 +486,7 @@ _Node_alloc_obj* node_alloc<_alloc,__threads, _Size>::_S_refill(size_t __n) {
 		__next_obj->_M_next = *__my_free_list;
 		// !!!!
 
-	} while (!ATOMIC_CAS(__my_free_list, __new_head, __next_obj->_M_next));
+	} while (!Node_Alloc_Lock<__threads, _Size>::ATOMIC_CAS((long volatile*)__my_free_list, (long)__new_head, (long)__next_obj->_M_next));
 
 	return __result;
 }
@@ -469,7 +510,7 @@ char* node_alloc<_alloc,__threads, _Size>::_S_chunk_alloc(size_t _p_size,
 		__pblock = _S_free_mem_blocks;
 		if (__pblock == 0) break;
 	}
-	while (!ATOMIC_CAS(&_S_free_mem_blocks, __pblock->_M_next, __pblock));
+	while (!Node_Alloc_Lock<__threads, _Size>::ATOMIC_CAS((long volatile*)&_S_free_mem_blocks, (long)__pblock->_M_next, (long)__pblock));
 
 	if (__pblock != 0) 
 	{
@@ -499,7 +540,7 @@ char* node_alloc<_alloc,__threads, _Size>::_S_chunk_alloc(size_t _p_size,
 				//the free mem blocks:
 				_Mem_block *__pnew_block = (_Mem_block*)(__new_buf_pos);
 				__pnew_block->_M_end = __pblock->_M_end;
-				__cas_new_head(&_S_free_mem_blocks, __pnew_block);
+				__cas_new_head<_Node_alloc_Mem_block, __threads, _Size>(&_S_free_mem_blocks, __pnew_block);
 				//__pCurrentHugeBlock->_M_count += __nobjs;
 			}
 			else 
@@ -530,17 +571,15 @@ char* node_alloc<_alloc,__threads, _Size>::_S_chunk_alloc(size_t _p_size,
 	size_t __bytes_to_get =  _Size;//_ALLOCATION_SIZE;////
 	__result = (char*)allocator.pool_alloc(__bytes_to_get);//(char*)_malloc(__bytes_to_get);
 	//++_S_allocations;
-	ATOMIC_INCREMENT(&_S_allocations);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_INCREMENT(&_S_allocations);
 	//_S_wasted_in_blocks += __bytes_to_get;
-	ATOMIC_EXCHANGE_ADD(&_S_wasted_in_blocks,__bytes_to_get);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_EXCHANGE_ADD(&_S_wasted_in_blocks,__bytes_to_get);
 	//this is gonna be optimized away in profile builds
 	if (0 == __result) 
 	{
 		// BOOOOOOM!
 #if defined(PS3)
-		printf("OUT OF MEMORY\n");
-		volatile int *p=NULL;
-		*p=1;//forced boom
+		abort();
 #else
 		__result= 0;
 #endif
@@ -551,7 +590,7 @@ char* node_alloc<_alloc,__threads, _Size>::_S_chunk_alloc(size_t _p_size,
 		do {
 			oldHeapSize = _S_heap_size;
 			newHeapSize = oldHeapSize + __bytes_to_get;
-		} while (!ATOMIC_CAS(&_S_heap_size, newHeapSize, oldHeapSize));
+		} while (!Node_Alloc_Lock<__threads, _Size>::ATOMIC_CAS(&_S_heap_size, newHeapSize, oldHeapSize));
 	}
 
 	//#  ifdef DO_CLEAN_NODE_ALLOC
@@ -559,21 +598,21 @@ char* node_alloc<_alloc,__threads, _Size>::_S_chunk_alloc(size_t _p_size,
 	__bytes_to_get -= sizeof(_Node_alloc_Mem_block_Huge);
 	__pBlock->_M_end = __result + __bytes_to_get;
 	__pBlock->_M_count = 0;
-	__cas_new_head(&_S_chunks, __pBlock);
+	__cas_new_head<_Node_alloc_Mem_block_Huge, __threads, _Size>(&_S_chunks, __pBlock);
 	__result += sizeof(_Node_alloc_Mem_block_Huge);
 	//__pCurrentHugeBlock = __pBlock;
 
 	_Node_alloc_Mem_block_Huge * volatile  __old_block;
 	do {
 		__old_block = __pCurrentHugeBlock;
-	} while (!ATOMIC_CAS(&__pCurrentHugeBlock, __pBlock, __old_block));
+	} while (!Node_Alloc_Lock<__threads, _Size>::ATOMIC_CAS((long volatile *)&__pCurrentHugeBlock, (long)__pBlock, (long)__old_block));
 
 	//__cas_new_head(__pCurrentHugeBlock)
 
 	//#  endif
 	_Mem_block *__pnewBlock = (_Mem_block*)(__result + __total_bytes);
 	__pnewBlock->_M_end = __result + __bytes_to_get;
-	__cas_new_head(&_S_free_mem_blocks, __pnewBlock);
+	__cas_new_head<_Node_alloc_Mem_block, __threads, _Size>(&_S_free_mem_blocks, __pnewBlock);
 	return __result;
 }
 
@@ -583,7 +622,7 @@ template <EAllocFreeType _alloc, bool __threads, int _Size>
 size_t& node_alloc<_alloc,__threads, _Size>::_S_alloc_call(size_t incr) {
 	static size_t _S_counter = 0;
 	if (incr != 0) {
-		ATOMIC_INCREMENT(&_S_counter);
+		Node_Alloc_Lock<__threads, _Size>::ATOMIC_INCREMENT(&_S_counter);
 	}
 	return _S_counter;
 }
@@ -593,7 +632,7 @@ void node_alloc<_alloc,__threads, _Size>::_S_dealloc_call()
 {
 
 	size_t *pcounter = &_S_alloc_call(0);
-	ATOMIC_DECREMENT(pcounter);
+	Node_Alloc_Lock<__threads, _Size>::ATOMIC_DECREMENT(pcounter);
 	//As we are only releasing memory on shared library unload, counter
 	//can only reach 0 once threads has been stopped so we do not have to
 	//check atomic_decrement result.
@@ -688,7 +727,7 @@ void node_alloc<_alloc,__threads, _Size>::_S_freelist_delete_inside(int num, _Ob
 			break;
 		}
 	}
-	while (ATOMIC_CAS(__pList, __r->_M_next, __r));
+	while (Node_Alloc_Lock<__threads, _Size>::ATOMIC_CAS(__pList, __r->_M_next, __r));
 
 
 	_Obj* __pcur = __REINTERPRET_CAST(_Obj*, *__pList);
@@ -701,7 +740,7 @@ void node_alloc<_alloc,__threads, _Size>::_S_freelist_delete_inside(int num, _Ob
 		{
 			//if (__pnext)
 			{
-				__cas_new_head(&__pnext, __pfirst);
+				__cas_new_head<_Obj, __threads, _Size>(&__pnext, __pfirst);
 				++count;
 			}
 		}
@@ -763,7 +802,7 @@ void node_alloc<_alloc,__threads, _Size>::_S_freememblocks_delete_inside(int num
 			break;
 		}
 	}
-	while (ATOMIC_CAS(__pList, __r->_M_next, __r));
+	while (Node_Alloc_Lock<__threads, _Size>::ATOMIC_CAS((long volatile *)__pList, (long)__r->_M_next, (long)__r));
 
 	_Mem_block * __pcur = __REINTERPRET_CAST(_Mem_block *, *__pList), *__pnext, *__pfirst;
 	__pfirst = __pcur;
@@ -775,7 +814,7 @@ void node_alloc<_alloc,__threads, _Size>::_S_freememblocks_delete_inside(int num
 		{
 			//if (__pnext)
 			{
-				__cas_new_head(&__pnext, __pfirst);
+				__cas_new_head<_Mem_block, __threads, _Size>(&__pnext, __pfirst);
 				++count;
 			}
 		}
@@ -851,7 +890,7 @@ long volatile node_alloc<_alloc,__threads, _Size>::_S_wasted_in_blocks = 0;
 template <EAllocFreeType _alloc, bool __threads, int _Size>
 void node_alloc<_alloc, __threads, _Size>::cleanup()
 {
-
+#ifndef LINUX
 	Node_Alloc_Lock<__threads, _Size> lock;
 	Node_Allocator<_alloc> allocator;
 	
@@ -983,7 +1022,7 @@ void node_alloc<_alloc, __threads, _Size>::cleanup()
 				}
 				else
 				{
-					__cas_new_head(&__pnext, __pfirst);
+					__cas_new_head<_Node_alloc_Mem_block_Huge, __threads, _Size>(&__pnext, __pfirst);
 				}
 				_S_heap_size -= _Size/*cursize*/;
 				_S_wasted_in_blocks -= _Size;
@@ -1032,7 +1071,7 @@ void node_alloc<_alloc, __threads, _Size>::cleanup()
 			//::delete [] tmp_free_list[i];
 		}
 	}
-
+#endif
 }
 
 

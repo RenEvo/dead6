@@ -29,6 +29,7 @@ class CVehicleClient
 public:
 
 	virtual bool Init();
+	virtual void Reset();
 	virtual void Release() { delete this; }
 
 	virtual void OnAction(IVehicle* pVehicle, EntityId actorId, const ActionId& actionId, int activationMode, float value);

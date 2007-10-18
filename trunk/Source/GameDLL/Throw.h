@@ -35,12 +35,14 @@ protected:
 		{
 			CItemParamReader reader(params);
 			ResetValueEx("throw", throwit,		"throw");
+			ResetValueEx("drop", dropit, "drop");
 			ResetValue(hold,		"hold");
 			ResetValue(pull,		"pull");
 			ResetValue(next,		"next");
 		}
 
 		ItemString throwit;
+		ItemString dropit;
 		ItemString hold;
 		ItemString pull;
 		ItemString next;
@@ -48,6 +50,7 @@ protected:
 		void GetMemoryStatistics(ICrySizer*s)
 		{
 			s->Add(throwit);
+			s->Add(dropit);
 			s->Add(hold);
 			s->Add(pull);
 			s->Add(next);
@@ -67,11 +70,14 @@ protected:
 			ResetValue(hold_duration, 1.0f);
 			ResetValue(hold_min_scale,1.0f);
 			ResetValue(hold_max_scale,1.0f);
+			ResetValue(strenght_scale, 1.5f);
 		}
 
 		float hold_duration;
 		float hold_min_scale;
 		float hold_max_scale;
+
+		float strenght_scale;
 
 		float	delay;
 		bool	hide_ammo;
@@ -99,10 +105,15 @@ public:
 	}
 
 	virtual bool IsReadyToFire() const;
-	virtual void StartFire(EntityId shooterId);
-	virtual void StopFire(EntityId shooterId);
+	virtual void StartFire();
+	virtual void StopFire();
 
-	virtual void SetThrowable(EntityId entityId, ISchedulerAction *action);
+	virtual void NetStartFire();
+	virtual void NetStopFire();
+
+	virtual void Serialize(TSerialize ser);
+
+	virtual void SetThrowable(EntityId entityId, bool forceThrow, ISchedulerAction *action);
 	virtual EntityId GetThrowable() const;
 
 	void SetSpeedScale(float speedScale) { m_speed_scale = speedScale; }
@@ -111,22 +122,26 @@ public:
 protected:
 
 	virtual void CheckAmmo();
-	virtual void DoThrow(bool drop);
+	virtual void DoThrow();
 	virtual void DoDrop();
 
 private:
 
-	void   PlayDropThrowSound();
+	void   ThrowGrenade();
+	void   ThrowObject(IEntity* pEntity, IPhysicalEntity* pPE);
+	void   ThrowLivingEntity(IEntity* pEntity, IPhysicalEntity* pPE);
+
+	bool   CheckForIntersections(IPhysicalEntity* heldEntity, Vec3 &dir);
 
 	bool  m_usingGrenade;
 	bool	m_thrown;
 	bool	m_pulling;
 	bool	m_throwing;
-	bool	m_auto_throw;
+	bool	m_netfiring;
 	float	m_throw_time;
-
+	bool  m_forceNextThrow;
+	
 	float	m_hold_timer;
-
 
 	EntityId					m_throwableId;
 	ISchedulerAction	*m_throwableAction;

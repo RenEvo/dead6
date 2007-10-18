@@ -17,17 +17,14 @@ History:
 
 //-----------------------------------------------------------------------------------------------------
 
-class CHUDTagNames : public CHUDObject
+class CHUDTagNames
 {
 public:
 
 		CHUDTagNames();
 	~	CHUDTagNames();
 
-	// CHUDObject
-	virtual void PreUpdate();
-	virtual void OnUpdate(float fDeltaTime,float fFadeValue) {}
-	// ~CHUDObject
+	void Update();
 
 	//added in MP when client hit another player/vehicle
 	void AddEnemyTagName(EntityId uiEntityId);
@@ -37,6 +34,8 @@ private:
 	const char *GetPlayerRank(EntityId uiEntityId);
 
 	bool ProjectOnSphere(Vec3 &rvWorldPos,const AABB &rvBBox);
+
+	bool IsFriendlyToClient(EntityId uiEntityId);
 
 	IUIDraw *m_pUIDraw;
 	IFFont *m_pMPNamesFont;
@@ -59,7 +58,7 @@ private:
 	typedef std::list<SEnemyTagName> TEnemyTagNamesList;
 	TEnemyTagNamesList m_enemyTagNamesList;
 
-	void DrawTagName(IActor *pActor);
+	void DrawTagName(IActor *pActor,bool bLocalVehicle=false);
 	void DrawTagName(IVehicle *pVehicle);
 	void DrawTagNames();
 };

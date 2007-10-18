@@ -110,6 +110,7 @@ void CVehicleMovementTweaks::AddValue(const char* valueName, float* pValue, bool
 	newValue.pValue = pValue;
 	newValue.defaultValue = *pValue;
 	newValue.isRestrictedToMult = isRestrictedToMult;
+  newValue.blocked = false;
 }
 
 //------------------------------------------------------------------------
@@ -211,11 +212,22 @@ void CVehicleMovementTweaks::ComputeGroup(const SGroup& group)
 
 		SValue& valueInfo = m_values[v.valueId];
 
-			if (v.op == eTVO_Replace)
-				(*valueInfo.pValue) = v.value;
-			else if (v.op == eTVO_Multiplier)
-				(*valueInfo.pValue) *= v.value;
+    if (valueInfo.blocked)
+      continue;
+
+		if (v.op == eTVO_Replace)
+			(*valueInfo.pValue) = v.value;
+		else if (v.op == eTVO_Multiplier)
+			(*valueInfo.pValue) *= v.value;
 	}
+}
+
+//------------------------------------------------------------------------
+void CVehicleMovementTweaks::BlockValue(TValueId valueId, bool block)
+{ 
+  assert(valueId >= 0 && valueId < m_values.size());
+    
+  m_values[valueId].blocked = block;  
 }
 
 //------------------------------------------------------------------------

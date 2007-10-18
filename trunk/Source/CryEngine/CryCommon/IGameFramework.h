@@ -27,7 +27,6 @@
 
 struct pe_explosion;
 struct IPhysicalEntity;
-enum ESaveGameReason;
 
 // Summary
 //   Generic factory creation
@@ -114,6 +113,7 @@ struct IGameObject;
 struct IMaterialEffects;
 struct INetChannel;
 struct IPlayerProfileManager;
+struct IMusicLogic;
 struct IAnimationGraphState;
 struct INetNub;
 struct ISaveGame;
@@ -139,6 +139,9 @@ enum EGameStartFlags
 	eGSF_NoSpawnPlayer             = 0x0100,
 	eGSF_BlockingMapLoad           = 0x0200,
 
+	eGSF_DemoRecorder              = 0x0400,
+	eGSF_DemoPlayback              = 0x0800,
+
 	eGSF_ImmersiveMultiplayer      = 0x1000,
 	eGSF_RequireController         = 0x2000,
 	eGSF_RequireKeyboardMouse      = 0x4000,
@@ -158,17 +161,15 @@ struct SGameContextParams
 {
 	const char * levelName;
 	const char * gameRules;
-	const char * recordDemoFilename;
-	const char * playbackDemoFilename;
-	bool compressRecordedDemo;
+	const char * demoRecorderFilename;
+	const char * demoPlaybackFilename;
 
 	SGameContextParams()
 	{
 		levelName = 0;
 		gameRules = 0;
-		recordDemoFilename = 0;
-		playbackDemoFilename = 0;
-		compressRecordedDemo = true;
+		demoRecorderFilename = 0;
+		demoPlaybackFilename = 0;
 	}
 };
 
@@ -184,12 +185,8 @@ struct SGameStartParams
 	const char * connectionString;
 	// context parameters - needed if bServer==true
 	const SGameContextParams * pContextParams;
-	// inactivity timeout on network - 0 for no timeout (good for single player)
-	float inactivityTimeout;
 	// maximum players to allow to connect
 	int maxPlayers;
-
-	bool recording;
 	
 	SGameStartParams()
 	{
@@ -198,14 +195,17 @@ struct SGameStartParams
 		hostname = 0;
 		connectionString = 0;
 		pContextParams = NULL;
-#if defined(PS3) && defined(CELL_ARCH_CEB)
-		inactivityTimeout = 900.0f;
-#else
-		inactivityTimeout = 300.0f;
-#endif
 		maxPlayers = 32;
-		recording = false;
 	}
+};
+
+//provides an interface to game so game will be able to display numeric stats in user-friendly way
+struct IGameStatsConfig
+{
+	virtual ~IGameStatsConfig(){}
+	virtual int GetStatsVersion() = 0;
+	virtual int GetCategoryMod(const char* cat) = 0;
+	virtual const char* GetValueNameByCode(const char* cat, int id) = 0;
 };
 
 struct IPersistantDebug
@@ -218,6 +218,7 @@ struct IPersistantDebug
 	virtual void Add2DText ( const char * text, float size, ColorF clr, float timeout ) = 0;
 	virtual void AddText ( float x, float y, float size, ColorF clr, float timeout, const char * fmt, ... ) = 0;
 	virtual void Add2DLine( float x1, float y1, float x2, float y2, ColorF clr, float timeout ) = 0;
+	virtual void AddQuat( const Vec3& pos, const Quat& q, float r, ColorF clr, float timeout ) = 0;
 };
 
 // when you add stuff here, also update in CCryAction::Init
@@ -247,6 +248,17 @@ enum EActionEvent
   eAE_connected,
   eAE_disconnected,
   eAE_clientDisconnected,
+	// map resetting
+	eAE_resetBegin,
+	eAE_resetEnd,
+	eAE_resetProgress,
+	eAE_preSaveGame,  // m_value -> ESaveGameReason
+	eAE_postSaveGame, // m_value -> ESaveGameReason, m_description: 0 (failed), != 0 (successful)
+	eAE_inGame,
+
+	eAE_serverName, //started server 
+	eAE_serverIp,		//obtained server ip
+	eAE_earlyPreUpdate,  // called from CryAction's PreUpdate loop after System has been updated, but before subsystems
 };
 
 struct SActionEvent
@@ -280,6 +292,7 @@ struct IGameFrameworkListener
 	virtual void OnPostUpdate(float fDeltaTime) = 0;
 	virtual void OnSaveGame(ISaveGame* pSaveGame) = 0;
 	virtual void OnLoadGame(ILoadGame* pLoadGame) = 0;
+	virtual void OnLevelEnd(const char* nextLevel) = 0;
   virtual void OnActionEvent(const SActionEvent& event) = 0;
 };
 
@@ -541,6 +554,18 @@ struct IGameFramework
 	//	Return Value:
 	//		Pointer to IGameObject of the entity if it exists (or NULL otherwise)
 	virtual IGameObject * GetGameObject(EntityId id) = 0;
+
+	// Description:
+	//    Retrieve a network safe entity class id, that will be the same in client and server
+	//	Return Value:
+	//		true if an entity class with this name has been registered
+	virtual bool GetNetworkSafeClassId(uint16 &id, const char *className) = 0;
+	// Description:
+	//    Retrieve a network safe entity class name, that will be the same in client and server
+	//	Return Value:
+	//		true if an entity class with this id has been registered
+	virtual bool GetNetworkSafeClassName(char *className, size_t maxn, uint16 id) = 0;
+
 	// Description:
 	//    Retrieve an IGameObjectExtension by name from an entity
 	//	Return Value:
@@ -549,10 +574,10 @@ struct IGameFramework
 
 	// Description:
 	//    Save the current game to disk
-	virtual bool SaveGame( const char * path, bool quick = false, bool bForceImmediate = true, ESaveGameReason reason = eSGR_QuickSave) = 0;
+	virtual bool SaveGame( const char * path, bool quick = false, bool bForceImmediate = true, ESaveGameReason reason = eSGR_QuickSave, bool ignoreDelay = false, const char* checkPoint = NULL) = 0;
 	// Description:
 	//    Load a game from disk (calls StartGameContext...)
-	virtual bool LoadGame( const char * path, bool quick = false ) = 0;
+	virtual bool LoadGame( const char * path, bool quick = false, bool ignoreDelay = false) = 0;
 
 	// Description:
 	//    Notification that game mode is being entered/exited
@@ -564,6 +589,13 @@ struct IGameFramework
 	virtual bool IsInLevelLoad() = 0;
 
 	virtual bool IsLoadingSaveGame() = 0;
+
+	virtual bool IsInTimeDemo() = 0;
+
+	virtual void AllowSave(bool bAllow = true) = 0;
+	virtual void AllowLoad(bool bAllow = true) = 0;
+	virtual bool CanSave() = 0;
+	virtual bool CanLoad() = 0;
 
 	// Description:
 	//		Check if the current game can activate cheats (flymode, godmode, nextspawn)
@@ -581,8 +613,11 @@ struct IGameFramework
 	virtual const char * GetAbsLevelPath() = 0;
 
 	virtual IPersistantDebug * GetIPersistantDebug() = 0;
+	virtual IGameStatsConfig * GetIGameStatsConfig() = 0;
 
+	// Music Logic
 	virtual IAnimationGraphState * GetMusicGraphState() = 0;
+	virtual IMusicLogic * GetMusicLogic() = 0;
 
 	virtual void RegisterListener		(IGameFrameworkListener *pGameFrameworkListener, const char * name,EFRAMEWORKLISTENERPRIORITY eFrameworkListenerPriority) = 0;
 	virtual void UnregisterListener	(IGameFrameworkListener *pGameFrameworkListener) = 0;
@@ -597,6 +632,8 @@ struct IGameFramework
 
 	virtual void EnableVoiceRecording(const bool enable) = 0;
 
+	virtual void MutePlayerById(EntityId mutePlayer) = 0;
+
   virtual IDebugHistoryManager* CreateDebugHistoryManager() = 0;
 
 	virtual void DumpMemInfo(const char* format, ...) PRINTF_PARAMS(2, 3) = 0;
@@ -604,6 +641,8 @@ struct IGameFramework
   // Description:
   //		Check whether the client actor is using voice communication.
 	virtual bool IsVoiceRecordingEnabled() = 0;
+
+	virtual bool IsImmersiveMPEnabled() = 0;
 
   // Description:
   //		Executes console command on next frame's beginning
@@ -618,7 +657,7 @@ struct IGameFramework
 
   // Description:
   //		Saves dedicated server console variables in server config file
-  virtual void SaveServerConfig(const char* path) = 0;
+  virtual bool SaveServerConfig(const char* path) = 0;
 
 	// Description:
 	//    to avoid stalls during gameplay and to get a list of all assets needed for the level (bEnforceAll=true)
@@ -627,6 +666,14 @@ struct IGameFramework
 	virtual void PrefetchLevelAssets( const bool bEnforceAll ) = 0;
 };
 
+ILINE bool IsDemoPlayback()
+{
+	ISystem* pSystem = GetISystem();
+	IGame* pGame = pSystem->GetIGame();
+	IGameFramework* pFramework = pGame->GetIGameFramework();
+	INetContext* pNetContext = pFramework->GetNetContext();
+	return pNetContext ? pNetContext->IsDemoPlayback() : false;
+}
 
 #endif //__IGAMEFRAMEWORK_H__
 

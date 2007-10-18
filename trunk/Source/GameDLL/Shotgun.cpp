@@ -19,9 +19,11 @@ void CShotgun::Activate(bool activate)
 {
 	CSingle::Activate(activate);
 
+	m_next_shot = 0.1f;
 	m_reload_pump = true;
 	m_break_reload = false;
 	m_reload_was_broken = false;
+	m_pWeapon->RequireUpdate(eIUS_FireMode);
 }
 
 void CShotgun::Reload(int zoomed)
@@ -60,8 +62,10 @@ void CShotgun::StartReload(int zoomed)
 		return;
 
 	int ammoCount = m_pWeapon->GetAmmoCount(m_fireparams.ammo_type_class);
-	if (ammoCount >= m_fireparams.clip_size)
+	if ((ammoCount >= m_fireparams.clip_size) || m_reloading)
 		return;
+
+	m_max_shells = m_fireparams.clip_size - ammoCount;
 
 	m_reload_was_broken = false;
 	m_reloading = true;
@@ -75,6 +79,8 @@ void CShotgun::StartReload(int zoomed)
 
 	m_reload_pump = ammoCount > 0 ? false : true;
 	uint animTime = m_pWeapon->GetCurrentAnimationTime(CItem::eIGS_FirstPerson);
+	if(animTime==0)
+		animTime = 500; //For DS
 	m_pWeapon->GetScheduler()->TimerAction(animTime, CSchedulerAction<BeginReloadLoop>::Create(BeginReloadLoop(this, zoomed)), false);
 
 	m_pWeapon->GetScheduler()->TimerAction((uint)((m_fireparams.reload_time-0.125f)*1000), CSchedulerAction<SliderBack>::Create(this), false);
@@ -120,12 +126,19 @@ void CShotgun::ReloadShell(int zoomed)
 	if(m_reload_was_broken)
 		return;
 
+	CActor* pOwner = m_pWeapon->GetOwnerActor();
+	bool isAI = pOwner && (pOwner->IsPlayer() == false);
 	int ammoCount = m_pWeapon->GetAmmoCount(m_fireparams.ammo_type_class);
-	if (ammoCount != m_fireparams.clip_size && m_pWeapon->GetInventoryAmmoCount(m_fireparams.ammo_type_class)>0)
+	if ((ammoCount < m_fireparams.clip_size) && (m_max_shells>0) &&
+		(isAI || (m_pWeapon->GetInventoryAmmoCount(m_fireparams.ammo_type_class) > 0)) ) // AI has unlimited ammo
 	{
+		m_max_shells --;
+		
 		// reload a shell
 		m_pWeapon->PlayAction(g_pItemStrings->reload_shell, 0, false, CItem::eIPAF_Default|CItem::eIPAF_RepeatLastFrame|CItem::eIPAF_RestartAnimation);
 		uint animTime = m_pWeapon->GetCurrentAnimationTime(CItem::eIGS_FirstPerson);
+		if(animTime==0)
+			animTime = 530; //For DS
 		m_pWeapon->GetScheduler()->TimerAction(animTime, CSchedulerAction<ReloadOneShellAction>::Create(ReloadOneShellAction(m_pWeapon, zoomed)), false);
 		// call this again
 	}
@@ -159,10 +172,11 @@ public:
 			fm->Shoot(true, true);
 			fm->m_break_reload=false;
 		}
-
-		//Do not zoom in after reload
-		//if (rzoomed != 0)
-			//pWep->StartZoom(pWep->GetOwnerId(), rzoomed);
+		else if(fm->m_reload_was_broken)
+		{
+			if(pWep->GetOwnerActor() && pWep->GetOwnerActor()->IsClient())
+				pWep->MeleeAttack();
+		}
 
 	}
 private:
@@ -180,20 +194,24 @@ void CShotgun::EndReload(int zoomed)
 
 	uint animTime = 100;
 
-	if (m_reload_pump)
+	if (m_reload_pump && !m_reload_was_broken)
 		m_pWeapon->PlayAction(g_pItemStrings->exit_reload_pump,0,false,CItem::eIPAF_Default,speedOverride);
 	else
 		m_pWeapon->PlayAction(g_pItemStrings->exit_reload_nopump,0,false,CItem::eIPAF_Default,speedOverride);
 
 	animTime = m_pWeapon->GetCurrentAnimationTime(CItem::eIGS_FirstPerson);
 
-	m_pWeapon->GetScheduler()->TimerAction(animTime, CSchedulerAction<ReloadEndAction>::Create(ReloadEndAction(m_pWeapon, zoomed)), false);
+	if(!m_reload_was_broken)
+		m_pWeapon->GetScheduler()->TimerAction(animTime, CSchedulerAction<ReloadEndAction>::Create(ReloadEndAction(m_pWeapon, zoomed)), false);
+	else
+		m_pWeapon->GetScheduler()->TimerAction(100, CSchedulerAction<ReloadEndAction>::Create(ReloadEndAction(m_pWeapon, zoomed)), false);
+
 }
 
 bool CShotgun::CanFire(bool considerAmmo) const
 {
 	return (m_next_shot<=0.0f) && (m_spinUpTime<=0.0f) &&
-		!m_pWeapon->IsBusy() && (!considerAmmo || !OutOfAmmo() || !m_fireparams.ammo_type_class || m_fireparams.clip_size == -1);
+		!m_pWeapon->IsBusy() && !m_pWeapon->IsSwitchingFireMode() && (!considerAmmo || !OutOfAmmo() || !m_fireparams.ammo_type_class || m_fireparams.clip_size == -1);
 }
 
 class CShotgun::ScheduleReload
@@ -220,6 +238,7 @@ bool CShotgun::Shoot(bool resetAnimation, bool autoreload/* =true */, bool noSou
 		ammoCount = m_pWeapon->GetInventoryAmmoCount(ammo);
 
 	CActor *pActor = m_pWeapon->GetOwnerActor();
+	bool playerIsShooter = pActor?pActor->IsPlayer():false;
 
 	if (!CanFire(true))
 	{
@@ -233,7 +252,7 @@ bool CShotgun::Shoot(bool resetAnimation, bool autoreload/* =true */, bool noSou
 	}
 	else if(m_pWeapon->IsWeaponLowered())
 	{
-		m_pWeapon->PlayAction(m_actions.empty_clip);
+		m_pWeapon->PlayAction(m_actions.null_fire);
 		return false;
 	}
 
@@ -246,8 +265,6 @@ bool CShotgun::Shoot(bool resetAnimation, bool autoreload/* =true */, bool noSou
 		{
 			m_break_reload = true;
 			m_pWeapon->RequestCancelReload();
-			//m_reload_was_broken = true;
-			//EndReload(0);
 		}
 		return false;
 	}
@@ -259,7 +276,7 @@ bool CShotgun::Shoot(bool resetAnimation, bool autoreload/* =true */, bool noSou
 	if (ammoCount == 1 || (m_fireparams.no_cock && m_pWeapon->IsZoomed()))
 		action = m_actions.fire.c_str();
 
-	m_pWeapon->PlayAction(action, 0, false, CItem::eIPAF_Default|CItem::eIPAF_NoBlend);
+	m_pWeapon->PlayAction(action, 0, false, CItem::eIPAF_Default|CItem::eIPAF_RestartAnimation|CItem::eIPAF_CleanBlending);
 
 	Vec3 hit = GetProbableHit(WEAPON_HIT_RANGE);
 	Vec3 pos = GetFiringPos(hit);
@@ -267,8 +284,7 @@ bool CShotgun::Shoot(bool resetAnimation, bool autoreload/* =true */, bool noSou
 	Vec3 vel = GetFiringVelocity(fdir);
 	Vec3 dir;
 
-	if (!m_fireparams.nearmiss_signal.empty())
-		CheckNearMisses(hit, pos, dir, WEAPON_HIT_RANGE, 1.0f, m_fireparams.nearmiss_signal.c_str());
+	CheckNearMisses(hit, pos, fdir, WEAPON_HIT_RANGE, m_shotgunparams.spread);
 	
 	bool serverSpawn = m_pWeapon->IsServerSpawn(ammo);
 
@@ -281,32 +297,23 @@ bool CShotgun::Shoot(bool resetAnimation, bool autoreload/* =true */, bool noSou
 			dir = ApplySpread(fdir, m_shotgunparams.spread);      
       int hitTypeId = g_pGame->GetGameRules()->GetHitTypeId(m_fireparams.hit_type.c_str());			
       
-      pAmmo->SetParams(m_shooterId, m_pWeapon->GetHostId(), m_pWeapon->GetEntityId(), m_shotgunparams.pelletdamage, hitTypeId, m_fireparams.damage_drop_per_meter);
+			pAmmo->SetParams(m_pWeapon->GetOwnerId(), m_pWeapon->GetHostId(), m_pWeapon->GetEntityId(), m_shotgunparams.pelletdamage, hitTypeId, playerIsShooter?m_fireparams.damage_drop_per_meter:0.0f, m_fireparams.damage_drop_min_distance);
 			pAmmo->SetDestination(m_pWeapon->GetDestination());
 			pAmmo->Launch(pos, dir, vel);
 
 			if ((!m_tracerparams.geometry.empty() || !m_tracerparams.effect.empty()) && (ammoCount==GetClipSize() || (ammoCount%m_tracerparams.frequency==0)))
 			{
-				CTracerManager::STracerParams params;
-				params.geometry = m_tracerparams.geometry.c_str();
-				params.effect = m_tracerparams.effect.c_str();
-				params.position = pos;
-				params.destination = hit;
-				params.effectScale = params.geometryScale = m_tracerparams.scale;
-				params.speed = m_tracerparams.speed;
-				params.lifetime = m_tracerparams.lifetime;
-
-				g_pGame->GetWeaponSystem()->GetTracerManager().EmitTracer(params);
+				EmitTracer(pos,hit,false);
 			}
 
 			m_projectileId = pAmmo->GetEntity()->GetId();
 		}
 	}
 
-	m_pWeapon->OnShoot(m_shooterId, 0, ammo, pos, dir, vel);
+	m_pWeapon->OnShoot(m_pWeapon->GetOwnerId(), 0, ammo, pos, dir, vel);
 
 	if (m_pWeapon->IsServer())
-		g_pGame->GetIGameFramework()->GetIGameplayRecorder()->Event(m_pWeapon->GetOwner(), GameplayEvent(eGE_WeaponShot, GetName(), m_shotgunparams.pellets, (void *)m_pWeapon->GetEntityId()));
+		g_pGame->GetIGameFramework()->GetIGameplayRecorder()->Event(m_pWeapon->GetOwner(), GameplayEvent(eGE_WeaponShot, ammo->GetName(), m_shotgunparams.pellets, (void *)m_pWeapon->GetEntityId()));
 
 	MuzzleFlashEffect(true);
 	RejectEffect();
@@ -316,7 +323,7 @@ bool CShotgun::Shoot(bool resetAnimation, bool autoreload/* =true */, bool noSou
 	m_zoomtimeout = m_next_shot + 0.5f;
 	ammoCount--;
 
-	if (pActor && pActor->IsPlayer())
+	if (playerIsShooter)
 	{
 		if (pActor->InZeroG())
 		{
@@ -342,7 +349,8 @@ bool CShotgun::Shoot(bool resetAnimation, bool autoreload/* =true */, bool noSou
 			}
 		}
 		if(pActor->IsClient())
-			gEnv->pInput->ForceFeedbackEvent( SFFOutputEvent(eDI_XI, eFF_Rumble_Basic, 0.15f, 0.0f, fabsf(m_recoilparams.back_impulse)*3.0f) );
+			if (gEnv->pInput) 
+				gEnv->pInput->ForceFeedbackEvent( SFFOutputEvent(eDI_XI, eFF_Rumble_Basic, 0.15f, 0.0f, fabsf(m_recoilparams.back_impulse)*3.0f) );
 	}
 	if (m_fireparams.clip_size != -1)
 	{
@@ -367,18 +375,21 @@ bool CShotgun::Shoot(bool resetAnimation, bool autoreload/* =true */, bool noSou
 		}
 	}
 
-	m_pWeapon->RequestShoot(ammo, pos, dir, vel, hit, 0, false);
+	m_pWeapon->RequestShoot(ammo, pos, dir, vel, hit, 1.0f, 0, false);
 
 	return true;
 }
 
 //------------------------------------------------------------------------
-void CShotgun::NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, int ph)
+void CShotgun::NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, float extra, int ph)
 {
 	assert(0 == ph);
 
 	IEntityClass* ammo = m_fireparams.ammo_type_class;
 	const char *action = m_actions.fire_cock.c_str();
+
+	CActor *pActor = m_pWeapon->GetOwnerActor();
+	bool playerIsShooter = pActor?pActor->IsPlayer():false;
 
 	int ammoCount = m_pWeapon->GetAmmoCount(ammo);
 	if (m_fireparams.clip_size==0)
@@ -401,33 +412,28 @@ void CShotgun::NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, con
 			pdir = ApplySpread(dir, m_shotgunparams.spread);
       int hitTypeId = g_pGame->GetGameRules()->GetHitTypeId(m_fireparams.hit_type.c_str());			
 
-			pAmmo->SetParams(m_shooterId, m_pWeapon->GetHostId(), m_pWeapon->GetEntityId(), m_shotgunparams.pelletdamage, hitTypeId, m_fireparams.damage_drop_per_meter);
+			pAmmo->SetParams(m_pWeapon->GetOwnerId(), m_pWeapon->GetHostId(), m_pWeapon->GetEntityId(), m_shotgunparams.pelletdamage, hitTypeId, playerIsShooter?m_fireparams.damage_drop_per_meter:0.0f, m_fireparams.damage_drop_min_distance);
 			pAmmo->SetDestination(m_pWeapon->GetDestination());
 			pAmmo->SetRemote(true);
 			pAmmo->Launch(pos, pdir, vel);
 
-			if ((!m_tracerparams.geometry.empty() || !m_tracerparams.effect.empty()) && (ammoCount==GetClipSize() || (ammoCount%m_tracerparams.frequency==0)))
-			{
-				CTracerManager::STracerParams params;
-				params.geometry = m_tracerparams.geometry.c_str();
-				params.effect = m_tracerparams.effect.c_str();
-				params.position = pos;
-				params.destination = hit;
-				params.effectScale = params.geometryScale = m_tracerparams.scale;
-				params.speed = m_tracerparams.speed;
-				params.lifetime = m_tracerparams.lifetime;
+			bool emit = false;
+			if(m_pWeapon->GetStats().fp)
+				emit = (!m_tracerparams.geometryFP.empty() || !m_tracerparams.effectFP.empty()) && (ammoCount==GetClipSize() || (ammoCount%m_tracerparams.frequency==0));
+			else
+				emit = (!m_tracerparams.geometry.empty() || !m_tracerparams.effect.empty()) && (ammoCount==GetClipSize() || (ammoCount%m_tracerparams.frequency==0));
 
-				g_pGame->GetWeaponSystem()->GetTracerManager().EmitTracer(params);
-			}
+			if (emit)
+				EmitTracer(pos,hit,false);
 
 			m_projectileId = pAmmo->GetEntity()->GetId();
 		}
 	}
 
-	m_pWeapon->OnShoot(m_shooterId, 0, ammo, pos, dir, vel);
+	m_pWeapon->OnShoot(m_pWeapon->GetOwnerId(), 0, ammo, pos, dir, vel);
 
 	if (m_pWeapon->IsServer())
-		g_pGame->GetIGameFramework()->GetIGameplayRecorder()->Event(m_pWeapon->GetOwner(), GameplayEvent(eGE_WeaponShot, GetName(), m_shotgunparams.pellets, (void *)m_pWeapon->GetEntityId()));
+		g_pGame->GetIGameFramework()->GetIGameplayRecorder()->Event(m_pWeapon->GetOwner(), GameplayEvent(eGE_WeaponShot, ammo->GetName(), m_shotgunparams.pellets, (void *)m_pWeapon->GetEntityId()));
 
 	MuzzleFlashEffect(true);
 	RejectEffect();
@@ -477,9 +483,12 @@ void CShotgun::PatchParams(const struct IItemParamsNode *patch)
 //---------------------------------------------------------------------
 void CShotgun::CancelReload()
 {
+	if(!m_reload_was_broken)
+	{
 		m_reload_was_broken = true;
 		m_pWeapon->GetScheduler()->Reset();
 		EndReload(0);
+	}
 }
 //------------------------------------------------------------------------
 const char *CShotgun::GetType() const

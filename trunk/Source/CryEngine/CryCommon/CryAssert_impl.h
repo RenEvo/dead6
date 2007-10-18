@@ -28,16 +28,17 @@ History:
 #define IDC_EDIT_CONDITION		1002
 #define IDC_BUTTON_CONTINUE		1003
 #define IDC_EDIT_REASON				1004
-#define IDC_BUTTON_DONT_CARE	1005
+#define IDC_BUTTON_IGNORE			1005
 #define IDC_BUTTON_REPORT			1006
 #define IDC_BUTTON_STOP				1007
 #define IDC_BUTTON_BREAK			1008
+#define IDC_BUTTON_IGNORE_ALL	1009
 
 #define IDC_STATIC_TEXT 0
 
 #define DLG_TITLE					L"Assertion Failed"
 #define DLG_FONT					L"MS Sans Serif"
-#define DLG_ITEM_TEXT_0		L"Skip"
+#define DLG_ITEM_TEXT_0		L"Continue"
 #define DLG_ITEM_TEXT_1		L"Stop"
 #define DLG_ITEM_TEXT_2		L"Info"
 #define DLG_ITEM_TEXT_3		L""
@@ -49,10 +50,12 @@ History:
 #define DLG_ITEM_TEXT_9		L"failed"
 #define DLG_ITEM_TEXT_10	L""
 #define DLG_ITEM_TEXT_11	L"Reason"
-#define DLG_ITEM_TEXT_12	L"Skip All"
+#define DLG_ITEM_TEXT_12	L"Ignore"
 #define DLG_ITEM_TEXT_13	L"Report as Bug"
 #define DLG_ITEM_TEXT_14	L"Break"
-#define DLG_NB_ITEM				15
+#define DLG_ITEM_TEXT_15	L"Ignore All"
+#define DLG_NB_ITEM   16
+
 
 template<int iTitleSize>
 struct SDlgItem
@@ -83,6 +86,7 @@ struct SDlgData
 
 	SDLGITEM(DLG_ITEM_TEXT_0,	i0);
 	SDLGITEM(DLG_ITEM_TEXT_12,i12);
+	SDLGITEM(DLG_ITEM_TEXT_15,i15);
 	SDLGITEM(DLG_ITEM_TEXT_14,i14);
 	SDLGITEM(DLG_ITEM_TEXT_1,	i1);
 	SDLGITEM(DLG_ITEM_TEXT_2,	i2);
@@ -102,22 +106,23 @@ struct SDlgData
 
 static SDlgData g_dialogRC =
 {
-	{DS_MODALFRAME|DS_3DLOOK|DS_SETFONT|DS_CENTER|WS_POPUP|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,0,DLG_NB_ITEM,0,0,280,134},0,0,DLG_TITLE,8,DLG_FONT,
+	{DS_MODALFRAME|DS_3DLOOK|DS_SETFONT|DS_CENTER|WS_POPUP|WS_CAPTION|WS_SYSMENU|WS_VISIBLE,0,DLG_NB_ITEM,0,0,330,134},0,0,DLG_TITLE,8,DLG_FONT,
 	{BS_PUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_TABSTOP,										0,	12,	113,50,	14,	IDC_BUTTON_CONTINUE,	0xFFFF,0x0080,DLG_ITEM_TEXT_0,	0},
-	{BS_DEFPUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_TABSTOP,									0,	66,	113,60,	14,	IDC_BUTTON_DONT_CARE,	0xFFFF,0x0080,DLG_ITEM_TEXT_12,	0},
-	{BS_PUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_TABSTOP,										0,	160,113,53,	14,	IDC_BUTTON_BREAK,			0xFFFF,0x0080,DLG_ITEM_TEXT_14,	0},
-	{BS_PUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_TABSTOP,										0,	217,113,50,	14,	IDC_BUTTON_STOP,			0xFFFF,0x0080,DLG_ITEM_TEXT_1,	0},
-	{BS_GROUPBOX|WS_CHILD|WS_VISIBLE,																	0,	7,	7,	266,100,IDC_STATIC_TEXT,			0xFFFF,0x0080,DLG_ITEM_TEXT_2,	0},
+	{BS_DEFPUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_TABSTOP,									0,	66,	113,50,	14,	IDC_BUTTON_IGNORE,		0xFFFF,0x0080,DLG_ITEM_TEXT_12,	0},
+	{BS_PUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_TABSTOP,										0,	120,113,50,	14,	IDC_BUTTON_IGNORE_ALL,0xFFFF,0x0080,DLG_ITEM_TEXT_15,	0},
+	{BS_PUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_TABSTOP,										0,	214,113,50,	14,	IDC_BUTTON_BREAK,			0xFFFF,0x0080,DLG_ITEM_TEXT_14,	0},
+	{BS_PUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_TABSTOP,										0,	268,113,50,	14,	IDC_BUTTON_STOP,			0xFFFF,0x0080,DLG_ITEM_TEXT_1,	0},
+	{BS_GROUPBOX|WS_CHILD|WS_VISIBLE,																	0,	7,	7,	316,100,IDC_STATIC_TEXT,			0xFFFF,0x0080,DLG_ITEM_TEXT_2,	0},
 	{ES_LEFT|ES_AUTOHSCROLL|ES_READONLY|WS_BORDER|WS_CHILD|WS_VISIBLE,0,	50,	48,	25,	13,	IDC_EDIT_LINE,				0xFFFF,0x0081,DLG_ITEM_TEXT_3,	0},
 	{WS_CHILD|WS_VISIBLE,																							0,	14,	50,	14,	8,	IDC_STATIC_TEXT,			0xFFFF,0x0082,DLG_ITEM_TEXT_4,	0},
-	{ES_LEFT|ES_AUTOHSCROLL|ES_READONLY|WS_BORDER|WS_CHILD|WS_VISIBLE,0,	50,	32,	192,13,	IDC_EDIT_FILE,				0xFFFF,0x0081,DLG_ITEM_TEXT_5,	0},
+	{ES_LEFT|ES_AUTOHSCROLL|ES_READONLY|WS_BORDER|WS_CHILD|WS_VISIBLE,0,	50,	32,	240,13,	IDC_EDIT_FILE,				0xFFFF,0x0081,DLG_ITEM_TEXT_5,	0},
 	{WS_CHILD|WS_VISIBLE,																							0,	14,	34,	12,	8,	IDC_STATIC_TEXT,			0xFFFF,0x0082,DLG_ITEM_TEXT_6,	0},
 	{WS_CHILD|WS_VISIBLE,																							0,	13,	18,	30,	8,	IDC_STATIC_TEXT,			0xFFFF,0x0082,DLG_ITEM_TEXT_7,	0},
-	{ES_LEFT|ES_AUTOHSCROLL|ES_READONLY|WS_BORDER|WS_CHILD|WS_VISIBLE,0,	50,	16,	192,13,	IDC_EDIT_CONDITION,		0xFFFF,0x0081,DLG_ITEM_TEXT_8,	0},
-	{WS_CHILD|WS_VISIBLE,																							0,	248,19,	18,	8,	IDC_STATIC_TEXT,			0xFFFF,0x0082,DLG_ITEM_TEXT_9,	0},
-	{ES_LEFT|ES_AUTOHSCROLL|ES_READONLY|WS_BORDER|WS_CHILD|WS_VISIBLE,0,	50,	67,	189,12,	IDC_EDIT_REASON,			0xFFFF,0x0081,DLG_ITEM_TEXT_10,	0},
+	{ES_LEFT|ES_AUTOHSCROLL|ES_READONLY|WS_BORDER|WS_CHILD|WS_VISIBLE,0,	50,	16,	240,13,	IDC_EDIT_CONDITION,		0xFFFF,0x0081,DLG_ITEM_TEXT_8,	0},
+	{WS_CHILD|WS_VISIBLE,																							0,	298,19,	18,	8,	IDC_STATIC_TEXT,			0xFFFF,0x0082,DLG_ITEM_TEXT_9,	0},
+	{ES_LEFT|ES_AUTOHSCROLL|ES_READONLY|WS_BORDER|WS_CHILD|WS_VISIBLE,0,	50,	67,	240,13,	IDC_EDIT_REASON,			0xFFFF,0x0081,DLG_ITEM_TEXT_10,	0},
 	{WS_CHILD|WS_VISIBLE,																							0,	15,	69,	26,	8,	IDC_STATIC_TEXT,			0xFFFF,0x0082,DLG_ITEM_TEXT_11,	0},
-	{BS_PUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_DISABLED,										0,	93,	88,	72,	12,	IDC_BUTTON_REPORT,		0xFFFF,0x0080,DLG_ITEM_TEXT_13,	0},
+	{BS_PUSHBUTTON|WS_CHILD|WS_VISIBLE|WS_DISABLED,										0,	127,88,	72,	12,	IDC_BUTTON_REPORT,		0xFFFF,0x0080,DLG_ITEM_TEXT_13,	0},
 };
 
 //-----------------------------------------------------------------------------------------------------
@@ -133,7 +138,8 @@ struct SCryAssertInfo
   enum
   {
 		BUTTON_CONTINUE,
-		BUTTON_DONTCARE,
+		BUTTON_IGNORE,
+		BUTTON_IGNORE_ALL,
 		BUTTON_BREAK,
 		BUTTON_STOP
   } btnChosen;
@@ -186,9 +192,15 @@ static INT_PTR CALLBACK DlgProc(HWND _hDlg,UINT _uiMsg,WPARAM _wParam,LPARAM _lP
 			EndDialog(_hDlg,0);
 			break;
 		}
-		case IDC_BUTTON_DONT_CARE:
+		case IDC_BUTTON_IGNORE:
 		{
-			pAssertInfo->btnChosen = SCryAssertInfo::BUTTON_DONTCARE;
+			pAssertInfo->btnChosen = SCryAssertInfo::BUTTON_IGNORE;
+			EndDialog(_hDlg,0);
+			break;
+		}
+		case IDC_BUTTON_IGNORE_ALL:
+		{
+			pAssertInfo->btnChosen = SCryAssertInfo::BUTTON_IGNORE_ALL;
 			EndDialog(_hDlg,0);
 			break;
 		}
@@ -237,18 +249,21 @@ static char gs_szMessage[MAX_PATH];
 
 void CryAssertTrace(const char *_pszFormat,...)
 {
-	if(NULL == _pszFormat)
+	if(!gEnv->bIgnoreAllAsserts)
 	{
-			gs_szMessage[0] = '\0';
-	}
-	else
-	{
-		va_list args;
-		va_start(args,_pszFormat);
+		if(NULL == _pszFormat)
+		{
+				gs_szMessage[0] = '\0';
+		}
+		else
+		{
+			va_list args;
+			va_start(args,_pszFormat);
 
-		vsprintf(gs_szMessage,_pszFormat,args);
+			vsprintf(gs_szMessage,_pszFormat,args);
 
-		va_end(args);
+			va_end(args);
+		}
 	}
 }
 
@@ -288,36 +303,43 @@ void RegistryWriteUInt32(const char* _strSubKey,const char* _strRegName,unsigned
 
 //-----------------------------------------------------------------------------------------------------
 
-bool CryAssert(const char *_pszCondition,const char *_pszFile,unsigned int _uiLine,bool *_pbDontCare)
+bool CryAssert(const char *_pszCondition,const char *_pszFile,unsigned int _uiLine,bool *_pbIgnore)
 {
-	SCryAssertInfo assertInfo;
-
-	assertInfo.pszCondition	= _pszCondition;
-	assertInfo.pszFile			= _pszFile;
-	assertInfo.pszMessage		= gs_szMessage;
-	assertInfo.uiLine				= _uiLine;
-	assertInfo.btnChosen		= SCryAssertInfo::BUTTON_CONTINUE;
-
-	RegistryReadUInt32(gs_strRegSubKey,gs_strRegXValue,&assertInfo.uiX,10);
-	RegistryReadUInt32(gs_strRegSubKey,gs_strRegYValue,&assertInfo.uiY,10);
-
-	DialogBoxIndirectParam(GetModuleHandle(NULL),(DLGTEMPLATE *) &g_dialogRC,GetDesktopWindow(),DlgProc,(LPARAM) &assertInfo);
-
-	RegistryWriteUInt32(gs_strRegSubKey,gs_strRegXValue,assertInfo.uiX);
-	RegistryWriteUInt32(gs_strRegSubKey,gs_strRegYValue,assertInfo.uiY);
-
-	if(SCryAssertInfo::BUTTON_DONTCARE == assertInfo.btnChosen)
+	if(!gEnv->bIgnoreAllAsserts)
 	{
-		*_pbDontCare = true;
-	}
-	else if(SCryAssertInfo::BUTTON_BREAK == assertInfo.btnChosen)
-	{
-		return true;
-	}
-	else if(SCryAssertInfo::BUTTON_STOP == assertInfo.btnChosen)
-	{
-	  raise(SIGABRT);
-		exit(-1);
+		SCryAssertInfo assertInfo;
+
+		assertInfo.pszCondition	= _pszCondition;
+		assertInfo.pszFile			= _pszFile;
+		assertInfo.pszMessage		= gs_szMessage;
+		assertInfo.uiLine				= _uiLine;
+		assertInfo.btnChosen		= SCryAssertInfo::BUTTON_CONTINUE;
+
+		RegistryReadUInt32(gs_strRegSubKey,gs_strRegXValue,&assertInfo.uiX,10);
+		RegistryReadUInt32(gs_strRegSubKey,gs_strRegYValue,&assertInfo.uiY,10);
+
+		DialogBoxIndirectParam(GetModuleHandle(NULL),(DLGTEMPLATE *) &g_dialogRC,GetDesktopWindow(),DlgProc,(LPARAM) &assertInfo);
+
+		RegistryWriteUInt32(gs_strRegSubKey,gs_strRegXValue,assertInfo.uiX);
+		RegistryWriteUInt32(gs_strRegSubKey,gs_strRegYValue,assertInfo.uiY);
+
+		if(SCryAssertInfo::BUTTON_IGNORE == assertInfo.btnChosen)
+		{
+			*_pbIgnore = true;
+		}
+		else if(SCryAssertInfo::BUTTON_IGNORE_ALL == assertInfo.btnChosen)
+		{
+			gEnv->bIgnoreAllAsserts = true;
+		}
+		else if(SCryAssertInfo::BUTTON_BREAK == assertInfo.btnChosen)
+		{
+			return true;
+		}
+		else if(SCryAssertInfo::BUTTON_STOP == assertInfo.btnChosen)
+		{
+			raise(SIGABRT);
+			exit(-1);
+		}
 	}
 
 	return false;

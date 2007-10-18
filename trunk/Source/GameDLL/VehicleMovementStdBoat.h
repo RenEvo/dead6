@@ -40,13 +40,13 @@ public:
 
   void UpdateObject( CVehicleMovementStdBoat *pMovement );
   void Serialize(TSerialize ser, unsigned aspects);
-
+  
   static const uint8 CONTROLLED_ASPECT = eEA_GameClientDynamic;
 
 private:
   float m_steer;
   float m_pedal;  
-  bool  m_boost;
+  bool  m_boost;      
 };
 
 class CVehicleMovementStdBoat
@@ -61,20 +61,18 @@ public:
   virtual bool Init(IVehicle* pVehicle, const SmartScriptTable &table);
   virtual void Reset();
   virtual void Release();
-	virtual void Physicalize();
   virtual void PostPhysicalize();
 
   virtual EVehicleMovementType GetMovementType() { return eVMT_Sea; }
 
   virtual void Update(const float deltaTime);
-  
-	virtual bool SetParams(const SmartScriptTable &table);
-	virtual bool SetSounds(const SmartScriptTable &table) { return true; }
 
-	virtual void ProcessMovement(const float deltaTime);
+virtual void ProcessAI(const float deltaTime);
+virtual void ProcessMovement(const float deltaTime);
 	virtual bool RequestMovement(CMovementRequest& movementRequest);
 
   virtual void OnEvent(EVehicleMovementEvent event, const SVehicleMovementEventParams& params);
+virtual void OnAction(const TVehicleActionId actionId, int activationMode, float value);
 
 	virtual void Serialize(TSerialize ser, unsigned aspects);
   virtual void SetAuthority( bool auth ) { m_netActionSync.CancelReceived(); }
@@ -83,6 +81,7 @@ public:
   // ~IVehicleMovement
 
   friend class CNetworkMovementStdBoat;
+  friend class CVehicleMovementAmphibious;
 
 protected:
 
@@ -94,8 +93,6 @@ protected:
 
   void DrawImpulse(const pe_action_impulse& action, Vec3 offset=Vec3(ZERO), float scale=1, const ColorB& col=ColorB(255,0,0,255));
   
-	IVehicleHelper* m_pSplashPos;
-
   // driving
   float m_velMax;
   float m_velMaxReverse;
@@ -108,7 +105,7 @@ protected:
   float m_velLift;   
   float m_waterDensity;
   bool  m_lifted;
-  
+
   // steering
   float m_turnRateMax;
   float m_turnAccel;
@@ -118,7 +115,7 @@ protected:
   Vec3  m_cornerOffset;
   float m_cornerTilt;
   float m_turnDamping;
-    
+
   Vec3 m_Inertia;
   float m_gravity;
   Vec3 m_massOffset;
@@ -132,20 +129,24 @@ protected:
   float m_waveSpeedMult;
   float m_waveRandomMult;
   bool m_inWater;
-  
+  IVehicleHelper* m_pSplashPos;
+  IParticleEffect* m_pWaveEffect;
+
   float m_waveSoundPitch;
   float m_waveSoundAmount;  
   int m_rpmPitchDir;
 
   CNetActionSync<CNetworkMovementStdBoat> m_netActionSync;
+  bool m_bNetSync; 
 
-  //------------------------------------------------------------------------------
-  // AI related
-  // PID controller for speed control.  
-  float	m_direction;
-  SPID	m_dirPID;
-  float	m_steering;
-  float m_prevAngle;
+	//------------------------------------------------------------------------------
+	// AI related
+	// PID controller for speed control.	
+
+	float	m_prevAngle;
+
+	CMovementRequest m_aiRequest;
+
 };
 
 #endif

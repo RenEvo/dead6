@@ -23,13 +23,13 @@ struct STimeDemoInfo
 	float lastAveFrameRate;
 	float minFPS;
 	float maxFPS;
-	int minFPS_Frame;
-	int maxFPS_Frame;
+	uint32 minFPS_Frame;
+	uint32 maxFPS_Frame;
 
 	// How many polygons per frame where recorded.
-	int nTotalPolysRecorded;
+	uint32 nTotalPolysRecorded;
 	// How many polygons per frame where played.
-	int nTotalPolysPlayed;
+	uint32 nTotalPolysPlayed;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -52,6 +52,10 @@ struct ITestSystem
 
 	// to free the system (not reference counted)
 	virtual void Release()=0;
+
+	// Arguments:
+	//   fInNSeconds <=0 to deactivate
+	virtual void QuitInNSeconds( const float fInNSeconds )=0;
 
 	// Set info about time demo (called by time demo system).
 	virtual void SetTimeDemoInfo( STimeDemoInfo *pTimeDemoInfo ) = 0;

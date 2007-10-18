@@ -50,47 +50,85 @@ void CVehicleMovementHarvester::ProcessMovement(const float deltaTime)
 	m_netActionSync.UpdateObject(this);
 
 // Note: Keep below up-to-date with what is in CVehicleMovementBase!
-	if (!GetPhysics()->GetStatus(&m_statusDyn))
-	{
-		GameWarning( "[CVehicleMovementBase]: '%s' is missing physics status", m_pEntity->GetName() );
+	IPhysicalEntity* pPhysics = GetPhysics();
+	assert(pPhysics);
+
+	m_movementAction.isAI = true;
+
+	if (!pPhysics->GetStatus(&m_PhysDyn))
 		return;
-	}
 
-	gEnv->pRenderer->GetIRenderAuxGeom()->SetRenderFlags(e_Def3DPublicRenderflags);
-
-	m_measureSpeedTimer+=deltaTime;
-	if (m_measureSpeedTimer > 0.25f)
-	{ 
-		Vec3 accel = (m_statusDyn.v - m_lastMeasuredVel) * (1.f/m_measureSpeedTimer);
-		m_localAccel = m_pVehicle->GetEntity()->GetWorldRotation().GetInverted() * accel;
-
-		m_lastMeasuredVel = m_statusDyn.v;
-		m_measureSpeedTimer = 0.f;
-	}
+	if (!pPhysics->GetStatus(&m_PhysPos))
+		return;
 
 	ProcessAI(deltaTime);
 
 // Note: Keep below up-to-date with what is in CVehicleMovementStdWheeled!
-	IPhysicalEntity* pPhysics = GetPhysics();
-	const SVehicleStatus& status = m_pVehicle->GetStatus();
-
 	NETINPUT_TRACE(m_pVehicle->GetEntityId(), m_action.pedal);
 
-	if (!m_isEnginePowered)
+	float speed = m_PhysDyn.v.len();
+
+	if (!m_isEnginePowered || m_pVehicle->IsDestroyed() )
 	{
-		m_action.bHandBrake = (m_damage < 1.f || m_pVehicle->IsDestroyed()) ? 1 : 0;
+
+		const float sleepTime = 3.0f;
+
+		if ( m_passengerCount > 0 || ( m_pVehicle->IsDestroyed() && m_bForceSleep == false ))
+		{
+			UpdateSuspension(deltaTime);
+			UpdateAxleFriction(m_movementAction.power, true, deltaTime);
+		}
+
+		m_action.bHandBrake = (m_movementAction.brake || m_pVehicle->IsDestroyed()) ? 1 : 0;
 		m_action.pedal = 0;
 		m_action.steer = 0;
 		pPhysics->Action(&m_action, 1); //THREAD_SAFE
+
+		bool maybeInTheAir = fabsf(m_PhysDyn.v.z) > 1.0f;
+		if ( maybeInTheAir )
+		{
+			UpdateGravity(-9.81f * 1.4f);
+			ApplyAirDamp(DEG2RAD(20.f), DEG2RAD(10.f), deltaTime, 1); //THREAD_SAFE
+		}
+
+		if ( m_pVehicle->IsDestroyed() && m_bForceSleep == false )
+		{
+			int numContact= 0;
+			int numWheels = m_pVehicle->GetWheelCount();
+			for (int i=0; i<numWheels; ++i)
+			{ 
+				pe_status_wheel ws;
+				ws.iWheel = i;
+				if (!pPhysics->GetStatus(&ws))
+					continue;
+				if (ws.bContact)
+					numContact ++;
+			}
+			if ( numContact > m_pVehicle->GetWheelCount()/2 || speed<0.2f )
+				m_forceSleepTimer += deltaTime;
+			else
+				m_forceSleepTimer = max(0.0f,m_forceSleepTimer-deltaTime);
+
+			if ( m_forceSleepTimer > sleepTime )
+			{
+				IPhysicalEntity* pPhysics = GetPhysics();
+				if (pPhysics)
+				{
+					pe_params_car params;
+					params.minEnergy = 0.05f;
+					pPhysics->SetParams(&params, 1);
+					m_bForceSleep = true;
+				}
+			}
+		}
 		return;
+
 	}
 
-	pPhysics->GetStatus(&m_vehicleStatus);
-	float speed = m_vehicleStatus.vel.len();
-
+	// moved to main thread
 	UpdateSuspension(deltaTime);   	
 	UpdateAxleFriction(m_movementAction.power, true, deltaTime);
-	UpdateBrakes(deltaTime);
+	//UpdateBrakes(deltaTime);
 
 	// speed ratio    
 	float speedRel = min(speed, m_vMaxSteerMax) / m_vMaxSteerMax;  
@@ -106,12 +144,6 @@ void CVehicleMovementHarvester::ProcessMovement(const float deltaTime)
 		bool reverse = sgn(m_action.steer)*sgn(steerError) < 0;
 		float steerSpeed = GetSteerSpeed(reverse ? 0.f : speedRel);
 
-		if (IsProfilingMovement() && reverse)
-		{
-			float color[] = {1,1,1,1};
-			gEnv->pRenderer->Draw2dLabel(100,300,1.5f,color,false,"reverse");  
-		}
-
 		// adjust steering based on current error    
 		m_action.steer = m_action.steer + sgn(steerError) * DEG2RAD(steerSpeed) * deltaTime;  
 		m_action.steer = CLAMP(m_action.steer, -steerMax, steerMax);
@@ -126,16 +158,58 @@ void CVehicleMovementHarvester::ProcessMovement(const float deltaTime)
 
 	// reduce actual pedal with increasing steering and velocity
 	float maxPedal = 1 - (speedRel * abs(steering) * m_pedalLimitMax);  
-	float damageMul = 1.0f - 0.25f*m_damage;  
+	float damageMul = 1.0f - 0.7f*m_damage;  
+	float submergeMul = 1.0f;  
+	float totalMul = 1.0f;  
+	bool bInWater = m_PhysDyn.submergedFraction > 0.01f;
+	if ( GetMovementType()!=IVehicleMovement::eVMT_Amphibious && bInWater )
+	{
+		submergeMul = max( 0.0f, 0.04f - m_PhysDyn.submergedFraction ) * 10.0f;
+		submergeMul *=submergeMul;
+		submergeMul = max( 0.2f, submergeMul );
+	}
 
-	m_action.pedal = CLAMP(m_movementAction.power, -maxPedal, maxPedal ) * damageMul;
+	Vec3 vUp(m_PhysPos.q.GetColumn2());
+	Vec3 vUnitUp(0.0f,0.0f,1.0f);
+
+	float slopedot = vUp.Dot( vUnitUp );
+	bool bSteep =  fabsf(slopedot) < 0.7f;
+	{ //fix for 30911
+		if ( bSteep && speed > 7.5f )
+		{
+			Vec3 vVelNorm = m_PhysDyn.v.GetNormalizedSafe();
+			if ( vVelNorm.Dot(vUnitUp)> 0.0f )
+			{
+				pe_action_impulse imp;
+				imp.impulse = -m_PhysDyn.v;
+				imp.impulse *= deltaTime * m_PhysDyn.mass*5.0f;      
+				imp.point = m_PhysDyn.centerOfMass;
+				imp.iApplyTime = 0;
+				GetPhysics()->Action(&imp, 1); //THREAD_SAFE
+			}
+		}
+	}
+
+	totalMul = max( 0.3f, damageMul *  submergeMul );
+	m_action.pedal = CLAMP(m_movementAction.power, -maxPedal, maxPedal ) * totalMul;
+
+	// make sure cars can't drive under water
+	if(GetMovementType()!=IVehicleMovement::eVMT_Amphibious && m_PhysDyn.submergedFraction >= m_submergedRatioMax && m_damage >= 0.99f)
+	{
+		m_action.pedal = 0.0f;
+	}
 
 	pPhysics->Action(&m_action, 1); //THREAD_SAFE
 
-	if (Boosting())  
-		ApplyBoost(speed, 1.25f*m_maxSpeed, m_boostStrength, deltaTime);  
+	if ( !bSteep && Boosting() )
+		ApplyBoost(speed, 1.25f*m_maxSpeed*GetWheelCondition()*damageMul, m_boostStrength, deltaTime);  
 
-	DebugDrawMovement(deltaTime);
+	if (m_wheelContacts <= 1 && speed > 5.f)
+	{
+		ApplyAirDamp(DEG2RAD(20.f), DEG2RAD(10.f), deltaTime, 1); //THREAD_SAFE
+		if ( !bInWater )
+			UpdateGravity(-9.81f * 1.4f);  
+	}
 
 	if (m_netActionSync.PublishActions( CNetworkMovementStdWheeled(this) ))
 		m_pVehicle->GetGameObject()->ChangedNetworkState( eEA_GameClientDynamic );
@@ -173,33 +247,36 @@ void CVehicleMovementHarvester::GetMemoryStatistics(ICrySizer * s)
 bool CVehicleMovementHarvester::StartEngine(EntityId driverId)
 {
 // Note: Keep below up-to-date with CVehicleMovementBase!
-	if (true == m_isEngineDisabled || true == m_isEngineStarting)
+	if (m_isEngineDisabled || m_isEngineStarting)
 		return false;
-	m_actorId = 0; // No actor!
+
+	if (/*m_damage >= 1.0f || */ m_pVehicle->IsDestroyed())
+		return false;
+
+	m_actorId = driverId;
 
 	m_movementAction.Clear();
 	m_movementAction.brake = false;
 
-	// Always use AI tweeks
-	if (m_aiTweaksId > -1)
-	{
-		if (m_movementTweaks.UseGroup(m_aiTweaksId))
-			OnValuesTweaked();
-	}
+	if (m_movementTweaks.UseGroup(m_aiTweaksId))
+		OnValuesTweaked();
 	if (gEnv->bMultiplayer && m_multiplayerTweaksId > -1)
 	{
 		if (m_movementTweaks.UseGroup(m_multiplayerTweaksId))
 			OnValuesTweaked();
 	}
 
-	if (m_isEnginePowered)
+	// WarmupEngine relies on this being done here!
+	if (m_isEnginePowered && !m_isEngineGoingOff)
 	{ 
-		if (!m_isEngineGoingOff)
-			return false;
-	}
+		StartExhaust(false, false);
 
-	if (m_damage >= 1.0f)
-		return false;
+		if (m_pVehicle->IsPlayerPassenger())
+			GetOrPlaySound(eSID_Ambience);
+
+		if (!m_isEngineGoingOff)
+			return true;
+	}
 
 	m_isEngineGoingOff = false;
 	m_isEngineStarting = true;
@@ -221,9 +298,9 @@ bool CVehicleMovementHarvester::StartEngine(EntityId driverId)
 	m_pVehicle->GetGameObject()->EnableUpdateSlot(m_pVehicle, IVehicle::eVUS_EnginePowered);
 
 // Note: Keep below up-to-date with CVehicleMovementStdWheeled!
-	m_brakeTimer = 0.0f;
-	m_action.pedal = 0.0f;
-	m_action.steer = 0.0f;
+	m_brakeTimer = 0.f;
+	m_action.pedal = 0.f;
+	m_action.steer = 0.f;
 
 	return true;
 }

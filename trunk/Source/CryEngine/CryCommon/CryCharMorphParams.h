@@ -54,11 +54,10 @@ struct CryCharMorphParams
 
 	enum FlagsEnum
 	{
-		// with this flag set, the attachments will be traversed to attempt to start the same morph target
-		FLAGS_RECURSIVE = 1,
 		// with this flag set, the morph will not be time-updated (it'll be frozen at the point where it is)
-		FLAGS_FREEZE    = 1 << 1,
-		FLAGS_NO_BLENDOUT = 1 << 2
+		FLAGS_FREEZE			= 0x01,
+		FLAGS_NO_BLENDOUT = 0x02,
+		FLAGS_INSTANTANEOUS = 0x03
 	};
 
 	// optional flags, as specified by the FlagsEnum

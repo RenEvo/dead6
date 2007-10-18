@@ -78,6 +78,7 @@ struct ICategory : public _i_reference_target_t
 	virtual uint32			GetChildCount() = 0;
 	virtual ICategory*	GetCategoryByIndex(uint32 nCategoryCount) const = 0;
 	virtual ICategory*	GetCategory(const char* sCategoryName) const = 0;
+	virtual ICategory*	GetCategoryByPtr(void *pPlatformCategory) const = 0;
 	virtual ICategory*	AddCategory(const char* sCategoryName) = 0;
 	virtual bool				RemoveCategory(const char *sCategoryName) = 0;
 
@@ -85,20 +86,20 @@ struct ICategory : public _i_reference_target_t
 	virtual bool				GetParam(enumGroupParamSemantics eSemantics, ptParam* pParam) const = 0;
 	virtual bool				SetParam(enumGroupParamSemantics eSemantics, ptParam* pParam) = 0;
 
-	virtual bool				InterpolateCategories(ICategory *pCat1, float fFade1, ICategory *pCat2, float fFade2) = 0;
+	virtual bool				InterpolateCategories(ICategory *pCat1, float fFade1, ICategory *pCat2, float fFade2, bool bForceDefault) = 0;
 
 	// Import Export
 	virtual bool				Serialize(XmlNodeRef &node, bool bLoading) = 0;
 	virtual bool				RefreshCategories(const bool bAddNew) = 0;
 
 	// Functionality
-	virtual bool ApplyCategory(float fFade, bool bForceUpdate) = 0;
+	virtual bool ApplyCategory(float fFade) = 0;
 
 	// Other
 	virtual ISoundMoodManager* GetIMoodManager() = 0;
 
 	// writes output to screen in debug
-	virtual void DrawInformation(IRenderer* pRenderer, float &xpos, float &ypos) = 0;
+	virtual void DrawInformation(IRenderer* pRenderer, float &xpos, float &ypos, bool bAppliedValues) = 0;
 };
 
 struct IMood : public _i_reference_target_t
@@ -114,7 +115,7 @@ struct IMood : public _i_reference_target_t
 	virtual uint32			GetCategoryCount() const = 0;
 	virtual ICategory*	GetCategoryByIndex(uint32 nCategoryCount) const = 0;
 	virtual ICategory*	GetCategory(const char *sCategoryName)  const = 0;
-	virtual ICategory*	GetCategory(void* pPlatformCategory) const = 0;
+	virtual ICategory*	GetCategoryByPtr(void* pPlatformCategory) const = 0;
 	virtual ICategory*	AddCategory(const char *sCategoryName) = 0;
 	virtual bool				RemoveCategory(const char *sCategoryName) = 0;
 
@@ -131,14 +132,14 @@ struct IMood : public _i_reference_target_t
 	virtual bool GetIsMixMood() = 0;
 
 	// Functionality
-	virtual bool InterpolateMoods(const IMood *pMood1, float fFade1, const IMood *pMood2, float fFade2) = 0;
-	virtual bool ApplyMood(float fFade, bool bForceUpdate) = 0;
+	virtual bool InterpolateMoods(const IMood *pMood1, float fFade1, const IMood *pMood2, float fFade2, bool bForceDefault) = 0;
+	virtual bool ApplyMood(float fFade) = 0;
 
 	// Other
   virtual ISoundMoodManager* GetIMoodManager() = 0;
 
 	// writes output to screen in debug
-	virtual void DrawInformation(IRenderer* pRenderer, float &xpos, float &ypos) = 0;
+	virtual void DrawInformation(IRenderer* pRenderer, float &xpos, float &ypos, bool bAppliedValues) = 0;
 };
 
 

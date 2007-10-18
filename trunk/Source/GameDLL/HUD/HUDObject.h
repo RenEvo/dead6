@@ -19,9 +19,7 @@ History:
 
 //-----------------------------------------------------------------------------------------------------
 
-// Forward declaration
-
-struct IGameTokenSystem;
+#include "ISerialize.h"
 
 //-----------------------------------------------------------------------------------------------------
 
@@ -29,34 +27,21 @@ class CHUDObject
 {
 public:
 
-						CHUDObject(bool bVisible=true);
+						CHUDObject();
 	virtual ~	CHUDObject();
 
-	void SetFadeValue(float fFadeValue);
-
-	void Update(float fDeltaTime);
+	virtual void Update(float fDeltaTime) = 0;
 
 	virtual void PreUpdate() {};
-	virtual void SetParent(void* parent);
 	virtual void OnHUDToBeDestroyed() {};
+	virtual void Serialize(TSerialize ser) {};
 
 	void GetHUDObjectMemoryStatistics(ICrySizer * s);
 
 protected:
 
-	virtual void OnUpdate(float fDeltaTime,float fFadeValue) = 0;
-
-	// Convenience method for accessing the GameToken system.
-	IGameTokenSystem *GetIGameTokenSystem() const;
-
 	float m_fX;
 	float m_fY;
-
-	void		*m_parent;
-
-private:
-
-	float m_fFadeValue;
 };
 
 //-----------------------------------------------------------------------------------------------------

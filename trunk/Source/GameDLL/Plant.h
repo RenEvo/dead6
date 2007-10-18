@@ -24,8 +24,6 @@ History:
 
 class CPlant : public IFireMode
 {
-	struct ReleaseButtonAction;
-	struct PressButtonAction;
 	struct StartPlantAction;
 
 protected:
@@ -53,12 +51,16 @@ protected:
 			ResetValue(led_minutes,		true);
 			ResetValue(led_layers,		"d%d%d");
 			ResetValue(simple,				false);
+			ResetValue(place_on_ground, false);
+			ResetValue(need_to_crouch, false);
 		};
 
 		IEntityClass*	ammo_type_class;
 		int			damage;
 		int			clip_size;
 		bool		simple;
+		bool		place_on_ground;
+		bool		need_to_crouch;
 
 		string	helper;
 		float		impulse;
@@ -140,22 +142,27 @@ public:
 
 	virtual float GetRecoil() const { return 0.0f; };
 	virtual float GetSpread() const { return 0.0f; };
+	virtual float GetMinSpread() const { return 0.0f; };
+	virtual float GetMaxSpread() const { return 0.0f; };
 	virtual const char *GetCrosshair() const { return ""; };
 	virtual float GetHeat() const { return 0.0f; };
+	virtual bool	CanOverheat() const {return false;};
 
 	virtual bool CanFire(bool considerAmmo=true) const;
-	virtual void StartFire(EntityId shooterId);
-	virtual void StopFire(EntityId shooterId);
+	virtual void StartFire();
+	virtual void StopFire();
 	virtual bool IsFiring() const { return m_planting; };
 
 	virtual void NetShoot(const Vec3 &hit, int ph);
-	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, int ph);
+	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, float extra, int ph);
+	virtual void NetEndReload() {};
 
-	virtual void NetStartFire(EntityId shooterId);
-	virtual void NetStopFire(EntityId shooterId);
+	virtual void NetStartFire();
+	virtual void NetStopFire();
 
-	virtual EntityId GetProjectileId() const { return m_projectileId; };
-	virtual void SetProjectileId(EntityId id) { m_projectileId = id; };
+	virtual EntityId GetProjectileId() const;
+	virtual void SetProjectileId(EntityId id);
+	virtual EntityId RemoveProjectileId();
 
 	virtual const char *GetType() const;
 	virtual IEntityClass* GetAmmoType() const;
@@ -164,6 +171,7 @@ public:
 	virtual float GetSpinUpTime() const { return 0.0f; };
 	virtual float GetSpinDownTime() const { return 0.0f; };
 	virtual float GetNextShotTime() const { return 0.0f; };
+	virtual void SetNextShotTime(float time) {};
 	virtual float GetFireRate() const { return 0.0f; };
 
 	virtual void Enable(bool enable) { m_enabled = enable; };
@@ -180,6 +188,7 @@ public:
 
 	virtual int GetCurrentBarrel() const { return 0; }
 	virtual void Serialize(TSerialize ser);
+	virtual void PostSerialize() {};
 
 	virtual void SetRecoilMultiplier(float recoilMult) { }
 	virtual float GetRecoilMultiplier() const { return 1.0f; }
@@ -194,23 +203,24 @@ public:
 	virtual void PatchRecoilMod(SRecoilModParams &sRMP){};
 	virtual void ResetRecoilMod(){};
 	virtual void ResetLock() {};
-	virtual void StartLocking(EntityId targetId) {};
-	virtual void Lock(EntityId targetId) {};
+	virtual void StartLocking(EntityId targetId, int partId) {};
+	virtual void Lock(EntityId targetId, int partId) {};
 	virtual void Unlock() {};
 
 protected:
-	virtual void TickTimer();
-	virtual void Plant(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, bool net=false);
-	virtual void SetLED(float time, bool minutes, const char *layerFmt);
+
+	virtual void Plant(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, bool net=false, int ph=0);
 	virtual void SelectDetonator();
-	virtual void SelectLast();
 	virtual void CheckAmmo();
+	virtual bool PlayerStanceOK() const;
+	virtual bool GetPlantingParameters(Vec3& pos, Vec3& dir, Vec3& vel) const;
 
 	CWeapon	*m_pWeapon;
 	bool		m_enabled;
 	string	m_name;
 
 	EntityId m_projectileId;
+	std::vector<EntityId> m_projectiles;
 
 	SPlantParams	m_plantparams;
 	SPlantActions	m_plantactions;
@@ -224,6 +234,13 @@ protected:
 
 	float		m_plantTimer;
 	float		m_tickTimer;
+
+	// pos/dir/vel are stored when the user presses fire for placed weapons
+	Vec3 m_plantPos;
+	Vec3 m_plantDir;
+	Vec3 m_plantVel;
+
+	static IEntityClass *m_pClaymoreClass, *m_pAVMineClass;
 };
 
 #endif 

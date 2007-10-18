@@ -6,6 +6,7 @@
 typedef enum
 {
 	eGE_DiscreetSample = 0,
+	eGE_GameReset,
 	eGE_GameStarted,
 	eGE_GameEnd,
 	eGE_Connected,
@@ -17,6 +18,7 @@ typedef enum
 	eGE_Currency,
 	eGE_Rank,
   eGE_Spectator,
+	eGE_ScoreReset,
 
 	eGE_AttachedAccessory,
 
@@ -43,6 +45,9 @@ typedef enum
 	eGE_ItemDropped,
 	eGE_ItemBought,
 
+	eGE_EnteredVehicle,
+	eGE_LeftVehicle,
+
 	eGE_Last
 } EGameplayEvent;
 
@@ -65,6 +70,7 @@ struct IGameplayListener
 	virtual void OnGameplayEvent(IEntity *pEntity, const GameplayEvent &event) = 0;
 };
 
+struct IMetadata;
 
 struct IGameplayRecorder
 {
@@ -74,7 +80,10 @@ struct IGameplayRecorder
 	virtual CTimeValue GetSampleInterval() const = 0;
 
 	virtual void Event(IEntity *pEntity, const GameplayEvent &event) = 0;
+
+	virtual void OnGameData(const IMetadata* pGameData) = 0;
 };
 
 
 #endif //__IGAMEPLAYRECORDER_H__
+

@@ -13,8 +13,6 @@
 #ifndef CRYGEOSTRUCTS_H
 #define CRYGEOSTRUCTS_H
 
-#include "Cry_Math.h" 
-
 #if _MSC_VER > 1000
 # pragma once
 #endif
@@ -246,7 +244,7 @@ struct AABB {
 	//! Reset Bounding box before calculating bounds.
 	//! These values ensure that Add() functions work correctly for Reset bbs, without additional testing.
 	inline void Reset()	
-		{	min = Vec3(FLT_MAX);	max = Vec3(-FLT_MAX);	}
+		{	min = Vec3(9999999.0f);	max = Vec3(-9999999.0f);	}
 
 	inline bool IsReset() const 
 		{ return min.x > max.x; }
@@ -313,9 +311,41 @@ struct AABB {
 		}
 	}
 
+	void ClipToBox( AABB const& bb )
+	{
+		min.CheckMax(bb.min);
+		max.CheckMin(bb.max);
+	}
+
+	void ClipMoveToBox( AABB const& bb )
+	{
+		for (int a = 0; a < 3; a++)
+		{
+			if (max[a] - min[a] > bb.max[a] - bb.min[a])
+			{
+				min[a] = bb.min[a];  
+				max[a] = bb.max[a];
+			}
+			else if (min[a] < bb.min[a])
+			{
+				max[a] += bb.min[a] - min[a];
+				min[a] = bb.min[a];
+			}
+			else if (max[a] > bb.max[a])
+			{
+				min[a] += bb.max[a] - max[a];
+				max[a] = bb.max[a];
+			}
+		}
+	}
+
 	//! Check if this bounding box overlap with bounding box of sphere.
 	bool IsOverlapSphereBounds( const Vec3 &pos,float radius ) const
 	{
+		assert( min.IsValid() );
+		assert( max.IsValid() );
+		assert( pos.IsValid() );
+
 		if (pos.x > min.x && pos.x < max.x &&	pos.y > min.y && pos.y < max.y &&	pos.z > min.z && pos.z < max.z) 
 			return true;
 
@@ -331,6 +361,9 @@ struct AABB {
 	//! Check if this bounding box contain sphere within itself.
 	bool IsContainSphere( const Vec3 &pos,float radius ) const
 	{
+		assert( min.IsValid() );
+		assert( max.IsValid() );
+		assert( pos.IsValid() );
 		if (pos.x-radius < min.x) return false;
 		if (pos.y-radius < min.y) return false;
 		if (pos.z-radius < min.z) return false;
@@ -343,6 +376,9 @@ struct AABB {
 	//! Check if this bounding box contains a point within itself.
 	bool IsContainPoint( const Vec3 &pos) const
 	{
+		assert( min.IsValid() );
+		assert( max.IsValid() );
+		assert( pos.IsValid() );
 		if (pos.x < min.x) return false;
 		if (pos.y < min.y) return false;
 		if (pos.z < min.z) return false;
@@ -367,13 +403,22 @@ struct AABB {
 
 	bool ContainsBox( AABB const& b ) const
 	{
+		assert( min.IsValid() );
+		assert( max.IsValid() );
+		assert( b.min.IsValid() );
+		assert( b.max.IsValid() );
 		return min.x <= b.min.x && min.y <= b.min.y && min.z <= b.min.z
 				&& max.x >= b.max.x && max.y >= b.max.y && max.z >= b.max.z;
 	}
 
 
 	// Check two bounding boxes for intersection.
-	inline bool	IsIntersectBox( const AABB &b ) const	{
+	inline bool	IsIntersectBox( const AABB &b ) const	
+	{
+		assert( min.IsValid() );
+		assert( max.IsValid() );
+		assert( b.min.IsValid() );
+		assert( b.max.IsValid() );
 		// Check for intersection on X axis.
 		if ((min.x > b.max.x)||(b.min.x > max.x)) return false;
 		// Check for intersection on Y axis.
@@ -499,8 +544,13 @@ template <typename F> struct OBB_tpl {
 		h		=	(aabb.max-aabb.min)*0.5f;	//calculate the half-length-vectors
 		c		=	(aabb.max+aabb.min)*0.5f;	//the center is relative to the PIVOT
 	}
+	ILINE void SetOBBfromAABB( const Quat& q, const AABB& aabb ) {
+		m33	=	Matrix33(q);
+		h		=	(aabb.max-aabb.min)*0.5f;	//calculate the half-length-vectors
+		c		=	(aabb.max+aabb.min)*0.5f;	//the center is relative to the PIVOT
+	}
 	ILINE static OBB_tpl<F> CreateOBBfromAABB( const Matrix33& m33, const AABB& aabb ) { OBB_tpl<f32> obb; obb.SetOBBfromAABB(m33,aabb); return obb;	}
-	ILINE static OBB_tpl<F> CreateOBBfromAABB( const Quat& m33, const AABB& aabb ) { OBB_tpl<f32> obb; obb.SetOBBfromAABB(Matrix33(m33),aabb); return obb;	}
+	ILINE static OBB_tpl<F> CreateOBBfromAABB( const Quat& q, const AABB& aabb ) { OBB_tpl<f32> obb; obb.SetOBBfromAABB(q,aabb); return obb;	}
 
 	~OBB_tpl( void ) {};
 };

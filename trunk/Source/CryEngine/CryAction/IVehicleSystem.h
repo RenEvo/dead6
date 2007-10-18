@@ -75,11 +75,11 @@ enum EVehicleActionIds
 	eVAI_ChangeSeat5,
 	eVAI_RotatePitch,
 	eVAI_RotateYaw,
+	eVAI_RotateRoll,
 	eVAI_XIRotatePitch,
 	eVAI_XIRotateYaw,
 	eVAI_MoveForward,
 	eVAI_MoveBack,
-	eVAI_RotateDir,
 	eVAI_XIMoveY,
 	eVAI_TurnLeft,
 	eVAI_TurnRight,
@@ -129,6 +129,7 @@ enum EVehicleEvent
   eVE_PreVehicleDeletion,
 	eVE_VehicleDeleted,
 	eVE_ToggleDebugView,
+  eVE_ToggleDriverControlledGuns,
   eVE_Brake,  
   eVE_Timer,  
   eVE_EngineStopped,
@@ -140,6 +141,7 @@ enum EVehicleEvent
   eVE_Indestructible,
   eVE_Last,
 };
+
 
 // Summary
 //   Value type used to define the seat id in the vehicle system
@@ -215,6 +217,8 @@ struct SVehicleDamageParams
   float groundCollisionMinMult;
   float groundCollisionMaxMult;
 
+	float vehicleCollisionDestructionSpeed;
+
   float submergedRatioMax;
   float submergedDamageMult;
 
@@ -225,7 +229,9 @@ struct SVehicleDamageParams
     groundCollisionMinMult = 1.f; // increases "falling" damage when > 1
     groundCollisionMaxMult = 1.f;
     groundCollisionMinSpeed = 15.f;
-    groundCollisionMaxSpeed = 50.f;      
+    groundCollisionMaxSpeed = 50.f;     
+
+		vehicleCollisionDestructionSpeed = -1;	// eg disabled.
 
     submergedRatioMax = 1.f;
     submergedDamageMult = 1.f;
@@ -264,9 +270,12 @@ struct SExhaustParams
     runMinPower = runMaxPower = 0;
     runMinSpeedSizeScale = runMaxSpeedSizeScale = 1.f;
     runMinSpeedCountScale = runMaxSpeedCountScale = 1.f;
+		runMinSpeedSpeedScale = runMaxSpeedSpeedScale = 1.f;
     runMinPowerSizeScale = runMaxPowerSizeScale = 1.f;
+		runMinPowerSpeedScale = runMaxPowerSpeedScale = 1.f;
     insideWater = false;
     outsideWater = true;
+		disableWithNegativePower = false;
 
     hasExhaust = false;
   }
@@ -283,18 +292,23 @@ struct SExhaustParams
   float  runMinSpeed;
   float  runMinSpeedSizeScale;
   float  runMinSpeedCountScale;
+	float	 runMinSpeedSpeedScale;
   float  runMaxSpeed;
   float  runMaxSpeedSizeScale;
   float  runMaxSpeedCountScale;
+	float	 runMaxSpeedSpeedScale;
   float  runMinPower;
   float  runMinPowerSizeScale;
   float  runMinPowerCountScale;
+	float	 runMinPowerSpeedScale;
   float  runMaxPower;
   float  runMaxPowerSizeScale;
   float  runMaxPowerCountScale;
+	float	 runMaxPowerSpeedScale;
 
   bool insideWater;
   bool outsideWater;
+	bool disableWithNegativePower;
 
   bool hasExhaust;
 };
@@ -334,8 +348,10 @@ struct SEnvironmentLayer
     maxSpeed = 10;    
     minSpeedSizeScale = maxSpeedSizeScale = 1.f;
     minSpeedCountScale = maxSpeedCountScale = 1.f;    
+		minSpeedSpeedScale = maxSpeedSpeedScale = 1.f;
     minPowerSizeScale = maxPowerSizeScale = 1.f;
     minPowerCountScale = maxPowerCountScale = 1.f;
+		minPowerSpeedScale = maxPowerSpeedScale = 1.f;
     maxHeightSizeScale = maxHeightCountScale = 1.f;
     alignGroundHeight = 0;
     alignToWater = false;
@@ -358,13 +374,17 @@ struct SEnvironmentLayer
   float minSpeed;
   float minSpeedSizeScale;
   float minSpeedCountScale;
+	float minSpeedSpeedScale;
   float maxSpeed;
   float maxSpeedSizeScale;
   float maxSpeedCountScale;
+	float maxSpeedSpeedScale;
   float minPowerSizeScale;
   float minPowerCountScale;  
+	float minPowerSpeedScale;
   float maxPowerSizeScale;
   float maxPowerCountScale;
+	float maxPowerSpeedScale;
   float alignGroundHeight; 
   float maxHeightSizeScale;
   float maxHeightCountScale;
@@ -399,7 +419,7 @@ struct SVehicleEventParams
 
 	bool bParam;
 	int iParam;
-	float fParam;
+	float fParam,fParam2;
 	Vec3 vParam;
 
   SVehicleEventParams()
@@ -407,6 +427,7 @@ struct SVehicleEventParams
    , bParam(false)
    , iParam(0)
    , fParam(0.f)
+	 , fParam2(0.0f)
   {
     vParam.zero();
   }  
@@ -576,18 +597,15 @@ struct IVehicle : public IGameObjectExtension
 
 	//FIXME:move this to the gameside, its not really needed here, plus add callerId to the IActionListener interface
 	virtual void OnAction(const TVehicleActionId actionId, int activationMode, float value, EntityId callerId) = 0;
-	virtual void OnHit(EntityId targetId, EntityId shooterId, float damage, Vec3 position, float radius, const char* pHitClass, bool explosion, float frost=0.f) = 0;
+	virtual void OnHit(EntityId targetId, EntityId shooterId, float damage, Vec3 position, float radius, const char* pHitClass, bool explosion) = 0;
 
-	virtual float GetDamageRatio() const = 0;
+	virtual float GetDamageRatio(bool onlyMajorComponents = false) const = 0;
 
 	virtual void SetAmmoCount(IEntityClass* pAmmoType, int amount) = 0;
 	virtual int GetAmmoCount(IEntityClass* pAmmoType) const = 0;
 
 	virtual void SetOwnerId(EntityId ownerId) = 0;
 	virtual EntityId GetOwnerId() const = 0;
-
-	virtual bool IsLocked() const = 0;
-	virtual void Lock(float amount) = 0;
 
 	virtual int IsUsable(EntityId userId) = 0;
 	virtual bool OnUsed(EntityId userId, int index) = 0;
@@ -631,6 +649,9 @@ struct IVehicle : public IGameObjectExtension
 
   // check if player/client is driving this vehicle
   virtual bool IsPlayerDriving(bool clientOnly = true) = 0;
+
+  // check if there is friendlyPassenger
+  virtual bool HasFriendlyPassenger(IEntity *pPlayer) = 0;
 
   // check if client is inside this vehicle
   virtual bool IsPlayerPassenger() = 0;
@@ -701,7 +722,7 @@ struct IVehicle : public IGameObjectExtension
 	//   pEvenListener - a pointer to class which implements the IVehicleEventListener interface
 	// See Also
 	//   UnregisterVehicleEventListener
-	virtual void RegisterVehicleEventListener(IVehicleEventListener* pEvenListener) = 0;
+	virtual void RegisterVehicleEventListener(IVehicleEventListener* pEvenListener, const char* name) = 0;
 
 	// Summary
 	//   Unregisters an event listener
@@ -743,19 +764,19 @@ struct IVehicle : public IGameObjectExtension
 
 	virtual IVehicleHelper* GetHelper(const char* pName) = 0;
   virtual bool IsDestroyed() = 0;
-
+	virtual bool IsFlipped(float maxSpeed=0.f) = 0;
   // Summary:
   //   Enables/disables engine slot triggering by vehicle speed
   virtual void TriggerEngineSlotBySpeed(bool trigger) = 0;
 
   enum EVehicleNeedsUpdateFlags
   {
-    eVUF_AwakePhysics = 1 << 0,    
+    eVUF_AwakePhysics = 1 << 0,        
   };
 
   // Summary:
   //  Notify vehicle to that update is required
-  virtual void NeedsUpdate(int flags=0) = 0;
+  virtual void NeedsUpdate(int flags=0, bool bThreadSafe=false) = 0;
   
   // Summary:
   //  Register Entity Timer. If timerId == -1, timerId will be assigned 
@@ -772,6 +793,21 @@ struct IVehicle : public IGameObjectExtension
   // Summary: 
   //  Sets vehicle glass surface type
   virtual void SetVehicleGlassSurfaceType(ISurfaceType* pSurface) = 0;  
+
+	// Summary:
+	//	Finds a valid world position the actor could be placed at when they exit the vehicle. 
+	//	Based on seat helpers, but does additional checks if these are all blocked.
+	//	NB: actor may not necessarily be a passenger (used for MP spawn trucks)
+	//	Returns true if a valid position was found, false otherwise.
+	//	extended==true -> allows two actors to exit from one seat (lining up away from the vehicle).
+	virtual bool GetExitPositionForActor(IActor* pActor, Vec3& pos, bool extended = false) = 0;
+
+	// Summary:
+	//	Returns the physical entities attached to this vehicle, for use with physics RWI and PWI tests
+	virtual int GetSkipEntities(IPhysicalEntity** pSkipEnts, int nMaxSkip) = 0;
+	// Summary:
+	//  Returns vehicle modification name
+	virtual const char* GetModification()const = 0;
 };
 
 
@@ -849,13 +885,17 @@ struct IVehicleMovement
 		// completely frozen and shouldn't move anymore
 		eVME_Freeze,
     // tire destroyed
-    eVME_TireBlown,    		
+    eVME_TireBlown,
+		// tires restored
+		eVME_TireRestored,
     // sent when player enters/leaves seat
     eVME_PlayerEnterLeaveSeat,    
     // sent when player enters/leaves the vehicle
     eVME_PlayerEnterLeaveVehicle,
     // sent when player switches view
     eVME_PlayerSwitchView,
+		// sent on collision
+		eVME_Collision,
     // sent on ground collision
 		eVME_GroundCollision,
     // ?
@@ -901,6 +941,10 @@ struct IVehicleMovement
   // Summary:
   //   Get movement type
   virtual EVehicleMovementType GetMovementType() = 0;
+
+	// Summary:
+	//	Resets any input previously active in the movement
+	virtual void ResetInput() = 0;
 
 	// Summary:
 	//   Turn On the movement
@@ -993,7 +1037,8 @@ struct IVehicleMovement
 	virtual void RegisterActionFilter(IVehicleMovementActionFilter* pActionFilter) = 0;
 	virtual void UnregisterActionFilter(IVehicleMovementActionFilter* pActionFilter) = 0;
 
-  virtual void ProcessEvent(SEntityEvent& event) = 0;  
+  virtual void ProcessEvent(SEntityEvent& event) = 0; 
+  virtual void SetSoundMasterVolume(float vol) = 0;
 
 	virtual void GetMemoryStatistics(ICrySizer * s) = 0;
 };
@@ -1010,6 +1055,7 @@ struct IVehicleView
 	virtual bool Init(CVehicleSeat* pSeat, const SmartScriptTable &table) = 0;
 	virtual void Reset() = 0;
 	virtual void Release() = 0;
+	virtual void ResetPosition() = 0;
 
 	// Summary
 	//		Returns the name of the camera view
@@ -1048,6 +1094,8 @@ struct IVehicleView
 
   virtual bool ShootToCrosshair() = 0;
 
+  virtual bool IsAvailableRemotely() const = 0;
+
 	virtual void GetMemoryStatistics(ICrySizer * ) = 0;
 };
 
@@ -1057,11 +1105,13 @@ struct SSeatSoundParams
 {
   float inout; // [0..1], 0 means fully inside
   float mood;  // [0..1], 1 means fully active (inside!)
+  float moodCurr; // current value
   
   SSeatSoundParams()
   {
     inout = 0.f; 
     mood = 0.f;
+    moodCurr = 0.f;
   }
 };
 
@@ -1069,6 +1119,17 @@ struct SSeatSoundParams
 //   Vehicle Seat interface
 struct IVehicleSeat 
 {
+  enum EVehicleTransition
+  {
+    eVT_None = 0,
+    eVT_Entering,
+    eVT_Exiting,
+    eVT_ExitingWarped,    
+    eVT_Dying,
+    eVT_SeatIsBorrowed,
+    eVT_RemoteUsage,
+  };
+
   virtual bool Init(IVehicle* pVehicle, TVehicleSeatId seatId, const SmartScriptTable &paramsTable) = 0;
 	virtual void PostInit(IVehicle* pVehicle, const SmartScriptTable &paramsTable) = 0;
   virtual void Reset() = 0;
@@ -1085,7 +1146,8 @@ struct IVehicleSeat
 	// Returns
 	//   A seat id
   virtual TVehicleSeatId GetSeatId() = 0;  
-  virtual EntityId GetPassenger(bool remoteUser=false) = 0;   
+  virtual EntityId GetPassenger(bool remoteUser=false) = 0;     
+  virtual int GetCurrentTransition() const = 0;
   
 	virtual TVehicleViewId GetCurrentView() = 0;
 	virtual IVehicleView* GetView(TVehicleViewId viewId) = 0;
@@ -1094,13 +1156,16 @@ struct IVehicleSeat
   
 	virtual bool IsDriver() = 0;
 	virtual bool IsGunner() = 0;
+	virtual bool IsLocked() = 0;
 
 	virtual bool Enter(EntityId actorId, bool isTransitionEnabled = true) = 0;
 	virtual bool Exit(bool isTransitionEnabled, bool force=false) = 0;
 
 	virtual void OnPassengerDeath() = 0;
+	virtual void ForceAnimGraphInputs() = 0;
 	virtual void UnlinkPassenger(bool ragdoll) = 0;
   virtual bool IsPassengerHidden() = 0;
+	virtual bool IsPassengerExposed() const = 0;
   
   virtual IVehicle* GetVehicle() = 0;
 	virtual IVehicleHelper* GetSitHelper() = 0;
@@ -1108,6 +1173,8 @@ struct IVehicleSeat
   
   virtual bool IsAnimGraphStateExisting(EntityId actorId) = 0;
   virtual void OnCameraShake(float& angleAmount, float& shiftAmount, const Vec3& pos, const char* source) const = 0;
+
+  virtual void ForceFinishExiting() = 0;
 };
 
 
@@ -1119,6 +1186,7 @@ struct IVehicleWheel
 {
   virtual int GetSlot() const = 0;
   virtual int GetWheelIndex() const = 0;
+  virtual float GetTorqueScale() const = 0;
   virtual float GetSlipFrictionMod(float slip) const = 0;  
   virtual const pe_cargeomparams* GetCarGeomParams() const = 0;
 };
@@ -1447,6 +1515,10 @@ struct IVehicleComponent
   virtual float GetDamageRatio() const = 0;
 
 	// Summary:
+	//	Set current damage ratio
+	virtual void SetDamageRatio(float ratio) = 0;
+
+	// Summary:
 	//  Get max damage 
 	virtual float GetMaxDamage() const = 0;
 };
@@ -1625,7 +1697,7 @@ struct IVehicleAnimation
 	//   Returns the current time in the animation
 	// Returns
 	//   a value usually between 0 to 1
-	virtual float GetAnimTime() = 0;
+	virtual float GetAnimTime(bool raw=false) = 0;
 
 	virtual void ToggleManualUpdate(bool isEnabled) = 0;
   virtual bool IsUsingManualUpdates() = 0;
@@ -1715,6 +1787,8 @@ struct IVehicleSystem
 	virtual IVehicle* GetVehicle(EntityId entityId) = 0;
 
 	virtual IVehicle* GetVehicleByChannelId(uint16 channelId) = 0;
+
+	virtual bool IsVehicleClass(const char *name) const = 0;
 
 	virtual IVehicleMovement* CreateVehicleMovement(const string& name) = 0;
 	virtual IVehicleView* CreateVehicleView(const string& name) = 0;
@@ -1823,14 +1897,27 @@ struct IVehicleHelper
 	// Returns
 	//   The Matrix34 holding the world space matrix
 	// See Also
-	//   GetLocalTM, GetVehicleTM
+	//   GetLocalTM, GetVehicleTM, GetReflectedWorldTM
 	virtual const Matrix34& GetWorldTM() = 0;
+
+	// Summary
+	//	Returns the helper matrix in world space after reflecting the
+	//	local translation across the yz plane (for left/right side of vehicle)
+	// Returns
+	//	The Matrix34 holding the world space matrix
+	// See Also
+	//	GetLocalTM, GetVehicleTM, GetWorldTM
+	virtual const Matrix34& GetReflectedWorldTM() = 0;
 
 	// Summary
 	//   Returns the parent part of the helper
 	// Returns
 	//   A pointer to the parent part, which is never null
 	virtual IVehiclePart* GetParentPart() = 0;
+
+	// Summary
+	//	Forces recalculation of helper matrices
+	virtual void Invalidate() = 0;
 };
 
 // Summary
@@ -1851,6 +1938,8 @@ struct IVehicleClient
 	// Returns
 	//   A bool representing the success of the initialization
 	virtual bool Init() = 0;
+
+	virtual void Reset() = 0;
 
 	// Summary
 	//   Releases the vehicle client implementation

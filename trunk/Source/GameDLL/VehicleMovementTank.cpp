@@ -47,9 +47,6 @@ CVehicleMovementTank::CVehicleMovementTank()
   m_steeringImpulseMax = 0.f;
   m_steeringImpulseRelaxMin = 0.f;
   m_steeringImpulseRelaxMax = 0.f;
-
-  // AI specific
-  m_bWideSteerThreshold = true;
 }
 
 //------------------------------------------------------------------------
@@ -97,6 +94,23 @@ void CVehicleMovementTank::PostInit()
   }
 
   assert(m_drivingWheels[0] && m_drivingWheels[1]);
+
+	m_treadParts.clear();
+	int nParts = m_pVehicle->GetPartCount();
+	for (int i=0; i<nParts; ++i)
+	{      
+		IVehiclePart* pPart = m_pVehicle->GetPart(i);
+		if (pPart->GetType() == IVehiclePart::eVPT_Tread)
+		{ 
+			m_treadParts.push_back(pPart);
+		}
+	}
+}
+
+//------------------------------------------------------------------------
+void CVehicleMovementTank::Reset()
+{
+  CVehicleMovementStdWheeled::Reset();
 }
 
 //------------------------------------------------------------------------
@@ -119,37 +133,44 @@ void CVehicleMovementTank::SetLatFriction(float latFric)
 }
 
 
-//------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////
+// NOTE: This function must be thread-safe. Before adding stuff contact MarcoC.
 void CVehicleMovementTank::ProcessMovement(const float deltaTime)
 { 
   FUNCTION_PROFILER( gEnv->pSystem, PROFILE_GAME );
   
-	m_netActionSync.UpdateObject(this);
+  m_netActionSync.UpdateObject(this);
+
+  CryAutoLock<CryFastLock> lk(m_lock);
   
   CVehicleMovementBase::ProcessMovement(deltaTime);
 
+	if (!(m_actorId && m_isEnginePowered))
+	{
+		IPhysicalEntity* pPhysics = GetPhysics();
+
+		if (m_latFriction != 1.3f)
+		  SetLatFriction(1.3f);
+
+		if (m_axleFriction != m_axleFrictionMax)
+		  UpdateAxleFriction(0.f, false, deltaTime);
+		
+		m_action.bHandBrake = 1;
+		m_action.pedal = 0;
+		m_action.steer = 0;
+		pPhysics->Action(&m_action, 1);
+		return;
+	}
+
   IPhysicalEntity* pPhysics = GetPhysics();
   MARK_UNUSED m_action.clutch;
-  
-  if (!(m_actorId && m_isEnginePowered))
-  {
-    if (m_latFriction != 1.f)
-      SetLatFriction(1.f);
 
-    if (m_axleFriction != m_axleFrictionMax)
-      UpdateAxleFriction(0.f, false, deltaTime);
+  Matrix34 worldTM( m_PhysPos.q );
+  worldTM.AddTranslation( m_PhysPos.pos );
 
-    m_action.bHandBrake = (m_damage < 1.f || m_pVehicle->IsDestroyed()) ? 1 : 0;
-    m_action.pedal = 0;
-    m_action.steer = 0;
-    pPhysics->Action(&m_action, 1);
-    return;
-  }
-
-  const Matrix34& worldTM = m_pVehicle->GetEntity()->GetWorldTM();   
-  Vec3 localVel = worldTM.GetInvertedFast().TransformVector(m_statusDyn.v);
-  Vec3 localW = worldTM.GetInvertedFast().TransformVector(m_statusDyn.w);
-  float speed = m_statusDyn.v.len();
+  Vec3 localVel = worldTM.GetInvertedFast().TransformVector(m_PhysDyn.v);
+  Vec3 localW = worldTM.GetInvertedFast().TransformVector(m_PhysDyn.w);
+  float speed = m_PhysDyn.v.len();
   float speedRatio = min(1.f, speed/m_maxSpeed);
 
   float actionPedal = abs(m_movementAction.power) > 0.001f ? m_movementAction.power : 0.f;        
@@ -168,10 +189,7 @@ void CVehicleMovementTank::ProcessMovement(const float deltaTime)
   { 
     if (m_movementAction.isAI)
     {
-      if (fabsf(actionSteer) < 0.2f)
-        m_currSteer = actionSteer;
-      else
-        m_currSteer =	sgn(actionSteer);
+      m_currSteer = actionSteer;
     }
     else
     {
@@ -192,17 +210,19 @@ void CVehicleMovementTank::ProcessMovement(const float deltaTime)
       actionPedal = max(0.f, min(1.f, 1.f-(localVel.y/maxReverseSpeed)));
       
       // todo
-      float steerLim = 0.75f;
+      float steerLim = 0.8f;
       Limit(m_currSteer, -steerLim*m_steerLimit, steerLim*m_steerLimit);
     }
   }
 
-  pPhysics->GetStatus(&m_vehicleStatus);
+  if (!pPhysics->GetStatus(&m_vehicleStatus))
+    return;
+  
   int currGear = m_vehicleStatus.iCurGear - 1; // indexing for convenience: -1,0,1,2,..
 
-  UpdateAxleFriction(actionPedal, false, deltaTime);
-  UpdateSuspension(deltaTime);  
-
+  UpdateAxleFriction(m_movementAction.power, true, deltaTime);
+  UpdateSuspension(deltaTime);   	
+  
   float absPedal = abs(actionPedal);  
   
   // pedal ramping   
@@ -219,6 +239,22 @@ void CVehicleMovementTank::ProcessMovement(const float deltaTime)
     m_action.pedal = 0;
   else
     m_action.pedal = m_currPedal;
+
+  // change pedal amount based on damages
+  float damageMul = 0.0f;
+  {
+	if (m_movementAction.isAI)
+	{
+		damageMul = 1.0f - 0.30f * m_damage; 
+		m_action.pedal *= damageMul;
+	}
+	else
+	{
+		m_action.pedal *= GetWheelCondition();
+		damageMul = 1.0f - 0.7f*m_damage; 
+		m_action.pedal *= damageMul;
+	}
+  }
 
   // reverse steering value for backward driving
   float effSteer = m_currSteer * sgn(actionPedal);   
@@ -245,7 +281,13 @@ void CVehicleMovementTank::ProcessMovement(const float deltaTime)
 
   float fractionSpeed = min(1.f, max(0.f, m_avgLateralSlip-m_currentSlipMin) / (m_latSlipMax-m_currentSlipMin));
   float latFric = fractionSpeed * (m_latFricMax-m_currentFricMin) + m_currentFricMin;
-  
+
+  if ( m_movementAction.brake && m_movementAction.isAI )
+  {
+    // it is natural for ai, apply differnt friction value while handbreaking
+	 latFric = m_latFricMax;
+  }
+
   if (latFric != m_latFriction)
   { 
     SetLatFriction(latFric);    
@@ -254,7 +296,7 @@ void CVehicleMovementTank::ProcessMovement(const float deltaTime)
   const static float maxSteer = gf_PI/4.f; // fix maxsteer, shouldn't change  
   m_action.steer = m_currSteer * maxSteer;  
    
-  if ((!m_movementAction.isAI || g_pGameCVars->v_help_tank_steering) && m_steeringImpulseMin > 0.f && m_wheelContactsLeft != 0 && m_wheelContactsRight != 0)
+  if (m_steeringImpulseMin > 0.f && m_wheelContactsLeft != 0 && m_wheelContactsRight != 0)
   {  
     const float maxW = 0.3f*gf_PI;
     float steer = abs(m_currSteer)>0.001f ? m_currSteer : 0.f;    
@@ -271,37 +313,16 @@ void CVehicleMovementTank::ProcessMovement(const float deltaTime)
       if (desired == 0.f || (desired*curr>0 && abs(desired)<abs(curr))) 
         amount = m_steeringImpulseRelaxMin + speedRatio*(m_steeringImpulseRelaxMax-m_steeringImpulseRelaxMin);
 
-      float corr = -err * amount * m_statusDyn.mass * deltaTime;
+      float corr = -err * amount * m_PhysDyn.mass * deltaTime;
 
       pe_action_impulse imp;
-      imp.iApplyTime = 1;      
+      imp.iApplyTime = 0;      
       imp.angImpulse = worldTM.GetColumn2() * corr;
       pPhysics->Action(&imp, THREAD_SAFE);
-
-      if (IsProfilingMovement())
-      {
-        float color[] = {1,1,1,1};
-        gEnv->pRenderer->Draw2dLabel(300,300,1.5f,color,false,"err: %.2f ", err);
-        gEnv->pRenderer->Draw2dLabel(300,320,1.5f,color,false,"corr: %.3f", corr/m_statusDyn.mass);
-
-        IRenderAuxGeom* pGeom = gEnv->pRenderer->GetIRenderAuxGeom();
-        float len = 4.f * imp.angImpulse.len() / deltaTime / m_statusDyn.mass;
-        Vec3 dir = -sgn(corr) * worldTM.GetColumn0(); //imp.angImpulse.GetNormalized();
-        pGeom->DrawCone(worldTM.GetTranslation()+Vec3(0,0,5)-(dir*len), dir, 0.5f, len, ColorB(128,0,0,255));        
-      }    
     }    
   }
   
-  if (m_movementAction.isAI && m_movementAction.brake)
-  {
-    // by tetsuji
-	  m_action.bHandBrake = 0;	
-	  m_action.pedal = 0;
-  }
-  else
-  {
-	  m_action.bHandBrake = (m_movementAction.brake) ? 1 : 0;	
-  }
+	m_action.bHandBrake = (m_movementAction.brake) ? 1 : 0;	
 
   if (currGear > 0 && m_vehicleStatus.iCurGear < m_currentGear) 
   {
@@ -312,12 +333,59 @@ void CVehicleMovementTank::ProcessMovement(const float deltaTime)
   pPhysics->Action(&m_action, 1);
 
   if (Boosting())  
-    ApplyBoost(speed, 1.2f*m_maxSpeed, m_boostStrength, deltaTime);  
+    ApplyBoost(speed, 1.2f*m_maxSpeed*GetWheelCondition()*damageMul, m_boostStrength, deltaTime);  
 
-  DebugDrawMovement(deltaTime);
+  if (m_wheelContacts <= 1 && speed > 5.f)
+  {
+    ApplyAirDamp(DEG2RAD(20.f), DEG2RAD(10.f), deltaTime, THREAD_SAFE);
+    UpdateGravity(-9.81f * 1.4f);
+  }
 
 	if (m_netActionSync.PublishActions( CNetworkMovementStdWheeled(this) ))
 		m_pVehicle->GetGameObject()->ChangedNetworkState( eEA_GameClientDynamic );
+}
+
+//////////////////////////////////////////////////////////////////////////
+void CVehicleMovementTank::OnEvent(EVehicleMovementEvent event, const SVehicleMovementEventParams& params)
+{
+	CVehicleMovementStdWheeled::OnEvent(event,params);
+
+  if (event == eVME_TireBlown || event == eVME_TireRestored)
+  { 
+    // tracked vehicles don't have blowable tires, these events are sent on track destruction
+    int numTreads = m_treadParts.size();
+    int treadsPrev = m_blownTires;
+    m_blownTires = max(0, min(numTreads, event==eVME_TireBlown ? m_blownTires+1 : m_blownTires-1));
+    
+    // reduce speed based on number of destroyed treads
+    if (m_blownTires != treadsPrev)
+    {	
+      SetEngineRPMMult(GetWheelCondition());
+    }
+  }
+}
+
+//------------------------------------------------------------------------
+void CVehicleMovementTank::OnAction(const TVehicleActionId actionId, int activationMode, float value)
+{
+
+	CryAutoLock<CryFastLock> lk(m_lock);
+
+	CVehicleMovementBase::OnAction(actionId, activationMode, value);
+
+}
+
+//------------------------------------------------------------------------
+float CVehicleMovementTank::GetWheelCondition() const
+{
+  if (0 == m_blownTires)
+    return 1.0f;
+
+  int numTreads = m_treadParts.size();
+  float treadCondition = (numTreads > 0) ? 1.0f - ((float)m_blownTires / numTreads) : 1.0f;
+
+  // for a 2-tread vehicle, want to reduce speed by 40% for each tread shot out.
+  return 1.0f - (0.8f * (1.0f - treadCondition));
 }
 
 //----------------------------------------------------------------------------------
@@ -348,42 +416,207 @@ void CVehicleMovementTank::DebugDrawMovement(const float deltaTime)
 //------------------------------------------------------------------------
 bool CVehicleMovementTank::RequestMovement(CMovementRequest& movementRequest)
 {
-	if (!CVehicleMovementStdWheeled::RequestMovement(movementRequest))	
+	FUNCTION_PROFILER( gEnv->pSystem, PROFILE_GAME );
+ 
+	m_movementAction.isAI = true;
+	if (!m_isEnginePowered)
 		return false;
-	
-	// [mikko]: use hysterisis to control the steering.
-	// Decrease this threshold too much and the tank is always correcting. Increase
-	// it too much and hit deviates from its path and hits trees etc.
-	const static float wideThreshold = 0.12f;
-	const static float smallThreshold = 0.08f;
 
-	float threshold = (m_bWideSteerThreshold) ? wideThreshold : smallThreshold;
+	CryAutoLock<CryFastLock> lk(m_lock);
 
-	if (fabs_tpl(m_movementAction.rotateYaw) < threshold)
+	if (movementRequest.HasLookTarget())
+		m_aiRequest.SetLookTarget(movementRequest.GetLookTarget());
+	else
+		m_aiRequest.ClearLookTarget();
+
+	if (movementRequest.HasMoveTarget())
 	{
-		// inside the threshold
-		m_movementAction.rotateYaw = 0.0f;
-		m_bWideSteerThreshold = true;	    
+		Vec3 entityPos = m_pEntity->GetWorldPos();
+		Vec3 start(entityPos);
+		Vec3 end( movementRequest.GetMoveTarget() );
+		Vec3 pos = ( end - start ) * 100.0f;
+		pos +=start;
+		m_aiRequest.SetMoveTarget( pos );
+	}
+	else
+		m_aiRequest.ClearMoveTarget();
+
+	if (movementRequest.HasDesiredSpeed())
+		m_aiRequest.SetDesiredSpeed(movementRequest.GetDesiredSpeed());
+	else
+		m_aiRequest.ClearDesiredSpeed();
+
+	if (movementRequest.HasForcedNavigation())
+	{
+		Vec3 entityPos = m_pEntity->GetWorldPos();
+		m_aiRequest.SetForcedNavigation(movementRequest.GetForcedNavigation());
+		m_aiRequest.SetDesiredSpeed(movementRequest.GetForcedNavigation().GetLength());
+		m_aiRequest.SetMoveTarget(entityPos+movementRequest.GetForcedNavigation().GetNormalizedSafe()*100.0f);
+	}
+	else
+		m_aiRequest.ClearForcedNavigation();
+
+	return true;
+		
+}
+
+//////////////////////////////////////////////////////////////////////////
+// NOTE: This function must be thread-safe. Before adding stuff contact MarcoC.
+void CVehicleMovementTank::ProcessAI(const float deltaTime)
+{
+	FUNCTION_PROFILER( GetISystem(), PROFILE_GAME );
+
+	float dt = max( deltaTime, 0.005f);
+
+	m_movementAction.brake = false;
+	m_movementAction.rotateYaw = 0.0f;
+	m_movementAction.power = 0.0f;
+
+	float inputSpeed = 0.0f;
+	{
+		if (m_aiRequest.HasDesiredSpeed())
+			inputSpeed = m_aiRequest.GetDesiredSpeed();
+		Limit(inputSpeed, -m_maxSpeed, m_maxSpeed);
+	}
+
+	Vec3 vMove(ZERO);
+	{
+		if (m_aiRequest.HasMoveTarget())
+			vMove = ( m_aiRequest.GetMoveTarget() - m_PhysPos.pos ).GetNormalizedSafe();
+	}
+
+	//start calculation
+	if ( fabsf( inputSpeed ) < 0.0001f || m_tireBlownTimer > 1.5f )
+	{
+		// only the case to use a hand break
+		m_movementAction.brake = true;
 	}
 	else
 	{
-		// outside the threshold. if the wide steering threshold is exceed switch to smaller one.	    
-		m_bWideSteerThreshold = false;	    
+
+		Matrix33 entRotMatInvert( m_PhysPos.q );
+		entRotMatInvert.Invert();
+		float currentAngleSpeed = RAD2DEG(-m_PhysDyn.w.z);
+
+		const static float maxSteer = RAD2DEG(gf_PI/4.f); // fix maxsteer, shouldn't change  
+		Vec3 vVel = m_PhysDyn.v;
+		Vec3 vVelR = entRotMatInvert * vVel;
+		float currentSpeed =vVel.GetLength();
+		vVelR.NormalizeSafe();
+		if ( vVelR.Dot( FORWARD_DIRECTION ) < 0 )
+			currentSpeed *= -1.0f;
+
+		// calculate pedal
+		static float accScale = 0.5f;
+		m_movementAction.power = (inputSpeed - currentSpeed) * accScale;
+		Limit( m_movementAction.power, -1.0f, 1.0f);
+
+		// calculate angles
+		Vec3 vMoveR = entRotMatInvert * vMove;
+		Vec3 vFwd	= FORWARD_DIRECTION;
+
+		vMoveR.z =0.0f;
+		vMoveR.NormalizeSafe();
+
+		if ( inputSpeed < 0.0 )	// when going back
+		{
+			vFwd *= -1.0f;
+			vMoveR *= -1.0f;
+			currentAngleSpeed *=-1.0f;
+		}
+
+		float cosAngle = vFwd.Dot(vMoveR);
+		float angle = RAD2DEG( acos_tpl(cosAngle));
+		if ( vMoveR.Dot( Vec3( 1.0f,0.0f,0.0f ) )< 0 )
+			 angle = -angle;
+
+		int step =0;
+		m_movementAction.rotateYaw = angle * 1.75f/ maxSteer; 
+
+		// implementation 1. if there is enough angle speed, we don't need to steer more
+		if ( fabsf(currentAngleSpeed) > fabsf(angle) && angle*currentAngleSpeed > 0.0f )
+		{
+			m_movementAction.rotateYaw = m_currSteer*0.995f; step =1;
+		}
+
+		// implementation 2. if we can guess we reach the distination angle soon, start counter steer.
+		float predictDelta = inputSpeed < 0.0f ? 0.1f : 0.07f;
+		float dict = angle + predictDelta * ( angle - m_prevAngle) / dt ;
+		if ( dict*currentAngleSpeed<0.0f )
+		{
+			if ( fabsf( angle ) < 2.0f )
+			{
+				m_movementAction.rotateYaw = angle* 1.75f/ maxSteer; ; step =3;
+			}
+			else
+			{
+				m_movementAction.rotateYaw = currentAngleSpeed < 0.0f ? 1.0f : -1.0f; step =2;
+			}
+		}
+
+		// implementation 3. tank can rotate at a point
+		if ( fabs( angle )> 20.0f ) 
+		{
+			m_movementAction.power *=0.1f;
+			step =4;
+		}
+
+//		char buf[1024];
+//		sprintf(buf, "steering	%4.2f	%4.2f	%4.2f	%d\n", deltaTime,currentAngleSpeed, angle - m_prevAngle, step);
+//		OutputDebugString( buf );
+		m_prevAngle =  angle;
+
 	}
 
-	if (m_movementAction.brake)
-	{
-		m_movementAction.power = 0.f;
-		m_movementAction.rotateYaw = 0.f;
-	}
-
-	return true;
 }
 
 //------------------------------------------------------------------------
 void CVehicleMovementTank::Update(const float deltaTime)
 {
-  CVehicleMovementStdWheeled::Update(deltaTime); 
+
+
+	CVehicleMovementStdWheeled::Update(deltaTime); 
+
+	if (IsProfilingMovement())
+	{
+		if (m_steeringImpulseMin > 0.f && m_wheelContactsLeft != 0 && m_wheelContactsRight != 0)
+		{  
+			const Matrix34& worldTM = m_pVehicle->GetEntity()->GetWorldTM();   
+			Vec3 localVel = worldTM.GetInvertedFast().TransformVector(m_statusDyn.v);
+			Vec3 localW = worldTM.GetInvertedFast().TransformVector(m_statusDyn.w);
+			float speed = m_statusDyn.v.len();
+			float speedRatio = min(1.f, speed/m_maxSpeed);
+
+			const float maxW = 0.3f*gf_PI;
+			float steer = abs(m_currSteer)>0.001f ? m_currSteer : 0.f;    
+			float desired = steer * maxW; 
+			float curr = -localW.z;
+			float err = desired - curr; // err>0 means correction to right 
+			Limit(err, -maxW, maxW);
+
+			if (abs(err) > 0.01f)
+			{ 
+				float amount = m_steeringImpulseMin + speedRatio*(m_steeringImpulseMax-m_steeringImpulseMin);
+
+				float corr = -err * amount * m_statusDyn.mass * deltaTime;
+
+				pe_action_impulse imp;
+				imp.iApplyTime = 1;      
+				imp.angImpulse = worldTM.GetColumn2() * corr;
+
+				float color[] = {1,1,1,1};
+				gEnv->pRenderer->Draw2dLabel(300,300,1.5f,color,false,"err: %.2f ", err);
+				gEnv->pRenderer->Draw2dLabel(300,320,1.5f,color,false,"corr: %.3f", corr/m_statusDyn.mass);
+
+				IRenderAuxGeom* pGeom = gEnv->pRenderer->GetIRenderAuxGeom();
+				float len = 4.f * imp.angImpulse.len() / deltaTime / m_statusDyn.mass;
+				Vec3 dir = -sgn(corr) * worldTM.GetColumn0(); //imp.angImpulse.GetNormalized();
+				pGeom->DrawCone(worldTM.GetTranslation()+Vec3(0,0,5)-(dir*len), dir, 0.5f, len, ColorB(128,0,0,255));        
+			}
+		}
+	}    
+
+	DebugDrawMovement(deltaTime);
 }
 
 //------------------------------------------------------------------------
@@ -409,5 +642,6 @@ void CVehicleMovementTank::StopEngine()
 void CVehicleMovementTank::GetMemoryStatistics(ICrySizer * s)
 {
 	s->Add(*this);
+	s->AddContainer(m_treadParts);
 	CVehicleMovementStdWheeled::GetMemoryStatistics(s);
 }

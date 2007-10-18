@@ -4,6 +4,10 @@
 #include "NanoSuit.h"
 #include "Nodes/G2FlowBaseNode.h"
 
+#if defined(WHOLE_PROJECT)
+	#define GetPlayer GetPlayerNodes
+#endif
+
 namespace
 {
 	CPlayer* GetPlayer(EntityId entityId)
@@ -436,7 +440,8 @@ public:
 	{
 		EIP_Open = 0,
 		EIP_Close,
-		EIP_Remove
+		EIP_Remove,
+		EIP_FreeFall,
 	};
 
 	virtual void GetConfiguration(SFlowNodeConfig& config)
@@ -445,6 +450,7 @@ public:
 			InputPortConfig_Void  ("Open", _HELP("Trigger to open")),
 			InputPortConfig_Void  ("Close", _HELP("Trigger to close")),
 			InputPortConfig_Void  ("Remove", _HELP("Trigger to remove")),
+			InputPortConfig_Void  ("FreeFall", _HELP("Trigger to force Player into FreeFall state")),
 			{0}
 		};
 		static const SOutputPortConfig outputs[] = {
@@ -479,10 +485,13 @@ public:
 					newState = 0;
 					pPlayer->EnableParachute(false);
 				}
-				else
-					CRY_ASSERT(0);
+	
+				if (newState != -1)
+					pPlayer->ChangeParachuteState(newState);
 
-				pPlayer->ChangeParachuteState(newState);
+				if (IsPortActive(pActInfo, EIP_FreeFall))
+					pPlayer->ForceFreeFall();
+
 			}
 			break;
 		}
@@ -493,8 +502,103 @@ public:
 		s->Add(*this);
 	}
 };
+
+class CFlowNanoSuitFakeMaterial : public CFlowBaseNode
+{
+public:
+	CFlowNanoSuitFakeMaterial( SActivationInfo * pActInfo )
+	{
+	}
+
+	~CFlowNanoSuitFakeMaterial()
+	{
+	}
+
+	enum EInputPorts
+	{
+		EIP_Asian = 0,
+		EIP_Cloak,
+		EIP_Strength,
+		EIP_Defense,
+		EIP_Speed,
+	};
+
+	enum EOutputPorts
+	{
+		EOP_Done = 0,
+	};
+
+	virtual void GetConfiguration(SFlowNodeConfig& config)
+	{
+		static const SInputPortConfig inputs[] = {
+			InputPortConfig<bool> ("Asian", false, _HELP("If true, use Asian material, otherwise US")),
+			InputPortConfig_Void  ("Cloak", _HELP("Trigger to select Cloak Mode")),
+			InputPortConfig_Void  ("Strength", _HELP("Trigger to select Strength Mode")),
+			InputPortConfig_Void  ("Defense", _HELP("Trigger to select Defense Mode")),
+			InputPortConfig_Void  ("Speed", _HELP("Trigger to select Speed Mode")),
+			{0}
+		};
+		static const SOutputPortConfig outputs[] = {
+			OutputPortConfig_Void("Done", _HELP("Triggered when Done.")),
+			{0}
+		};
+		config.nFlags |= EFLN_TARGET_ENTITY;
+		config.pInputPorts = inputs;
+		config.pOutputPorts = outputs;
+		config.sDescription = _HELP("Fake Materials on Characters (non Player/AI) NanoSuit for Cinematics");
+		config.SetCategory(EFLN_WIP);
+	}
+
+
+	virtual void ProcessEvent( EFlowEvent event, SActivationInfo *pActInfo )
+	{
+		switch (event)
+		{
+		case eFE_Activate:
+			{
+				IEntity* pEntity = pActInfo->pEntity;
+				if (pEntity != 0)
+				{
+					ENanoMode nanoMode = NANOMODE_LAST;
+					if (IsPortActive(pActInfo, EIP_Cloak))
+						nanoMode = NANOMODE_CLOAK;
+					else if (IsPortActive(pActInfo, EIP_Speed))
+						nanoMode = NANOMODE_SPEED;
+					else if (IsPortActive(pActInfo, EIP_Strength))
+						nanoMode = NANOMODE_STRENGTH;
+					else if (IsPortActive(pActInfo, EIP_Defense))
+						nanoMode = NANOMODE_DEFENSE;
+					if (nanoMode != NANOMODE_LAST)
+					{
+						const bool bAsian = GetPortBool(pActInfo, EIP_Asian);
+						CNanoSuit::SNanoMaterial* pNanoMat = CNanoSuit::GetNanoMaterial(nanoMode, bAsian);
+						if (pNanoMat)
+						{
+							CNanoSuit::AssignNanoMaterialToEntity(pEntity, pNanoMat);
+							ActivateOutput(pActInfo, EOP_Done, true);
+						}
+					}
+				}
+			}
+			break;
+		}
+	}
+
+	virtual void GetMemoryStatistics(ICrySizer * s)
+	{
+		s->Add(*this);
+	}
+};
+
+
 REGISTER_FLOW_NODE("NanoSuit:NanoSuit", CFlowNanoSuitNode);
 REGISTER_FLOW_NODE_SINGLETON("NanoSuit:NanoSuitGet", CFlowNanoSuitGetNode);
 REGISTER_FLOW_NODE_SINGLETON("NanoSuit:ModeControl", CFlowNanoSuitControlNode);
+REGISTER_FLOW_NODE_SINGLETON("NanoSuit:FakeMaterial", CFlowNanoSuitFakeMaterial);
 
 REGISTER_FLOW_NODE_SINGLETON("Inventory:ParachuteControl", CFlowParachuteControlNode);
+
+#if defined(WHOLE_PROJECT)
+	#undef GetPlayer
+#endif
+

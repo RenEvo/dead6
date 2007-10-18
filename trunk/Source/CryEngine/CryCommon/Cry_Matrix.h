@@ -40,7 +40,14 @@ template<typename F> struct Diag33_tpl {
 #ifdef _DEBUG
 	ILINE Diag33_tpl() 
 	{
-		x=NanTraits<F>::GetNan();	y=NanTraits<F>::GetNan();	z=NanTraits<F>::GetNan();
+		if (sizeof(F)==4)
+		{
+			uint32* p=(uint32*)&x;	p[0]=F32NAN;	p[1]=F32NAN;	p[2]=F32NAN;
+		}
+		if (sizeof(F)==8)
+		{
+			uint64* p=(uint64*)&x;	p[0]=F64NAN;	p[1]=F64NAN;	p[2]=F64NAN;
+		}
 	}
 #else
 	ILINE Diag33_tpl()	{};
@@ -171,9 +178,20 @@ template<typename F> struct Matrix33_tpl
 #ifdef _DEBUG
 	ILINE Matrix33_tpl() 
 	{
-		m00=NanTraits<F>::GetNan();	m01=NanTraits<F>::GetNan();	m02=NanTraits<F>::GetNan();
-		m10=NanTraits<F>::GetNan();	m11=NanTraits<F>::GetNan();	m12=NanTraits<F>::GetNan();
-		m20=NanTraits<F>::GetNan();	m21=NanTraits<F>::GetNan();	m22=NanTraits<F>::GetNan();
+		if (sizeof(F)==4)
+		{
+			uint32* p=(uint32*)&m00;
+			p[0]=F32NAN;	p[1]=F32NAN;	p[2]=F32NAN;
+			p[3]=F32NAN;	p[4]=F32NAN;	p[5]=F32NAN;
+			p[6]=F32NAN;	p[7]=F32NAN;	p[8]=F32NAN;
+		}
+		if (sizeof(F)==8)
+		{
+			uint64* p=(uint64*)&m00;
+			p[0]=F64NAN;	p[1]=F64NAN;	p[2]=F64NAN;
+			p[3]=F64NAN;	p[4]=F64NAN;	p[5]=F64NAN;
+			p[6]=F64NAN;	p[7]=F64NAN;	p[8]=F64NAN;
+		}
 	}
 #else
 	ILINE Matrix33_tpl(){};
@@ -221,7 +239,7 @@ template<typename F> struct Matrix33_tpl
 
 	//Convert unit quaternion to matrix (23-flops).
 	template<class F1> explicit ILINE Matrix33_tpl( const Quat_tpl<F1>& q ) {
-		assert(q.IsValid());
+		assert(q.IsValid(0.05f));
 		Vec3r v2=q.v+q.v;
 		f64 xx=1-v2.x*q.v.x;	f64 yy=v2.y*q.v.y;		f64 xw=v2.x*q.w;
 		f64 xy=v2.y*q.v.x;		f64 yz=v2.z*q.v.y;		f64 yw=v2.y*q.w;
@@ -529,7 +547,7 @@ template<typename F> struct Matrix33_tpl
 		assert( d.IsOrthonormalRH(0.0001f) );
 
 		//extract angle and axis
-		f64 cosine = clamp_tpl((d.m00+d.m11+d.m22-1.0)*0.5,-1.0,+1.0);
+		f64 cosine = clamp((d.m00+d.m11+d.m22-1.0)*0.5,-1.0,+1.0);
 		f64 angle = atan2(sqrt(1.0-cosine*cosine),cosine);
 		Vec3r axis(d.m21-d.m12,d.m02-d.m20,d.m10-d.m01);
 		f64 l = sqrt(axis|axis);	if (l>0.00001) axis/=l; else axis(1,0,0); 
@@ -995,6 +1013,22 @@ ILINE Vec3_tpl<F1> operator*(const Vec3_tpl<F1> &v, const Matrix33_tpl<F2> &m) {
 		v.x*m.m02 + v.y*m.m12 + v.z*m.m22);
 }
 
+//post-multiply
+template<class F1, class F2>
+ILINE Vec2_tpl<F1> operator*(const Matrix33_tpl<F2> &m, const Vec2_tpl<F1> &v) {
+	assert(m.IsValid());
+	assert(v.IsValid());
+	return Vec2_tpl<F1>(v.x*m.m00+v.y*m.m01, 	v.x*m.m10 + v.y*m.m11);
+}
+
+//pre-multiply
+template<class F1, class F2>
+ILINE Vec2_tpl<F1> operator*(const Vec2_tpl<F1> &v, const Matrix33_tpl<F2> &m) {
+	assert(m.IsValid());
+	assert(v.IsValid());
+	return Vec2_tpl<F1>(v.x*m.m00 + v.y*m.m10, v.x*m.m01 + v.y*m.m11);
+}
+
 template<class F1> 
 ILINE Matrix33_tpl<F1>& crossproduct_matrix(const Vec3_tpl<F1> &v, Matrix33_tpl<F1> &m) {
 	m.m00=0;			m.m01=-v.z;		m.m02=v.y;
@@ -1029,6 +1063,8 @@ ILINE Matrix33_tpl<F1>& dotproduct_matrix(const Vec3_tpl<F1> &v, const Vec3_tpl<
 ///////////////////////////////////////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////
 
+
+//////////////////////////////////////////////////////////////////////////
 template <typename F> struct Matrix34_tpl 
 {
 
@@ -1040,9 +1076,20 @@ template <typename F> struct Matrix34_tpl
 #ifdef _DEBUG
 	ILINE Matrix34_tpl() 
 	{
-		m00=NanTraits<F>::GetNan();	m01=NanTraits<F>::GetNan();	m02=NanTraits<F>::GetNan();	m03=NanTraits<F>::GetNan();
-		m10=NanTraits<F>::GetNan();	m11=NanTraits<F>::GetNan();	m12=NanTraits<F>::GetNan();	m13=NanTraits<F>::GetNan();
-		m20=NanTraits<F>::GetNan();	m21=NanTraits<F>::GetNan();	m22=NanTraits<F>::GetNan();	m23=NanTraits<F>::GetNan();
+		if (sizeof(F)==4)
+		{
+			uint32* p=(uint32*)&m00;
+			p[ 0]=F32NAN;	p[ 1]=F32NAN;	p[ 2]=F32NAN;	p[ 3]=F32NAN;
+			p[ 4]=F32NAN;	p[ 5]=F32NAN;	p[ 6]=F32NAN;	p[ 7]=F32NAN;
+			p[ 8]=F32NAN;	p[ 9]=F32NAN;	p[10]=F32NAN;	p[11]=F32NAN;
+		}
+		if (sizeof(F)==8)
+		{
+			uint64* p=(uint64*)&m00;
+			p[ 0]=F64NAN;	p[ 1]=F64NAN;	p[ 2]=F64NAN;	p[ 3]=F64NAN;
+			p[ 4]=F64NAN;	p[ 5]=F64NAN;	p[ 6]=F64NAN;	p[ 7]=F64NAN;
+			p[ 8]=F64NAN;	p[ 9]=F64NAN;	p[10]=F64NAN;	p[11]=F64NAN;
+		}
 	}
 #else
 	ILINE Matrix34_tpl(){};
@@ -1736,10 +1783,22 @@ template<typename F> struct Matrix44_tpl
 #ifdef _DEBUG
 	ILINE Matrix44_tpl() 
 	{
-		m00=NanTraits<F>::GetNan();	m01=NanTraits<F>::GetNan();	m02=NanTraits<F>::GetNan();	m03=NanTraits<F>::GetNan();
-		m10=NanTraits<F>::GetNan();	m11=NanTraits<F>::GetNan();	m12=NanTraits<F>::GetNan();	m13=NanTraits<F>::GetNan();
-		m20=NanTraits<F>::GetNan();	m21=NanTraits<F>::GetNan();	m22=NanTraits<F>::GetNan();	m23=NanTraits<F>::GetNan();
-		m30=NanTraits<F>::GetNan();	m31=NanTraits<F>::GetNan();	m32=NanTraits<F>::GetNan();	m33=NanTraits<F>::GetNan();
+		if (sizeof(F)==4)
+		{
+			uint32* p=(uint32*)&m00;
+			p[ 0]=F32NAN;	p[ 1]=F32NAN;	p[ 2]=F32NAN;	p[ 3]=F32NAN;
+			p[ 4]=F32NAN;	p[ 5]=F32NAN;	p[ 6]=F32NAN;	p[ 7]=F32NAN;
+			p[ 8]=F32NAN;	p[ 9]=F32NAN;	p[10]=F32NAN;	p[11]=F32NAN;
+			p[12]=F32NAN;	p[13]=F32NAN;	p[14]=F32NAN;	p[15]=F32NAN;
+		}
+		if (sizeof(F)==8)
+		{
+			uint64* p=(uint64*)&m00;
+			p[ 0]=F64NAN;	p[ 1]=F64NAN;	p[ 2]=F64NAN;	p[ 3]=F64NAN;
+			p[ 4]=F64NAN;	p[ 5]=F64NAN;	p[ 6]=F64NAN;	p[ 7]=F64NAN;
+			p[ 8]=F64NAN;	p[ 9]=F64NAN;	p[10]=F64NAN;	p[11]=F64NAN;
+			p[12]=F64NAN;	p[13]=F64NAN;	p[14]=F64NAN;	p[15]=F64NAN;
+		}
 	}
 #else
 	ILINE Matrix44_tpl(){};

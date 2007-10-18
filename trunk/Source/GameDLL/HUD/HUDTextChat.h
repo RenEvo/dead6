@@ -28,6 +28,9 @@ static const int CHAT_LENGTH = 6;
 
 class CHUDTextChat : public CHUDObject,public IInputEventListener, public IFSCommandHandler
 {
+
+	typedef bool (CHUDTextChat::*OpFuncPtr) (const char*, const char*);
+
 public:
 	CHUDTextChat();
 
@@ -39,17 +42,23 @@ public:
 	virtual void HandleFSCommand(const char* pCommand, const char* pArgs);
 	// ~IFSCommandHandler
 
-	virtual void OnUpdate(float deltaTime,float fadeValue);
+	virtual void Update(float deltaTime);
 
 	void GetMemoryStatistics(ICrySizer * s);
 
+	// IInputEventListener
 	virtual bool OnInputEvent(const SInputEvent &event );
+	virtual bool OnInputEventUI(const SInputEvent &event );
+	// ~IInputEventListener
 
 	//add arriving multiplayer chat messages here
-	virtual void AddChatMessage(EntityId sourceId, const char* msg, int teamFaction);
-  virtual void AddChatMessage(const char* nick, const char* msg, int teamFaction);
-
+	virtual void AddChatMessage(EntityId sourceId, const wchar_t* msg, int teamFaction, bool teamChat);
+	virtual void AddChatMessage(EntityId sourceId, const char* msg, int teamFaction, bool teamChat);
+	virtual void AddChatMessage(const char* nick, const wchar_t* msg, int teamFaction, bool teamChat);
+  virtual void AddChatMessage(const char* nick, const char* msg, int teamFaction, bool teamChat);
 	void ShowVirtualKeyboard(bool active);
+
+	ILINE virtual void ShutDown() {Flush();};
 
 	//open chat
 	void OpenChat(int type);
@@ -62,7 +71,18 @@ private:
 	virtual void Left();
 	virtual void Right();
 	virtual void Insert(const char *key);
-	virtual void VirtualKeyboardInput(string direction);
+	virtual void VirtualKeyboardInput(const char* direction);
+	virtual bool ProcessCommands(const string& text);
+	virtual bool Vote(const char* type=NULL, const char* kickuser=NULL);
+	virtual bool VoteYes(const char* param1=NULL, const char* param2=NULL);
+	virtual bool VoteNo(const char* param1=NULL, const char* param2=NULL);
+	virtual bool Lowtec(const char* param1=NULL, const char* param2=NULL);
+	virtual bool Quarantine(const char* param1=NULL, const char* param2=NULL);
+
+	//option-function mapper
+	typedef std::map<string, OpFuncPtr> TOpFuncMap;
+	TOpFuncMap	m_opFuncMap;
+	typedef TOpFuncMap::iterator TOpFuncMapIt;
 
 	CGameFlashAnimation *m_flashChat;
 

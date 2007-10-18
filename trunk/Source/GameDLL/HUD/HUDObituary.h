@@ -26,7 +26,7 @@ public:
 	CHUDObituary();
 	~CHUDObituary();
 
-	virtual void OnUpdate(float deltaTime, float fadeValue);
+	virtual void Update(float deltaTime);
 	virtual void AddMessage(const wchar_t *msg);
 
 	void GetMemoryStatistics(ICrySizer * s);

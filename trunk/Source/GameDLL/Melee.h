@@ -121,21 +121,26 @@ public:
 
 	virtual float GetRecoil() const { return 0.0f; };
 	virtual float GetSpread() const { return 0.0f; };
+	virtual float GetMinSpread() const { return 0.0f; }
+	virtual float GetMaxSpread() const { return 0.0f; }
 	virtual const char *GetCrosshair() const { return ""; };
 
 	virtual bool CanFire(bool considerAmmo=true) const;
-	virtual void StartFire(EntityId shooterId);
-	virtual void StopFire(EntityId shooterId);
+	virtual void StartFire();
+	virtual void StopFire();
 	virtual bool IsFiring() const { return m_attacking; };
 	virtual float GetHeat() const { return 0.0f; };
+	virtual bool	CanOverheat() const {return false;};
 
 	virtual void NetShoot(const Vec3 &hit, int ph);
-	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, int ph);
+	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, float extra, int ph);
+	virtual void NetEndReload() {};
 
-	virtual void NetStartFire(EntityId shooterId);
-	virtual void NetStopFire(EntityId shooterId);
+	virtual void NetStartFire();
+	virtual void NetStopFire();
 
 	virtual EntityId GetProjectileId() const { return 0; };
+	virtual EntityId RemoveProjectileId() { return 0; };
 	virtual void SetProjectileId(EntityId id) {};
 
 	virtual const char *GetType() const;
@@ -145,6 +150,7 @@ public:
 	virtual float GetSpinUpTime() const { return 0.0f; };
 	virtual float GetSpinDownTime() const { return 0.0f; };
   virtual float GetNextShotTime() const { return 0.0f; };
+	virtual void SetNextShotTime(float time) {};
   virtual float GetFireRate() const { return 0.0f; };
 
 	virtual void Enable(bool enable) { m_enabled = enable; };
@@ -161,6 +167,7 @@ public:
 
   virtual int GetCurrentBarrel() const { return 0; }
 	virtual void Serialize(TSerialize ser) {};
+	virtual void PostSerialize(){};
 
 	virtual void SetRecoilMultiplier(float recoilMult) { }
 	virtual float GetRecoilMultiplier() const { return 1.0f; }
@@ -172,8 +179,8 @@ public:
 	virtual void ResetRecoilMod(){};
 
 	virtual void ResetLock() {};
-	virtual void StartLocking(EntityId targetId) {};
-	virtual void Lock(EntityId targetId) {};
+	virtual void StartLocking(EntityId targetId, int partId) {};
+	virtual void Lock(EntityId targetId, int partId) {};
 	virtual void Unlock() {};
 	//~IFireMode
 
@@ -209,6 +216,8 @@ protected:
 
 	SMeleeParams	m_meleeparams;
 	SMeleeActions	m_meleeactions;
+
+	bool			m_noImpulse;
 };
 
 

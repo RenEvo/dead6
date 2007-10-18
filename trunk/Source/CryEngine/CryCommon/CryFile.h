@@ -33,6 +33,56 @@
 #define CRY_COMPILED_FILE_EXT                    "(c)"
 //////////////////////////////////////////////////////////////////////////
 
+inline const char* CryGetExt( const char *filepath )
+{
+	const char *str = filepath;
+	int len = strlen(filepath);
+	for (const char* p = str + len-1; p >= str; --p)
+	{
+		switch(*p)
+		{
+		case ':':
+		case '/':
+		case '\\':
+			// we've reached a path separator - it means there's no extension in this name
+			return "";
+		case '.':
+			// there's an extension in this file name
+			return p+1;
+		}
+	}
+	return "";
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Check if specified file name is a character file.
+//////////////////////////////////////////////////////////////////////////
+inline bool IsCharacterFile( const char *filename )
+{
+	const char *ext = CryGetExt(filename);
+	if (stricmp(ext,CRY_CHARACTER_FILE_EXT) == 0 ||
+			stricmp(ext,CRY_CHARACTER_DEFINITION_FILE_EXT) == 0 ||
+			stricmp(ext,CRY_ANIM_GEOMETRY_FILE_EXT) == 0)
+	{
+		return true;
+	}
+	else
+		return false;
+}
+
+//////////////////////////////////////////////////////////////////////////
+// Check if specified file name is a static geometry file.
+//////////////////////////////////////////////////////////////////////////
+inline bool IsStatObjFile( const char *filename )
+{
+	const char *ext = CryGetExt(filename);
+	if (stricmp(ext,CRY_GEOMETRY_FILE_EXT) == 0)
+	{
+		return true;
+	}
+	else
+		return false;
+}
 
 //////////////////////////////////////////////////////////////////////////
 // Wrapper on file system.
@@ -51,21 +101,21 @@ public:
 	virtual size_t Write( const void *lpBuf,size_t nSize );
 	//! Reads data from a file at the current file position.
 	virtual size_t ReadRaw( void *lpBuf, size_t nSize );
-	//! Template version, for automatic size & endian support.
+	//! Template version, for automatic size support.
+	template<class T>
+		inline size_t ReadTypeRaw( T *pDest, size_t nCount = 1 )
+		{
+			return ReadRaw( pDest, sizeof(T)*nCount );
+		}
+
+	//! Automatic endian-swapping version.
 	template<class T>
 		inline size_t ReadType( T *pDest, size_t nCount = 1 )
 		{
 			size_t nRead = ReadRaw( pDest, sizeof(T)*nCount );
-			if (m_bSwap)
-				SwapEndian(pDest, nCount);
+			SwapEndian(pDest, nCount);
 			return nRead;
 		}
-
-	//! Turns endian swapping on or off (default on).
-	void SetSwap(bool bSwap)
-	{
-		m_bSwap = bSwap;
-	}
 
 	//! Retrieves the length of the file.
 	virtual size_t GetLength();
@@ -109,7 +159,6 @@ private:
 	string m_filename;
 	FILE *m_file;
 	ICryPak *m_pIPak;
-	bool m_bSwap;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -119,7 +168,6 @@ inline CCryFile::CCryFile()
 {
 	m_file = 0;
 	m_pIPak = gEnv->pCryPak;
-	m_bSwap = true;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -128,7 +176,6 @@ inline CCryFile::CCryFile( const char *filename, const char *mode )
 	m_file = 0;
 	m_pIPak = gEnv->pCryPak;
 	Open( filename,mode );
-	m_bSwap = true;
 }
 
 //////////////////////////////////////////////////////////////////////////

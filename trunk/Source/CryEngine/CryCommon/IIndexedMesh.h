@@ -18,6 +18,7 @@
 #pragma once
 
 #include "Cry_Color.h"
+#include "StlUtils.h"
 
 // Description:
 //    2D Texture coordinates used by CMesh.
@@ -128,9 +129,11 @@ struct SMeshSubset
 	int nMatFlags; // Special Material flags.
 	int nPhysicalizeType; // Type of physicalization for this subset.
 
-	std::vector<uint16> m_arrGlobalBonesPerSubset; //array with global-boneIDs used for this subset
+	PodArray<uint16> m_arrGlobalBonesPerSubset; //array with global-boneIDs used for this subset
 
 	SMeshSubset() : vCenter(0,0,0),fRadius(0),nFirstIndexId(0),nNumIndices(0),nFirstVertId(0),nNumVerts(0),nMatID(0),nMatFlags(0),nPhysicalizeType(0) {}
+
+  int GetMemoryUsage() const { return m_arrGlobalBonesPerSubset.GetDataSize(); }
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -189,7 +192,38 @@ public:
 	AABB m_bbox;
 
 	// Array of mesh subsets.
-	std::vector<SMeshSubset> m_subsets;
+	DynArray<SMeshSubset> m_subsets;
+
+  static PodArray<CMesh*> * GetCounter()
+  {
+    static PodArray<CMesh*> arrAll;
+    return &arrAll;
+  }
+
+  size_t GetMemoryUsage()
+  {
+    int nSize = sizeof(*this);
+
+    nSize += sizeofVector(m_subsets);
+
+    DynArray<SMeshSubset>::const_iterator it, end=m_subsets.end();
+
+    for(it=m_subsets.begin();it!=end;++it)
+    {
+      const SMeshSubset &ref = *it;
+      nSize += ref.GetMemoryUsage();
+    }
+
+    for (int stream = 0; stream < LAST_STREAM; stream++)
+    {
+      void *pStream;
+      int nElementSize = 0;
+      GetStreamInfo( stream,pStream,nElementSize );
+      nSize += m_streamSize[stream]*nElementSize;
+    }
+
+    return nSize;
+  }
 
 	//////////////////////////////////////////////////////////////////////////
 	CMesh()
@@ -215,10 +249,14 @@ public:
 		m_nIndexCount = 0;
 
 		memset( m_streamSize,0,sizeof(m_streamSize) );
-	}
+
+    GetCounter()->Add(this);
+  }
 
 	~CMesh()
 	{
+    GetCounter()->Delete(this);
+
 		free(m_pFaces);
 		free(m_pIndices);
 		free(m_pPositions);
@@ -231,7 +269,8 @@ public:
 		free(m_pColor1);
 
 		free(m_pShapeDeformation); 
-		free(m_pBoneMapping); 
+		//free(m_pBoneMapping); 
+		delete[] m_pBoneMapping;
 
 		delete m_pSHInfo;
 	}
@@ -305,90 +344,6 @@ public:
 		pStream = 0;
 		nElementSize = 0;
 		assert( stream >= 0 && stream < LAST_STREAM );
-
-#if defined(PS3)
-		//COMPILER_BUG (03/2007): the current ps3 compiler puts the switch statement into the 
-		//	linkonce section but jump tables > 8 entries use a toc so this is not linkable for different modules
-		if(stream == POSITIONS)
-		{
-			pStream = m_pPositions;
-			nElementSize = sizeof(Vec3);
-		}
-		else
-    if(stream == VERT_MATS)
-    {
-      pStream = m_pVertMats;
-      nElementSize = sizeof(int);
-    }
-    else
-		if(stream == NORMALS)
-		{
-			pStream = m_pNorms;
-			nElementSize = sizeof(Vec3);
-		}
-		else
-		if(stream == FACENORMALS)
-		{
-			pStream = m_pFaceNorms;
-			nElementSize = sizeof(Vec3);
-		}
-		else
-		if(stream == FACES)
-		{
-			pStream = m_pFaces;
-			nElementSize = sizeof(SMeshFace);
-		}
-		else
-		if(stream == TEXCOORDS)
-		{
-			pStream = m_pTexCoord;
-			nElementSize = sizeof(SMeshTexCoord);
-		}
-		else
-		if(stream == COLORS_0)
-		{
-			pStream = m_pColor0;
-			nElementSize = sizeof(SMeshColor);
-		}
-		else
-		if(stream == COLORS_1)
-		{
-			pStream = m_pColor1;
-			nElementSize = sizeof(SMeshColor);
-		}
-		else
-		if(stream == INDICES)
-		{
-			pStream = m_pIndices;
-			nElementSize = sizeof(uint16);
-		}
-		else
-		if(stream == TANGENTS)
-		{
-			pStream = m_pTangents;
-			nElementSize = sizeof(SMeshTangents);
-		}
-		else
-		if(stream == SHCOEFFS)
-		{
-			pStream = m_pSHInfo?m_pSHInfo->pSHCoeffs : NULL;
-			nElementSize = sizeof(SMeshSHCoeffs);
-		}
-		else
-		if(stream == SHAPEDEFORMATION)
-		{
-			pStream = m_pShapeDeformation;
-			nElementSize = sizeof(SMeshShapeDeformation);
-		}
-		else
-		if(stream == BONEMAPPING)
-		{
-			pStream = m_pBoneMapping;
-			nElementSize = sizeof(SMeshBoneMapping);
-		}
-		else
-			assert(0);
-#else
 		switch (stream)
 		{
 		case POSITIONS:
@@ -446,7 +401,6 @@ public:
 		default:
 			assert(0); // unknown stream.
 		}
-#endif
 	}
 
 	// Set stream size.
@@ -462,84 +416,6 @@ public:
 		GetStreamInfo( stream,pStream,nElementSize );
 		pStream = ReAllocElements(pStream,nNewCount,nElementSize);
 		m_streamSize[stream] = nNewCount;
-#if defined(PS3)
-		//COMPILER_BUG (03/2007): the current ps3 compiler puts the switch statement into the 
-		//	linkonce section but jump tables > 8 entries use a toc so this is not linkable for different modules
-		if(stream == POSITIONS)
-		{
-			m_pPositions = (Vec3*)pStream;
-			m_numVertices = nNewCount;
-		}
-		else
-    if(stream == VERT_MATS)
-    {
-      m_pVertMats = (int*)pStream;
-      m_numVertices = nNewCount;
-    }
-    else
-		if(stream == NORMALS)
-		{
-			m_pNorms = (Vec3*)pStream;
-			m_numVertices = nNewCount;
-		}
-		else
-		if(stream == FACENORMALS)
-		{
-			m_pFaceNorms = (Vec3*)pStream;
-		}
-		else
-		if(stream == FACES)
-		{
-			m_pFaces = (SMeshFace*)pStream;
-			m_numFaces = nNewCount;
-		}
-		else
-		if(stream == TEXCOORDS)
-		{
-			m_pTexCoord = (SMeshTexCoord*)pStream;
-			m_nCoorCount = nNewCount;
-		}
-		else
-		if(stream == COLORS_0)
-		{
-			m_pColor0 = (SMeshColor*)pStream;
-		}
-		else
-		if(stream == COLORS_1)
-		{
-			m_pColor1 = (SMeshColor*)pStream;
-		}
-		else
-		if(stream == INDICES)
-		{
-			m_pIndices = (uint16*)pStream;
-			m_nIndexCount = nNewCount;
-		}
-		else
-		if(stream == TANGENTS)
-		{
-			m_pTangents = (SMeshTangents*)pStream;
-		}
-		else
-		if(stream == SHCOEFFS)
-		{
-			if(!m_pSHInfo)
-				m_pSHInfo = new SSHInfo;
-			m_pSHInfo->pSHCoeffs = (SMeshSHCoeffs*)pStream;
-		}
-		else
-		if(stream == SHAPEDEFORMATION)
-		{
-			m_pShapeDeformation = (SMeshShapeDeformation*)pStream;
-		}
-		else
-		if(stream == BONEMAPPING)
-		{
-			m_pBoneMapping = (SMeshBoneMapping*)pStream;
-		}
-		else
-			assert(0);
-#else
 		switch (stream)
 		{
 		case POSITIONS:
@@ -592,7 +468,6 @@ public:
 		default:
 			assert(0); // unknown stream.
 		}
-#endif //PS3
 		m_streamSize[stream] = nNewCount;
 	}
 
@@ -707,7 +582,7 @@ public:
 
 	void Debug() const
 	{
-		std::vector<SMeshSubset>::const_iterator it, end=m_subsets.end();
+		DynArray<SMeshSubset>::const_iterator it, end=m_subsets.end();
 
 		for(it=m_subsets.begin();it!=end;++it)
 		{
@@ -815,7 +690,7 @@ struct IIndexedMesh
 	virtual void SetSubSetCount( int nSubsets ) = 0;
 	virtual int GetSubSetCount() = 0;
 	virtual SMeshSubset& GetSubSet( int nIndex ) = 0;
-	virtual void SetSubsetBoneIds( int idx, const std::vector<uint16> &boneIds ) = 0;
+	virtual void SetSubsetBoneIds( int idx, const PodArray<uint16> &boneIds ) = 0;
 
 	// Description:
 	//    Mark indexed mesh as being updated.
@@ -832,7 +707,7 @@ struct IIndexedMesh
 
 	// Description:
 	//    Optimizes mesh.
-	virtual void Optimize( std::vector<uint16> *pVertexRemapping=NULL,std::vector<uint16> *pIndexRemapping=NULL ) = 0;
+	virtual void Optimize( const char * szComment=NULL, std::vector<uint16> *pVertexRemapping=NULL,std::vector<uint16> *pIndexRemapping=NULL ) = 0;
 };
 
 #endif // __IIndexedMesh_h__

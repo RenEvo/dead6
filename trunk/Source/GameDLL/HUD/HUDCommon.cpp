@@ -26,6 +26,7 @@ History:
 #include "Weapon.h"
 #include "Game.h"
 #include "GameCVars.h"
+#include "GameActions.h"
 
 //-----------------------------------------------------------------------------------------------------
 //-- IConsoleArgs
@@ -33,12 +34,10 @@ History:
 
 void CHUDCommon::HUD(ICVar *pVar)
 {
-	CHUD* pHUD = g_pGame->GetHUD();
-	if (pHUD)
-	{
-		pHUD->Show(pVar->GetIVal()!=0);
-	}
+	SAFE_HUD_FUNC(Show(pVar->GetIVal()!=0));
 }
+
+//-----------------------------------------------------------------------------------------------------
 
 void CHUDCommon::ShowGODMode(IConsoleCmdArgs *pConsoleCmdArgs)
 {
@@ -46,13 +45,18 @@ void CHUDCommon::ShowGODMode(IConsoleCmdArgs *pConsoleCmdArgs)
 
 	if(pHUD && 2 == pConsoleCmdArgs->GetArgCount())
 	{
-		if(0 == strcmp(pConsoleCmdArgs->GetArg(1),"0"))
-		{
+		if(gEnv->pSystem->IsDevMode())
 			pHUD->m_bShowGODMode = false;
-		}
 		else
 		{
-			pHUD->m_bShowGODMode = true;
+			if(0 == strcmp(pConsoleCmdArgs->GetArg(1),"0"))
+			{
+				pHUD->m_bShowGODMode = false;
+			}
+			else
+			{
+				pHUD->m_bShowGODMode = true;
+			}
 		}
 	}
 }
@@ -61,9 +65,6 @@ void CHUDCommon::ShowGODMode(IConsoleCmdArgs *pConsoleCmdArgs)
 //-- ~ IConsoleArgs
 //-----------------------------------------------------------------------------------------------------
 
-
-
-//-----------------------------------------------------------------------------------------------------
 void CHUDCommon::UpdateRatio()
 {
 	// try to resize based on any width and height
@@ -79,8 +80,6 @@ void CHUDCommon::UpdateRatio()
 
 //-----------------------------------------------------------------------------------------------------
 
-
-
 CHUDCommon::CHUDCommon() 
 {
 	m_bShowGODMode = true;
@@ -92,18 +91,17 @@ CHUDCommon::CHUDCommon()
 	m_width					= 0;
 	m_height				= 0;
 
+	m_bForceInterferenceUpdate = false;
 	m_distortionStrength = 0;
 	m_displacementStrength = 0;
 	m_alphaStrength = 0;
 	m_interferenceDecay = 0;
 
-	m_lastInterference = 0;
-
 	m_displacementX = 0;
 	m_displacementY = 0;
 	m_distortionX = 0;
 	m_distortionY = 0;
-	m_alpha	 = 100;
+	m_alpha	= 100;
 
 	m_iCursorVisibilityCounter = 0;
 
@@ -127,16 +125,17 @@ CHUDCommon::~CHUDCommon()
 		{
 			gEnv->pHardwareMouse->DecrementCounter();
 		}
-		gEnv->pGame->GetIGameFramework()->GetIActionMapManager()->EnableFilter("no_mouse",false);
+		if(g_pGameActions && g_pGameActions->FilterNoMouse())
+		{
+			g_pGameActions->FilterNoMouse()->Enable(false);
+		}
 	}
 
 	if(gEnv->pHardwareMouse)
 	{
 		gEnv->pHardwareMouse->RemoveListener(this);
 	}
-
 }
-
 
 //-----------------------------------------------------------------------------------------------------
 
@@ -154,31 +153,31 @@ void CHUDCommon::SetGODMode(uint8 ucGodMode, bool forceUpdate)
 		m_godMode = ucGodMode;
 		m_fLastGodModeUpdate = gEnv->pTimer->GetAsyncTime().GetSeconds();
 
-		if(0 == ucGodMode)
+		if(gEnv->pSystem->IsDevMode())
 		{
-			strcpy(m_strGODMode,"GOD MODE OFF");
-			m_iDeaths = 0;
-		}
-		else if(1 == ucGodMode)
-		{
-			strcpy(m_strGODMode,"GOD");
-		}
-		else if(2 == ucGodMode)
-		{
-			strcpy(m_strGODMode,"Team GOD");
-		}
-		else if(3 == ucGodMode)
-		{
-			strcpy(m_strGODMode,"DEMI GOD");
+			if(0 == ucGodMode)
+			{
+				strcpy(m_strGODMode,"GOD MODE OFF");
+				m_iDeaths = 0;
+			}
+			else if(1 == ucGodMode)
+			{
+				strcpy(m_strGODMode,"GOD");
+			}
+			else if(2 == ucGodMode)
+			{
+				strcpy(m_strGODMode,"Team GOD");
+			}
+			else if(3 == ucGodMode)
+			{
+				strcpy(m_strGODMode,"DEMI GOD");
+			}
 		}
 	}
 }
 
-
 //-----------------------------------------------------------------------------------------------------
 //-- Cursor handling
-//-----------------------------------------------------------------------------------------------------
-
 //-----------------------------------------------------------------------------------------------------
 
 void CHUDCommon::CursorIncrementCounter()
@@ -192,7 +191,10 @@ void CHUDCommon::CursorIncrementCounter()
 		{
 			gEnv->pHardwareMouse->IncrementCounter();
 		}
-		gEnv->pGame->GetIGameFramework()->GetIActionMapManager()->EnableFilter("no_mouse",true);
+		if(g_pGameActions && g_pGameActions->FilterNoMouse())
+		{
+			g_pGameActions->FilterNoMouse()->Enable(true);
+		}
 		UpdateCrosshairVisibility();
 	}
 }
@@ -210,11 +212,33 @@ void CHUDCommon::CursorDecrementCounter()
 		{
 			gEnv->pHardwareMouse->DecrementCounter();
 		}
-		gEnv->pGame->GetIGameFramework()->GetIActionMapManager()->EnableFilter("no_mouse",false);
+		if(g_pGameActions && g_pGameActions->FilterNoMouse())
+		{
+			g_pGameActions->FilterNoMouse()->Enable(false);
+		}
 		UpdateCrosshairVisibility();
 	}
 }
 
+//-----------------------------------------------------------------------------------------------------
+
+void CHUDCommon::Register(CGameFlashAnimation* pAnim)
+{
+	TGameFlashAnimationsList::iterator it = std::find(m_gameFlashAnimationsList.begin(), m_gameFlashAnimationsList.end(), pAnim);
+
+	if (it == m_gameFlashAnimationsList.end())
+		m_gameFlashAnimationsList.push_back(pAnim);
+}
+
+//-----------------------------------------------------------------------------------------------------
+
+void CHUDCommon::Remove(CGameFlashAnimation* pAnim)
+{
+	TGameFlashAnimationsList::iterator it = std::find(m_gameFlashAnimationsList.begin(), m_gameFlashAnimationsList.end(), pAnim);
+
+	if (it != m_gameFlashAnimationsList.end())
+		m_gameFlashAnimationsList.erase(it);
+}
 
 //-----------------------------------------------------------------------------------------------------
 //-- Starting new interference effect 
@@ -226,23 +250,7 @@ void CHUDCommon::StartInterference(float distortion, float displacement, float a
 	m_displacementStrength = displacement;
 	m_alphaStrength = alpha;
 	m_interferenceDecay = decay;
-	m_lastInterference = 0;
-}
-
-void CHUDCommon::Register(CGameFlashAnimation* pAnim)
-{
-	TGameFlashAnimationsList::iterator it = std::find(m_gameFlashAnimationsList.begin(), m_gameFlashAnimationsList.end(), pAnim);
-
-	if (it == m_gameFlashAnimationsList.end())
-		m_gameFlashAnimationsList.push_back(pAnim);
-}
-
-void CHUDCommon::Remove(CGameFlashAnimation* pAnim)
-{
-	TGameFlashAnimationsList::iterator it = std::find(m_gameFlashAnimationsList.begin(), m_gameFlashAnimationsList.end(), pAnim);
-
-	if (it != m_gameFlashAnimationsList.end())
-		m_gameFlashAnimationsList.erase(it);
+	m_bForceInterferenceUpdate = true;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -251,34 +259,46 @@ void CHUDCommon::Remove(CGameFlashAnimation* pAnim)
 
 void CHUDCommon::CreateInterference()
 {
-	m_distortionStrength;
-	m_displacementStrength;
-	m_alphaStrength;
-
-	float now = gEnv->pTimer->GetFrameStartTime().GetSeconds();
-	float timeGone = 0;
-	if(m_lastInterference)
+	if(m_distortionStrength || m_displacementStrength || m_alphaStrength || m_bForceInterferenceUpdate)
 	{
-		timeGone = now - m_lastInterference;
+		float fDistortionStrengthOverTwo = m_distortionStrength * 0.5f;
+
+		m_distortionX		= (int)((Random()*m_distortionStrength)		-fDistortionStrengthOverTwo);
+		m_distortionY		= (int)((Random()*m_distortionStrength)		-fDistortionStrengthOverTwo);
+		m_displacementX	= (int)((Random()*m_displacementStrength)	-fDistortionStrengthOverTwo);
+		m_displacementY	= (int)((Random()*m_displacementStrength)	-fDistortionStrengthOverTwo);
+
+		m_alpha = 100 - (int)(Random()*m_alphaStrength);
+		
+		float fMultiplier = m_interferenceDecay * gEnv->pTimer->GetFrameTime();
+
+		m_distortionStrength		-= m_distortionStrength		* fMultiplier;
+		m_displacementStrength	-= m_displacementStrength	* fMultiplier;
+		m_alphaStrength					-= m_alphaStrength				* fMultiplier;
+
+		if(m_distortionStrength<0.5f)
+			m_distortionStrength = 0.0f;
+		if(m_displacementStrength<0.5f)
+			m_displacementStrength = 0.0f;
+		if(m_alphaStrength<1.0f)
+			m_alphaStrength = 0.0f;
+
+		if(!m_distortionStrength && !m_displacementStrength && !m_alphaStrength)
+		{
+			m_displacementX = 0;
+			m_displacementY = 0;
+			m_distortionX = 0;
+			m_distortionY = 0;
+			m_alpha	= 100;
+		}
+
+		for(TGameFlashAnimationsList::iterator iter=m_gameFlashAnimationsList.begin(); iter!=m_gameFlashAnimationsList.end(); ++iter)
+		{
+			RepositionFlashAnimation(*iter);
+		}
+
+		m_bForceInterferenceUpdate = false;
 	}
-	m_lastInterference = now;
-
-	m_distortionX = (int)((Random()*m_distortionStrength)*0.5-m_distortionStrength*0.5);
-	m_distortionY = (int)((Random()*m_distortionStrength)-m_distortionStrength);
-	m_displacementX = (int)((Random()*m_displacementStrength)-m_displacementStrength*0.5f);
-	m_displacementY = (int)((Random()*m_displacementStrength)-m_displacementStrength*0.5f);
-
-	m_alpha = 100 - (int)(Random()*m_alphaStrength);
-	
-	m_distortionStrength		-= m_distortionStrength*m_interferenceDecay*timeGone;
-	if(m_distortionStrength<0.5f)
-		m_distortionStrength = 0;
-	m_displacementStrength	-= m_displacementStrength*m_interferenceDecay*timeGone;
-	if(m_displacementStrength<0.5f)
-		m_displacementStrength = 0;
-	m_alphaStrength					-= m_alphaStrength*m_interferenceDecay*timeGone;
-	if(m_alphaStrength<1.0f)
-		m_alphaStrength = 0;
 }
 
 //-----------------------------------------------------------------------------------------------------
@@ -290,37 +310,29 @@ void CHUDCommon::RepositionFlashAnimation(CGameFlashAnimation *pAnimation) const
 	if(!pAnimation)
 		return;
 
+	pAnimation->RepositionFlashAnimation();
+
 	IFlashPlayer *player = pAnimation->GetFlashPlayer();
 	if(player)
 	{
-		IRenderer *pRenderer = gEnv->pRenderer;
-
-		float fMovieRatio		=	((float)player->GetWidth()) / ((float)player->GetHeight());
-		float fRenderRatio	=	((float)pRenderer->GetWidth()) / ((float)pRenderer->GetHeight());
-
-		float fWidth				=	pRenderer->GetWidth();
-		float fHeight				=	pRenderer->GetHeight();
-		float fXPos = 0.0f;
-		float fYPos = 0.0f;
-
-		float fXOffset			= (fWidth - (fMovieRatio * fHeight));
-
-		int dock = pAnimation->GetDock();
-
-		if(fRenderRatio != fMovieRatio && !(dock & eGFD_Stretch))
-		{
-
-			fWidth = fWidth-fXOffset;
-
-			if (dock & eGFD_Left)
-				fXPos = 0;
-			else if (dock & eGFD_Right)
-				fXPos = fXOffset;
-			else if (dock & eGFD_Center)
-				fXPos = fXOffset * 0.5;
-		}
-
-		player->SetViewport((int)(((int)fXPos+m_displacementX)-(m_distortionX*0.5)),(int)(m_displacementY-(m_distortionY*0.5)),(int)fWidth+m_distortionX,(int)fHeight+m_distortionY);
+		int iX0,iY0,iWidth,iHeight;
+		float fAspectRatio;
+		player->GetViewport(iX0,iY0,iWidth,iHeight,fAspectRatio);
+		player->SetViewport((int)(iX0+m_displacementX-m_distortionX*0.5),(int)(m_displacementY-m_distortionY*0.5),iWidth+m_distortionX,iHeight+m_distortionY);
 		player->SetVariable("_alpha",SFlashVarValue(m_alpha));
 	}
 }
+
+//-----------------------------------------------------------------------------------------------------
+
+void CHUDCommon::Serialize(TSerialize ser)
+{
+	ser.Value("distortionStrength",m_distortionStrength);
+	ser.Value("displacementStrength",m_displacementStrength);
+	ser.Value("alphaStrength",m_alphaStrength);
+	ser.Value("interferenceDecay",m_interferenceDecay);
+
+	m_bForceInterferenceUpdate = true;
+}
+
+//-----------------------------------------------------------------------------------------------------

@@ -14,17 +14,19 @@ History:
 *************************************************************************/
 
 #include "StdAfx.h"
+#include "Actor.h"
 #include "GameCVars.h"
 #include "GameFlashLogic.h"
 #include "GameRules.h"
 #include "HUD.h"
+#include "HUDRadar.h"
 #include "HUDTagNames.h"
 #include "IUIDraw.h"
 
 //-----------------------------------------------------------------------------------------------------
 
 #define COLOR_DEAD		ColorF(0.4f,0.4f,0.4f)
-#define COLOR_ENEMY		ColorF(0.85f,0.0f,0.0f)
+#define COLOR_ENEMY		ColorF(0.9f,0.1f,0.1f)
 #define COLOR_FRIEND	ColorF(0.0353f,0.6235f,0.9137f)
 
 //-----------------------------------------------------------------------------------------------------
@@ -75,7 +77,7 @@ const char *CHUDTagNames::GetPlayerRank(EntityId uiEntityId)
 	{
 		static string strRank;
 		static wstring wRank;
-		strRank.Format("@ui_rank_%d",iPlayerRank);
+		strRank.Format("@ui_short_rank_%d",iPlayerRank);
 		if(gEnv->pSystem->GetLocalizationManager()->LocalizeLabel(strRank,wRank))
 		{
 			ConvertWString(wRank,strRank);
@@ -135,6 +137,29 @@ bool CHUDTagNames::ProjectOnSphere(Vec3 &rvWorldPos,const AABB &rBBox)
 
 //-----------------------------------------------------------------------------------------------------
 
+bool CHUDTagNames::IsFriendlyToClient(EntityId uiEntityId)
+{
+	IActor *client = g_pGame->GetIGameFramework()->GetClientActor();
+	CGameRules *pGameRules = g_pGame->GetGameRules();
+	if(!client || !pGameRules)
+		return false;
+
+	int playerTeam = pGameRules->GetTeam(client->GetEntityId());
+
+	// if this actor is spectating, use the team of the player they are spectating instead...
+	if(static_cast<CActor*>(client)->GetSpectatorMode() == CActor::eASM_Follow)
+	{
+		playerTeam = pGameRules->GetTeam(static_cast<CActor*>(client)->GetSpectatorTarget());
+	}
+
+	// Less than 2 teams means we are in a FFA based game.
+	if(pGameRules->GetTeam(uiEntityId) == playerTeam && pGameRules->GetTeamCount() > 1)
+		return true;
+	return false;
+}
+
+//-----------------------------------------------------------------------------------------------------
+
 void CHUDTagNames::AddEnemyTagName(EntityId uiEntityId)
 {
 	for(TEnemyTagNamesList::iterator iter=m_enemyTagNamesList.begin(); iter!=m_enemyTagNamesList.end(); ++iter)
@@ -156,7 +181,7 @@ void CHUDTagNames::AddEnemyTagName(EntityId uiEntityId)
 
 //-----------------------------------------------------------------------------------------------------
 
-void CHUDTagNames::DrawTagName(IActor *pActor)
+void CHUDTagNames::DrawTagName(IActor *pActor,bool bLocalVehicle)
 {
 	CRY_ASSERT(pActor);
 	if(!pActor)
@@ -166,7 +191,7 @@ void CHUDTagNames::DrawTagName(IActor *pActor)
 	CGameRules *pGameRules = g_pGame->GetGameRules();
 	int iClientTeam = pGameRules->GetTeam(pClientActor->GetEntityId());
 
-	if(pActor->GetLinkedVehicle())
+	if(!bLocalVehicle && pActor->GetLinkedVehicle())
 		return;
 	
 	const char *szRank = GetPlayerRank(pActor->GetEntityId());
@@ -189,15 +214,15 @@ void CHUDTagNames::DrawTagName(IActor *pActor)
 	if(!pCharacterInstance)
 		return;
 
-	ISkeleton *pSkeleton = pCharacterInstance->GetISkeleton();
-	if(!pSkeleton)
+	ISkeletonPose *pSkeletonPose = pCharacterInstance->GetISkeletonPose();
+	if(!pSkeletonPose)
 		return;
 
-	int16 sHeadID = pSkeleton->GetIDByName("Bip01 Head");
+	int16 sHeadID = pSkeletonPose->GetJointIDByName("Bip01 Head");
 	if(-1 == sHeadID)
 		return;
 
-	Matrix34 matWorld = pEntity->GetWorldTM() * Matrix34(pSkeleton->GetAbsJQuatByID(sHeadID));
+	Matrix34 matWorld = pEntity->GetWorldTM() * Matrix34(pSkeletonPose->GetAbsJointByID(sHeadID));
 
 	Vec3 vWorldPos = matWorld.GetTranslation();
 
@@ -207,7 +232,7 @@ void CHUDTagNames::DrawTagName(IActor *pActor)
 	AABB box; 
 	pEntity->GetWorldBounds(box);
 
-	bool bDrawOnTop = false;
+	bool bDrawOnTop = bLocalVehicle;
 
 	if(ProjectOnSphere(vWorldPos,box))
 	{
@@ -218,7 +243,7 @@ void CHUDTagNames::DrawTagName(IActor *pActor)
 
 	if(0 == iClientTeam)
 	{
-		if(SAFE_HUD_FUNC_RET(IsFriendlyToClient(pActor->GetEntityId())))
+		if(IsFriendlyToClient(pActor->GetEntityId()))
 		{
 			rgbTagName = COLOR_FRIEND;
 		}
@@ -234,6 +259,16 @@ void CHUDTagNames::DrawTagName(IActor *pActor)
 	}
 
 	m_tagNamesVector.resize(1);
+
+	for(std::vector<EntityId>::iterator iter=SAFE_HUD_FUNC_RET(GetRadar()->GetSelectedTeamMates())->begin(); iter!=SAFE_HUD_FUNC_RET(GetRadar()->GetSelectedTeamMates())->end(); ++iter)
+	{
+		if(pActor->GetEntityId() == *iter)
+		{
+			// Teammate is selected in radar, force the visibility of that name					
+			bDrawOnTop = true;
+			break;
+		}
+	}
 
 	STagName *pTagName = &m_tagNamesVector[0];
 
@@ -253,9 +288,40 @@ void CHUDTagNames::DrawTagName(IVehicle *pVehicle)
 	if(!pVehicle)
 		return;
 
-	IActor *pClientActor = g_pGame->GetIGameFramework()->GetClientActor();
+	CActor *pClientActor = static_cast<CActor *>(g_pGame->GetIGameFramework()->GetClientActor());
 	CGameRules *pGameRules = g_pGame->GetGameRules();
 	int iClientTeam = pGameRules->GetTeam(pClientActor->GetEntityId());
+	bool bThirdPerson = pClientActor->IsThirdPerson();
+
+	bool bDrawSeatTagNames = false;
+	if(pClientActor->GetSpectatorMode() == CActor::eASM_Follow)
+	{
+		IActor *pFollowedActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pClientActor->GetSpectatorTarget());
+		if(pFollowedActor)
+			bDrawSeatTagNames = (pVehicle == pFollowedActor->GetLinkedVehicle());
+	}
+	else
+		bDrawSeatTagNames = (pVehicle == pClientActor->GetLinkedVehicle());
+
+	if(bDrawSeatTagNames)
+	{
+		// When this is local player vehicle, we always display all passengers name above their head so that he can identify them
+
+		for(int iSeatId=1; iSeatId<=pVehicle->GetLastSeatId(); iSeatId++)
+		{
+			IVehicleSeat *pVehicleSeat = pVehicle->GetSeatById(iSeatId);
+			if(!pVehicleSeat)
+				continue;
+
+			IActor *pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pVehicleSeat->GetPassenger());
+			if(!pActor || (pActor == pClientActor && !bThirdPerson))
+				continue;
+
+			DrawTagName(pActor,true);
+		}
+
+		return;
+	}
 
 	ColorF rgbTagName = COLOR_ENEMY;
 
@@ -285,7 +351,7 @@ void CHUDTagNames::DrawTagName(IVehicle *pVehicle)
 
 	m_tagNamesVector.resize(0);
 
-	for(int iSeatId=1; iSeatId<pVehicle->GetLastSeatId(); iSeatId++)
+	for(int iSeatId=1; iSeatId<=pVehicle->GetLastSeatId(); iSeatId++)
 	{
 		IVehicleSeat *pVehicleSeat = pVehicle->GetSeatById(iSeatId);
 		if(!pVehicleSeat)
@@ -315,7 +381,7 @@ void CHUDTagNames::DrawTagName(IVehicle *pVehicle)
 
 		if(0 == iClientTeam)
 		{
-			if(uiEntityId && SAFE_HUD_FUNC_RET(IsFriendlyToClient(uiEntityId)))
+			if(uiEntityId && IsFriendlyToClient(uiEntityId))
 			{
 				rgbTagName = COLOR_FRIEND;
 			}
@@ -344,12 +410,10 @@ void CHUDTagNames::DrawTagName(IVehicle *pVehicle)
 }
 
 //-----------------------------------------------------------------------------------------------------
-// Note: we render in PreUpdate as we MUST not render between PreRender/PostRender block
-//-----------------------------------------------------------------------------------------------------
 
-void CHUDTagNames::PreUpdate()
+void CHUDTagNames::Update()
 {
-	IActor *pClientActor = g_pGame->GetIGameFramework()->GetClientActor();
+	CActor *pClientActor = static_cast<CActor *>(g_pGame->GetIGameFramework()->GetClientActor());
 	CGameRules *pGameRules = g_pGame->GetGameRules();
 
 	if(!pClientActor || !pGameRules || !gEnv->bMultiplayer)
@@ -358,18 +422,33 @@ void CHUDTagNames::PreUpdate()
 	int iClientTeam = pGameRules->GetTeam(pClientActor->GetEntityId());
 
 	// Skip enemies, they need to be added only when shot
-	int iTeamPlayerCount = pGameRules->GetTeamPlayerCount(iClientTeam);
-	for(int iPlayer=0; iPlayer<iTeamPlayerCount; iPlayer++)
+	// (except in spectator mode when we display everyone)
+	for(int iTeam = 0; iTeam < pGameRules->GetTeamCount() + 1; ++iTeam)
 	{
-		IActor *pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pGameRules->GetTeamPlayer(iClientTeam,iPlayer));
-		if(!pActor)
-			continue;
+		if((iTeam == iClientTeam) || (pClientActor->GetSpectatorMode() != CActor::eASM_None))
+		{
+			int iTeamPlayerCount = pGameRules->GetTeamPlayerCount(iTeam);
+			for(int iPlayer=0; iPlayer<iTeamPlayerCount; iPlayer++)
+			{
+				IActor *pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pGameRules->GetTeamPlayer(iTeam,iPlayer));
+				if(!pActor)
+					continue;
 
-		// Never display the local player
-		if(pActor == pClientActor)
-			continue;
+				// Never display the local player
+				if(pActor == pClientActor)
+					continue;
 
-		DrawTagName(pActor);
+				// never display other spectators
+				if(static_cast<CActor*>(pActor)->GetSpectatorMode() != CActor::eASM_None)
+					continue;
+
+				// never display the name of the player we're spectating (it's shown separately with their current health)
+				if(pClientActor->GetSpectatorMode() == CActor::eASM_Follow && pClientActor->GetSpectatorTarget() == pActor->GetEntityId())
+					continue;
+
+				DrawTagName(pActor);
+			}
+		}
 	}
 
 	IVehicleSystem *pVehicleSystem = gEnv->pGame->GetIGameFramework()->GetIVehicleSystem();
@@ -383,9 +462,9 @@ void CHUDTagNames::PreUpdate()
 		if(0 == rVehicleStatus.passengerCount)
 			continue;
 
-		// Skip enemy vehicles, they need to be added only when shot
+		// Skip enemy vehicles, they need to be added only when shot (except in spectator mode...)
 		bool bEnemyVehicle = true;
-		for(int iSeatId=1; iSeatId<pVehicle->GetLastSeatId(); iSeatId++)
+		for(int iSeatId=1; iSeatId<=pVehicle->GetLastSeatId(); iSeatId++)
 		{
 			IVehicleSeat *pVehicleSeat = pVehicle->GetSeatById(iSeatId);
 			if(!pVehicleSeat)
@@ -395,7 +474,7 @@ void CHUDTagNames::PreUpdate()
 
 			if(0 == iClientTeam)
 			{
-				if(uiEntityId && SAFE_HUD_FUNC_RET(IsFriendlyToClient(uiEntityId)))
+				if(uiEntityId && IsFriendlyToClient(uiEntityId))
 				{
 					bEnemyVehicle = false;
 				}
@@ -405,32 +484,36 @@ void CHUDTagNames::PreUpdate()
 				bEnemyVehicle = false;
 			}
 		}
-		if(bEnemyVehicle)
+		if(bEnemyVehicle && (pClientActor->GetSpectatorMode() == CActor::eASM_None))	// again, draw enemies in spectator mode
 			continue;
 
 		DrawTagName(pVehicle);
 	}
 
-	for(TEnemyTagNamesList::iterator iter=m_enemyTagNamesList.begin(); iter!=m_enemyTagNamesList.end(); ++iter)
+	// don't need to do any of this if we're in spectator mode - all player names will have been drawn above.
+	if(pClientActor->GetSpectatorMode() == CActor::eASM_None)
 	{
-		SEnemyTagName *pEnemyTagName = &(*iter);
-		if(gEnv->pTimer->GetAsyncTime().GetSeconds() >= pEnemyTagName->fSpawnTime+((float) g_pGameCVars->hud_mpNamesDuration))
+		for(TEnemyTagNamesList::iterator iter=m_enemyTagNamesList.begin(); iter!=m_enemyTagNamesList.end(); ++iter)
 		{
-			// Note: iter=my_list.erase(iter) may not be standard/safe
-			TEnemyTagNamesList::iterator iterNext = iter;
-			++iterNext;
-			m_enemyTagNamesList.erase(iter);
-			iter = iterNext;
-		}
-		else
-		{
-			IActor *pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEnemyTagName->uiEntityId);
-			if(pActor)
-				DrawTagName(pActor);
+			SEnemyTagName *pEnemyTagName = &(*iter);
+			if(gEnv->pTimer->GetAsyncTime().GetSeconds() >= pEnemyTagName->fSpawnTime+((float) g_pGameCVars->hud_mpNamesDuration))
+			{
+				// Note: iter=my_list.erase(iter) may not be standard/safe
+				TEnemyTagNamesList::iterator iterNext = iter;
+				++iterNext;
+				m_enemyTagNamesList.erase(iter);
+				iter = iterNext;
+			}
+			else
+			{
+				IActor *pActor = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pEnemyTagName->uiEntityId);
+				if(pActor)
+					DrawTagName(pActor);
 
-			IVehicle *pVehicle = gEnv->pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(pEnemyTagName->uiEntityId);
-			if(pVehicle)
-				DrawTagName(pVehicle);
+				IVehicle *pVehicle = gEnv->pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(pEnemyTagName->uiEntityId);
+				if(pVehicle)
+					DrawTagName(pVehicle);
+			}
 		}
 	}
 }
@@ -463,20 +546,10 @@ void CHUDTagNames::DrawTagNames()
 		// Seems that Z is on range [1 .. -1]
 		vScreenSpace.z = 1.0f - (vScreenSpace.z * 2.0f);
 
-	/*	if(m_pHUDRadar->m_selectedTeamMates.size())
-		{
-			for(std::vector<EntityId>::iterator iter=m_pHUDRadar->m_selectedTeamMates.begin(); iter!=m_pHUDRadar->m_selectedTeamMates.end(); ++iter)
-			{
-				if(uiEntityId == *iter)
-				{
-					// Teammate is selected in radar, force the visibility of that name					
-					bDrawOnTop = true;
-					break;
-				}
-			}
-		}*/
-
 		float fDistance = (pTagName->vWorld-gEnv->pSystem->GetViewCamera().GetPosition()).len();
+
+		// Adjust distance when zoomed. Default fov is 60, so we use (1/(60*pi/180)=3/pi)
+		fDistance *= 3.0f * gEnv->pRenderer->GetCamera().GetFov() / gf_PI;
 
 		float fSize = 0.0f;
 		float fAlpha = 0.0f;
@@ -500,13 +573,15 @@ void CHUDTagNames::DrawTagNames()
 
 		fAlpha = MIN(fAlpha,0.8f);
 
+		const float fBaseSize = 11.0f;
+
 		if(fDistance < fMinDistance)
 		{
-			fSize = 20.0f;
+			fSize = fBaseSize;
 		}
 		else if(fDistance < fMaxDistance)
 		{
-			fSize = 20.0f * (1.0f - (fDistance - fMinDistance) / (fMaxDistance-fMinDistance));
+			fSize = fBaseSize * (1.0f - (fDistance - fMinDistance) / (fMaxDistance-fMinDistance));
 		}
 
 		m_pUIDraw->PreRender();

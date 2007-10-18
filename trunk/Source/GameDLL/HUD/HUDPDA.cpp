@@ -2,7 +2,6 @@
 #include <StlUtils.h>
 
 #include "HUD.h"
-#include "HUDRadar.h"
 #include "GameFlashAnimation.h"
 #include "Menus/FlashMenuObject.h"
 #include "../Game.h"
@@ -11,6 +10,7 @@
 
 #include "HUDPowerStruggle.h"
 
+#undef HUD_CALL_LISTENERS
 #define HUD_CALL_LISTENERS(func) \
 { \
 	if (m_hudListeners.empty() == false) \
@@ -57,16 +57,9 @@ void CHUD::HandleFSCommandPDA(const char *strCommand,const char *strArgs)
 		{
 			// We do this on the fly because the Buy Menu could be updated as the level increases.
 			InitPDA();
-
-			/*CursorIncrementCounter();
-			PlaySound(ESound_OpenPopup);
-			HUD_CALL_LISTENERS(PDAOpened());*/
 		}
 		else if(0 == strcmp(strArgs,"Close"))
 		{
-			/*CursorDecrementCounter();
-			PlaySound(ESound_ClosePopup);
-			HUD_CALL_LISTENERS(PDAClosed());*/
 		}
 		else if(0 == strcmp(strArgs,"TabChanged"))
 		{
@@ -75,18 +68,25 @@ void CHUD::HandleFSCommandPDA(const char *strCommand,const char *strArgs)
 		else if(0 == strcmp(strArgs,"SelfClose"))
 		{
 			if(m_pModalHUD == &m_animPDA)
+			{
 				ShowPDA(false);
+
+				if (m_changedSpawnGroup)
+				{
+					RequestRevive();
+					m_changedSpawnGroup=false;
+				}
+			}
 			else if(m_pModalHUD == &m_animBuyMenu)
 				ShowBuyMenu(false);
 		}
 	}
 	else if(0 == strcmp(strCommand,"UpdateBuyList"))
 	{
-		if(strArgs && m_pHUDPowerStruggle)
+		if(m_pHUDPowerStruggle)
 		{
 			m_pHUDPowerStruggle->UpdateBuyList(strArgs);
-			if(m_pHUDPowerStruggle->ConvertToBuyList(strArgs) == CHUDPowerStruggle::E_AMMO)
-				HUD_CALL_LISTENERS(OnShowBuyMenuAmmoPage());
+			HUD_CALL_LISTENERS(OnShowBuyMenuPage(m_pHUDPowerStruggle->m_eCurBuyMenuPage));
 		}
 	}
 	else if(0 == strcmp(strCommand,"UpdatePackageList"))
@@ -214,13 +214,6 @@ void CHUD::SetQuickMenuButtonDefect(EQuickMenuButtons button, bool defect)
 		return;
 
 	m_animQuickMenu.Invoke("setDefect", m_defectButtons);
-}
-
-//-----------------------------------------------------------------------------------------------------
-
-void CHUD::ShowDeltaEnergy(float energy) 
-{ 
-	m_animSuitIcons.Invoke("setPeak", energy);
 }
 
 //-----------------------------------------------------------------------------------------------------

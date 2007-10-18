@@ -22,6 +22,7 @@ History:
 #include <IItemSystem.h>
 #include <ILevelSystem.h>
 #include <IWeapon.h>
+#include <IGameTokens.h>
 #include "Item.h"
 #include "TracerManager.h"
 #include "VectorMap.h"
@@ -45,15 +46,23 @@ struct SProjectileQuery
 	}
 };
 
-class CWeaponSystem : public ILevelSystemListener
+class CWeaponSystem : public ILevelSystemListener,
+											public IGameTokenEventListener
 {
+	typedef struct SAmmoTypeDesc
+	{
+		SAmmoTypeDesc(): params(0) {};
+		const SAmmoParams *params;
+		std::map<string, const SAmmoParams *> configurations;
+	};
+
 	typedef std::map<string, IFireMode		*(*)()>								TFireModeRegistry;
 	typedef std::map<string, IZoomMode		*(*)()>								TZoomModeRegistry;
 	typedef std::map<string, IGameObjectExtensionCreatorBase *>	TProjectileRegistry;
-	typedef std::map<EntityId, CProjectile *>				TProjectileMap;
-	typedef VectorMap<IEntityClass*, const SAmmoParams*>		TAmmoTypeParams;
-	typedef std::vector<string>											TFolderList;
-	typedef std::vector<IEntity*>	TIEntityVector;
+	typedef std::map<EntityId, CProjectile *>										TProjectileMap;
+	typedef VectorMap<IEntityClass*, SAmmoTypeDesc>							TAmmoTypeParams;
+	typedef std::vector<string>																	TFolderList;
+	typedef std::vector<IEntity*>																TIEntityVector;
 
 public:
 	CWeaponSystem(CGame *pGame, ISystem *pSystem);
@@ -66,13 +75,20 @@ public:
 
 	void Reload();
 
+	void SetConfiguration(const char *config) { m_config=config; };
+	const char *GetConfiguration() const { return m_config.c_str(); };
+
 	// ILevelSystemListener
 	virtual void OnLevelNotFound(const char *levelName) {};
-	virtual void OnLoadingStart(ILevelInfo *pLevel) {};
+	virtual void OnLoadingStart(ILevelInfo *pLevel);
 	virtual void OnLoadingComplete(ILevel *pLevel);
 	virtual void OnLoadingError(ILevelInfo *pLevel, const char *error) {};
 	virtual void OnLoadingProgress(ILevelInfo *pLevel, int progressAmount) {};
 	//~ILevelSystemListener
+
+	// IGameTokenEventListener
+	virtual void OnGameTokenEvent( EGameTokenEvent event,IGameToken *pGameToken );
+	//~IGameTokenEventListener
 
 	IFireMode *CreateFireMode(const char *name);
 	void RegisterFireMode(const char *name, IFireMode *(*)());
@@ -98,10 +114,17 @@ public:
   static void DebugGun(IConsoleCmdArgs *args = 0);
 	static void RefGun(IConsoleCmdArgs *args = 0);
 
-private:  
-	CGame				*m_pGame;
-	ISystem			*m_pSystem;
-	IItemSystem	*m_pItemSystem;
+	bool IsFrozenEnvironment() { return m_frozenEnvironment; }
+	bool IsWetEnvironment() { return m_wetEnvironment; }
+
+	void RegisterGameTokens();
+	void UnregisterGameTokens();
+
+private: 
+
+	CGame								*m_pGame;
+	ISystem							*m_pSystem;
+	IItemSystem					*m_pItemSystem;
 
 	CTracerManager			m_tracerManager;
 
@@ -115,8 +138,13 @@ private:
 	bool								m_reloading;
 	bool								m_recursing;
 
+	string							m_config;
+
 	ICVar								*m_pPrecache;
 	TIEntityVector			m_queryResults;//for caching queries results
+
+	bool								m_frozenEnvironment;
+	bool								m_wetEnvironment;
 };
 
 

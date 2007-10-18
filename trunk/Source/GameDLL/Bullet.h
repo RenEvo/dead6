@@ -21,8 +21,6 @@ History:
 
 #include "Projectile.h"
 
-//#define MAT_WATER_ID	194		//TODO: Get the material ID from the engine	
-
 class CBullet : public CProjectile
 {
 public:
@@ -31,7 +29,6 @@ public:
 
 	// CProjectile
 	virtual void HandleEvent(const SGameObjectEvent &);
-	virtual void Update(SEntityUpdateContext &ctx, int updateSlot);
 	// ~CProjectile
 
 	//For underwater trails (Called only from WeaponSystem.cpp)
@@ -43,7 +40,6 @@ public:
 private:
 	
 	static int  m_waterMaterialId;
-	bool m_underWater;
 
 };
 

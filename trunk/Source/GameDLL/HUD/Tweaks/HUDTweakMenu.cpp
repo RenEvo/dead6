@@ -75,7 +75,7 @@ void CHUDTweakMenu::Init( IScriptSystem *pScriptSystem )
 
 //-----------------------------------------------------------------------------------------------------
 
-void CHUDTweakMenu::OnUpdate(float fDeltaTime,float fFadeValue) 
+void CHUDTweakMenu::Update(float fDeltaTime) 
 {
 	if (!m_bActive)
 		return;

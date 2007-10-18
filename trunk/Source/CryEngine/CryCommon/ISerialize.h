@@ -130,6 +130,41 @@ private:
 	F_Update m_rUpdate;
 };
 
+//////////////////////////////////////////////////////////////////////////
+// Temporary class for string serialization.
+//////////////////////////////////////////////////////////////////////////
+struct SSerializeString
+{
+	AUTO_STRUCT_INFO
+
+	SSerializeString() {};
+	SSerializeString( const SSerializeString &src ) { m_str.assign(src.c_str()); };
+	explicit SSerializeString( const char *sbegin,const char *send ) : m_str(sbegin,send) {};
+	~SSerializeString() {}
+
+	// Casting to const char*
+	SSerializeString( const char *s ) : m_str(s) { };
+	//operator const char* () const { return m_str; }
+
+	SSerializeString& operator =( const SSerializeString &src ) { m_str.assign(src.c_str()); return *this; }
+	SSerializeString& operator =( const char *src ) { m_str.assign(src); return *this; }
+
+	size_t size() const { return m_str.size(); }
+	size_t length() const { return m_str.length(); }
+	const char* c_str() const { return m_str.c_str(); };
+	bool empty() const { return m_str.empty(); }
+	void resize( int sz ) { m_str.resize(sz); }
+	void reserve( int sz ) { m_str.reserve(sz); }
+
+	void set_string( const string &s )
+	{
+		m_str.assign( s.begin(),s.size() );
+	}
+
+private:
+	string m_str;
+};
+
 // the ISerialize is intended to be implemented by objects that need
 // to read and write from various data sources, in such a way that
 // different tradeoffs can be balanced by the object that is being
@@ -141,11 +176,15 @@ struct ISerialize
 
 	ILINE ISerialize() {}
 	// this is for string values -- they need special support
-	virtual void ReadStringValue( const char * name, string &curValue, uint32 policy = 0 ) = 0;
-	virtual void WriteStringValue( const char * name, string& buffer, uint32 policy = 0 ) = 0;
+	virtual void ReadStringValue( const char * name, SSerializeString &curValue, uint32 policy = 0 ) = 0;
+	virtual void WriteStringValue( const char * name, SSerializeString& buffer, uint32 policy = 0 ) = 0;
 	// this function should be implemented to call the passed in interface
 	// if we are reading, and to not call it if we are writing
 	virtual void Update( ISerializeUpdateFunction * pUpdate ) = 0;
+
+	// for network updates: notify the network engine that this value was only partially read and we
+	// should re-request an update from the server soon
+	virtual void FlagPartialRead() = 0;
 	
 	//////////////////////////////////////////////////////////////////////////
 	// these functions should be implemented to deal with groups
@@ -219,24 +258,23 @@ public:
 	{
 		m_pSerialize->Value( szName, value );
 	}
-#if defined(PS3) && (defined(CELL_ARCH_CEB) || !defined(__LP32__))
-#pragma message ( "Please fix me, Craig!" )
-	ILINE void Value( const char * szName, std::size_t& value )
-	{
-		assert(0);
-	}
-#endif
 	void Value( const char * szName, string& value, int policy )
 	{
 		if (IsWriting())
 		{
-			m_pSerialize->WriteStringValue(szName, value, policy);
+			SSerializeString &serializeString = GetSharedSerializeString();
+			serializeString.set_string(value);
+			m_pSerialize->WriteStringValue(szName, serializeString, policy);
 		}
 		else
 		{
 			if (GetSerializationTarget()!=eST_Script)
 				value = "";
-			m_pSerialize->ReadStringValue(szName, value, policy);
+			
+			SSerializeString &serializeString = GetSharedSerializeString();
+			serializeString.set_string(value);
+			m_pSerialize->ReadStringValue(szName, serializeString, policy);
+			value = serializeString.c_str();
 		}
 	}
 	ILINE void Value( const char * szName, string& value )
@@ -247,7 +285,9 @@ public:
 	{
 		if (IsWriting())
 		{
-			m_pSerialize->WriteStringValue(szName, const_cast<string&>(value), policy);
+			SSerializeString &serializeString = GetSharedSerializeString();
+			serializeString.set_string(value);
+			m_pSerialize->WriteStringValue(szName, serializeString, policy);
 		}
 		else
 		{
@@ -326,6 +366,26 @@ public:
             val.SetGoal(a);
         }
     }
+
+	bool ValueChar( const char * name, char * buffer, int len ) {
+		string temp;
+		if (IsReading())
+		{
+			Value(name, temp);
+			if (temp.length() > len-1)
+			{
+				return false;		// truncated read
+			}
+			memcpy(buffer, temp.data(), len-1);
+			buffer[len-1] = 0;
+		}
+		else
+		{
+			temp = string( buffer, buffer+len );
+			Value(name, temp);
+		}
+		return true;
+	}
 
 	template <typename T>
 	void ValueWithDefault( const char * name, T& x, const T &defaultValue )
@@ -672,9 +732,20 @@ public:
 		return ser.m_pSerialize;
 	}
 
+	ILINE void FlagPartialRead()
+	{
+		m_pSerialize->FlagPartialRead();
+	}
+
 	operator CSerializeWrapper<ISerialize>()
 	{
 		return CSerializeWrapper<ISerialize>( m_pSerialize );
+	}
+
+	SSerializeString& GetSharedSerializeString()
+	{
+		static SSerializeString serializeString;
+		return serializeString;
 	}
 
 private:
@@ -698,5 +769,23 @@ void ISerialize::Value( const char * name, B& x, uint32 policy )
 	x.Serialize( TSerialize(this) );
 	EndGroup();
 }
+
+//////////////////////////////////////////////////////////////////////////
+// Used to automatically Begin/End group in serialization stream
+//////////////////////////////////////////////////////////////////////////
+struct SSerializeScopedBeginGroup
+{
+	SSerializeScopedBeginGroup( TSerialize &ser,const char *sGroupName )
+	{
+		m_pSer = &ser;
+		m_pSer->BeginGroup(sGroupName);
+	}
+	~SSerializeScopedBeginGroup()
+	{
+		m_pSer->EndGroup();
+	}
+private:
+	TSerialize *m_pSer;
+};
 
 #endif

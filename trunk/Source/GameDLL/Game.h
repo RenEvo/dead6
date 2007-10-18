@@ -23,7 +23,7 @@
 #include <IGameObjectSystem.h>
 #include <IGameObject.h>
 #include <IActorSystem.h>
-
+#include <StlUtils.h>
 #include "ClientSynchedStorage.h"
 #include "ServerSynchedStorage.h"
 
@@ -40,17 +40,15 @@ class CScriptBind_Weapon;
 class CScriptBind_GameRules;
 class CScriptBind_Game;
 class CScriptBind_HUD;
-class CScriptBind_MusicLogic;
 class CWeaponSystem;
 class CFlashMenuObject;
 class COptionsManager;
-class CMusicLogic;
 
 struct IActionMap;
 struct IActionFilter;
-struct SGameActions;
-struct IGameTokenSystem;
+class  CGameActions;
 class CGameRules;
+class CBulletTime;
 class CHUD;
 class CSynchedStorage;
 class CClientSynchedStorage;
@@ -58,6 +56,9 @@ class CServerSynchedStorage;
 struct SCVars;
 struct SItemStrings;
 class CItemSharedParamsList;
+class CSPAnalyst;
+class CSoundMoods;
+class CLaptopUtil;
 
 // when you add stuff here, also update in CGame::RegisterGameObjectEvents
 enum ECryGameEvent
@@ -97,6 +98,10 @@ enum ECryGameEvent
   eCGE_Turret_LostTarget,
 };
 
+static const int GLOBAL_SERVER_IP_KEY						=	1000;
+static const int GLOBAL_SERVER_PUBLIC_PORT_KEY	= 1001;
+static const int GLOBAL_SERVER_NAME_KEY					=	1002;
+
 class CGame :
   public IGame, public IGameFrameworkListener
 {
@@ -114,7 +119,8 @@ public:
 	virtual void  ConfigureGameChannel(bool isServer, IProtocolBuilder *pBuilder);
 	virtual void  EditorResetGame(bool bStart);
 	virtual void  PlayerIdSet(EntityId playerId);
-	virtual void  InitMapReloading() { m_bReload = true; }
+	virtual string  InitMapReloading();
+	virtual bool IsReloading() { return m_bReload; }
 	virtual IGameFramework *GetIGameFramework() { return m_pFramework; }
 
 	virtual const char *GetLongName();
@@ -123,12 +129,17 @@ public:
 	virtual void GetMemoryStatistics(ICrySizer * s);
 
 	virtual void OnClearPlayerIds();
+	//auto-generated save game file name
+	virtual const char* CreateSaveGameName();
+	//level names were renamed without changing the file/directory
+	virtual const char* GetMappedLevelName(const char *levelName) const;
 	// ~IGame
 
   // IGameFrameworkListener
   virtual void OnPostUpdate(float fDeltaTime);
   virtual void OnSaveGame(ISaveGame* pSaveGame);
   virtual void OnLoadGame(ILoadGame* pLoadGame);
+	virtual void OnLevelEnd(const char* nextLevel) {};
   virtual void OnActionEvent(const SActionEvent& event);
   // ~IGameFrameworkListener
 
@@ -143,11 +154,13 @@ public:
 	virtual CScriptBind_HUD *GetHUDScriptBind() { return m_pScriptBindHUD; }
 	virtual CWeaponSystem *GetWeaponSystem() { return m_pWeaponSystem; };
 	virtual CItemSharedParamsList *GetItemSharedParamsList() { return m_pItemSharedParamsList; };
-	CMusicLogic *GetMusicLogic() { return m_pMusicLogic; }
 
-	SGameActions&	Actions() const {	return *m_pGameActions;	};
+	CGameActions&	Actions() const {	return *m_pGameActions;	};
 
 	CGameRules *GetGameRules() const;
+	CBulletTime *GetBulletTime() const;
+	CSoundMoods *GetSoundMoods() const;
+	CLaptopUtil *GetLaptopUtil() const;
 	CHUD *GetHUD() const;
 	CFlashMenuObject *GetMenu() const;
 	COptionsManager *GetOptions() const;
@@ -165,7 +178,10 @@ public:
 		return m_pServerSynchedStorage;
 	}
 
-	const string& GetLastSaveGame();
+	CSPAnalyst* GetSPAnalyst() const { return m_pSPAnalyst; }
+
+	const string& GetLastSaveGame(string &levelName);
+	const string& GetLastSaveGame() { string tmp; return GetLastSaveGame(tmp); }
 
   ILINE SCVars *GetCVars() {return m_pCVars;}
 	static void DumpMemInfo(const char* format, ...) PRINTF_PARAMS(1, 2);
@@ -180,8 +196,6 @@ protected:
 
 	virtual void CheckReloadLevel();
 
-	virtual void InitGameTokens();
-
 	// These funcs live in GameCVars.cpp
 	virtual void RegisterConsoleVars();
 	virtual void RegisterConsoleCommands();
@@ -194,6 +208,7 @@ protected:
 
 	static void CmdDumpSS(IConsoleCmdArgs *pArgs);
 
+	static void CmdLastInv(IConsoleCmdArgs *pArgs);
 	static void CmdName(IConsoleCmdArgs *pArgs);
 	static void CmdTeam(IConsoleCmdArgs *pArgs);
 	static void CmdLoadLastSave(IConsoleCmdArgs *pArgs);
@@ -215,6 +230,7 @@ protected:
   static void CmdQuickGameStop(IConsoleCmdArgs* pArgs);
   static void CmdBattleDustReload(IConsoleCmdArgs* pArgs);
   static void CmdLogin(IConsoleCmdArgs* pArgs);
+	static void CmdLoginProfile(IConsoleCmdArgs* pArgs);
   static void CmdCryNetConnect(IConsoleCmdArgs* pArgs);
 
 	IGameFramework			*m_pFramework;
@@ -231,28 +247,21 @@ protected:
 	CScriptBind_GameRules*m_pScriptBindGameRules;
 	CScriptBind_Game    *m_pScriptBindGame;
 	CScriptBind_HUD     *m_pScriptBindHUD;
-	CScriptBind_MusicLogic *m_pScriptBindMusicLogic;
 
 	//menus
 	CFlashMenuObject		*m_pFlashMenuObject;
 	COptionsManager			*m_pOptionsManager;
 
-	IActionMap					*m_pDefaultAM;
 	IActionMap					*m_pDebugAM;
+	IActionMap					*m_pDefaultAM;
 	IActionMap					*m_pMultiplayerAM;
-	IActionFilter				*m_pNoMoveAF;
-	IActionFilter				*m_pNoMouseAF;
-	IActionFilter				*m_pInVehicleSuitMenu;
-	IActionFilter				*m_pFreezeTimeAF;
-	SGameActions				*m_pGameActions;	
-	IGameTokenSystem		*m_pGameTokenSystem;
+	CGameActions				*m_pGameActions;	
 	IPlayerProfileManager* m_pPlayerProfileManager;
-	CMusicLogic					*m_pMusicLogic;
 	CHUD								*m_pHUD;
 
 	CServerSynchedStorage	*m_pServerSynchedStorage;
 	CClientSynchedStorage	*m_pClientSynchedStorage;
-
+	CSPAnalyst          *m_pSPAnalyst;
 	bool								m_inDevMode;
 
 	EntityId m_uiPlayerID;
@@ -261,14 +270,42 @@ protected:
 	SItemStrings					*m_pItemStrings;
 	CItemSharedParamsList *m_pItemSharedParamsList;
 	string                 m_lastSaveGame;
+	string								 m_newSaveGame;
+
+	CBulletTime						*m_pBulletTime;
+	CSoundMoods						*m_pSoundMoods;
+	CLaptopUtil						*m_pLaptopUtil;
+	typedef std::map<string, string, stl::less_stricmp<string> > TLevelMapMap;
+	TLevelMapMap m_mapNames;
 };
 
 extern CGame *g_pGame;
 
+#define SAFE_HARDWARE_MOUSE_FUNC(func)\
+	if(gEnv->pHardwareMouse)\
+		gEnv->pHardwareMouse->func
+
+#define SAFE_MENU_FUNC(func)\
+	{	if(g_pGame && g_pGame->GetMenu()) g_pGame->GetMenu()->func; }
+
+#define SAFE_MENU_FUNC_RET(func)\
+	((g_pGame && g_pGame->GetMenu()) ? g_pGame->GetMenu()->func : NULL)
+
 #define SAFE_HUD_FUNC(func)\
-	if(g_pGame && g_pGame->GetHUD()) (g_pGame->GetHUD()->func)
+	{	if(g_pGame && g_pGame->GetHUD()) g_pGame->GetHUD()->func; }
 
 #define SAFE_HUD_FUNC_RET(func)\
 	((g_pGame && g_pGame->GetHUD()) ? g_pGame->GetHUD()->func : NULL)
+
+#define SAFE_LAPTOPUTIL_FUNC(func)\
+	{	if(g_pGame && g_pGame->GetLaptopUtil()) g_pGame->GetLaptopUtil()->func; }
+
+#define SAFE_LAPTOPUTIL_FUNC_RET(func)\
+	((g_pGame && g_pGame->GetLaptopUtil()) ? g_pGame->GetLaptopUtil()->func : NULL)
+
+#define SAFE_SOUNDMOODS_FUNC(func)\
+	{	if(g_pGame && g_pGame->GetSoundMoods()) g_pGame->GetSoundMoods()->func; }
+
+#define CRAPDOLLS
 
 #endif //__GAME_H__

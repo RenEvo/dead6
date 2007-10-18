@@ -48,7 +48,7 @@ private:
 
 	float m_viewRoll;
 	Vec3 m_upVector;
-	Vec3 m_viewAnglesOffset;
+	Ang3 m_viewAnglesOffset;
 	float m_leanAmount;	  
 	float m_absRoll;
 	float	m_desiredLeanAmount;

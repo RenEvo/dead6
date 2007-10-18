@@ -99,16 +99,16 @@ struct ICharacterManager;
 struct ICharacterInstance;
 struct ICharacterModel;
 struct IAnimationSet;
+
 struct ISkeletonAnim;
 struct ISkeletonPose;
-struct ISkeleton;
-struct IAnimEvents;
-
+struct IMorphing;
 struct IAttachmentManager;
+
 struct IAttachment;
 struct IAttachmentObject; //entity, static object or character
 
-struct AnimSinkEventData;
+struct IAnimEvents;
 struct ExtSkinVertex;
 struct TFace;
 struct IFacialInstance;
@@ -190,7 +190,7 @@ struct ICharacterManager
 	// Summary:
 	//     Create a new instance of a model
 	//	virtual ICharacterInstance * MakeCharacter(const char * szFilename, unsigned nFlags = 0)=0;
-	virtual ICharacterInstance* CreateInstance(const char * szFilename, unsigned nFlags = 0, struct IRendererD3D9* pRenderer=0)=0;
+	virtual ICharacterInstance* CreateInstance(const char * szFilename, uint32 IsSkinAtt=0, IAttachment* pIMasterAttachment=0 )=0;
 
 	// Description:
 	//     Cleans up all resources. Currently deletes all bodies and characters even if there are references on them.
@@ -204,6 +204,12 @@ struct ICharacterManager
 	// Summary:
 	//     Update the Animation System
 	virtual void Update() = 0;
+
+	// Description:
+	//     Increment the frame counter.
+	// Summary:
+	//     Useful to prevent log spam: "several updates per frame..."
+	virtual void DummyUpdate() = 0;
 
 	// Description:
 	//     Releases any resource allocated by the Animation System and shut it down properly.
@@ -243,7 +249,7 @@ struct ICharacterManager
 	virtual void SetScalingLimits( const Vec2& limits ) = 0;
 	
 	//used by the Crysis game-DLL to initialize the CCC-file
-	virtual void LoadCharacterConversionFile( const char* FilePath ) = 0;
+	//virtual void LoadCharacterConversionFile( const char* FilePath ) = 0;
 
 };
 
@@ -256,13 +262,14 @@ struct ICharacterModel
 	virtual void Release() = 0;
 	virtual uint32 GetNumInstances() = 0;
 	virtual uint32 GetNumLods() = 0;
-	virtual const char * GetFile() = 0;
+	virtual const char* GetModelFilePath() const =0;
+
+//	virtual const char * GetFile() = 0;
 	// Retrieve render mesh for specified lod.
 	virtual IRenderMesh* GetRenderMesh( int nLod ) = 0;
 
 	virtual uint32 GetTextureMemoryUsage( ICrySizer *pSizer=0 ) = 0;
 	virtual uint32 GetMeshMemoryUsage(ICrySizer *pSizer=0) = 0;
-
 	virtual ICharacterInstance * GetInstance(uint32 num) = 0;
 };
 
@@ -288,6 +295,38 @@ struct SCharUpdateFeedback
 //     Interface to character animation
 struct ICharacterInstance : ISkinnable
 {
+
+
+	//////////////////////////////////////////////////////////////////////
+	// Description:
+	//     Return a pointer of the instance of a ISkeletonAnim derived class applicable for the model.
+	// Return Value:
+	//     A pointer to a ISkeletonAnim derived class
+	// Summary:
+	//     Get the skeleton for this instance
+	virtual ISkeletonAnim* GetISkeletonAnim() = 0;
+
+
+
+	//////////////////////////////////////////////////////////////////////
+	// Description:
+	//     Return a pointer of the instance of a ISkeletonPose derived class applicable for the model.
+	// Return Value:
+	//     A pointer to a ISkeletonPose derived class
+	// Summary:
+	//     Get the skeleton for this instance
+	virtual ISkeletonPose* GetISkeletonPose() = 0;
+
+	//////////////////////////////////////////////////////////////////////
+	// Description:
+	//     Return a pointer of the instance of a IMorphing derived class.
+	// Return Value:
+	//     A pointer to a IMorphing derived class
+	// Summary:
+	//     Get the low-level morphing interface for this instance
+	virtual IMorphing* GetIMorphing() = 0;
+
+
 	//////////////////////////////////////////////////////////////////////
 	// Description:
 	//     Return a pointer of the instance of a IAttachmentManager derived class applicable for the model.
@@ -297,37 +336,13 @@ struct ICharacterInstance : ISkinnable
 	//     Get the attachment manager for this instance
 	virtual IAttachmentManager* GetIAttachmentManager() = 0;
 
+
+
+
 	//////////////////////////////////////////////////////////////////////
 	// Description:
 	//     Return shared character model used by this instance.
 	virtual ICharacterModel* GetICharacterModel() = 0;
-
-	//////////////////////////////////////////////////////////////////////
-	// Description:
-	//     Return a pointer of the instance of a ISkeleton derived class applicable for the model.
-	// Return Value:
-	//     A pointer to a ISkeletonAnim derived class
-	// Summary:
-	//     Get the skeleton for this instance
-	virtual ISkeletonAnim* GetISkeletonAnim() = 0;
-
-	//////////////////////////////////////////////////////////////////////
-	// Description:
-	//     Return a pointer of the instance of a ISkeleton derived class applicable for the model.
-	// Return Value:
-	//     A pointer to a ISkeletonAnim derived class
-	// Summary:
-	//     Get the skeleton for this instance
-	virtual ISkeletonPose* GetISkeletonPose() = 0;
-
-	//////////////////////////////////////////////////////////////////////
-	// Description:
-	//     Return a pointer of the instance of a ISkeleton derived class applicable for the model.
-	// Return Value:
-	//     A pointer to a ISkeleton derived class
-	// Summary:
-	//     Get the skeleton for this instance
-	virtual ISkeleton* GetISkeleton() = 0;
 
 	// Description:
 	//     Return a pointer of the instance of a ICryAnimationSet derived class applicable for the model.
@@ -349,23 +364,18 @@ struct ICharacterInstance : ISkinnable
 
 	virtual void AddRef() = 0;
 	virtual void Release() = 0;
-	virtual void InitInstance()=0;
 
 	virtual void Serialize(TSerialize ser)=0;
-
 
 	//enables/disables StartAnimation* calls; puts warning into the log if StartAnimation* is called while disabled
 	virtual void EnableStartAnimation (bool bEnable)=0;
 
 	//! apply animation to the base-character. 
-	virtual void SkeletonPreProcess (const QuatT &rPhysLocationCurr,const QuatTS &rAnimLocationCurr, const CCamera& rCamera, uint32 OnRender=0 ) =0;
+	virtual void SkeletonPreProcess (const QuatT &rPhysLocationCurr,const QuatTS &rAnimLocationCurr, const CCamera& rCamera, uint32 OnRender ) =0;
 	//! Updates the bones and the bounding box. 
-	virtual void SkeletonPostProcess(const QuatT &rPhysLocationNext,const QuatTS &rAnimLocationNext, IAttachment* pIAttachment, uint32 OnRender=0 )=0;
-	
-	virtual void SkinPostProcess(const QuatT &rPhysLocationNext,const QuatTS &rAnimLocationNext, IAttachment* pIAttachment )=0;
+	virtual void SkeletonPostProcess(const QuatT &rPhysLocationNext,const QuatTS &rAnimLocationNext, IAttachment* pIAttachment, float fZoomAdjustedDistanceFromCamera, uint32 OnRender )=0;
 
-	//Timur, Temporary function, to be removed later.
-	virtual void SetEntityWorldMatrix( const QuatTS &WorldMatrix ) = 0;
+	virtual void UpdateAttachedObjectsFast(const QuatT& rPhysLocationNext, float fZoomAdjustedDistanceFromCamera, uint32 OnRender )=0;
 
 	//! disable rendering of this render this instance
 	virtual void HideMaster(uint32 h)=0;
@@ -375,7 +385,6 @@ struct ICharacterInstance : ISkinnable
 	virtual uint32 GetResetMode()=0;
 	virtual void SetResetMode(uint32 rm)=0;
 
-	virtual f32* GetMeshMorphArray()=0;
 
 	//! Return dynamic bbox of object
 	// Description:
@@ -404,7 +413,7 @@ struct ICharacterInstance : ISkinnable
 	//     RendParams - Rendering parameters
 	// Summary:
 	//     Draw the character
-	virtual void Render(const SRendParams& RendParams, const QuatTS& Offset, IAttachment* pIAttachment=0)=0;	
+	virtual void Render(const SRendParams& RendParams, const QuatTS& Offset, Matrix34 *pFinalPhysLocation=0)=0;	
 
 	// Description:
 	//     Set rendering flags defined in ECharRenderFlags for this character instance
@@ -456,8 +465,8 @@ struct ICharacterInstance : ISkinnable
 	//     A pointer to a null terminated char string which contain the filename of the model.
 	// Summary:
 	//     Get the filename of the model
-	virtual const char* GetModelFilePath()=0;
 	virtual const char* GetFilePath()=0;
+
 	//! Returns true if this character was created from the file the path refers to.
 	//! If this is true, then there's no need to reload the character if you need to change its model to this one.
 	virtual bool IsModelFileEqual (const char* szFileName) = 0;
@@ -473,44 +482,14 @@ struct ICharacterInstance : ISkinnable
 	//! Spawn a decal on animated characters
 	//! The decal hit direction and source point are in the local coordinates of the character.
 	virtual void CreateDecal(CryEngineDecalInfo& DecalLCS)=0;
-	//! delete all decals attached to this instance
-	virtual void DeleteDecals()=0;
 
 
-	//! sets the scale to the given vector (1,1,1 is the default)
-	//! isn't compatible with physicalized objects, use only with weapons
-	virtual void SetScale (const Vec3& vScale) {}
 	//! Pushes the underlying tree of objects into the given Sizer object for statistics gathering
 	virtual void GetMemoryUsage(class ICrySizer* pSizer) const = 0;
 	//! notifies the renderer that the character will soon be rendered
 	virtual void PreloadResources ( f32 fDistance, f32 fTime, int nFlags) {}
 
-
-
-	//! Start the specified by parameters morph target
-	virtual void StartMorph (const char* szMorphTarget, const CryCharMorphParams& params) {};
-	//! Set morph speed scale
-	//! Finds the morph target with the given id, sets its morphing speed and returns true;
-	//! if there's no such morph target currently playing, returns false
-	virtual bool SetMorphSpeed(const char* szMorphTarget, f32 fSpeed, bool recursive=0) =0; //{return false;}
-	//! Stops morph by target id
-	virtual bool StopMorph(const char* szMorphTarget, bool recursive=0 )=0;
-	//! Stops all morphs
-	virtual void StopAllMorphs() {}
-	//! freezes all currently playing morphs at the point they're at
-	virtual void FreezeAllMorphs() {}
-	//! play all morphs in a sequence
-	virtual void SetLinearMorphSequence(f32 i) =0;
 	virtual void ReleaseTemporaryResources() = 0;
-
-
-
-
-
-
-
-
-
 
 
 
@@ -544,8 +523,9 @@ struct ICharacterInstance : ISkinnable
 	//     A pointer to the material, or 0.
 	virtual IMaterial* GetMaterialOverride() = 0;
 
+
 	//! Renderer calls this function to get the current skeleton-pose to deform the mesh right before the rendering
-	virtual void GetSkeletonPose(int nLod, const Matrix34& RenderMat34, QuatTS*& pBoneQuatsL, QuatTS*& pBoneQuatsS, QuatTS*& pMBBoneQuatsL, QuatTS*& pMBBoneQuatsS, Vec4 shapeDeformationData[], uint32 &DoWeNeedMorphtargets ) = 0;
+	virtual uint32 GetSkeletonPose(int nLod, const Matrix34& RenderMat34, QuatTS*& pBoneQuatsL, QuatTS*& pBoneQuatsS, QuatTS*& pMBBoneQuatsL, QuatTS*& pMBBoneQuatsS, Vec4 shapeDeformationData[], uint32 &DoWeNeedMorphtargets ) = 0;
 
 
 	//////////////////////////////////////////////////////////////////////////
@@ -569,8 +549,15 @@ struct ICharacterInstance : ISkinnable
 	virtual uint32 IsCharacterVisible() = 0;
 	// Return true if animation graph for this character is still valid.
 	virtual bool IsAnimationGraphValid() = 0;
-};
+	virtual void SetFPWeapon(f32 fp) = 0;
+	virtual void ProcessSkinAttachment(const QuatT &rPhysLocationNext,const QuatTS &rAnimLocationNext, IAttachment* pIAttachment, float fZoomAdjustedDistanceFromCamera, uint32 OnRender )=0;
+	virtual size_t SizeOfThis (ICrySizer * pSizer) = 0;
+	virtual f32* GetShapeDeformArray()=0;
 
+	// Skeleton effects interface.
+	virtual void SpawnSkeletonEffect(int animID, const char* animName, const char* effectName, const char* boneName, const Vec3& offset, const Vec3& dir, const Matrix34& entityTM) = 0;
+	virtual void KillAllSkeletonEffects() = 0;
+};
 
 
 
@@ -579,20 +566,6 @@ struct ICharacterInstance : ISkinnable
 //------------------------------------------------------------------------------------
 
 struct ISkeletonAnim
-{
-
-};
-
-struct ISkeletonPose
-{
-
-};
-
-//------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------
-//------------------------------------------------------------------------------------
-
-struct ISkeleton
 {
 
 	// Description:
@@ -625,7 +598,7 @@ struct ISkeleton
 	//! NOTE: It does NOT override the overall animation speed, but it's multiplies it
 	virtual void SetLayerUpdateMultiplier(int32 nLayer, f32 fSpeed) = 0;
 
-	virtual void SetDesiredLocalLocation(const QuatT& desiredLocalLocation, float deltaTime, float frameTime) = 0;
+	virtual void SetDesiredLocalLocation(const QuatT& desiredLocalLocation, float deltaTime, float frameTime, float turnSpeedMultiplier) =0;
 	virtual void SetDesiredMotionParam(EMotionParamID id, f32 value, f32 frametime, bool initOnly = false) = 0; // Updates the given parameter (will perform clamping and clearing as needed)
 	virtual float GetDesiredMotionParam(EMotionParamID id) const = 0; // What is the current value of a given param.
 	virtual void SetBlendSpaceOverride(EMotionParamID id, float value, bool enable) = 0; // Enable/Disable direct override of blendspace weights, used from CharacterEditor.
@@ -655,17 +628,25 @@ struct ISkeleton
 
 	virtual void SetPreProcessCallback(int (*func)(ICharacterInstance*,void*), void *pdata) = 0;
 
+	virtual AnimTransRotParams GetBlendedAnimTransRot(f32 DeltaTime, uint32 clamp) = 0;
+	virtual f32 GetFootPlantStatus() = 0;
+
+	virtual Vec3 GetRelTranslation() =0;
+	virtual f32	 GetRelRotationZ() =0;
+	virtual QuatT GetRelMovement() =0;
+	virtual Vec3 GetRelFootSlide() =0;
+
+	virtual f32  GetUserData( int i ) = 0;
+
+};
 
 
 
 
-
-
-
-
+struct ISkeletonPose
+{
 
 	virtual void SetDefaultPose()=0;
-
 
 	// Description:
 	//     Return the number of joints included in the model. All joint-ids start from 0. The first joint, which has the id 0, is the root joint.
@@ -682,51 +663,18 @@ struct ISkeleton
 	//   szJointName - Null terminated string holding the name of the joint.
 	// Return Value:
 	//   An integer representing the index of the joint. In case the joint-name couldn't be found, -1 will be returned.
-	virtual int16 GetIDByName (const char* szJointName) const =0;
+	virtual int16 GetJointIDByName (const char* szJointName) const =0;
+
+	//this should be in one single joint-structure
 	virtual int16 GetParentIDByID (int32 ChildID) const =0;
-	virtual uint32 GetControllerIDByID (int32 ChildID) const =0;
-
-	// Description:
-	//     Return the name of a joint by searching its id.
-	// Arguments:
-	//     nId - Id of the joint
-	// Return Value:
-	//     A NULL terminated char array which hold the name. If no joints of the specified id have been found, NULL is returned.
-	virtual const char* GetJointNameByID(uint32 nId) const = 0;
-
-	// Description:
-	//     Get the absolute matrix of the joint.
-	// Return Value:
-	//     The position is return in a Matrix34 structure.
-	// Summary:
-	//     Get the matrix of the joint
-	virtual const QuatT& GetAbsJQuatByID(int32 nId)=0;
-	virtual const QuatT& GetRelJQuatByID(int32 nId)=0;
+	virtual uint32 GetJointCRC32 (int32 nJointID) const =0;
+	virtual const char* GetJointNameByID(int32 nJointID) const =0;
+	virtual const QuatT& GetAbsJointByID(int32 nJointID) =0;
+	virtual const QuatT& GetRelJointByID(int32 nJointID) =0;
+	virtual const QuatT& GetDefaultRelJointByID(int32 nJointID) =0;
+	virtual const QuatT& GetDefaultAbsJointByID(int32 nJointID) =0;
 
 
-	// Description:
-	//     Get the absolute matrix of the joint in default pose.
-	// Return Value:
-	//     The position is return in a Matrix34 structure.
-	// Summary:
-	//     Get the matrix of the joint in default pose
-	virtual const QuatT& GetDefaultRelJQuatByID(int32 id) = 0;
-	virtual const QuatT& GetDefaultAbsJQuatByID(int32 id) = 0;
-
-
-	// Description:
-	//     WHAT IS THIS:
-	//     Sets the joint matrix to the given position in world coordinates only for this frame (until update)
-	//     assuming the character position and orientation are given by the vCharPos and vCharAngles
-	//     vCharAngles are the same as in the entity and in the Draw call to ICharacterInstance
-	// See Also:
-	//     FixBoneOriginInWorld
-	// Arguments:
-	//     charMtx      - The character's matrix
-	//     vTargetOrigin - The character's target origin
-	// Summary:
-	//     Fix the bone matrix to a position and orientation in world coordinates until the Animation System is updated
-	virtual void SetBoneOriginInWorld(int32 nId, const Matrix34 &charMtx, const Vec3& vTargetOrigin) = 0;
 
 	virtual bool SetJointMask(const char* szBoneName, uint32 nLayerNo, uint8 nVal)=0; 
 	virtual bool SetLayerMask(uint32 nLayerNo, uint8 nVal)=0;; 
@@ -737,7 +685,7 @@ struct ISkeleton
 
 	virtual void SetFootAnchoring(uint32 ts)	=0;
 
-	virtual void SetLookIK(uint32 ik, f32 FOR, const Vec3& LookAtTarget,const f32 *customBlends=0) = 0;
+	virtual void SetLookIK(uint32 ik, f32 FOR, const Vec3& LookAtTarget,const f32 *customBlends=0, bool allowAdditionalTransforms=true) = 0;
 
 	virtual void SetAimIK(uint32 ik, const Vec3& AimAtTarget) = 0; 
 	virtual void SetAimIKFadeOut(uint32 a) = 0;
@@ -745,12 +693,14 @@ struct ISkeleton
 	virtual uint32 GetAimIKStatus() = 0;
 	virtual f32 GetAimIKBlend() = 0;
 
-	virtual void ApplyRecoilAnimation(f32 fDuration, f32 fKinematicImpact)=0; 
+	virtual void ApplyRecoilAnimation(f32 fDuration, f32 fKinematicImpact, uint32 arms=3 )=0; 
+	virtual void SetWeaponRaisedPose(EWeaponRaisedPose pose) = 0;
 
 	//functions to handle arm-IK for humans with different skeleton-hierarchies
 	virtual uint32 SetCustomArmIK(const Vec3& wgoal,int32 idx0,int32 idx1,int32 idx2)=0;
 	virtual uint32 SetHumanLimbIK(const Vec3& wgoal, uint32 limbtype) = 0;
 	virtual uint32 SetFootGroundAlignmentCCD( uint32 leg, const Plane& GroundPlane)=0;
+	virtual void EnableFootGroundAlignment(bool enable) = 0;
 	virtual void MoveSkeletonVertical( f32 vertical )=0;
 
 
@@ -764,12 +714,6 @@ struct ISkeleton
 
 
 
-	virtual Vec3 GetRelTranslation() =0;
-	virtual f32	 GetRelRotationZ() =0;
-	virtual QuatT GetRelMovement() =0;
-	virtual Vec3 GetRelFootSlide() =0;
-
-	virtual f32  GetUserData( int i ) = 0;
 
 
 
@@ -780,8 +724,8 @@ struct ISkeleton
 	virtual IPhysicalEntity *GetPhysEntOnJoint(int32 nId) = 0;
 	virtual void SetPhysEntOnJoint(int32 nId, IPhysicalEntity *pPhysEnt) = 0;
 	virtual int GetPhysIdOnJoint(int32 nId) = 0;
-  virtual void SetMaterialOnJoint(int32 nId, IMaterial* pMaterial) = 0;
-  virtual IMaterial* GetMaterialOnJoint(int32 nId) = 0;
+	virtual void SetMaterialOnJoint(int32 nId, IMaterial* pMaterial) = 0;
+	virtual IMaterial* GetMaterialOnJoint(int32 nId) = 0;
 
 
 	//! Used by physics engine)
@@ -801,6 +745,8 @@ struct ISkeleton
 	virtual void Fall() = 0;
 	virtual void GoLimp() = 0;
 	virtual void StandUp(const Matrix34 &mtx, bool b3DOF, IPhysicalEntity *&pNewPhysicalEntity, Matrix34 &mtxDelta) = 0;
+	virtual bool SetFnPAnimGroup(const char *name) = 0;
+	virtual bool SetFnPAnimGroup(int idx) = 0;
 
 	virtual f32 Falling() const = 0;
 	virtual f32 Lying() const = 0;
@@ -813,11 +759,33 @@ struct ISkeleton
 	//need to attachmentmanager
 	virtual int getBonePhysParentOrSelfIndex (int nBoneIndex, int nLod=0) = 0;
 
-	virtual AnimTransRotParams GetBlendedAnimTransRot(f32 DeltaTime, uint32 clamp) = 0;
-	virtual f32 GetFootPlantStatus() = 0;
-
 };
 
+
+//-----------------------------------------------------------------
+//-----------------------------------------------------------------
+//-----------------------------------------------------------------
+
+struct IMorphing
+{
+
+
+	//! Start the specified by parameters morph target
+	virtual void StartMorph (const char* szMorphTarget, const CryCharMorphParams& params)=0;
+	//! Set morph speed scale
+	//! Finds the morph target with the given id, sets its morphing speed and returns true;
+	//! if there's no such morph target currently playing, returns false
+	virtual bool SetMorphSpeed(const char* szMorphTarget, f32 fSpeed) =0;
+	//! Stops morph by target id
+	virtual bool StopMorph(const char* szMorphTarget)=0;
+	//! Stops all morphs
+	virtual void StopAllMorphs()=0;
+	//! freezes all currently playing morphs at the point they're at
+	virtual void FreezeAllMorphs()=0;
+	//! play all morphs in a sequence
+	virtual void SetLinearMorphSequence(f32 i) =0;
+
+};
 
 
 //DOC-IGNORE-BEGIN
@@ -877,7 +845,7 @@ struct IAnimationSet
 	// Return Value:
 	//   An integer representing the index of the animation. In case the animation 
 	//   couldn't be found, -1 will be returned.
-	virtual int GetIDByName (const char* szAnimationName) = 0;
+	virtual int GetAnimIDByName (const char* szAnimationName) = 0;
 
 	//! Returns the given animation name
 	// Summary:
@@ -888,7 +856,7 @@ struct IAnimationSet
 	//   A null terminated string holding the name of the animation. In case the 
 	//   animation wasn't found, the string "!NEGATIVE ANIMATION ID!" will be 
 	//   returned.
-	virtual const char* GetNameByID(int nAnimationId) = 0;
+	virtual const char* GetNameByAnimID(int nAnimationId) = 0;
 
 	//get file-path either by ID or by animation-name
 	virtual const char* GetFilePathByName (const char* szAnimationName) = 0;
@@ -899,7 +867,7 @@ struct IAnimationSet
 
 	//! Returns the given animation's start, in seconds; 0 if the id is invalid
 	virtual f32 GetStart (int nAnimationId) {return 0;}// default implementation
-	f32 GetStart (const char* szAnimationName) {	return GetStart (GetIDByName(szAnimationName));}
+	f32 GetStart (const char* szAnimationName) {	return GetStart (GetAnimIDByName(szAnimationName));}
 
 	virtual f32 GetSpeed(int nAnimationId) = 0;
 	virtual f32 GetSlope(int nAnimationId) = 0;
@@ -931,12 +899,19 @@ struct IAnimationSet
 	virtual int GetNumFacialAnimations() = 0;
 	virtual const char* GetFacialAnimationName(int index) = 0; // Returns 0 on invalid index.
 	virtual const char* GetFacialAnimationPath(int index) = 0; // Returns 0 on invalid index.
+
+	virtual const char *GetFnPAnimGroupName(int idx) = 0;
 };
 
 
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
 //---------------------------------------------------------------------------
+
+struct SAnimationStatistics {
+	const char * name;
+	long count;
+};
 struct IAnimEvents
 {
 	//! Returns the number of installed anim-events for this asset
@@ -945,6 +920,10 @@ struct IAnimEvents
 	virtual int GetGlobalAnimID(const char* pFilePath) = 0;
 	virtual void AddAnimEvent(int nGlobalID, const char* pName, const char* pParameter, const char* pBone, f32 fTime, const Vec3& vOffset, const Vec3& vDir) = 0;
 	virtual void DeleteAllEventsForAnimation(int nGlobalID) = 0;
+
+	virtual size_t GetGlobalAnimCount() = 0;
+	virtual bool GetGlobalAnimStatistics(size_t num, SAnimationStatistics&) = 0;
+
 };
 
 
@@ -984,13 +963,20 @@ struct IAttachment
 	virtual uint32 GetFlags()=0;
 	virtual void SetFlags(uint32 flags)=0;
 
-	virtual Quat GetRMWRotation()=0; 
-	virtual Vec3 GetRMWPosition()=0; 
-	virtual void SetRMWRotation(const Quat& rot)=0; 
-	virtual void SetRMWPosition(const Vec3& pos)=0; 
+	//attachment location in default model-pose
+	virtual const QuatT& GetAttAbsoluteDefault()=0; 
+	virtual void SetAttAbsoluteDefault(const QuatT& rot)=0; 
 
-	virtual void SetRelativeQuat(const QuatT& mat)=0; 
-	virtual const QuatT& GetRelativeQuat()=0; 
+	//attachment location relative to the attachment point (bone,face). Similar to an additional rotation 
+	//its is the location in the default-pose 
+	virtual void SetAttRelativeDefault(const QuatT& mat)=0; 
+	virtual const QuatT& GetAttRelativeDefault()=0; 
+
+	//its is the location of the attachment in the animated-pose is model-space 
+	virtual const QuatT& GetAttModelRelative()=0; 
+	//its is the location of the attachment in the animated-pose in world-space 
+	virtual const QuatT& GetAttWorldAbsolute()=0; 
+
 
 	virtual uint32 ProjectAttachment()=0;
 
@@ -1009,8 +995,6 @@ struct IAttachment
 	virtual IAttachmentObject* GetIAttachmentObject()=0; 
 	virtual void ClearBinding() =0;   
 
-	virtual const QuatT& GetLQuatT()=0; 
-	virtual const QuatT& GetWQuatT()=0; 
 
 	virtual void GetHingeParams(int &idx,f32 &limit,f32 &damping) = 0;
 	virtual void SetHingeParams(int idx=-1,f32 limit=120.0f,f32 damping=2.0f) = 0;
@@ -1033,20 +1017,16 @@ struct IAttachmentObject
 	};
 	virtual EType GetAttachmentType() = 0;
 
-	virtual void UpdateAttachment( IAttachment* pIAttachment, const QuatT& mtx) =0;
+	virtual void UpdateAttachment( IAttachment* pIAttachment, const QuatT& mtx, float fZoomAdjustedDistanceFromCamera, uint32 OnRender ) =0;
 	virtual void RenderAttachment( SRendParams& rParams, IAttachment *pAttachment) {};
 
 	virtual bool StartAnimation (const char* szAnimName, const struct CryCharAnimationParams& Params) { return 0; }
 	virtual bool StopAnimationInLayer (int nLayer) { return 0; }
-	virtual bool SetLoop (const char* szAnimName, bool nLoop, bool nResursive)  { return 0; };
-	virtual void StartMorph( const char* szMorphTarget,const CryCharMorphParams& Params ) {};
-	virtual bool SetMorphSpeed(const char* szMorphTarget, f32 fSpeed, bool recursive) { return 0; }
-	virtual bool StopMorph(const char* szMorphTarget, bool recursive ) { return 0; };
 
 	virtual AABB GetAABB()=0;
 
-	virtual IStatObj* GetIStatObj() { return NULL; }
-	virtual ICharacterInstance* GetICharacterInstance() { return NULL; }
+	virtual IStatObj* GetIStatObj() { return 0; }
+	virtual ICharacterInstance* GetICharacterInstance() { return 0; }
 
 	virtual IMaterial *GetMaterial() = 0;
 	virtual void SetMaterial(IMaterial *pMaterial) = 0;
@@ -1061,7 +1041,7 @@ struct IAttachmentObject
 struct CCGFAttachment : public IAttachmentObject
 {
 	virtual EType GetAttachmentType() { return eAttachment_StatObj; };
-	void UpdateAttachment(IAttachment *pIAttachment, const QuatT &m) {}
+	void UpdateAttachment(IAttachment *pIAttachment, const QuatT &m, float fZoomAdjustedDistanceFromCamera, uint32 OnRender) {}
 	void RenderAttachment(SRendParams &rParams, IAttachment *pAttachment ){
 		IMaterial *pPrev = rParams.pMaterial;
 		if (pMaterial)
@@ -1083,50 +1063,32 @@ struct CCGFAttachment : public IAttachmentObject
 struct CCHRAttachment : public IAttachmentObject
 {
 	virtual EType GetAttachmentType() { return eAttachment_Character; };
-	void UpdateAttachment( IAttachment *pAttachment, const QuatT& rWorldLocation )	
+	void UpdateAttachment( IAttachment *pAttachment, const QuatT& rWorldLocation, float fZoomAdjustedDistanceFromCamera, uint32 OnRender )	
 	{
 		uint32 type = pAttachment->GetType();	
 		if (type==CA_FACE)
-			m_pCharInstance->SkeletonPostProcess(rWorldLocation,rWorldLocation,pAttachment);
+			m_pCharInstance->SkeletonPostProcess(rWorldLocation,rWorldLocation,pAttachment, fZoomAdjustedDistanceFromCamera, OnRender);
 		else if (type==CA_BONE)
-			m_pCharInstance->SkeletonPostProcess(rWorldLocation,rWorldLocation,pAttachment);
+			m_pCharInstance->SkeletonPostProcess(rWorldLocation,rWorldLocation,pAttachment, fZoomAdjustedDistanceFromCamera, OnRender);
 		else if (type==CA_SKIN)
-			m_pCharInstance->SkinPostProcess(rWorldLocation,rWorldLocation,pAttachment );
+			m_pCharInstance->ProcessSkinAttachment(rWorldLocation,rWorldLocation,pAttachment, fZoomAdjustedDistanceFromCamera, OnRender );
 	};
 	void RenderAttachment( SRendParams &rParams, IAttachment *pAttachment  )	
 	{
 		IMaterial *pPrev = rParams.pMaterial;
 		if (m_pMaterial)
 			rParams.pMaterial = m_pMaterial;
-		m_pCharInstance->Render(rParams,QuatTS(IDENTITY), pAttachment);
+		m_pCharInstance->Render(rParams,QuatTS(IDENTITY));
 		rParams.pMaterial = pPrev;
 	};
 
-	void StartMorph(  const char* szMorphTarget,const CryCharMorphParams& Params  ) 
-	{
-		m_pCharInstance->StartMorph(szMorphTarget,Params);
-	};
-	bool SetMorphSpeed( const char* szMorphTarget, f32 fSpeed, bool recursive)
-	{
-		return m_pCharInstance->SetMorphSpeed(szMorphTarget,fSpeed,recursive);
-	};
-	bool StopMorph(const char* szMorphTarget, bool recursive )
-	{
-		return m_pCharInstance->StopMorph(szMorphTarget,recursive);
-	};
-
-
 	bool StartAnimation (const char* szAnimName, const struct CryCharAnimationParams& Params)	
 	{
-		return m_pCharInstance->GetISkeleton()->StartAnimation(szAnimName,0,0,0,Params);
+		return m_pCharInstance->GetISkeletonAnim()->StartAnimation(szAnimName,0,0,0,Params);
 	}
-	bool SetLoop (const char* szAnimName, bool nLoop, bool nResursive)  
-	{ 
-		return 0;//m_pCharInstance->SetLoop(szAnimName,nLoop,nResursive);
-	};
 	bool StopAnimationInLayer (int nLayer)	
 	{ 
-		return m_pCharInstance->GetISkeleton()->StopAnimationInLayer(nLayer,0.0f);
+		return m_pCharInstance->GetISkeletonAnim()->StopAnimationInLayer(nLayer,0.0f);
 	}
 
 	AABB GetAABB() {	return m_pCharInstance->GetAABB();	};
@@ -1149,15 +1111,18 @@ struct CCHRAttachment : public IAttachmentObject
 };
 
 
+
+
 struct CEntityAttachment :	public IAttachmentObject
 {
 public:
 	virtual EType GetAttachmentType() { return eAttachment_Entity; };
 	void SetEntityId(EntityId id) { m_id = id; };
+	EntityId GetEntityId() { return m_id; }
 
-	void UpdateAttachment(IAttachment *pIAttachment,const QuatT &m )
+	void UpdateAttachment(IAttachment *pIAttachment,const QuatT &m, float fZoomAdjustedDistanceFromCamera, uint32 OnRender )
 	{
-		Matrix34 worldMatrix = Matrix34(pIAttachment->GetWQuatT());
+		Matrix34 worldMatrix = Matrix34(pIAttachment->GetAttWorldAbsolute());
 		IEntity *pEntity = gEnv->pEntitySystem->GetEntity(m_id);
 
 		if (pEntity)
@@ -1174,7 +1139,6 @@ public:
 			obb=OBB::CreateOBBfromAABB( m33,aabb );
 			gEnv->pRenderer->GetIRenderAuxGeom()->DrawOBB(obb,pos,0,RGBA8(0xff,0x00,0x1f,0xff),eBBD_Extremes_Color_Encoded);
 			*/
-			pEntity->InvalidateTM();
 		}
 	}
 
@@ -1222,13 +1186,13 @@ public:
 
   ILightSource* GetLightSource() { return m_pLightSource; }
 
-	void UpdateAttachment(IAttachment *pAttachment, const QuatT &m)	
+	void UpdateAttachment(IAttachment *pAttachment, const QuatT &m, float fZoomAdjustedDistanceFromCamera, uint32 OnRender)	
 	{
 		if (m_pLightSource)
 		{
 			CDLight &light = m_pLightSource->GetLightProperties();
 
-			Matrix34 worldMatrix = Matrix34(pAttachment->GetWQuatT());
+			Matrix34 worldMatrix = Matrix34(pAttachment->GetAttWorldAbsolute());
 			Vec3 origin = worldMatrix.GetTranslation();
 			light.m_Origin = origin;
 			light.MakeBaseParams();
@@ -1276,7 +1240,7 @@ public:
 	virtual ~CEffectAttachment()
 	{
 		if (m_pEmitter)
-			gEnv->p3DEngine->DeleteParticleEmitter(m_pEmitter);
+			m_pEmitter->Activate(false);
 	}
 
 	void CreateEffect()
@@ -1299,7 +1263,7 @@ public:
 		return m_pEmitter;
 	}
 
-	void UpdateAttachment(IAttachment *pIAttachment,const QuatT &m )
+	void UpdateAttachment(IAttachment *pIAttachment,const QuatT &m, float fZoomAdjustedDistanceFromCamera, uint32 OnRender )
 	{
 		/*
 		Vec3 pos =  m.GetTranslation();
@@ -1319,7 +1283,7 @@ public:
 			}
 
 			if (m_pEmitter)
-				m_pEmitter->SetMatrix( Matrix34(pIAttachment->GetWQuatT()) * m_loc);
+				m_pEmitter->SetMatrix( Matrix34(pIAttachment->GetAttWorldAbsolute()) * m_loc);
 		}
 		else
 		{

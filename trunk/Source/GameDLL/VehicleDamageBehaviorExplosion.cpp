@@ -28,6 +28,12 @@ bool CVehicleDamageBehaviorExplosion::Init(IVehicle* pVehicle, const SmartScript
 	{
 		explosionParams->GetValue("damage", m_damage);
 		explosionParams->GetValue("radius", m_radius);
+		if (!explosionParams->GetValue("minRadius", m_minRadius))
+			m_minRadius = m_radius/2.0f;
+		if (!explosionParams->GetValue("physRadius", m_physRadius))
+			m_physRadius = min(m_radius, 5.0f);
+		if (!explosionParams->GetValue("minPhysRadius", m_minPhysRadius))
+			m_minPhysRadius = m_physRadius/2.0f;
 		explosionParams->GetValue("pressure", m_pressure);
 
 		m_pHelper = NULL;
@@ -71,6 +77,9 @@ void CVehicleDamageBehaviorExplosion::OnDamageEvent(EVehicleDamageBehaviorEvent 
 				explosionInfo.pos = m_pVehicle->GetEntity()->GetWorldTM().GetTranslation();
 
 			explosionInfo.radius = m_radius;
+			explosionInfo.minRadius = m_minRadius;
+			explosionInfo.physRadius = m_physRadius;
+			explosionInfo.minPhysRadius = m_minPhysRadius;
 			explosionInfo.shooterId = behaviorParams.shooterId;
 			explosionInfo.weaponId = m_pVehicle->GetEntityId();
 			explosionInfo.pressure = m_pressure;

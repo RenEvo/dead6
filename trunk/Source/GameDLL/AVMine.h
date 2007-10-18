@@ -28,15 +28,18 @@ public:
 	CAVMine();
 	virtual ~CAVMine();
 
-	virtual void ProcessEvent(SEntityEvent &event);
-	virtual void Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity, float speedScale);
+	virtual bool Init(IGameObject *pGameObject);
 
-	static float GetDisarmTime() { return s_disarmTime; }
+	virtual void ProcessEvent(SEntityEvent &event);
+	virtual void HandleEvent(const SGameObjectEvent &event);
+	virtual void Launch(const Vec3 &pos, const Vec3 &dir, const Vec3 &velocity, float speedScale);
+	virtual void SetParams(EntityId ownerId, EntityId hostId, EntityId weaponId, int damage, int hitTypeId, float damageDrop = 0.0f, float damageDropMinR = 0.0f);
 
 protected:
+	int m_teamId;
 	float m_triggerWeight;
 	float m_currentWeight;
-	static float s_disarmTime;
+	bool m_frozen;
 };
 
 

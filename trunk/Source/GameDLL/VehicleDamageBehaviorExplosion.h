@@ -42,7 +42,10 @@ protected:
 	IVehicle* m_pVehicle;
 
 	float m_damage;
+	float m_minRadius;
 	float m_radius;
+	float m_minPhysRadius;
+	float m_physRadius;
 	float m_pressure;
 	IVehicleHelper* m_pHelper;
 

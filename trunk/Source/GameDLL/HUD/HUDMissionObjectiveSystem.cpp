@@ -1,7 +1,6 @@
 #include "StdAfx.h"
 #include "ISerialize.h"
 #include "Game.h"
-#include "HUDMissionObjectiveSystem.h"
 #include "HUD.h"
 #include "HUDRadar.h"
 
@@ -13,8 +12,8 @@ void CHUDMissionObjective::SetStatus(HUDMissionStatus status)
 	m_eStatus = status;
 
 	assert (m_pMOS != 0);
-	if(g_pGame->GetHUD())
-		g_pGame->GetHUD()->UpdateObjective(this);
+
+	SAFE_HUD_FUNC(UpdateObjective(this));
 
 	m_lastTimeChanged = gEnv->pTimer->GetFrameStartTime().GetSeconds();
 }
@@ -59,7 +58,7 @@ void CHUDMissionObjectiveSystem::LoadLevelObjectives(bool forceReloading)
 			const char* attrib;
 			const char* objective;
 			const char* text;
-			const char* secondary;
+			const char* optional;
 			for(int obj = 0; obj < mission->getChildCount(); ++obj)
 			{
 				XmlNodeRef objectiveNode = mission->getChild(obj);
@@ -69,10 +68,25 @@ void CHUDMissionObjectiveSystem::LoadLevelObjectives(bool forceReloading)
 				if(objectiveNode->getAttributeByIndex(0, &attrib, &objective) && objectiveNode->getAttributeByIndex(1, &attrib, &text))
 				{
 					bool secondaryObjective = false;
-					if(objectiveNode->getAttributeByIndex(2, &attrib, &secondary))
-						if(!stricmp(secondary, "true"))
-							secondaryObjective = true;
-					m_currentMissionObjectives.push_back(CHUDMissionObjective(this, id.c_str(), objective, text, secondaryObjective));
+					const char* mapLabel = NULL;
+					int attribs = objectiveNode->getNumAttributes();
+					for(int attribIndex = 2; attribIndex < attribs; ++attribIndex)
+					{
+						if(objectiveNode->getAttributeByIndex(attribIndex, &attrib, &optional))
+						{
+							if(attrib)
+							{
+								if(!stricmp(attrib, "Secondary"))
+								{
+									if(!stricmp(optional, "true"))
+										secondaryObjective = true;
+								}
+								else if(!stricmp(attrib, "MapLabel"))
+									mapLabel = optional;
+							}
+						}
+					}
+					m_currentMissionObjectives.push_back(CHUDMissionObjective(this, id.c_str(), objective, text, mapLabel, secondaryObjective));
 				}
 				else
 					GameWarning("Error reading mission objectives.");
@@ -92,9 +106,10 @@ void CHUDMissionObjectiveSystem::DeactivateObjectives(bool leaveOutRecentlyChang
 		if(!leaveOutRecentlyChanged ||
 			(m_currentMissionObjectives[i].m_lastTimeChanged - gEnv->pTimer->GetFrameStartTime().GetSeconds() > 0.2f))
 		{
+			bool isSilent = m_currentMissionObjectives[i].IsSilent();
 			m_currentMissionObjectives[i].SetSilent(true);
 			m_currentMissionObjectives[i].SetStatus(CHUDMissionObjective::DEACTIVATED);
-			m_currentMissionObjectives[i].SetSilent(false);
+			m_currentMissionObjectives[i].SetSilent(isSilent);
 		}
 	}
 }
@@ -111,27 +126,28 @@ CHUDMissionObjective* CHUDMissionObjectiveSystem::GetMissionObjective(const char
 	return NULL;
 }
 
-void CHUDMissionObjectiveSystem::Serialize(TSerialize ser, unsigned aspects)	//not tested!!
+void CHUDMissionObjectiveSystem::Serialize(TSerialize ser)	//not tested!!
 {
-	if(ser.GetSerializationTarget() != eST_Network)		
+	if (ser.IsReading())
+		LoadLevelObjectives(true);
+
+	float now = gEnv->pTimer->GetFrameStartTime().GetSeconds();
+
+	for(std::vector<CHUDMissionObjective>::iterator it = m_currentMissionObjectives.begin(); it != m_currentMissionObjectives.end(); ++it)
 	{
-		if (ser.IsReading())
-			LoadLevelObjectives(true);
+		ser.BeginGroup("HUD_Objective");
+		ser.EnumValue("ObjectiveStatus", (*it).m_eStatus, CHUDMissionObjective::FIRST, CHUDMissionObjective::LAST);
+		ser.Value("trackedEntity", (*it).m_trackedEntity);
+		ser.EndGroup();
 
-		float now = gEnv->pTimer->GetFrameStartTime().GetSeconds();
-
-		for(std::vector<CHUDMissionObjective>::iterator it = m_currentMissionObjectives.begin(); it != m_currentMissionObjectives.end(); ++it)
-		{
-			ser.BeginGroup("HUD_Objective");
-			ser.EnumValue("ObjectiveStatus", (*it).m_eStatus, CHUDMissionObjective::FIRST, CHUDMissionObjective::LAST);
-			ser.Value("trackedEntity", (*it).m_trackedEntity);
-			ser.EndGroup();
-
-			if(ser.IsReading() && (*it).m_eStatus != CHUDMissionObjective::DEACTIVATED)
-			{				
-				(*it).m_lastTimeChanged = now;
-				g_pGame->GetHUD()->UpdateObjective(&(*it));
-			}
+		if(ser.IsReading() && (*it).m_eStatus != CHUDMissionObjective::DEACTIVATED)
+		{				
+			CHUDMissionObjective obj = *it;
+			obj.m_lastTimeChanged = now;
+			bool isSilent = obj.IsSilent();
+			obj.SetSilent(true);
+			SAFE_HUD_FUNC(UpdateObjective(&obj));
+			obj.SetSilent(isSilent);
 		}
 	}
 }
@@ -147,8 +163,7 @@ void CHUDMissionObjectiveSystem::GetMemoryStatistics(ICrySizer * s)
 void CHUDMissionObjective::SetTrackedEntity(EntityId entityID)
 {	
 	if(m_trackedEntity)
-		if(g_pGame->GetHUD())
-			g_pGame->GetHUD()->GetRadar()->UpdateMissionObjective(m_trackedEntity, false, 0);
+		SAFE_HUD_FUNC(GetRadar()->UpdateMissionObjective(m_trackedEntity, false, 0, false));
 
 	m_trackedEntity = entityID;
 }

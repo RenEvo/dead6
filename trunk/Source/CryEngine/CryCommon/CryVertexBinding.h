@@ -32,7 +32,7 @@ public:
 	// ASSUMES:that the links are already sorted by the blending factors in descending order
 	void pruneSmallWeights(float fMinBlending, unsigned numMinLinks = 1);
 	// remaps the bone ids
-	void remapBoneIds (class CryModel* pModel, const unsigned* arrBoneIdMap, unsigned numBoneIds);
+	void remapBoneIds (class CCharacterModel* pModel, const unsigned* arrBoneIdMap, unsigned numBoneIds);
 
 	// returns the maximum BoneID in the array of links
 	unsigned maxBoneID ()const;
@@ -84,7 +84,7 @@ inline void CryVertexBinding::pruneSmallWeights(float fMinBlending, unsigned num
 
 
 // remaps the bone ids
-inline void CryVertexBinding::remapBoneIds (CryModel* pModel, const unsigned* arrBoneIdMap, unsigned numBoneIds)
+inline void CryVertexBinding::remapBoneIds (CCharacterModel* pModel, const unsigned* arrBoneIdMap, unsigned numBoneIds)
 {
 	for (iterator it = begin(); it != end(); ++it)
 	{

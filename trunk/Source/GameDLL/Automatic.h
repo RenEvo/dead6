@@ -24,17 +24,48 @@ History:
 
 class CAutomatic : public CSingle
 {
+protected:
+	typedef struct SAutomaticActions
+	{
+		SAutomaticActions() { Reset(); };
+		void Reset(const IItemParamsNode *params=0, bool defaultInit=true)
+		{
+			CItemParamReader reader(params);
+			ResetValue(automatic_fire,"automatic_fire");
+		}
+
+		void GetMemoryStatistics(ICrySizer * s)
+		{
+			s->Add(automatic_fire);
+		}
+
+		ItemString automatic_fire;
+
+	} SAutomaticActions;
+
 public:
 	CAutomatic();
 	virtual ~CAutomatic();
 
 	// CSingle
+
+	virtual void ResetParams(const struct IItemParamsNode *params);
+	virtual void PatchParams(const struct IItemParamsNode *patch);
+
+	virtual void GetMemoryStatistics(ICrySizer * s);
+
 	virtual void Update(float frameTime, uint frameId);
-	virtual void StopFire(EntityId shooterId);
+	virtual void StartFire();
+	virtual void StopFire();
 	virtual const char *GetType() const;
 	// no new members... don't override GetMemoryStatistics
 
 	// ~CSingle
+
+protected:
+
+	SAutomaticActions m_automaticactions;
+	uint							m_soundId;
 };
 
 #endif //__AUTOMATIC_H__

@@ -16,6 +16,7 @@
 #include <IWorldQuery.h>
 #include <IInteractor.h>
 
+TActionHandler<CPlayerInput>	CPlayerInput::s_actionHandler;
 
 CPlayerInput::CPlayerInput( CPlayer * pPlayer ) : 
 	m_pPlayer(pPlayer), 
@@ -33,57 +34,73 @@ CPlayerInput::CPlayerInput( CPlayer * pPlayer ) :
 	m_moveButtonState(0),
 	m_bUseXIInput(false),
 	m_checkZoom(false),
-	m_lastPos(0,0,0)
+	m_lastPos(0,0,0),
+	m_iSuitModeActionPressed(0),
+	m_iCarryingObject(0),
+	m_fSuitModeActionTime(0.0f),
+	m_lastSerializeFrameID(0)
 {
+	m_pPlayer->RegisterPlayerEventListener(this);
 	m_pPlayer->GetGameObject()->CaptureActions(this);
 
 	// set up the handlers
-	const SGameActions& actions = g_pGame->Actions();
-	m_actionHandler.SetThis(this);
+	if (s_actionHandler.GetNumHandlers() == 0)
+	{
+	#define ADD_HANDLER(action, func) s_actionHandler.AddHandler(actions.action, &CPlayerInput::func)
+		const CGameActions& actions = g_pGame->Actions();
 
-#define ADD_HANDLER(action, func) m_actionHandler.AddHandler(actions.action, &CPlayerInput::func)
+		ADD_HANDLER(moveforward, OnActionMoveForward);
+		ADD_HANDLER(moveback, OnActionMoveBack);
+		ADD_HANDLER(moveleft, OnActionMoveLeft);
+		ADD_HANDLER(moveright, OnActionMoveRight);
+		ADD_HANDLER(rotateyaw, OnActionRotateYaw);
+		ADD_HANDLER(rotatepitch, OnActionRotatePitch);
+		ADD_HANDLER(jump, OnActionJump);
+		ADD_HANDLER(suitmode, OnActionSuitMode);
+		ADD_HANDLER(suitskin, OnActionSuitSkin);
+		ADD_HANDLER(crouch, OnActionCrouch);
+		ADD_HANDLER(sprint, OnActionSprint);
+		ADD_HANDLER(togglestance, OnActionToggleStance);
+		ADD_HANDLER(prone, OnActionProne);
+		//ADD_HANDLER(zerogbrake, OnActionZeroGBrake);
+		ADD_HANDLER(gyroscope, OnActionGyroscope);
+		ADD_HANDLER(gboots, OnActionGBoots);
+		ADD_HANDLER(leanleft, OnActionLeanLeft);
+		ADD_HANDLER(leanright, OnActionLeanRight);
+		//ADD_HANDLER(holsteritem, OnActionHolsterItem);
+		ADD_HANDLER(use, OnActionUse);
 
-	ADD_HANDLER(moveforward, OnActionMoveForward);
-	ADD_HANDLER(moveback, OnActionMoveBack);
-	ADD_HANDLER(moveleft, OnActionMoveLeft);
-	ADD_HANDLER(moveright, OnActionMoveRight);
-	ADD_HANDLER(rotateyaw, OnActionRotateYaw);
-	ADD_HANDLER(rotatepitch, OnActionRotatePitch);
-	ADD_HANDLER(jump, OnActionJump);
-	ADD_HANDLER(crouch, OnActionCrouch);
-	ADD_HANDLER(sprint, OnActionSprint);
-	ADD_HANDLER(togglestance, OnActionToggleStance);
-	ADD_HANDLER(prone, OnActionProne);
-	//ADD_HANDLER(zerogbrake, OnActionZeroGBrake);
-	ADD_HANDLER(gyroscope, OnActionGyroscope);
-	ADD_HANDLER(gboots, OnActionGBoots);
-	ADD_HANDLER(leanleft, OnActionLeanLeft);
-	ADD_HANDLER(leanright, OnActionLeanRight);
-	ADD_HANDLER(holsteritem, OnActionHolsterItem);
-	ADD_HANDLER(use, OnActionUse);
+		ADD_HANDLER(speedmode, OnActionSpeedMode);
+		ADD_HANDLER(strengthmode, OnActionStrengthMode);
+		ADD_HANDLER(defensemode, OnActionDefenseMode);
+		ADD_HANDLER(suitcloak, OnActionSuitCloak);
 
-	ADD_HANDLER(speedmode, OnActionSpeedMode);
-	ADD_HANDLER(strengthmode, OnActionStrengthMode);
-	ADD_HANDLER(defensemode, OnActionDefenseMode);
-	ADD_HANDLER(suitcloak, OnActionSuitCloak);
+		ADD_HANDLER(thirdperson, OnActionThirdPerson);
+		ADD_HANDLER(flymode, OnActionFlyMode);
+		ADD_HANDLER(godmode, OnActionGodMode);
 
-	ADD_HANDLER(thirdperson, OnActionThirdPerson);
-	ADD_HANDLER(flymode, OnActionFlyMode);
-	ADD_HANDLER(godmode, OnActionGodMode);
+		ADD_HANDLER(v_rotateyaw, OnActionVRotateYaw); // needed so player can shake unfreeze while in a vehicle
+		ADD_HANDLER(v_rotatepitch, OnActionVRotatePitch);
 
-	ADD_HANDLER(xi_v_rotateyaw, OnActionXIRotateYaw);
-	ADD_HANDLER(xi_rotateyaw, OnActionXIRotateYaw);
-	ADD_HANDLER(xi_rotatepitch, OnActionXIRotatePitch);
-	ADD_HANDLER(xi_v_rotatepitch, OnActionXIRotatePitch);
-	ADD_HANDLER(xi_movex, OnActionXIMoveX);
-	ADD_HANDLER(xi_movey, OnActionXIMoveY);
-	ADD_HANDLER(xi_use, OnActionUse);
+		ADD_HANDLER(xi_v_rotateyaw, OnActionXIRotateYaw);
+		ADD_HANDLER(xi_rotateyaw, OnActionXIRotateYaw);
+		ADD_HANDLER(xi_rotatepitch, OnActionXIRotatePitch);
 
-	ADD_HANDLER(invert_mouse, OnActionInvertMouse);
+		ADD_HANDLER(xi_v_rotatepitch, OnActionXIRotatePitch);
+		ADD_HANDLER(xi_movex, OnActionXIMoveX);
+		ADD_HANDLER(xi_movey, OnActionXIMoveY);
+		ADD_HANDLER(xi_disconnect, OnActionXIDisconnect);
+		ADD_HANDLER(xi_use, OnActionUse);
+
+		ADD_HANDLER(invert_mouse, OnActionInvertMouse);
+
+	#undef ADD_HANDLER
+	}
 }
 
 CPlayerInput::~CPlayerInput()
 {
+	m_pPlayer->UnregisterPlayerEventListener(this);
 	m_pPlayer->GetGameObject()->ReleaseActions(this);
 }
 
@@ -99,6 +116,7 @@ void CPlayerInput::Reset()
 	m_xi_deltaRotation.Set(0,0,0);
 	m_bDisabledXIRot = false;
 	m_moveButtonState = 0;
+	m_lastSerializeFrameID = 0;
 }
 
 void CPlayerInput::DisableXI(bool disabled)
@@ -128,8 +146,7 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 	//this tell if OnAction have to be forwarded to scripts, now its true by default, only high framerate actions are ignored
 	bool filterOut = true;
 	m_checkZoom = false;
-	const SGameActions& actions = g_pGame->Actions();
-	CHUD * pHUD = g_pGame->GetHUD();
+	const CGameActions& actions = g_pGame->Actions();
 	IVehicle* pVehicle = m_pPlayer->GetLinkedVehicle();
 
 	bool canMove = CanMove();
@@ -143,7 +160,7 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 
 	{
 		FRAME_PROFILER("New Action Processing", GetISystem(), PROFILE_GAME);
-		handled = m_actionHandler.Dispatch(m_pPlayer->GetEntityId(), actionId, activationMode, value, filterOut);
+		handled = s_actionHandler.Dispatch(this, m_pPlayer->GetEntityId(), actionId, activationMode, value, filterOut);
 	}
 
 	{
@@ -153,37 +170,9 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 			filterOut = true;
 			if (!m_pPlayer->m_stats.spectatorMode)
 			{
-				if (actions.ulammo==actionId && m_pPlayer->m_pGameFramework->CanCheat())
+				if (actions.ulammo==actionId && m_pPlayer->m_pGameFramework->CanCheat() && gEnv->pSystem->IsDevMode())
 				{
 					g_pGameCVars->i_unlimitedammo = 1;
-				}
-				else if (actions.giveitems==actionId && m_pPlayer->m_pGameFramework->CanCheat())
-				{
-					//m_pPlayer->m_pGameFramework->GetIItemSystem()->GiveItem(m_pPlayer, "GaussRifle", false, false, false);
-					//m_pPlayer->m_pGameFramework->GetIItemSystem()->GiveItem(m_pPlayer, "DSG1", false, false, false);
-					//m_pPlayer->m_pGameFramework->GetIItemSystem()->GiveItem(m_pPlayer, "Shotgun", false, false, false);
-					//m_pPlayer->m_pGameFramework->GetIItemSystem()->GiveItem(m_pPlayer, "LAW", true, true, true);
-					g_pGame->GetIGameFramework()->GetIItemSystem()->GetIEquipmentManager()->GiveEquipmentPack(m_pPlayer, "DebugPlayer", true, true);
-					//m_pPlayer->GetInventory()->SetAmmoCount("bullet", 600);
-					//m_pPlayer->GetInventory()->SetAmmoCount("incendiarybullet", 600);
-					//m_pPlayer->GetInventory()->SetAmmoCount("hurricanebullet", 600);
-					//m_pPlayer->GetInventory()->SetAmmoCount("gaussbullet", 600);
-					//m_pPlayer->GetInventory()->SetAmmoCount("sniperbullet", 600);
-					//m_pPlayer->GetInventory()->SetAmmoCount("explosivegrenade", 60);
-					//m_pPlayer->GetInventory()->SetAmmoCount("flashbang", 60);
-					//m_pPlayer->GetInventory()->SetAmmoCount("smokegrenade", 60);
-					//m_pPlayer->GetInventory()->SetAmmoCount("rocket", 120);
-				}
-				else if (actions.switchhud == actionId)
-				{
-					if (pHUD)
-					{
-						if(pHUD->IsVisible())
-							gEnv->pConsole->ExecuteString("cl_hud 0");
-						else
-							gEnv->pConsole->ExecuteString("cl_hud 1");
-					}
-					return;
 				}
 				else if (actions.debug_ag_step == actionId)
 				{
@@ -215,27 +204,29 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 			if (itemId)
 			{
 				pWeapon = m_pPlayer->GetWeapon(itemId);
-				if (pWeapon && pWeapon->GetEntity()->GetClass() == CItem::sBinocularsClass)
-					binoculars = true;
-				if(pWeapon && pWeapon->IsZoomed() && pWeapon->GetMaxZoomSteps()>1)
-					scope = true;
+				if (pWeapon)
+				{
+					binoculars = (pWeapon->GetEntity()->GetClass() == CItem::sBinocularsClass);
+					scope = (pWeapon->IsZoomed() && pWeapon->GetMaxZoomSteps()>1);
+				}
 			}
 
 			if (pVehicle)
 			{
-				if (binoculars)
+				// 06/06/2007: Bernd took the (good) decision to remove the ability to use binoculars from inside a vehicle
+				// Let's keep the (buggy in third person) code for now and remove it once it's validated by everyone else!
+
+/*				if (binoculars)
 				{
 					// This is needed to forward action like v_zoom_in/v_zoom_out to Binoculars
 					// FIXME?: Does it produce some conflicts with others things?
 					m_pPlayer->CActor::OnAction(actionId, activationMode, value);
-				}
+				}*/
 
-				if (m_pPlayer->m_pVehicleClient)
-				{
+				if (m_pPlayer->m_pVehicleClient && !m_pPlayer->IsFrozen())
 					m_pPlayer->m_pVehicleClient->OnAction(pVehicle, m_pPlayer->GetEntityId(), actionId, activationMode, value);
-				}
 
-				if (actions.binoculars == actionId)
+/*				if (actions.binoculars == actionId)
 				{
 					COffHand* pOffHand = static_cast<COffHand*>(m_pPlayer->GetWeaponByClass(CItem::sOffHandClass));
 					if (binoculars)
@@ -281,19 +272,19 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 						if(binoculars)
 							m_pPlayer->SelectLastItem(false);
 					}
-				}
+				}*/
 
 				//FIXME:not really good
 				m_actions = 0;
-				//			m_deltaRotation.Set(0,0,0);
+//			m_deltaRotation.Set(0,0,0);
 				m_deltaMovement.Set(0,0,0);
 			}
-			else if (!m_pPlayer->m_stats.isFrozen.Value() && !m_pPlayer->m_stats.inFreefall.Value() && !m_pPlayer->m_stats.isOnLadder 
-				&& !m_pPlayer->m_stats.isStandingUp && m_pPlayer->GetGameObject()->GetPhysicalizationProfile()!=eAP_Sleep)
+			else if (m_pPlayer->GetHealth() > 0 && !m_pPlayer->m_stats.isFrozen.Value() && !m_pPlayer->m_stats.inFreefall.Value() && !m_pPlayer->m_stats.isOnLadder 
+				&& !m_pPlayer->m_stats.isStandingUp && m_pPlayer->GetGameObject()->GetAspectProfile(eEA_Physics)!=eAP_Sleep)
 			{
 				m_pPlayer->CActor::OnAction(actionId, activationMode, value);
 
-				if (!binoculars && !scope)
+				if (!binoculars && (!scope || actionId == actions.use))
 				{
 					COffHand* pOffHand = static_cast<COffHand*>(m_pPlayer->GetWeaponByClass(CItem::sOffHandClass));
 					if (pOffHand)
@@ -301,16 +292,7 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 						pOffHand->OnAction(m_pPlayer->GetEntityId(), actionId, activationMode, value);
 					}
 
-					CFists *pFists=0;
-					EntityId fistsId = pInventory->GetItemByClass(CItem::sFistsClass);
-					if (fistsId)
-					{
-						pFists=static_cast<CFists*>(m_pPlayer->GetWeapon(fistsId));
-						if (pFists)
-							pFists->OnAction(m_pPlayer->GetEntityId(), actionId, activationMode, value);
-					}
-
-					if ((!pOffHand || !pOffHand->IsSelected()) && (!pWeapon || !pWeapon->IsMounted()))
+					if ((!pWeapon || !pWeapon->IsMounted()))
 					{
 						if ((actions.drop==actionId) && itemId)
 						{
@@ -321,7 +303,20 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 							{
 								m_buttonPressure=CLAMP(m_buttonPressure, 0.0f, 2.5f);
 								impulseScale=1.0f+(1.0f-m_buttonPressure/2.5f)*15.0f;
-								m_pPlayer->DropItem(itemId, impulseScale, true);
+								if (m_pPlayer->DropItem(itemId, impulseScale, true) && pOffHand && pOffHand->IsSelected())
+								{							
+									if (EntityId fistsId = pInventory->GetItemByClass(CItem::sFistsClass))
+									{
+										m_pPlayer->SelectItem(fistsId, false);
+									}
+									pOffHand->PreExecuteAction(eOHA_REINIT_WEAPON, eAAM_OnPress);
+									CItem* pItem = static_cast<CItem*>(m_pPlayer->GetCurrentItem());
+									if (pItem)
+									{
+										pItem->SetActionSuffix("akimbo_");
+										pItem->PlayAction(g_pItemStrings->idle);
+									}
+								}
 							}
 						}
 						else if (actions.nextitem==actionId)
@@ -369,15 +364,19 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 						m_pPlayer->SelectNextItem(1, true, actionId.c_str());
 					else if (actions.heavy==actionId)
 						m_pPlayer->SelectNextItem(1, true, actionId.c_str());
+					else if (actions.drop==actionId && activationMode == eAAM_OnRelease && itemId)
+						m_pPlayer->DropItem(itemId, 1.0f, true);
 				}
 
 				if (actions.binoculars == actionId)
 				{
 					COffHand* pOffHand = static_cast<COffHand*>(m_pPlayer->GetWeaponByClass(CItem::sOffHandClass));
 					if (binoculars)
-						m_pPlayer->SelectLastItem(false);
-					else if(!m_pPlayer->m_stats.mountedWeaponID && (!pOffHand || (pOffHand->GetOffHandState()==eOHS_INIT_STATE)))
+						m_pPlayer->SelectLastItem(false,true);
+					else if(!m_pPlayer->m_stats.mountedWeaponID && (!pOffHand || (pOffHand->GetOffHandState()==eOHS_INIT_STATE) && !(m_pPlayer->GetNanoSuit() && !m_pPlayer->GetNanoSuit()->IsActive())) && !SAFE_HUD_FUNC_RET(IsInitializing()))
+					{
 						m_pPlayer->SelectItemByName("Binoculars", true);
+					}
 				}
 
 				if (actions.xi_binoculars == actionId)
@@ -429,9 +428,13 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 
 	bool hudFilterOut = true;
 
-	if(pHUD) 	// FIXME: temporary method to dispatch Actions to HUD (it's not yet possible to register)
-		hudFilterOut = pHUD->OnAction(actionId,activationMode,value);
+	// FIXME: temporary method to dispatch Actions to HUD (it's not yet possible to register)
+	hudFilterOut = SAFE_HUD_FUNC_RET(OnAction(actionId,activationMode,value));
 
+	//Filter must take into account offHand too
+	COffHand* pOffHand = static_cast<COffHand*>(m_pPlayer->GetWeaponByClass(CItem::sOffHandClass));
+	if(pOffHand && pOffHand->IsSelected())
+		filterOut = false;
 
 	//send the onAction to scripts, after filter the range of actions. for now just use and hold
 	if (filterOut && hudFilterOut)
@@ -475,8 +478,16 @@ void CPlayerInput::OnAction( const ActionId& actionId, int activationMode, float
 	{
 		FRAME_PROFILER("Final Action Processing", GetISystem(), PROFILE_GAME);
 
-		if(GetISystem()->IsDemoMode() == 2 && actionId == g_pGame->Actions().hud_show_multiplayer_scoreboard && activationMode == eAAM_OnPress)
+		if(IsDemoPlayback() && actionId == g_pGame->Actions().hud_show_multiplayer_scoreboard && activationMode == eAAM_OnPress)
 			g_pGame->GetIGameFramework()->GetIActorSystem()->SwitchDemoSpectator();
+	}
+}
+
+void CPlayerInput::OnObjectGrabbed(IActor* pActor, bool bIsGrab, EntityId objectId, bool bIsNPC, bool bIsTwoHanded)
+{
+	if(m_pPlayer == pActor)
+	{
+		m_iCarryingObject = bIsGrab ? (bIsTwoHanded ? 2 : 1) : 0;
 	}
 }
 
@@ -527,17 +538,27 @@ void CPlayerInput::PreUpdate()
 	// get rotation into a manageable form
 	float mouseSensitivity;
 	if (m_pPlayer->InZeroG())
-		mouseSensitivity = 0.01f*MAX(1.0f, g_pGameCVars->cl_sensitivityZeroG);
+		mouseSensitivity = 0.00333f*MAX(0.01f, g_pGameCVars->cl_sensitivityZeroG);
 	else
-		mouseSensitivity = 0.01f*MAX(1.0f, g_pGameCVars->cl_sensitivity);
+		mouseSensitivity = 0.00333f*MAX(0.01f, g_pGameCVars->cl_sensitivity);
 
 	mouseSensitivity *= gf_PI / 180.0f;//doesnt make much sense, but after all helps to keep reasonable values for the sensitivity cvars
 	//these 2 could be moved to CPlayerRotation
 	mouseSensitivity *= m_pPlayer->m_params.viewSensitivity;
 	mouseSensitivity *= m_pPlayer->GetMassFactor();
 	COffHand * pOffHand=static_cast<COffHand*>(m_pPlayer->GetWeaponByClass(CItem::sOffHandClass));
-	if(pOffHand && (pOffHand->GetOffHandState()&(eOHS_HOLDING_NPC|eOHS_HOLDING_OBJECT)))
-		mouseSensitivity *= 0.35f;
+	if(pOffHand && (pOffHand->GetOffHandState()&eOHS_HOLDING_NPC))
+		mouseSensitivity *= pOffHand->GetObjectMassScale();
+
+	// When carrying object/enemy, adapt mouse sensitiviy to feel the weight
+	// Designers requested we ignore single-handed objects (1 == m_iCarryingObject)
+	if(2 == m_iCarryingObject)
+	{
+		if(NANOMODE_STRENGTH == m_pPlayer->GetNanoSuit()->GetMode())
+			mouseSensitivity /= 1.6f;
+		else
+			mouseSensitivity /= 2.0f;
+	}
 
 	if(m_fCrouchPressedTime>0.0f)
 	{
@@ -553,12 +574,27 @@ void CPlayerInput::PreUpdate()
 		}
 	}
 
+	Ang3 deltaRotation(m_deltaRotation * mouseSensitivity);
+
+	if (m_pStats->isFrozen.Value() && m_pPlayer->IsPlayer() && m_pPlayer->GetHealth()>0)
+	{
+		float sMin = g_pGameCVars->cl_frozenSensMin;
+		float sMax = g_pGameCVars->cl_frozenSensMax;
+
+		float mult = sMin + (sMax-sMin)*(1.f-m_pPlayer->GetFrozenAmount(true));    
+		deltaRotation *= mult;
+
+		m_pPlayer->UpdateUnfreezeInput(m_deltaRotation, m_deltaMovement-m_deltaMovementPrev, mult);
+	}
+
 	// apply rotation from xinput controller
 	if(!m_bDisabledXIRot)
 	{
 		// Controller framerate compensation needs frame time! 
 		// The constant is to counter for small frame time values.
-		Ang3 xiDeltaRot=m_xi_deltaRotation*gEnv->pTimer->GetFrameTime()*50.f;
+		// adjust some too small values, should be handled differently later on
+		Ang3 xiDeltaRot=m_xi_deltaRotation*gEnv->pTimer->GetFrameTime() * mouseSensitivity * 50.0f;
+
 		// Applying aspect modifiers
 		if (g_pGameCVars->hud_aspectCorrection > 0)
 		{
@@ -574,7 +610,7 @@ void CPlayerInput::PreUpdate()
 		if(g_pGameCVars->cl_invertController)
 			xiDeltaRot.x*=-1;
 
-		m_deltaRotation+=xiDeltaRot;
+		deltaRotation+=xiDeltaRot;
 
 		IVehicle *pVehicle = m_pPlayer->GetLinkedVehicle();
 		if (pVehicle)
@@ -586,8 +622,8 @@ void CPlayerInput::PreUpdate()
 
 			//FIXME:not really good
 			m_actions = 0;
-			//			m_deltaRotation.Set(0,0,0);
 			m_deltaMovement.Set(0,0,0);
+			m_deltaRotation.Set(0,0,0);
 		}
 	}
 
@@ -596,22 +632,18 @@ void CPlayerInput::PreUpdate()
 		m_deltaMovement.x = m_xi_deltaMovement.x;
 		m_deltaMovement.y = m_xi_deltaMovement.y;
 		m_deltaMovement.z = 0;
+
+		if (m_xi_deltaMovement.len2()>0.0f)
+			m_actions |= ACTION_MOVE;
+		else
+			m_actions &= ~ACTION_MOVE;
 	}
 
-	Ang3 deltaRotation(m_deltaRotation * mouseSensitivity);
-
-  if (m_pStats->isFrozen.Value() && m_pPlayer->IsPlayer())
-  {
-    float sMin = g_pGameCVars->cl_frozenSensMin;
-    float sMax = g_pGameCVars->cl_frozenSensMax;
-    
-    float mult = sMin + (sMax-sMin)*(1.f-m_pPlayer->GetFrozenAmount(true));    
-    deltaRotation *= mult;
-    
-    m_pPlayer->UpdateUnfreezeInput(m_deltaRotation, m_deltaMovement-m_deltaMovementPrev, mult);
-  }
-
 	bool animControlled(m_pPlayer->m_stats.animationControlled);
+
+	// If there was a recent serialization, ignore the delta rotation, since it's accumulated over several frames.
+	if ((m_lastSerializeFrameID + 2) > gEnv->pRenderer->GetFrameID())
+		deltaRotation.Set(0,0,0);
 
 	//if(m_pPlayer->m_stats.isOnLadder)
 		//deltaRotation.z = 0.0f;
@@ -670,7 +702,17 @@ void CPlayerInput::PreUpdate()
 	}*/
 	request.SetPseudoSpeed(pseudoSpeed);
 
-  // send the movement request to the appropriate spot!
+	if (m_deltaMovement.GetLength() > 0.1f)
+	{
+		float moveAngle = RAD2DEG(fabs_tpl(cry_atan2f(-m_deltaMovement.x, m_deltaMovement.y)));
+		request.SetAllowStrafing(moveAngle > 20.0f);
+	}
+	else
+	{
+		request.SetAllowStrafing(true);
+	}
+
+	// send the movement request to the appropriate spot!
 	m_pPlayer->m_pMovementController->RequestMovement( request );
 	m_pPlayer->m_actions = m_actions;
 
@@ -704,6 +746,36 @@ void CPlayerInput::Update()
 		if (m_buttonPressure<0.0f)
 			m_buttonPressure=0.0f;
 	}
+	if(m_iSuitModeActionPressed && m_fSuitModeActionTime > 0.0f && !m_pPlayer->GetSpectatorMode())
+	{
+		m_fSuitModeActionTime -= gEnv->pTimer->GetFrameTime();
+
+		if(m_fSuitModeActionTime <= 0.0f) 
+		{
+			if(m_iSuitModeActionPressed && g_pGame->GetHUD()->GetWeaponMenu() != g_pGame->GetHUD()->GetModalHUD())
+			{
+				if(m_pPlayer->GetNanoSuit())
+				{
+					switch(m_iSuitModeActionPressed)
+					{
+					case 2:
+						m_pPlayer->GetNanoSuit()->SetMode(NANOMODE_SPEED);
+						break;
+					case 3:
+						m_pPlayer->GetNanoSuit()->SetMode(NANOMODE_STRENGTH);
+						break;
+					case 4:
+						m_pPlayer->GetNanoSuit()->SetMode(NANOMODE_CLOAK);
+						break;
+					default:
+						m_pPlayer->GetNanoSuit()->SetMode(NANOMODE_DEFENSE);
+					}
+				}
+			}
+			m_iSuitModeActionPressed = 0;
+			m_fSuitModeActionTime = 0.0f;
+		}
+	}
 }
 
 void CPlayerInput::PostUpdate()
@@ -724,12 +796,13 @@ void CPlayerInput::GetState( SSerializedPlayerInput& input )
 	input.deltaMovement = worldRot.GetNormalized() * m_filteredDeltaMovement;
 	// ensure deltaMovement has the right length
 	input.deltaMovement = input.deltaMovement.GetNormalizedSafe(ZERO) * m_filteredDeltaMovement.GetLength();
-	input.sprint = (m_actions & ACTION_SPRINT) != 0;
-	input.jump = (m_actions & ACTION_JUMP) != 0;
+	input.sprint = (((m_actions & ACTION_SPRINT) != 0) && !m_pPlayer->m_stats.bIgnoreSprinting);
+
 	input.leanl = (m_actions & ACTION_LEANLEFT) != 0;
 	input.leanr = (m_actions & ACTION_LEANRIGHT) != 0;
 	input.lookDirection = movementState.eyeDirection;
 	input.bodyDirection = movementState.bodyDirection;
+
 	m_lastPos = movementState.pos;
 }
 
@@ -742,6 +815,9 @@ void CPlayerInput::SerializeSaveGame( TSerialize ser )
 {
 	if(ser.GetSerializationTarget() != eST_Network)
 	{
+		// Store the frame we serialize, to avoid accumulated input during serialization.
+		m_lastSerializeFrameID = gEnv->pRenderer->GetFrameID();
+
 		bool proning = (m_actions & ACTION_PRONE)?true:false;
 		ser.Value("ProningAction", proning);
 
@@ -758,15 +834,24 @@ void CPlayerInput::SerializeSaveGame( TSerialize ser )
 
 bool CPlayerInput::OnActionMoveForward(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
-	if (CanMove() && CheckMoveButtonStateChanged(eMBM_Forward, activationMode))
+	if (CanMove())
 	{
-		ApplyMovement(Vec3(0,value*2.0f - 1.0f,0));
+		if(activationMode == 2)
+		{
+			if(!(m_moveButtonState&eMBM_Left) && !(m_moveButtonState&eMBM_Back) && !(m_moveButtonState&eMBM_Right))
+				m_actions &= ~ACTION_MOVE;
+		}
+		else 
+		{
+			m_actions |= ACTION_MOVE;
+		}
 
-		m_actions |= ACTION_MOVE;
-
-		// TODO: support this hacked in logic ... sigh
-		m_checkZoom = true;
-		AdjustMoveButtonState(eMBM_Forward, activationMode);
+		if(CheckMoveButtonStateChanged(eMBM_Forward, activationMode))
+		{
+			ApplyMovement(Vec3(0,value*2.0f - 1.0f,0));
+			m_checkZoom = true;
+			AdjustMoveButtonState(eMBM_Forward, activationMode);
+		}
 	}
 
 	return false;
@@ -774,21 +859,36 @@ bool CPlayerInput::OnActionMoveForward(EntityId entityId, const ActionId& action
 
 bool CPlayerInput::OnActionMoveBack(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
-	if (CanMove() && CheckMoveButtonStateChanged(eMBM_Back, activationMode))
+	if (CanMove())
 	{
-		ApplyMovement(Vec3(0,-(value*2.0f - 1.0f),0));
-
-		m_actions |= ACTION_MOVE;
-		if(m_pPlayer->GetActorStats()->inZeroG)
+		if (activationMode == eAAM_OnPress)
 		{
-			if(activationMode == 1 && m_actions & ACTION_SPRINT)
-				m_actions |= ACTION_ZEROGBACK;
-			else if(activationMode == 2)
-				m_actions &= ~ACTION_ZEROGBACK;
-		}
+			m_pPlayer->GetNanoSuit()->Tap(eNA_Backward);
+		} // end dt_enable
 
-		m_checkZoom = true;
-		AdjustMoveButtonState(eMBM_Back, activationMode);
+		if(activationMode == 2)
+		{
+			if(!(m_moveButtonState&eMBM_Left) && !(m_moveButtonState&eMBM_Forward) && !(m_moveButtonState&eMBM_Right))
+				m_actions &= ~ACTION_MOVE;
+		}
+		else
+			m_actions |= ACTION_MOVE;
+
+		if(CheckMoveButtonStateChanged(eMBM_Back, activationMode))
+		{
+			ApplyMovement(Vec3(0,-(value*2.0f - 1.0f),0));
+
+			if(m_pPlayer->GetActorStats()->inZeroG)
+			{
+				if(activationMode == 2)
+					m_actions &= ~ACTION_ZEROGBACK;
+				else
+					m_actions |= ACTION_ZEROGBACK;
+			}
+
+			m_checkZoom = true;
+			AdjustMoveButtonState(eMBM_Back, activationMode);
+		}
 	}
 
 	return false;
@@ -796,16 +896,24 @@ bool CPlayerInput::OnActionMoveBack(EntityId entityId, const ActionId& actionId,
 
 bool CPlayerInput::OnActionMoveLeft(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
-	if (CanMove() && CheckMoveButtonStateChanged(eMBM_Left, activationMode))
+	if (CanMove())
 	{
-		ApplyMovement(Vec3(-(value*2.0f - 1.0f),0,0));
+		if(activationMode == 2)
+		{
+			if(!(m_moveButtonState&eMBM_Forward) && !(m_moveButtonState&eMBM_Back) && !(m_moveButtonState&eMBM_Right))
+				m_actions &= ~ACTION_MOVE;
+		}
+		else
+			m_actions |= ACTION_MOVE;
 
-		m_actions |= ACTION_MOVE;
-
-		m_checkZoom = true;
-		AdjustMoveButtonState(eMBM_Left, activationMode);
-		if(m_pPlayer->m_stats.isOnLadder)
-			m_pPlayer->m_stats.ladderAction = CPlayer::eLAT_StrafeLeft;
+		if(CheckMoveButtonStateChanged(eMBM_Left, activationMode))
+		{
+			ApplyMovement(Vec3(-(value*2.0f - 1.0f),0,0));
+			m_checkZoom = true;
+			AdjustMoveButtonState(eMBM_Left, activationMode);
+			if(m_pPlayer->m_stats.isOnLadder)
+				m_pPlayer->m_stats.ladderAction = CPlayer::eLAT_StrafeLeft;
+		}
 	}
 
 	return false;
@@ -813,16 +921,24 @@ bool CPlayerInput::OnActionMoveLeft(EntityId entityId, const ActionId& actionId,
 
 bool CPlayerInput::OnActionMoveRight(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
-	if (CanMove() && CheckMoveButtonStateChanged(eMBM_Right, activationMode))
+	if (CanMove())
 	{
-		ApplyMovement(Vec3(value*2.0f - 1.0f,0,0));
+		if(activationMode == 2)
+		{
+			if(!(m_moveButtonState&eMBM_Left) && !(m_moveButtonState&eMBM_Back) && !(m_moveButtonState&eMBM_Forward))
+				m_actions &= ~ACTION_MOVE;
+		}
+		else
+			m_actions |= ACTION_MOVE;
 
-		m_actions |= ACTION_MOVE;
-
-		m_checkZoom = true;
-		AdjustMoveButtonState(eMBM_Right, activationMode);
-		if(m_pPlayer->m_stats.isOnLadder)
-			m_pPlayer->m_stats.ladderAction = CPlayer::eLAT_StrafeRight;
+		if(CheckMoveButtonStateChanged(eMBM_Right, activationMode))
+		{
+			ApplyMovement(Vec3(value*2.0f - 1.0f,0,0));
+			m_checkZoom = true;
+			AdjustMoveButtonState(eMBM_Right, activationMode);
+			if(m_pPlayer->m_stats.isOnLadder)
+				m_pPlayer->m_stats.ladderAction = CPlayer::eLAT_StrafeRight;
+		}
 	}
 
 	return false;
@@ -858,7 +974,7 @@ bool CPlayerInput::OnActionRotatePitch(EntityId entityId, const ActionId& action
 	/*if(m_pPlayer->GetActorStats()->inZeroG)	//check for flip over in zeroG .. this makes no sense
 	{
 	SPlayerStats *stats = static_cast<SPlayerStats*> (m_pPlayer->GetActorStats());
-	float absAngle = fabsf(acosf(stats->upVector.Dot(stats->zeroGUp)));
+	float absAngle = fabsf(acos_tpl(stats->upVector.Dot(stats->zeroGUp)));
 	if(absAngle > 1.57f) //90°
 	{
 	if(value > 0)
@@ -875,14 +991,64 @@ bool CPlayerInput::OnActionRotatePitch(EntityId entityId, const ActionId& action
 	return false;
 }
 
+bool CPlayerInput::OnActionVRotateYaw(EntityId entityId, const ActionId& actionId, int activationMode, float value)
+{
+	m_deltaRotation.z -= value;
+
+	return false;
+}
+
+bool CPlayerInput::OnActionVRotatePitch(EntityId entityId, const ActionId& actionId, int activationMode, float value)
+{
+	m_deltaRotation.x -= value;
+	if(g_pGameCVars->cl_invertMouse)
+		m_deltaRotation.x*=-1.0f;
+
+	return false;
+}
+
+bool CPlayerInput::OnActionSuitMode(EntityId entityId, const ActionId& actionId, int activationMode, float value)
+{
+	if(activationMode == 1 && !m_pPlayer->GetSpectatorMode() && m_pPlayer->GetHealth() > 0)
+	{
+		if(m_pPlayer->GetNanoSuit())
+		{
+			if(m_iSuitModeActionPressed < 4 && g_pGame->GetHUD()->GetWeaponMenu() != g_pGame->GetHUD()->GetModalHUD())
+			{			
+				m_fSuitModeActionTime = 0.3f;
+				m_iSuitModeActionPressed++;
+			}
+			return true;
+		}
+	}
+	return false;
+}
+
+bool CPlayerInput::OnActionSuitSkin(EntityId entityId, const ActionId& actionId, int activationMode, float value)
+{
+	if(m_pPlayer->GetNanoSuit())
+	{
+		if (!m_pPlayer->GetNanoSuit()->Tap(eNA_Skin))
+		{
+			m_pPlayer->GetNanoSuit()->SetMode(NANOMODE_DEFENSE);
+		}
+	}
+	return false;
+}
+
 bool CPlayerInput::OnActionJump(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
 	bool canJump = ((m_pPlayer->GetStance() == STANCE_ZEROG) || 
 									(m_pPlayer->GetStance() == STANCE_SWIM) ||
 									 m_pPlayer->TrySetStance(STANCE_STAND));
 
-	if (CanMove() && canJump)
+	if (CanMove() && canJump && m_pPlayer->GetSpectatorMode() != CActor::eASM_Free && m_pPlayer->GetSpectatorMode() != CActor::eASM_Fixed)
 	{
+		if (activationMode == eAAM_OnPress)
+		{
+			m_pPlayer->GetNanoSuit()->Tap(eNA_Jump);
+		}
+
 		if (value > 0.0f)
 		{
 			if(m_actions & ACTION_PRONE || m_actions & ACTION_CROUCH)
@@ -898,19 +1064,26 @@ bool CPlayerInput::OnActionJump(EntityId entityId, const ActionId& actionId, int
 				m_speedLean = 0.0f;
 			return true;
 		}
-		else
-		{
-			m_actions &= ~ACTION_JUMP;
-		}
 	}
+
+	// Moved this outside, since if the top condition is false the JUMP flag might not be cleared, 
+	// and the player continues jumping as if the jump key was held.
+	m_actions &= ~ACTION_JUMP;
+
+	m_pPlayer->GetGameObject()->ChangedNetworkState(INPUT_ASPECT);
 
 	return false;
 }
 
 bool CPlayerInput::OnActionCrouch(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
-	if (CanMove())
+	if (CanMove() && m_pPlayer->GetSpectatorMode() != CActor::eASM_Free && m_pPlayer->GetSpectatorMode() != CActor::eASM_Fixed)
 	{
+		if (activationMode == eAAM_OnPress)
+		{
+			m_pPlayer->GetNanoSuit()->Tap(eNA_Crouch);
+		}
+
 		if (g_pGameCVars->cl_crouchToggle)
 		{
 			if (value > 0.0f)
@@ -944,19 +1117,33 @@ bool CPlayerInput::OnActionSprint(EntityId entityId, const ActionId& actionId, i
 	{
 		if (value > 0.0f)
 		{
-			if (m_pPlayer->m_params.speedMultiplier > 0.99f)
+			if ((m_moveButtonState & eMBM_Forward) || (m_bUseXIInput))
+			{
+				m_pPlayer->GetNanoSuit()->Tap(eNA_Forward);
+			} // end dt_enable
+
+			if (m_pPlayer->m_params.speedMultiplier*m_pPlayer->GetZoomSpeedMultiplier() > 0.99f)
+			{
 				m_actions |= ACTION_SPRINT;
+				m_pPlayer->m_stats.bIgnoreSprinting = false;
+			}
 		}
 		else
 		{
 			m_actions &= ~ACTION_SPRINT;
 			m_speedLean = 0.0f;
 			m_pPlayer->SetSpeedLean(0.0f);
+			CItem* pItem = static_cast<CItem*>(m_pPlayer->GetCurrentItem());
+			if(pItem)
+				pItem->ForcePendingActions();
+
 		}
 	}
 
 	return false;
 }
+
+
 
 bool CPlayerInput::OnActionToggleStance(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
@@ -997,25 +1184,36 @@ bool CPlayerInput::OnActionProne(EntityId entityId, const ActionId& actionId, in
 	if(pOffHand && pOffHand->IsHoldingEntity())
 		return false;
 
-	if(!m_pPlayer->m_stats.spectatorMode && !m_pPlayer->GetActorStats()->inZeroG)
+	if (!m_pPlayer->m_stats.spectatorMode)
 	{
-		if(activationMode == eAAM_OnPress)
+		if (activationMode == eAAM_OnPress)
 		{
-			CItem *curItem = static_cast<CItem*>(gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(m_pPlayer->GetInventory()->GetCurrentItem()));
-			if(curItem && curItem->GetParams().prone_not_usable)
+			m_pPlayer->GetNanoSuit()->Tap(eNA_Crouch);
+		}
+		if(!m_pPlayer->GetActorStats()->inZeroG)
+		{
+			if(activationMode == eAAM_OnPress)
 			{
-				// go crouched instead
-				if (!(m_actions & ACTION_CROUCH))
-					m_actions |= ACTION_CROUCH;
+				CItem *curItem = static_cast<CItem*>(gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(m_pPlayer->GetInventory()->GetCurrentItem()));
+				if(curItem && curItem->GetParams().prone_not_usable)
+				{
+					// go crouched instead.
+					// Nope, actually do nothing
+					// 				if (!(m_actions & ACTION_CROUCH))
+					// 					m_actions |= ACTION_CROUCH;
+					// 				else
+					// 					m_actions &= ~ACTION_CROUCH;
+				}
 				else
-					m_actions &= ~ACTION_CROUCH;
-			}
-			else
-			{
-				if (!(m_actions & ACTION_PRONE))
-					m_actions |= ACTION_PRONE;
-				else
-					m_actions &= ~ACTION_PRONE;
+				{
+					if (!(m_actions & ACTION_PRONE))
+					{
+						if(!m_pPlayer->GetActorStats()->inAir)
+							m_actions |= ACTION_PRONE;
+					}
+					else
+						m_actions &= ~ACTION_PRONE;
+				}
 			}
 		}
 	}
@@ -1041,7 +1239,7 @@ bool CPlayerInput::OnActionGyroscope(EntityId entityId, const ActionId& actionId
 	if (!m_pPlayer->m_stats.spectatorMode && m_pPlayer->InZeroG())
 	{
 		if (m_actions & ACTION_GYROSCOPE)
-			if(g_pGameCVars->v_zeroGSwitchableGyro)
+			if(g_pGameCVars->pl_zeroGSwitchableGyro)
 			{
 				m_actions &= ~ACTION_GYROSCOPE;
 				m_pPlayer->CreateScriptEvent("gyroscope",(m_actions & ACTION_GYROSCOPE)?1.0f:0.0f);
@@ -1069,12 +1267,12 @@ bool CPlayerInput::OnActionGBoots(EntityId entityId, const ActionId& actionId, i
 
 		if(m_actions & ACTION_GRAVITYBOOTS)
 		{
-			g_pGame->GetHUD()->TextMessage("gravity_boots_on");
+			SAFE_HUD_FUNC(TextMessage("gravity_boots_on"));
 			m_pPlayer->GetNanoSuit()->PlaySound(ESound_GBootsActivated);
 		}
 		else
 		{
-			g_pGame->GetHUD()->TextMessage("gravity_boots_off");
+			SAFE_HUD_FUNC(TextMessage("gravity_boots_off"));
 			m_pPlayer->GetNanoSuit()->PlaySound(ESound_GBootsDeactivated);
 		}
 	}*/
@@ -1083,7 +1281,7 @@ bool CPlayerInput::OnActionGBoots(EntityId entityId, const ActionId& actionId, i
 
 bool CPlayerInput::OnActionLeanLeft(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
-	if (!m_pPlayer->m_stats.spectatorMode)
+	if (!m_pPlayer->m_stats.spectatorMode && !m_pPlayer->m_stats.inFreefall.Value())
 	{
 		m_actions |= ACTION_LEANLEFT;
 		//not sure about this, its for zeroG
@@ -1094,7 +1292,7 @@ bool CPlayerInput::OnActionLeanLeft(EntityId entityId, const ActionId& actionId,
 
 bool CPlayerInput::OnActionLeanRight(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
-	if (!m_pPlayer->m_stats.spectatorMode)
+	if (!m_pPlayer->m_stats.spectatorMode && !m_pPlayer->m_stats.inFreefall.Value())
 	{
 		m_actions |= ACTION_LEANRIGHT;
 		//not sure about this, its for zeroG
@@ -1103,6 +1301,7 @@ bool CPlayerInput::OnActionLeanRight(EntityId entityId, const ActionId& actionId
 	return false;
 }
 
+/************************NO HOLSTER****************
 bool CPlayerInput::OnActionHolsterItem(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
 	if (!m_pPlayer->m_stats.spectatorMode)
@@ -1122,6 +1321,7 @@ bool CPlayerInput::OnActionHolsterItem(EntityId entityId, const ActionId& action
 	}
 	return false;
 }
+*********************************************************/
 
 bool CPlayerInput::OnActionUse(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
@@ -1137,7 +1337,6 @@ bool CPlayerInput::OnActionUse(EntityId entityId, const ActionId& actionId, int 
 	if (activationMode==eAAM_OnPress)
 	{
 		COffHand* pOffHand = static_cast<COffHand*>(m_pPlayer->GetWeaponByClass(CItem::sOffHandClass));
-		bool ok=true;
 		IEntity *pEntity=gEnv->pEntitySystem->GetEntity(m_pPlayer->GetGameObject()->GetWorldQuery()->GetLookAtEntityId());
 
 		//Drop objects/npc before enter a vehicle
@@ -1164,52 +1363,8 @@ bool CPlayerInput::OnActionUse(EntityId entityId, const ActionId& actionId, int 
 				return false;
 			}
 		}
-		
-		//---------------------------------------------------------------------------------
-		//TODO: Remove this (probably is not needed)
-		//Not in Single Player (Multiplayer??)
-		/*if(gEnv->pGame->GetIGameFramework()->IsMultiplayer())
-		{
-			if (pEntity)
-			{
-				IInteractor *pInteractor=m_pPlayer->GetInteractor();
-				if (pInteractor && pInteractor->IsUsable(pEntity->GetId()))
-					ok=false;
-			}
- 
-			if (ok) // need to also check if the entity it's looking at is usable or not
-			{
-				SMovementState movementState;
-				m_pPlayer->GetMovementController()->GetMovementState(movementState);
-
-				float sizeX = 0.75f;
-				float sizeY = sizeX;
-				float sizeZup = 0.35f;
-				float sizeZdown = 1.75f;
-
-				Vec3 center=movementState.eyePosition;
-				SEntityProximityQuery query;
-				query.box = AABB(Vec3(center.x-sizeX,center.y-sizeY,center.z-sizeZdown),
-					Vec3(center.x+sizeX,center.y+sizeY,center.z+sizeZup));
-					query.nEntityFlags = ~0; // Filter by entity flag.
-
-				int count=gEnv->pEntitySystem->QueryProximity(query);
-				for(int i=0; i<query.nCount; i++)
-				{
-					EntityId id=query.pEntities[i]->GetId();
-
-					if (CItem *pItem=m_pPlayer->GetItem(id))
-					{
-						if (pItem->GetOwnerId()!=m_pPlayer->GetEntityId() && pItem->CanPickUp(m_pPlayer->GetEntityId()))
-						{
-							m_pPlayer->PickUpItem(id,true);
-							filterOut = false;
-						}
-					}
-				}
-			}
-		}*/
 	}
+
 	return filterOut;
 }
 
@@ -1217,9 +1372,7 @@ bool CPlayerInput::OnActionSpeedMode(EntityId entityId, const ActionId& actionId
 {
 	if (!m_pPlayer->m_stats.spectatorMode)
 	{
-		CHUD* pHUD = g_pGame->GetHUD();
-		if (pHUD)
-			pHUD->OnQuickMenuSpeedPreset();
+		SAFE_HUD_FUNC(OnQuickMenuSpeedPreset());
 	}
 	return false;
 }
@@ -1228,9 +1381,7 @@ bool CPlayerInput::OnActionStrengthMode(EntityId entityId, const ActionId& actio
 {
 	if (!m_pPlayer->m_stats.spectatorMode)
 	{
-		CHUD* pHUD = g_pGame->GetHUD();
-		if (pHUD)
-			pHUD->OnQuickMenuStrengthPreset();
+		SAFE_HUD_FUNC(OnQuickMenuStrengthPreset());
 	}
 	return false;
 }
@@ -1239,9 +1390,7 @@ bool CPlayerInput::OnActionDefenseMode(EntityId entityId, const ActionId& action
 {
 	if (!m_pPlayer->m_stats.spectatorMode)
 	{
-		CHUD* pHUD = g_pGame->GetHUD();
-		if (pHUD)
-			pHUD->OnQuickMenuDefensePreset();
+		SAFE_HUD_FUNC(OnQuickMenuDefensePreset());
 	}
 	return false;
 }
@@ -1250,15 +1399,16 @@ bool CPlayerInput::OnActionSuitCloak(EntityId entityId, const ActionId& actionId
 {
 	if (!m_pPlayer->m_stats.spectatorMode)
 	{
-		CHUD* pHUD = g_pGame->GetHUD();
-		if (pHUD)
-			pHUD->OnCloak();
+		SAFE_HUD_FUNC(OnCloak());
 	}
 	return false;
 }
 
 bool CPlayerInput::OnActionThirdPerson(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
+	if (!gEnv->pSystem->IsDevMode())
+		return false;
+
 	if (!m_pPlayer->m_stats.spectatorMode && m_pPlayer->m_pGameFramework->CanCheat())
 	{
 		if (!m_pPlayer->GetLinkedVehicle())
@@ -1269,6 +1419,9 @@ bool CPlayerInput::OnActionThirdPerson(EntityId entityId, const ActionId& action
 
 bool CPlayerInput::OnActionFlyMode(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
+	if (!gEnv->pSystem->IsDevMode())
+		return false;
+
 	if (!m_pPlayer->m_stats.spectatorMode && m_pPlayer->m_pGameFramework->CanCheat())
 	{
 		uint8 flyMode=m_pPlayer->GetFlyMode()+1;
@@ -1288,11 +1441,14 @@ bool CPlayerInput::OnActionFlyMode(EntityId entityId, const ActionId& actionId, 
 
 bool CPlayerInput::OnActionGodMode(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
+	if (!gEnv->pSystem->IsDevMode())
+		return false;
+
 	if (!m_pPlayer->m_stats.spectatorMode && m_pPlayer->m_pGameFramework->CanCheat())
 	{
 		int godMode(g_pGameCVars->g_godMode);
 
-		godMode = (++godMode)%4;
+		godMode = (godMode+1)%4;
 
 		if(godMode && m_pPlayer->GetHealth() <= 0)
 		{
@@ -1310,29 +1466,17 @@ bool CPlayerInput::OnActionGodMode(EntityId entityId, const ActionId& actionId, 
 
 bool CPlayerInput::OnActionXIRotateYaw(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
-	// scale rotation speed if we strafe in opposite direction
-	/*float scale = 0.0f;
-	
-	if ((m_input.desiredDeltaMovement.x < -0.6 && value >  0.6) ||
-	(m_input.desiredDeltaMovement.x >  0.6 && value < -0.6))
-	{
-	float movScale = 1.0f - (1.0f - fabs(m_input.desiredDeltaMovement.x))/0.4f;
-	float rotScale = 1.0f - (1.0f - fabs(value))/0.4f;
-	scale = movScale*rotScale;
-	if (value < 0.0f)
-	scale = -scale;
-	}
-	
-	m_xi_deltaRotation.z = (5.0f*value)*(5.0f*value)*(-value);*/
-
 	m_xi_deltaRotation.z = MapControllerValue(value, g_pGameCVars->hud_ctrl_Coeff_Z, g_pGameCVars->hud_ctrl_Curve_Z, true);
+	if(fabs(m_xi_deltaRotation.z) < 0.003f)
+		m_xi_deltaRotation.z = 0.f;//some dead point
 	return false;
 }
 
 bool CPlayerInput::OnActionXIRotatePitch(EntityId entityId, const ActionId& actionId, int activationMode, float value)
 {
-//	m_xi_deltaRotation.x = (3.5f*value)*(3.5f*value)*value;
 	m_xi_deltaRotation.x = MapControllerValue(value, g_pGameCVars->hud_ctrl_Coeff_X, g_pGameCVars->hud_ctrl_Curve_X, false);
+	if(fabs(m_xi_deltaRotation.x) < 0.003f)
+		m_xi_deltaRotation.x = 0.f;//some dead point
 	return false;
 }
 
@@ -1357,9 +1501,24 @@ bool CPlayerInput::OnActionXIMoveY(EntityId entityId, const ActionId& actionId, 
 		else if(fabsf(value)<=0.001 && m_bUseXIInput)
 		{
 			m_bUseXIInput = false;
+			if (!GetMoveButtonsState())
+				m_actions &= ~ACTION_MOVE;
+
 			m_deltaMovement.zero();
 		}
 	}
+
+	return false;
+}
+
+bool CPlayerInput::OnActionXIDisconnect(EntityId entityId, const ActionId& actionId, int activationMode, float value)
+{
+	m_xi_deltaRotation.Set(0,0,0);
+	m_xi_deltaMovement.zero();
+	m_bUseXIInput = false;
+	if (!GetMoveButtonsState())
+		m_actions &= ~ACTION_MOVE;
+	m_deltaMovement.zero();
 
 	return false;
 }

@@ -20,12 +20,26 @@ enum ESound
 	ESound_SniperZoomOut,
 	ESound_OpenPopup,
 	ESound_ClosePopup,
+	ESound_MapOpen,
+	ESound_MapClose,
 	ESound_TabChanged,
 	ESound_WaterDroplets,
 	ESound_BuyBeep,
 	ESound_BuyError,
 	ESound_Highlight,
 	ESound_Select,
+	ESound_ObjectiveUpdate,
+	ESound_ObjectiveComplete,
+	ESound_GameSaved,
+	ESound_Target_Lock,
+	ESound_Malfunction,
+	ESound_Reboot,
+	ESound_ReActivate,
+	ESound_VehicleIn,
+	ESound_LawLocking,
+	ESound_DownloadStart,
+	ESound_DownloadLoop,
+	ESound_DownloadStop,
 	ESound_Hud_Last
 };
 
@@ -73,4 +87,96 @@ enum EHUDGAMERULES
 	EHUD_INSTANTACTION,
 	EHUD_POWERSTRUGGLE,
 	EHUD_TEAMACTION,
+};
+
+//radar objects on mini map and radar
+enum FlashRadarType	//don't change order (unless you change the flash asset)
+{
+	EFirstType = 0,
+	ETank,
+	EAPC,
+	ECivilCar,
+	ETruck,
+	EHovercraft,
+	ESpeedBoat,
+	EPatrolBoat,
+	ESmallBoat,
+	ELTV,
+	EHeli,
+	EVTOL,
+	EAAA,	// should be AAA
+	ESoundEffect,		// is empty, but we have neither Tank nor APC as an icon
+	ENuclearWeapon,
+	ETechCharger,
+	EWayPoint,
+	EPlayer,
+	ETaggedEntity,
+	ESpawnPoint,
+	EFactoryAir,
+	EFactoryTank,
+	EFactoryPrototype,
+	EFactoryVehicle,
+	EFactorySea,
+	EINVALID1, //EBase,
+	EBarracks,
+	ESpawnTruck,
+	EAmmoTruck,
+	EHeadquarter2,
+	EHeadquarter,
+	//single player only icons
+	EAmmoDepot,
+	EMineField,
+	EMachineGun,
+	ECanalization,
+	ETutorial,
+	ESecretEntrance,
+	EHitZone,
+	EHitZoneNK,
+	EAlienEnergySource,
+	EAlienEnergySourcePlus,
+	EPlaceholderForJuliensAutoTurrets,
+	ESecondaryObjective,
+	ELastType
+};
+
+//factions on mini map
+enum FlashRadarFaction
+{
+	ENeutral,
+	EFriend,
+	EEnemy,
+	EAggressor,
+	ESelf
+};
+
+//types of objective icons shown on screen
+enum FlashOnScreenIcon
+{
+	eOS_MissionObjective = 0,
+	eOS_TACTank,
+	eOS_TACWeapon,
+	eOS_FactoryAir,
+	eOS_FactoryTank,
+	eOS_FactoryPrototypes,
+	eOS_FactoryVehicle,
+	eOS_FactoryNaval,
+	eOS_HQKorean,
+	eOS_HQUS,
+	eOS_Spawnpoint,
+	eOS_TeamMate,
+	eOS_Purchase,
+	eOS_Left,
+	eOS_TopLeft,
+	eOS_Top,
+	eOS_TopRight,
+	eOS_Right,
+	eOS_BottomRight,
+	eOS_Bottom,
+	eOS_BottomLeft,
+	eOS_AlienEnergyPoint,
+	eOS_AlienEnergyPointPlus,
+	eOS_HQTarget,
+	eOS_SPObjective,
+	eOS_Claymore,
+	eOS_Mine
 };

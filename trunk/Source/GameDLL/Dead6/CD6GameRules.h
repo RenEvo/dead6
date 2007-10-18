@@ -56,6 +56,22 @@ public:
 	virtual int GetTeam(EntityId entityId) const;
 	virtual void SetTeamDefaultSpawnGroup(int teamId, EntityId spawnGroupId);
 	virtual EntityId GetTeamDefaultSpawnGroup(int teamId);
+	virtual int GetChannelTeam(int channelId) const;
+	virtual int GetTeamChannelCount(int teamId, bool inGame=false) const;
+
+	////////////////////////////////////////////////////
+	// GetServerStateScript
+	//
+	// Purpose: Returns server state script object
+	////////////////////////////////////////////////////
+	SmartScriptTable& GetServerStateScript(void) { return m_serverStateScript; }
+
+	////////////////////////////////////////////////////
+	// GetClientStateScript
+	//
+	// Purpose: Returns client state script object
+	////////////////////////////////////////////////////
+	SmartScriptTable& GetClientStateScript(void) { return m_clientStateScript; }
 };
 
 #endif //_D6C_CD6GAMERULES_H_

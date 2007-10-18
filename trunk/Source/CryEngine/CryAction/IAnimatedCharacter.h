@@ -23,6 +23,10 @@
 #include "IFacialAnimation.h"
 #include "SerializeFwd.h"
 
+#include "CryCharAnimationParams.h"
+
+//--------------------------------------------------------------------------------
+
 enum EAnimationGraphLayerID
 {
 	eAnimationGraphLayer_FullBody = 0,
@@ -31,16 +35,23 @@ enum EAnimationGraphLayerID
 	eAnimationGraphLayer_COUNT
 };
 
+//--------------------------------------------------------------------------------
+
 enum ECharacterMoveType
 {
-	eCMT_NoOp,
-	eCMT_JustRotation,
+	eCMT_None = 0,
 	eCMT_Normal,
-	eCMT_JumpInstant,
-	eCMT_JumpAccumulate,
 	eCMT_Fly,
-	eCMT_Impulse
+	eCMT_Swim,
+	eCMT_ZeroG,
+
+	eCMT_Impulse,
+	eCMT_JumpInstant,
+	eCMT_JumpAccumulate
+
 };
+
+//--------------------------------------------------------------------------------
 
 enum EAnimatedCharacterFlags
 {
@@ -71,6 +82,8 @@ enum EAnimatedCharacterFlags
 	eACF_Frozen										= 0x00001000,
 };
 
+//--------------------------------------------------------------------------------
+
 /*
 struct SPredictedCharacterState
 {
@@ -84,9 +97,19 @@ struct SPredictedCharacterState
 };
 */
 
+//--------------------------------------------------------------------------------
+
 struct SCharacterMoveRequest
 {
-	SCharacterMoveRequest() : type(eCMT_NoOp), velocity(ZERO), rotation(Quat::CreateIdentity()) {}
+	SCharacterMoveRequest()
+	: type(eCMT_None)
+	, velocity(ZERO)
+	, rotation(Quat::CreateIdentity())
+	, allowStrafe(false)
+	, proceduralLeaning(false)
+	, jumping(false)
+	{}
+
 	ECharacterMoveType type;
 
 	Vec3 velocity; // meters per second (world space)
@@ -94,8 +117,14 @@ struct SCharacterMoveRequest
 
 	SPredictedCharacterStates prediction;
 
+	bool allowStrafe;
+	bool proceduralLeaning;
+	bool jumping;
+
 	// TODO: pass left/right turn intent
 };
+
+//--------------------------------------------------------------------------------
 
 struct SAnimationBlendingParams
 {
@@ -120,6 +149,8 @@ struct SAnimationBlendingParams
 	f32 m_fUpDownParam;
 };
 
+//--------------------------------------------------------------------------------
+
 struct IAnimationBlending
 {
 	virtual ~IAnimationBlending(){}
@@ -128,11 +159,13 @@ struct IAnimationBlending
 	virtual void GetMemoryStatistics(ICrySizer * s) = 0;
 };
 
+//--------------------------------------------------------------------------------
+
 struct SAnimatedCharacterParams
 {
 	SAnimatedCharacterParams() : flags(eACF_PerAnimGraph|eACF_EnableMovementProcessing), 
 															modeChangeTime(0.1f),
-															inertia(0), inertiaAccel(0), inertiaChanged(false),
+															inertia(0), inertiaAccel(0), inertiaChanged(false), timeImpulseRecover(0.0f),
 															physErrorInnerRadiusFactor(0.0f), physErrorOuterRadiusFactor(0.07f), 
 															physErrorMinOuterRadius(0.0f), physErrorMaxOuterRadius(2.0f),
 															pAnimationBlending(0) {} 
@@ -162,6 +195,7 @@ struct SAnimatedCharacterParams
 	uint32 flags;
 	float inertia;
 	float inertiaAccel;
+	float timeImpulseRecover;
 	float modeChangeTime;
 
 	float physErrorInnerRadiusFactor;
@@ -175,6 +209,8 @@ private:
 
 	bool inertiaChanged;
 };
+
+//--------------------------------------------------------------------------------
 
 struct IAnimatedCharacter : public IGameObjectExtension
 {
@@ -190,6 +226,8 @@ struct IAnimatedCharacter : public IGameObjectExtension
 	virtual void AddMovement( const SCharacterMoveRequest& ) = 0;
 	virtual void SetEntityRotation(const Quat &rot) = 0;
 
+	virtual const QuatT& GetAnimLocation() const = 0;
+
 	virtual const SAnimatedCharacterParams& GetParams() = 0;
 	virtual void SetParams( const SAnimatedCharacterParams& params ) = 0;
 
@@ -202,9 +240,12 @@ struct IAnimatedCharacter : public IGameObjectExtension
 	virtual void RequestStance( int stanceID, const char * name ) = 0;
 
 	//
-	virtual float FilterView(SViewParams &viewParams) = 0;
-
-	virtual void RequestPhysicalColliderMode(EColliderMode mode, EColliderModeLayer layer) = 0;
+	virtual bool IsAnimationControlledView() const = 0;
+	virtual float FilterView(SViewParams &viewParams) const = 0;
+	
+	virtual EColliderMode GetPhysicalColliderMode() = 0;
+	virtual void ForceRefreshPhysicalColliderMode() = 0;
+	virtual void RequestPhysicalColliderMode(EColliderMode mode, EColliderModeLayer layer, const char* tag = NULL) = 0;
 	virtual void SetMovementControlMethods(EMovementControlMethod horizontal, EMovementControlMethod vertical) = 0;
 	virtual void SetLocationClampingOverride(float distance, float angle) = 0;
 
@@ -213,7 +254,6 @@ struct IAnimatedCharacter : public IGameObjectExtension
 
 	//virtual void MakePushable(bool enable) = 0;
 
-	virtual IFacialManager* GetFacialManager() = 0;
 	virtual void SetFacialAlertnessLevel(int alertness) = 0;
 	virtual int GetFacialAlertnessLevel() = 0;
 
@@ -222,6 +262,15 @@ struct IAnimatedCharacter : public IGameObjectExtension
 	virtual bool IsLookIkAllowed() const = 0;
 
 	virtual void TriggerRecoil(float duration, float distance) = 0;
+	virtual void SetWeaponRaisedPose(EWeaponRaisedPose pose) = 0;
+
+	virtual void SetNoMovementOverride(bool external) = 0;
+
+	// Returns the angle (in degrees) of the ground below the character.
+	// Zero is flat ground (along facing direction), positive when character facing uphill, negative when character facing downhill.
+	virtual float GetGroundSlopeAngle() const = 0;
 };
+
+//--------------------------------------------------------------------------------
 
 #endif

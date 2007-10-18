@@ -54,7 +54,7 @@ const int CM_MaxMemSize[eCryM_Num] =
 #endif
 
 // In debug builds, pass the standard allocator routine in to override alloc behavior.
-#ifdef _DEBUG
+#if defined(_DEBUG) && !defined(PS3)
 	// Standard lib alloc routine (used in debug builds).
 	#undef malloc
 	#undef calloc
@@ -85,11 +85,16 @@ const int CM_MaxMemSize[eCryM_Num] =
 #define DLL_ENTRY_CRYFREE "CryFree"
 #define DLL_ENTRY_CRYREALLOC "CryRealloc"
 #define DLL_ENTRY_CRYGETMEMSIZE "CryGetMemSize"
+#define DLL_ENTRY_CRYCRTMALLOC "CrySystemCrtMalloc"
+#define DLL_ENTRY_CRYCRTFREE "CrySystemCrtFree"
+
 #else
 #define DLL_ENTRY_CRYMALLOC      (LPCSTR)2
 #define DLL_ENTRY_CRYFREE        (LPCSTR)3
 #define DLL_ENTRY_CRYREALLOC     (LPCSTR)4
 #define DLL_ENTRY_CRYGETMEMSIZE  (LPCSTR)5
+#define DLL_ENTRY_CRYCRTMALLOC 	 (LPCSTR)13
+#define DLL_ENTRY_CRYCRTFREE		 (LPCSTR)14
 #endif
 
 #ifdef _LIB
@@ -114,6 +119,46 @@ const int CM_MaxMemSize[eCryM_Num] =
   };
 #endif
 
+#if defined(PS3)
+// On PS3, CryMalloc and friends may be exported from a PRX (unless PS3_NOPRX
+// is defined, indicating that the entire solution is linked statically).  PRX
+// exported functions may _not_ be called through a function pointer, so we
+// need a wrapper to call them.
+#if !defined(PS3_NOPRX)
+void *WrappedCryMalloc(size_t size, size_t &allocated)
+{
+	return CryMalloc(size, allocated);
+}
+void *WrappedCryRealloc(void *memblock, size_t size, size_t &allocated)
+{
+	return CryRealloc(memblock, size, allocated);
+}
+size_t WrappedCryFree(void *memblock)
+{
+	return CryFree(memblock);
+}
+size_t WrappedCryGetMemSize(void *memblock, size_t sourceSize)
+{
+	return CryGetMemSize(memblock, sourceSize);
+}
+void *WrappedCrySystemCrtMalloc(size_t size)
+{
+	return CrySystemCrtMalloc(size);
+}
+void WrappedCrySystemCrtFree(void *memblock)
+{
+	CrySystemCrtFree(memblock);
+}
+#else
+#define WrappedCryMalloc CryMalloc
+#define WrappedCryRealloc CryRealloc
+#define WrappedCryFree CryFree
+#define WrappedCryGetMemSize CryGetMemSize
+#define WrappedCrySystemCrtMalloc CrySystemCrtMalloc
+#define WrappedCrySystemCrtFree CrySystemCrtFree
+#endif
+#endif
+
 //////////////////////////////////////////////////////////////////////////
 // _PoolHelper definition.
 //////////////////////////////////////////////////////////////////////////
@@ -121,6 +166,7 @@ struct _CryMemoryManagerPoolHelper
 {
 
   typedef void *(*FNC_CryMalloc)(size_t size, size_t& allocated);
+	typedef void *(*FNC_CryCrtMalloc)(size_t size);
   typedef void *(*FNC_CryRealloc)(void *memblock, size_t size, size_t& allocated);
   typedef size_t (*FNC_CryFree)(void *p);
 
@@ -144,9 +190,18 @@ struct _CryMemoryManagerPoolHelper
 	static FNC_CryRealloc _CryRealloc;
 	static FNC_CryFree _CryFree;
 	static FNC_CryGetMemSize _CryGetMemSize;
+	static FNC_CryCrtMalloc _CryCrtMalloc;
+	static FNC_CryFree _CryCrtFree;
+
 
 	static int m_bInitialized;
 
+#if defined PS3_PRX
+	// For a PRX build, the Init() method must be visible for the *_PRX.o, so it
+	// may not be inlined.  With 'noinline', GCC will place the Init() method
+	// into a linkonce section, which is OK.
+	__attribute__ ((noinline))
+#endif
 	static void Init()
 	{
 		m_bInitialized = 1;
@@ -157,11 +212,20 @@ struct _CryMemoryManagerPoolHelper
     requestedMemory = 0;
     numAllocations = 0;
 
-#if defined(LINUX) || defined(PS3)
+#if defined(LINUX)
 		_CryMalloc=CryMalloc;
 		_CryRealloc=CryRealloc;
 		_CryFree=CryFree;
 		_CryGetMemSize=CryGetMemSize;
+		_CryCrtMalloc=CrySystemCrtMalloc;
+		_CryCrtFree=(FNC_CryFree)CrySystemCrtFree;
+#elif defined(PS3)
+		_CryMalloc=WrappedCryMalloc;
+		_CryRealloc=WrappedCryRealloc;
+		_CryFree=WrappedCryFree;
+		_CryGetMemSize=WrappedCryGetMemSize;
+		_CryCrtMalloc=WrappedCrySystemCrtMalloc;
+		_CryCrtFree=(FNC_CryFree)WrappedCrySystemCrtFree;
 #else
 		HMODULE hMod;
 		int iter;
@@ -171,11 +235,13 @@ struct _CryMemoryManagerPoolHelper
 			_CryRealloc=(FNC_CryRealloc)GetProcAddress((HINSTANCE)hMod,DLL_ENTRY_CRYREALLOC);
 			_CryFree=(FNC_CryFree)GetProcAddress((HINSTANCE)hMod,DLL_ENTRY_CRYFREE);
 			_CryGetMemSize=(FNC_CryGetMemSize)GetProcAddress((HINSTANCE)hMod,DLL_ENTRY_CRYGETMEMSIZE);
-			if ((_CryMalloc && _CryRealloc && _CryFree && _CryGetMemSize) || iter==1)
+			_CryCrtMalloc=(FNC_CryCrtMalloc)GetProcAddress((HINSTANCE)hMod,DLL_ENTRY_CRYCRTMALLOC);
+			_CryCrtFree=(FNC_CryFree)GetProcAddress((HINSTANCE)hMod,DLL_ENTRY_CRYCRTFREE);
+			if ((_CryMalloc && _CryRealloc && _CryFree && _CryGetMemSize && _CryCrtMalloc && _CryCrtFree) || iter==1)
 				break;
       hMod = ::LoadLibrary("CrySystem.dll"); 
 		}
-		if (!hMod || !_CryMalloc || !_CryRealloc || !_CryFree || !_CryGetMemSize)
+		if (!hMod || !_CryMalloc || !_CryRealloc || !_CryFree || !_CryGetMemSize ||! _CryCrtMalloc || !_CryCrtFree)
 		{
 #ifndef AVOID_MEMORY_ERROR
 			#ifdef WIN32
@@ -198,10 +264,21 @@ struct _CryMemoryManagerPoolHelper
       requestedMemory[i] = 0;
       numAllocations[i] = 0;
     }
+#if defined(PS3)
+		_CryMalloc=WrappedCryMalloc;
+		_CryRealloc=WrappedCryRealloc;
+		_CryFree=WrappedCryFree;
+		_CryGetMemSize=WrappedCryGetMemSize;
+		_CryCrtMalloc=WrappedCrySystemCrtMalloc;
+		_CryCrtFree=(FNC_CryFree)WrappedCrySystemCrtFree;
+#else
 		_CryMalloc=CryMalloc;
 		_CryRealloc=CryRealloc;
 		_CryFree=CryFree;
 		_CryGetMemSize=CryGetMemSize;
+		_CryCrtMalloc=CrySystemCrtMalloc;
+		_CryCrtFree=(FNC_CryFree)CrySystemCrtFree;
+#endif
 #endif
 	}
  
@@ -429,6 +506,8 @@ _CryMemoryManagerPoolHelper::FNC_CryMalloc _CryMemoryManagerPoolHelper::_CryMall
 _CryMemoryManagerPoolHelper::FNC_CryGetMemSize _CryMemoryManagerPoolHelper::_CryGetMemSize = NULL;
 _CryMemoryManagerPoolHelper::FNC_CryRealloc _CryMemoryManagerPoolHelper::_CryRealloc = NULL;
 _CryMemoryManagerPoolHelper::FNC_CryFree _CryMemoryManagerPoolHelper::_CryFree = NULL;
+_CryMemoryManagerPoolHelper::FNC_CryCrtMalloc _CryMemoryManagerPoolHelper::_CryCrtMalloc = NULL;
+_CryMemoryManagerPoolHelper::FNC_CryFree _CryMemoryManagerPoolHelper::_CryCrtFree = NULL;
 int _CryMemoryManagerPoolHelper::m_bInitialized = 0;
 //////////////////////////////////////////////////////////////////////////
 
@@ -464,6 +543,8 @@ void CryGetMemoryInfoForModule(CryModuleMemoryInfo * pInfo)
 	_CryMemoryManagerPoolHelper::GetMemoryInfo(pInfo);
 };
 
+
+
 #else
 
 //////////////////////////////////////////////////////////////////////////
@@ -498,9 +579,27 @@ void CryGetMemoryInfoForModule(CryModuleMemoryInfo * pInfo)
 };
 #endif
 
-// If using CryMemoryManager, redefine new & delete for entire module.
+void *CryCrtMalloc(size_t size)
+{
+#if defined(NOT_USE_CRY_MEMORY_MANAGER) || defined(_DEBUG)
+	return malloc(size);
+#else
+	return _CryMemoryManagerPoolHelper::_CryCrtMalloc(size);
+#endif
+}
 
-#if !defined(_DEBUG) && !defined(NOT_USE_CRY_MEMORY_MANAGER) && !defined(__SPU__)
+void CryCrtFree(void *p)
+{
+#if defined(NOT_USE_CRY_MEMORY_MANAGER) || defined(_DEBUG)
+	free(p);
+#else
+	_CryMemoryManagerPoolHelper::_CryCrtFree(p);
+#endif
+};
+
+
+// If using CryMemoryManager, redefine new & delete for entire module.
+#if (!defined(_DEBUG) || defined(PS3)) && !defined(NOT_USE_CRY_MEMORY_MANAGER) && !defined(__SPU__)
 	#ifndef _LIB
 		void * __cdecl operator new   (size_t size) { return CryModuleMalloc(size); } 
 		void * __cdecl operator new[] (size_t size) { return CryModuleMalloc(size); }; 

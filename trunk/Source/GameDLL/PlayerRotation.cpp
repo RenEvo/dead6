@@ -155,21 +155,21 @@ void CPlayerRotation::GetStanceAngleLimits(float & minAngle,float & maxAngle)
 		minAngle = -80.0f;
 		maxAngle = 80.0f;
 		break;
-	/*case STANCE_CROUCH:
-		minAngle = -55.0f;
-		maxAngle = 89.0f;
-		break;*/
 	case STANCE_PRONE:
-		minAngle = -55.0f;
-		maxAngle = 60.0f;
+		minAngle = -35.0f;
+		maxAngle = 45.0f;
 		break;
 	}
 
 	//Limit camera rotation on ladders(to prevent clipping)
-	if(m_player.IsPlayer() && m_player.m_stats.isOnLadder)
+	if(m_player.m_stats.isOnLadder)
 	{
 		minAngle = -40.0f;
 		maxAngle = 80.0f;
+	}
+	if(m_stats.grabbedHeavyEntity!=0)
+	{
+		minAngle = -35.0f;  //Limit angle to prevent clipping, throw objects at feet, etc...
 	}
 
 	// SNH: additional restriction based on weapon type if prone.
@@ -212,7 +212,7 @@ void CPlayerRotation::GetStanceAngleLimits(float & minAngle,float & maxAngle)
 		for (int i=0; i<ret; i++)
 		{
 			geom_contact *contact = currentc;
-			if (contact)
+			if (contact && (fabs_tpl(contact->n.z)>0.2f))
 			{
 				Vec3 dir = contact->pt - movestate.weaponPosition;
 				dir.NormalizeSafe();
@@ -220,7 +220,8 @@ void CPlayerRotation::GetStanceAngleLimits(float & minAngle,float & maxAngle)
 				horiz.z = 0.0f;
 				horiz.NormalizeSafe();
 				float cosangle = dir.Dot(horiz);
-				float newMin = acos(cosangle);
+				Limit(cosangle, -1.0f, 1.0f);
+				float newMin = acos_tpl(cosangle);
 				newMin = -newMin * 180.0f / gf_PI;
 				//float col[] = {1,1,1,1};
 				//gEnv->pRenderer->Draw2dLabel(100,100, 1.0f, col, false, "minangle: %.2f", newMin);
@@ -244,8 +245,8 @@ void CPlayerRotation::GetStanceAngleLimits(float & minAngle,float & maxAngle)
 
 void CPlayerRotation::ProcessFlyingZeroG()
 {
-	bool bEnableGyroVerticalFade = (g_pGameCVars->cl_enableGyroFade > 0);
-	bool bEnableGyroSpeedFade = (g_pGameCVars->cl_enableGyroFade < 2);
+	bool bEnableGyroVerticalFade = (g_pGameCVars->pl_zeroGEnableGyroFade > 0);
+	bool bEnableGyroSpeedFade = (g_pGameCVars->pl_zeroGEnableGyroFade < 2);
 
 	//thats necessary when passing from groundG to normalG
 	m_baseQuat = m_viewQuat;
@@ -262,7 +263,7 @@ void CPlayerRotation::ProcessFlyingZeroG()
 
 	//gyroscope: the gyroscope just apply the right roll speed to compensate the rotation, that way effects like
 	//propulsion particles and such can be done easily just by using the angularVel
-	float rotInertia(6.6f);
+	float rotInertia(g_pGameCVars->pl_zeroGAimResponsiveness);
 
 	if (m_player.GravityBootsOn() && m_stats.gBootsSpotNormal.len2()>0.01f)
 	{
@@ -285,14 +286,14 @@ void CPlayerRotation::ProcessFlyingZeroG()
 		float gyroFade = 1.0f;
 		if (bEnableGyroVerticalFade)
 		{
-			static float gyroFadeOutAngleMin = 20.0f;
-			static float gyroFadeOutAngleMax = 70.0f;
-			static float gyroFadeOutAngleSpan = gyroFadeOutAngleMax - gyroFadeOutAngleMin;
-			static float gyroFadeOutAngleSpanInv = 1.0f / gyroFadeOutAngleSpan;
+			float gyroFadeAngleInner = g_pGameCVars->pl_zeroGGyroFadeAngleInner;
+			float gyroFadeAngleOuter = g_pGameCVars->pl_zeroGGyroFadeAngleOuter;
+			float gyroFadeAngleSpan = gyroFadeAngleOuter - gyroFadeAngleInner;
+			float gyroFadeAngleSpanInv = 1.0f / gyroFadeAngleSpan;
 			float viewVerticalAlignment = abs(m_viewQuat.GetFwdZ());
 			float viewVerticalAngle = RAD2DEG(cry_asinf(viewVerticalAlignment));
-			gyroFade = 1.0f - CLAMP((viewVerticalAngle - gyroFadeOutAngleMin) * gyroFadeOutAngleSpanInv, 0.0, 1.0f);
-			gyroFade = gyroFade * gyroFade * gyroFade;
+			gyroFade = 1.0f - CLAMP((viewVerticalAngle - gyroFadeAngleInner) * gyroFadeAngleSpanInv, 0.0, 1.0f);
+			gyroFade = cry_powf(gyroFade, g_pGameCVars->pl_zeroGGyroFadeExp);
 		}
 
 		float speedFade = 1.0f;
@@ -302,7 +303,7 @@ void CPlayerRotation::ProcessFlyingZeroG()
 			speedFade = 1.0f - std::min(1.0f, speed / 5.0f);
 		}
 
-		desiredAngVel.y += alignAngle.y * 0.05f * speedFade * gyroFade;
+		desiredAngVel.y += alignAngle.y * speedFade * gyroFade * m_frameTime * g_pGameCVars->pl_zeroGGyroStrength;
 
 		//rotInertia = 3.0f;
 	}
@@ -427,6 +428,13 @@ void CPlayerRotation::ProcessNormalRoll()
 	{	
 		m_leanAmount *= 0.3f;
 	}
+
+	// Scale down player leaning by 50% when moving in 3rd person.
+	if (m_player.IsPlayer() && m_player.IsThirdPerson())
+	{
+		float movementFraction = min(1.0f, speed2 / sqr(2.0f));
+		m_leanAmount *= 1.0f - movementFraction * 0.5f;
+	}
 		
 	rollAngleGoal += m_leanAmount * m_params.leanAngle * gf_PI/180.0f;
 	Interpolate(m_viewRoll,rollAngleGoal,9.9f,m_frameTime);
@@ -475,6 +483,8 @@ void CPlayerRotation::ClampAngles()
 		float limitV = m_params.vLimitRangeV;
 		float limitH = m_params.vLimitRangeH;
 		Vec3  limitDir = m_params.vLimitDir;
+		float limitVUp = m_params.vLimitRangeVUp;
+		float limitVDown = m_params.vLimitRangeVDown;
 
 		if (m_player.m_stats.isFrozen.Value())
 		{ 
@@ -500,7 +510,7 @@ void CPlayerRotation::ClampAngles()
 			limitH = DEG2RAD(40.0f);
 		}
 
-		if (limitH+limitV && limitDir.len2()>0.1f)
+		if ((limitH+limitV+limitVUp+limitVDown) && limitDir.len2()>0.1f)
 		{
 			//A matrix is built around the view limit, and then the player view angles are checked with it.
 			//Later, if necessary the upVector could be made customizable.
@@ -528,6 +538,22 @@ void CPlayerRotation::ClampAngles()
 				float deltaX(limitV - fabs(limit.x));
 				if (deltaX < 0.0f)
 					m_deltaAngles.x += deltaX*(limit.x>0.0f?1.0f:-1.0f);
+			}
+
+			if (limitVUp || limitVDown)
+			{
+				limit.x = asin(localDir.z) + m_deltaAngles.x;
+
+				if(limit.x>=limitVUp && limitVUp!=0)
+				{
+					float deltaXUp(limitVUp - limit.x);
+					m_deltaAngles.x += deltaXUp;
+				}
+				if(limit.x<=limitVDown && limitVDown!=0)
+				{
+					float deltaXDown(limitVDown - limit.x);
+					m_deltaAngles.x += deltaXDown;
+				}
 			}
 
 			if (limitH)
@@ -617,7 +643,7 @@ void CPlayerRotation::ProcessLean()
 
 		float distMult(3.0f);
 
-		if (gEnv->pPhysicalWorld->RayWorldIntersection(headPos + m_viewQuat.GetColumn1() * 0.25f, (newPos - headPos)*distMult, ent_terrain|ent_static|ent_rigid, rayFlags, &hit, 1, &pSkip, 1))
+		if (gEnv->pPhysicalWorld->RayWorldIntersection(headPos + m_viewQuat.GetColumn1() * 0.25f, (newPos - headPos)*distMult, ent_terrain|ent_static|ent_rigid|ent_sleeping_rigid, rayFlags, &hit, 1, &pSkip, 1))
 		{
 			float dist((headPos - newPos).len2() * distMult);
 			m_leanAmount *= ((hit.pt - headPos).len2() / dist) / distMult;

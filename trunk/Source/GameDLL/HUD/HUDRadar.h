@@ -28,93 +28,8 @@ class CPlayer;
 #include "ILevelSystem.h"
 
 const static int NUM_TAGGED_ENTITIES = 4;
+const static int NUM_MAP_TEXTURES = 8;
 
-//radar objects on mini map and radar
-enum FlashRadarType	//don't change order (unless you change the flash asset)
-{
-	EFirstType = 0,
-	ETank,
-	EAPC,
-	ECivilCar,
-	ETruck,
-	EHovercraft,
-	ESpeedBoat,
-	EPatrolBoat,
-	ESmallBoat,
-	ELTV,
-	EHeli,
-	EVTOL,
-	EAAA,	// should be AAA
-	ESoundEffect,		// is empty, but we have neither Tank nor APC as an icon
-	ENuclearWeapon,
-	ETechCharger,
-	EWayPoint,
-	EPlayer,
-	ETaggedEntity,
-	ESpawnPoint,
-	EFactoryAir,
-	EFactoryTank,
-	EFactoryPrototype,
-	EFactoryVehicle,
-	EFactorySea,
-	EINVALID1, //EBase,
-	EBarracks,
-	ESpawnTruck,
-	EAmmoTruck,
-	EHeadquarter2,
-	EHeadquarter,
-	//single player only icons
-	EAmmoDepot,
-	EMineField,
-	EMachineGun,
-	ECanalization,
-	ETutorial,
-	ESecretEntrance,
-	EHitZone,
-	EHitZoneNK,
-	EAlienEnergySource,
-	EAlienEnergySourcePlus,
-	ELastType
-};
-
-//factions on mini map
-enum FlashRadarFaction
-{
-	ENeutral,
-	EFriend,
-	EEnemy,
-	EAggressor,
-	ESelf
-};
-
-//types of objective icons shown on screen
-enum FlashOnScreenIcon
-{
-	eOS_MissionObjective = 0,
-	eOS_TACTank,
-	eOS_TACWeapon,
-	eOS_FactoryAir,
-	eOS_FactoryTank,
-	eOS_FactoryPrototypes,
-	eOS_FactoryVehicle,
-	eOS_FactoryNaval,
-	eOS_HQKorean,
-	eOS_HQUS,
-	eOS_Spawnpoint,
-	eOS_TeamMate,
-	eOS_Purchase,
-	eOS_Left,
-	eOS_TopLeft,
-	eOS_Top,
-	eOS_TopRight,
-	eOS_Right,
-	eOS_BottomRight,
-	eOS_Bottom,
-	eOS_BottomLeft,
-	eOS_AlienEnergyPoint,
-	eOS_AlienEnergyPointPlus,
-	eOS_HQTarget
-};
 //-----------------------------------------------------------------------------------------------------
 
 class CHUDRadar : public CHUDObject
@@ -170,6 +85,16 @@ public:
 		}
 	};
 
+	struct RadarObjective
+	{
+		string text;
+		bool secondaryObjective;
+		RadarObjective() : secondaryObjective(false)
+		{}
+		RadarObjective(const char *text, bool secondary) : text(text), secondaryObjective(secondary)
+		{}
+	};
+
 	void AddTaggedEntity(EntityId iEntityId);
 
 						CHUDRadar();
@@ -195,7 +120,9 @@ public:
 	//remove an entity from the radar (scanned entity, tac'd entity)
 	void RemoveFromRadar(EntityId id);
 	//this updates a list of all active missionObjective - tracked Entities
-	void UpdateMissionObjective(EntityId id, bool active, const char* description);
+	void UpdateMissionObjective(EntityId id, bool active, const char* description, bool secondary);
+	//this can be used to get the minimap description for a entity id
+	const char* GetObjectiveDescription(EntityId id);
 	//sets the flash pda
 	void SetFlashPDA(CGameFlashAnimation *flashPDA) {m_flashPDA = flashPDA;}
 	//sets the flash Radar
@@ -232,6 +159,8 @@ public:
 	void SelectTeamMate(EntityId id, bool active);
 	//sets a jamming entity (just using position) - set id == 0 to disable
 	void SetJammer(EntityId id, float radius = 0.0f);
+	//return jamming amount
+	ILINE float GetJamming() const { return m_jammingValue; }
 	//minimap init
 	virtual void InitMap();
 	//zoom the minimap stepwise
@@ -248,15 +177,11 @@ public:
 	void ReloadMiniMap();
 	//returns the selected teammates vector
 	std::vector<EntityId> * GetSelectedTeamMates() { return &m_selectedTeamMates; }
+	//sets the optional minimap background (1-3)
+	void SetMiniMapTexture(int mapId);
 
 	//show an entity on the radar for a short time only (default is one second)
-	ILINE void ShowEntityTemporarily(FlashRadarType type, EntityId id, float timeLimit = 1.0f)
-	{
-		for(int e = 0; e < m_tempEntitiesOnRadar.size(); ++e)
-			if(id == m_tempEntitiesOnRadar[e].m_id)
-				return;
-		m_tempEntitiesOnRadar.push_back(TempRadarEntity(id, type, timeLimit));
-	}
+	void ShowEntityTemporarily(FlashRadarType type, EntityId id, float timeLimit = 1.0f);
 
 	void Serialize(TSerialize ser);
 
@@ -268,7 +193,7 @@ public:
 private:
 
 	// CHUDObject
-	virtual void	OnUpdate(float fDeltaTime,float fFadeValue);
+	virtual void	Update(float fDeltaTime);
 	// ~CHUDObject
 
 	float m_fTime;
@@ -277,14 +202,15 @@ private:
 	bool					IsOnRadar(EntityId id, int first, int last);
 	void					AddToRadar(EntityId id);
 	bool					ScanObject(EntityId id);
-	void					QueueObject(EntityId id);
 	bool					IsObjectInQueue(EntityId id);
 	bool					IsNextObject(EntityId id);
-	bool					CheckObject(IEntity *pEntity, const CCamera &camera, bool checkVelocity=false, bool checkVisibility=false);
+	bool					CheckObject(IEntity *pEntity, bool checkVelocity=false, bool checkVisibility=false);
 	void					UpdateScanner(float frameTime);
 	void					ResetScanner();
 	void					GatherScannableObjects();
-	EntityId			RayCastBinoculars(CPlayer *pPlayer);
+	EntityId			RayCastBinoculars(CPlayer *pPlayer,ray_hit *pRayHit);
+	void					UpdateBinoculars(CActor *pActor, float fDeltaTime);
+	bool					CheckObjectMultiplayer(EntityId id);	// additional checks to see if this object is worth looking at in MP.
 
 	//activate minimap rendering
 	ILINE void SetRenderMapOverlay(bool bActive) {	m_renderMiniMap = bActive;}
@@ -302,22 +228,21 @@ private:
 	//chooses the right icon for a given synched entity type (ammo trucks, tac tanks ... special mp units)
 	FlashRadarType GetSynchedEntityType(int type);
 	//return whether the entity is friend or foe to the player
-	FlashRadarFaction	FriendOrFoe(bool multiplayer, IActor *player, int team, IEntity *entity, CGameRules *pGameRules);
+	FlashRadarFaction	FriendOrFoe(bool multiplayer, int playerTeam, IEntity *entity, CGameRules *pGameRules);
 	//helper function to write (flash-) icon data to a double stream (implicitly casting for readability)
 	int FillUpDoubleArray(std::vector<double> *doubleArray, double entityId, double iconID, double posX, double posY,
-												double rotation, double faction, double scaleX = 100.0, double scaleY = 100.0, double isOnScreenObjective = false, double isCurrentSpawnPoint = false);
+												double rotation, double faction, double scaleX = 100.0, double scaleY = 100.0, double isOnScreenObjective = false, double isCurrentSpawnPoint = false, double isUnderAttack = false);
 	//helper function to scan an area for entities - currently the results are saved in m_entitiesInProximity
 	void ScanProximity(Vec3 &pos, float &radius);
 	//calculates minimap zoom and translation
 	void ComputePositioning(Vec2 playerpos, std::vector<double> *doubleArray);
+	//checks a transformed radar position for being inside the asset boudaries, if not returns the intersection point
+	bool RadarBounds_Inside(const Vec2 &pos, Vec2 &intersectionPoint);
+	//this is a 2d line intersection test (AB - PM)
+	bool RadarBounds_IntersectsLineFromOutside(const Vec2 &A, const Vec2 &B, const Vec2 &P, const Vec2 &M, Vec2 &resultingIntersection);
 
 	//texture handles
-	int m_iTextureIDEnemy;
-	int m_iTextureIDWaypoint;
-	int m_iTextureIDPlayer;
-	int m_iTextureIDVehicle;
-	int m_iTextureIDAirVehicle;
-	int m_iTextureIDSound;
+	//int m_iTextureIDWaypoint;
 
 	//sizes of different radar heights / entities
 	float		 m_radarDotSizes[4];
@@ -331,10 +256,9 @@ private:
 	float		 m_scannerGatherTimer;
 	//team / squad mates
 	std::vector<EntityId> m_teamMates;
-	//absolute radar mode
-	bool			m_bAbsoluteMode;
 	//in MP there is an enemy nearby
 	int			 m_iMultiplayerEnemyNear;
+	string	 m_coordinateToString[8];
 
 	//Map positioning stuff
 	bool m_initMap;
@@ -354,9 +278,10 @@ private:
 	//pda mini map data
 	bool		m_renderMiniMap;
 	float		m_mapDivX, m_mapDivY, m_mapGridSizeX, m_mapGridSizeY;
-	int			m_miniMapStartX, m_miniMapStartY, m_miniMapEndX, m_miniMapEndY, m_mapDimX, m_mapDimY;
+	int			m_miniMapStartX[NUM_MAP_TEXTURES], m_miniMapStartY[NUM_MAP_TEXTURES], m_miniMapEndX[NUM_MAP_TEXTURES], m_miniMapEndY[NUM_MAP_TEXTURES], m_mapDimX, m_mapDimY;
 	int			m_startOnScreenX, m_startOnScreenY, m_endOnScreenX, m_endOnScreenY;
 	string  m_currentLevel;
+	int			m_mapId;
 
 	//broad scan parameter
 	float		m_bsRadius;
@@ -367,12 +292,13 @@ private:
 	EntityId	m_jammerID;
 	float			m_jammerRadius;
 	float			m_jammingValue;
+	bool			m_jammerDisconnectMap;
 
 	//normal scanning timer
 	float		m_lastScan;
 
 	//flash optimization for the radar invokes
-	float m_fLastViewRot, m_fLastCompassRot, m_fLastStealthValue, m_fLastStealthValueStatic, m_fLastFov;
+	float m_fLastViewRot, m_fLastCompassRot, m_fLastStealthValue, m_fLastStealthValueStatic, m_fLastFov, m_fLastRadarRatio;
 
 	//entities in proximity of the player
 	std::vector<EntityId> m_entitiesInProximity;
@@ -388,7 +314,8 @@ private:
 	//entities on the normal radar
 	std::deque<RadarEntity>		m_entitiesOnRadar;
 	std::vector<RadarSound>		m_soundsOnRadar;
-	std::map<EntityId, string>	m_missionObjectives;
+	//mission objectives on radar
+	std::map<EntityId, RadarObjective>	m_missionObjectives;
 	//additional entities on miniMap in multiplayer
 	std::vector<RadarEntity>  m_buildingsOnRadar;
 	//teammates that are selected in multiplayer (name is rendered on miniMap)
@@ -397,7 +324,12 @@ private:
 	std::vector<EntityId> m_possibleOnScreenObjectives;
 	//level / minimap data
 	ILevel		*m_pLevelData;
-
+	//map textures
+	string m_mapFile[NUM_MAP_TEXTURES];
+	//radius of the radar per map
+	int m_mapRadarRadius[NUM_MAP_TEXTURES];
+	//player coords helper for MP
+	string m_lastPlayerCoords;
 };
 
 //-----------------------------------------------------------------------------------------------------

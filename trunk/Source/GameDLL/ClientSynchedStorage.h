@@ -29,6 +29,14 @@ class classname: public CSetGlobalMsg \
 	EMessageSendResult WritePayload(TSerialize ser, uint32 currentSeq, uint32 basisSeq); \
 	}; \
 
+#define DECLARE_CHANNEL_MESSAGE(classname) \
+class classname: public CSetChannelMsg \
+	{ \
+	public: \
+	classname(int _channelId, CServerSynchedStorage *pStorage, TSynchedKey _key, TSynchedValue &_value); \
+	EMessageSendResult WritePayload(TSerialize ser, uint32 currentSeq, uint32 basisSeq); \
+	}; \
+
 
 #define DECLARE_ENTITY_MESSAGE(classname) \
 	class classname: public CSetEntityMsg \
@@ -44,7 +52,7 @@ class CClientSynchedStorage:
 	public CNetMessageSinkHelper<CClientSynchedStorage, CSynchedStorage>
 {
 public:
-	CClientSynchedStorage() {};
+	CClientSynchedStorage(IGameFramework *pGameFramework) { m_pGameFramework=pGameFramework; };
 	virtual ~CClientSynchedStorage() {};
 
 	void GetMemoryStatistics( ICrySizer * );
@@ -90,6 +98,29 @@ public:
 	DECLARE_GLOBAL_MESSAGE(CSetGlobalEntityIdMsg);
 	DECLARE_GLOBAL_MESSAGE(CSetGlobalStringMsg);
 
+	//------------------------------------------------------------------------
+	class CSetChannelMsg: public INetMessage
+	{
+	public:
+		CSetChannelMsg(const SNetMessageDef *pDef, int _channelId, CServerSynchedStorage *pStorage, TSynchedKey _key, TSynchedValue &_value);
+
+		int											channelId;
+		CServerSynchedStorage		*m_pStorage;
+
+		TSynchedKey							key;
+		TSynchedValue						value;
+
+		virtual EMessageSendResult WritePayload(TSerialize ser, uint32 currentSeq, uint32 basisSeq);
+		virtual void UpdateState(uint32 fromSeq, ENetSendableStateUpdate update);
+		virtual size_t GetSize();
+	};
+
+	DECLARE_CHANNEL_MESSAGE(CSetChannelBoolMsg);
+	DECLARE_CHANNEL_MESSAGE(CSetChannelFloatMsg);
+	DECLARE_CHANNEL_MESSAGE(CSetChannelIntMsg);
+	DECLARE_CHANNEL_MESSAGE(CSetChannelEntityIdMsg);
+	DECLARE_CHANNEL_MESSAGE(CSetChannelStringMsg);
+
 
 	//------------------------------------------------------------------------
 	class CSetEntityMsg: public INetMessage
@@ -123,6 +154,12 @@ public:
 	NET_DECLARE_IMMEDIATE_MESSAGE(SetGlobalIntMsg);
 	NET_DECLARE_IMMEDIATE_MESSAGE(SetGlobalEntityIdMsg);
 	NET_DECLARE_IMMEDIATE_MESSAGE(SetGlobalStringMsg);
+
+	NET_DECLARE_IMMEDIATE_MESSAGE(SetChannelBoolMsg);
+	NET_DECLARE_IMMEDIATE_MESSAGE(SetChannelFloatMsg);
+	NET_DECLARE_IMMEDIATE_MESSAGE(SetChannelIntMsg);
+	NET_DECLARE_IMMEDIATE_MESSAGE(SetChannelEntityIdMsg);
+	NET_DECLARE_IMMEDIATE_MESSAGE(SetChannelStringMsg);
 
 	NET_DECLARE_IMMEDIATE_MESSAGE(SetEntityBoolMsg);
 	NET_DECLARE_IMMEDIATE_MESSAGE(SetEntityFloatMsg);

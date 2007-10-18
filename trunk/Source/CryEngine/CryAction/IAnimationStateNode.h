@@ -169,8 +169,9 @@ struct SAnimationDesc
 	SAnimationMovement movement;
 	//CTimeValue duration;
 	QuatT startLocation;
+	bool initialized;
 
-	SAnimationDesc() : properties(NULL), startLocation(IDENTITY) {}
+	SAnimationDesc() : initialized(false), properties(NULL), startLocation(IDENTITY) {}
 };
 
 struct IAnimationStateNode

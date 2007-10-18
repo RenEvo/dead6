@@ -44,6 +44,7 @@ class CSingle :
 	struct CockAction;
 	class ScheduleReload;
 	class SmokeEffectAction;
+	struct EndCockingAction;
 
 
 public:
@@ -60,9 +61,10 @@ public:
 				scale[0]=scale[1]=1.0f;
 				time[0]=time[1]=0.060f;
 				light_helper[0].clear(); light_helper[1].clear();
-				light_radius[0]=light_radius[1]=2.0f;
+				light_radius[0]=light_radius[1]=0.0f;
 				light_color[0]=light_color[1]=Vec3(1,1,1);        
-				light_time[0]=light_time[1]=0.060f;        
+				light_time[0]=light_time[1]=0.060f;   
+				offset.Set(0.0f,0.0f,0.0f);
 			}
 
 			if (params)
@@ -78,6 +80,7 @@ public:
 					fp->GetAttribute("light_radius", light_radius[0]);
 					fp->GetAttribute("light_color", light_color[0]);          
 					fp->GetAttribute("light_time", light_time[0]);
+					fp->GetAttribute("offset", offset);
 
 					float diffuse_mult = 1.f;
 					fp->GetAttribute("light_diffuse_mult", diffuse_mult);
@@ -95,6 +98,7 @@ public:
 					tp->GetAttribute("light_radius", light_radius[1]);
 					tp->GetAttribute("light_color", light_color[1]);          
 					tp->GetAttribute("light_time", light_time[1]);
+					tp->GetAttribute("offset",offset);
 
 					float diffuse_mult = 1.f;
 					tp->GetAttribute("light_diffuse_mult", diffuse_mult);
@@ -125,7 +129,8 @@ public:
 		ItemString helper[2];
 		float light_radius[2];
 		float light_time[2];
-		Vec3 light_color[2];    
+		Vec3 light_color[2]; 
+		Vec3 offset;
 		ItemString light_helper[2];    
 	};
 
@@ -272,8 +277,10 @@ protected:
 			CItemParamReader reader(params);
 			ResetValue(geometry,	"");
 			ResetValue(effect,		"");
-			ResetValue(speed,			175.0f);
-			ResetValue(scale,			1.0f);
+			ResetValue(geometryFP, "");
+			ResetValue(effectFP,  "");
+			ResetValue(speed,			200.0f);
+			ResetValue(speedFP,    400.0f);
 			ResetValue(lifetime,	1.5f);
 			ResetValue(frequency,	1);
 			ResetValueEx("helper_fp", helper[0],	"");
@@ -284,8 +291,10 @@ protected:
 
 		ItemString	geometry;
 		ItemString	effect;
+		ItemString  geometryFP;
+		ItemString  effectFP;
 		float		speed;
-		float		scale;
+		float   speedFP;
 		float		lifetime;
 		int			frequency;
 		ItemString	helper[2];
@@ -293,15 +302,19 @@ protected:
 		void PreLoadAssets()
 		{
 			gEnv->p3DEngine->FindParticleEffect(effect);
+			gEnv->p3DEngine->FindParticleEffect(effectFP);
 		}
 		void GetMemoryStatistics(ICrySizer * s)
 		{
 			s->Add(geometry);
 			s->Add(effect);
+			s->Add(geometryFP);
+			s->Add(effectFP);
 			s->Add(helper[0]);
 			s->Add(helper[1]);
 		}
 	};
+
 
 	struct SHeatingParams
 	{
@@ -363,6 +376,7 @@ protected:
 			ResetValue(slider_layer,	"");
 			ResetValue(slider_layer_time,	500);
 			ResetValue(damage,				32);
+			ResetValue(secondary_damage, false);
 			ResetValue(ai_vs_player_damage, 32);
 			ResetValue(crosshair,			"default");
 			ResetValue(unzoomed_cock,	false);
@@ -371,8 +385,6 @@ protected:
 			ResetValueEx("helper_fp", helper[0],	"");
 			ResetValueEx("helper_tp",	helper[1],	"");
       ResetValue(barrel_count,  1);
-
-			ResetValue(nearmiss_signal, "");
 
 			ResetValue(spin_up_time,	0.0f);
 			ResetValue(spin_down_time,0.0f);
@@ -388,13 +400,15 @@ protected:
 			ResetValue(autoaim_autofiringdir, true);
 			ResetValue(track_projectiles, false);
 			ResetValue(aim_helper, false);
-			ResetValue(aim_helper_delay, 1.0f);
+			ResetValue(aim_helper_delay, 0.5f);
 			ResetValue(damage_drop_per_meter, 0.0f);
+			ResetValue(damage_drop_min_distance, 10.0f);
 			ResetValue(sound_variation,false);
 			ResetValue(fake_fire_rate, 0);
 			ResetValue(auto_fire, false);
 			ResetValue(advanced_AAim,false);
 			ResetValue(advanced_AAim_Range,1.0f);
+      ResetValue(crosshair_assist_range, 0.0f);
 
 
 			pierceability[0] = 0.0f;
@@ -421,7 +435,6 @@ protected:
 			s->Add(crosshair);
 			s->Add(hit_type);
 			s->Add(slider_layer);
-			s->Add(nearmiss_signal);
 		}
 
 		short		rate;
@@ -437,7 +450,8 @@ protected:
 		int			ooatracer_treshold;
 
 		int			damage;
-		int     ai_vs_player_damage; //Only for the hurricane
+		bool    secondary_damage;
+		int     ai_vs_player_damage;
 
 		ItemString	crosshair;
 
@@ -451,8 +465,6 @@ protected:
 
 		float		spin_up_time;
 		float		spin_down_time;
-
-		ItemString	nearmiss_signal;
 
 		bool	  autoaim;
 		bool		autoaim_zoom;
@@ -470,12 +482,15 @@ protected:
 		bool	autozoom;
 
 		float damage_drop_per_meter;
+		float damage_drop_min_distance;
 		bool  sound_variation;				//For the FY71 (usual weapon of the enemy)
 		int   fake_fire_rate;					//Fake hurricanes fire rate
 		bool  auto_fire;							//Single fire mode continue shooting while holding LMB
 
 		bool  advanced_AAim;
 		float advanced_AAim_Range;
+
+    float  crosshair_assist_range;
 	};
 
 	struct SSingleActions
@@ -494,8 +509,10 @@ protected:
 			ResetValue(reload_chamber_empty, "reload_chamber_empty");
 			ResetValue(spin_up,				"spin_up");
 			ResetValue(spin_down,			"spin_down");
+			ResetValue(spin_down_tail, "spin_down_tail");
 			ResetValue(overheating,		"overheating");
 			ResetValue(cooldown,			"cooldown");
+			ResetValue(null_fire, "null_fire");
 		}
 
 		void GetMemoryStatistics(ICrySizer * s)
@@ -509,8 +526,10 @@ protected:
 			s->Add(reload_chamber_empty);
 			s->Add(spin_up);
 			s->Add(spin_down);
+			s->Add(spin_down_tail);
 			s->Add(overheating);
 			s->Add(cooldown);
+			s->Add(null_fire);
 		}
 
 		ItemString	fire;
@@ -522,8 +541,10 @@ protected:
 		ItemString	reload_chamber_empty;
 		ItemString	spin_up;
 		ItemString	spin_down;
+		ItemString  spin_down_tail;
 		ItemString	overheating;
 		ItemString	cooldown;
+		ItemString  null_fire;
 	};
 
 public:
@@ -552,22 +573,24 @@ public:
 	virtual bool CanCancelReload() { return true;};
 
 	virtual bool CanFire(bool considerAmmo = true) const;
-	virtual void StartFire(EntityId shooterId);
-	virtual void StopFire(EntityId shooterId);
+	virtual void StartFire();
+	virtual void StopFire();
 	virtual bool IsFiring() const { return m_firing; };
 	
 	virtual bool AllowZoom() const;
 	virtual void Cancel();
 
 	virtual void NetShoot(const Vec3 &hit, int predictionHandle);
-	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, int predictionHandle);
+	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, float extra, int predictionHandle);
+	virtual void NetEndReload() { m_reloadPending=false; };
 
-	virtual void NetStartFire(EntityId shooterId) {};
-	virtual void NetStopFire(EntityId shooterId) {};
+	virtual void NetStartFire() {};
+	virtual void NetStopFire() {};
 
 	virtual bool IsReadyToFire() const { return CanFire(true); };
 
 	virtual EntityId GetProjectileId() const { return m_projectileId; };
+	virtual EntityId RemoveProjectileId();
 	virtual void SetProjectileId(EntityId id) { m_projectileId = id; };
 
 	virtual const char* GetType() const;
@@ -576,6 +599,7 @@ public:
 	virtual float GetSpinUpTime() const;
 	virtual float GetSpinDownTime() const;
 	virtual float GetNextShotTime() const;
+	virtual void SetNextShotTime(float time);
 	virtual float GetFireRate() const;
 
 	virtual void Enable(bool enable);
@@ -586,7 +610,23 @@ public:
   virtual Vec3 GetFireHelperDir() const;
 
   virtual int GetCurrentBarrel() const { return m_barrelId; }  
-	virtual void Serialize(TSerialize ser) {};
+	virtual void Serialize(TSerialize ser) 
+	{ 
+		if(ser.GetSerializationTarget() != eST_Network)
+		{
+			ser.BeginGroup("firemode");
+			ser.Value("enabled", m_enabled);
+			ser.Value("nextShot", m_next_shot);
+			ser.EndGroup();
+			if(ser.IsReading())
+				m_saved_next_shot = m_next_shot;
+		}
+	};
+
+	virtual void PostSerialize() 
+	{
+		SetNextShotTime(m_saved_next_shot);
+	};
 
 	virtual void PatchSpreadMod(SSpreadModParams &sSMP);
 	virtual void ResetSpreadMod();
@@ -595,10 +635,12 @@ public:
 	virtual void ResetRecoilMod();
 
 	virtual void ResetLock();
-	virtual void StartLocking(EntityId targetId);
-	virtual void Lock(EntityId targetId);
+	virtual void StartLocking(EntityId targetId, int partId = 0);
+	virtual void Lock(EntityId targetId, int partId = 0);
 	virtual void Unlock();
   //~IFireMode
+
+	virtual bool IsValidAutoAimTarget(IEntity* pEntity, int partId = 0);
 
 	virtual void StartReload(int zoomed);
 	virtual void EndReload(int zoomed);
@@ -622,10 +664,12 @@ public:
 
 	virtual float GetRecoil() const;
 	virtual float GetSpread() const;
+	virtual float GetMinSpread() const;
+	virtual float GetMaxSpread() const;
 	virtual float GetRecoilScale() const;
 	virtual const char *GetCrosshair() const;
 	virtual float GetHeat() const;
-
+	virtual bool	CanOverheat() const { return (m_heatingparams.attack>0.0f)? true:false; }
 	virtual void MuzzleFlashEffect(bool attach, bool light=true, bool effect=true);
 	virtual void SmokeEffect(bool effect=true);
 	virtual void SpinUpEffect(bool attach);
@@ -658,10 +702,9 @@ public:
 
 protected:
 
-	void CheckNearMisses(const Vec3 &probableHit, const Vec3 &pos, const Vec3 &dir, float range, float radius, const char *signalName);
+	void CheckNearMisses(const Vec3 &probableHit, const Vec3 &pos, const Vec3 &dir, float range, float radius);
 	void CacheTracer();
 	void ClearTracerCache();
-	bool IsValidAutoAimTarget(IEntity* pEntity);
 	bool CheckAutoAimTolerance(const Vec3& aimPos, const Vec3& aimDir);
 
 	void BackUpOriginalSpreadRecoil();
@@ -670,12 +713,15 @@ protected:
 
 	void SetAutoAimHelperTimer(float time) { m_autoAimHelperTimer = time;}
 
+  bool CrosshairAssistAiming(const Vec3& firingPos, Vec3& firingDir, ray_hit* pRayhit=NULL);
+
+	void EmitTracer(const Vec3& pos,const Vec3& destination,bool ooa);
+
 	std::vector<IStatObj *> m_tracerCache;
 
 
 	CWeapon		*m_pWeapon;
 
-	EntityId	m_shooterId;
 	bool			m_fired;
 	bool			m_firing;
 	bool			m_reloading;
@@ -683,6 +729,7 @@ protected:
 
 	float			m_next_shot_dt;
 	float			m_next_shot;
+	float     m_saved_next_shot; //For serialization
   short     m_barrelId;
 
 	EntityId	m_projectileId;
@@ -711,7 +758,7 @@ protected:
 	Vec2			m_recoil_offset;
 	float			m_spread;
 
-	float			m_recoilMultiplier;			//Increment recoil while holding an object
+	float			m_recoilMultiplier;			
 
 	float			m_speed_scale;
 
@@ -727,19 +774,23 @@ protected:
 	SSingleActions	m_actions;
 	SEffectParams		m_muzzleflash;
 	SEffectParams		m_muzzlesmoke;
+	SEffectParams   m_muzzlesmokeice;
 	SEffectParams		m_reject;
 	SEffectParams		m_spinup;  
 	SRecoilParams		m_recoilparams;
-	SRecoilParams   m_recoilparamsCopy;		//Must be better to have a copy (after mult/div could lose precision)
+	SRecoilParams   m_recoilparamsCopy;		
 	SSpreadParams		m_spreadparams;
-	SSpreadParams   m_spreadparamsCopy;		//Must be better to have a copy (after mult/div could lose precision)
+	SSpreadParams   m_spreadparamsCopy;		
 	SHeatingParams	m_heatingparams;
   SDustParams     m_dustparams;
 
 	float						m_heat;
 	float						m_overheat;
+	float           m_nextHeatTime;
 	int							m_heatEffectId;
   tSoundID        m_heatSoundId;
+
+	int             m_smokeEffectId;
 
 	EntityId				m_lastNearMissId;
 	bool						m_firstShot;
@@ -764,6 +815,15 @@ protected:
 
 	bool						m_reloadCancelled;
 	int							m_reloadStartFrame;
+	bool						m_reloadPending;
+
+	bool						m_lastModeStrength;
+
+	bool						m_cocking;
+
+private:
+
+	void RestoreOverHeating(bool activate);
 };
 
 

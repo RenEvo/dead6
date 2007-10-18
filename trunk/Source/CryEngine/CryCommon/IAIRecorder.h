@@ -9,11 +9,18 @@
 #	include "platform.h"
 #endif
 
+// Luciano - remove these lines to remove the log signals
+#ifndef AI_LOG_SIGNALS
+	#define AI_LOG_SIGNALS
+#endif
+////////////////////////////////////////////////////
+
 struct IAIRecorder
 {
 	virtual bool Load(const char *filename = NULL) = 0;
 	virtual bool Save(const char *filename = NULL) = 0;
 	virtual void Update(void) = 0;
+
 };
 
 class CStream;
@@ -60,6 +67,7 @@ struct IAIRecordable
 		E_HEALTH,
 		E_HIT_DAMAGE,
 		E_DEATH,
+		E_SIGNALEXECUTEDWARNING
 	};
 
 	virtual void	RecordEvent(e_AIDbgEvent event, const RecorderEventData* pEventData=NULL)=0;

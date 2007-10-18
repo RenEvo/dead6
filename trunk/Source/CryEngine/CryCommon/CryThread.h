@@ -28,14 +28,17 @@
 enum CryLockType
 {
 	CRYLOCK_NONE = 0,
-#if !defined(PS3)
+#if !defined(PS3) || defined(__CRYCG__)
 	CRYLOCK_FAST = 1,
 #endif
 	CRYLOCK_RECURSIVE = 2,
 };
 
-#if defined(PS3)
+#if defined(PS3) && !defined(__CRYCG__)
 	#define CRYLOCK_FAST CRYLOCK_RECURSIVE
+  #undef CRYLOCK_HAVE_FASTLOCK
+#else
+  #define CRYLOCK_HAVE_FASTLOCK 1
 #endif
 
 #include <stdio.h>
@@ -50,14 +53,12 @@ const char* CryThreadGetName( unsigned int nThreadId );
 // Primitive locks and conditions.
 //
 // Primitive locks are represented by instances of class CryLock<Type> and
-// CryRWLock<Type>.
+// CryRWLock.
 //
-// Conditions are represented by instances of class
-// CryCond<LockClass, impliedLock> where LockClass is the class of lock to be
-// associated with the condition and impliedLock is a flag indicating if an
-// implied lock should be associated with the condition.
+// Conditions are represented by instances of class CryCond<LockClass> where
+// LockClass is the class of lock to be associated with the condition.
 //
-// CryCondLock<> acts like CryLock, but is always appropriate for CryCond
+// CryCondLock<> acts like CryLock<>, but is always appropriate for CryCond.
 
 template<CryLockType Type> class CryLock
 {
@@ -69,12 +70,9 @@ template<CryLockType Type> class CryCondLock
 	/* Unsupported lock type. */
 };
 
-template<CryLockType Type> class CryRWLock
-{
-	/* Unsupported lock type. */
-};
+class CryRWLock;
 
-template<class LockClass, bool impliedLock = true> class CryCond
+template<class LockClass> class CryCond
 {
 	/* Unsupported lock class. */
 };
@@ -94,58 +92,26 @@ public:
 #endif
 };
 
-template<> class CryRWLock<CRYLOCK_NONE>
-{
-	CryRWLock(const CryRWLock<CRYLOCK_NONE>&);
-	void operator = (const CryRWLock<CRYLOCK_NONE>&);
-
-public:
-	CryRWLock() { }
-	void RLock() { }
-	bool TryRLock() { return true; }
-	void WLock() { }
-	bool TryWLock() { return true; }
-	void Lock() { }
-	bool TryLock() { return true; }
-	void Unlock() { }
-};
-
 typedef CryLock<CRYLOCK_NONE> CryNoLock;
-#if defined(PS3)
+#if defined(PS3) && !defined __CRYCG__
 	typedef CryLock<CRYLOCK_RECURSIVE> CryFastLock;
 #else
 	typedef CryLock<CRYLOCK_FAST> CryFastLock;
 #endif
 typedef CryLock<CRYLOCK_RECURSIVE> CryRecursiveLock;
 
-template<> class CryCond<CryNoLock, false>
+template<> class CryCond<CryNoLock>
 {
-	CryCond(const CryCond<CryNoLock, false>&);
-	void operator = (const CryCond<CryNoLock, false>&);
+	CryCond(const CryCond<CryNoLock>&);
+	CryCond<CryNoLock>& operator = (const CryCond<CryNoLock>&);
 
 public:
   CryCond() { }
-  CryCond(CryNoLock &Lock) { }
 
   void Notify() { }
   void NotifySingle() { }
   void Wait() { }
 	bool TimedWait(uint32 milliseconds) { return true; }
-};
-
-template<> class CryCond<CryNoLock, true> : public CryCond<CryNoLock, false>
-{
-  CryNoLock m_Lock;
-
-	CryCond(const CryCond<CryNoLock, true>&);
-	void operator = (const CryCond<CryNoLock, true>&);
-
-public:
-	CryCond() { }
-  void Lock() { }
-	bool TryLock() { return true; }
-  void Unlock() { }
-  CryNoLock &GetLock() { return m_Lock; }
 };
 
 template<class LockClass> class CryAutoLock
@@ -155,7 +121,7 @@ private:
 
 	CryAutoLock();
 	CryAutoLock(const CryAutoLock<LockClass>&);
-	void operator = (const CryAutoLock<LockClass>&);
+	CryAutoLock<LockClass>& operator = (const CryAutoLock<LockClass>&);
 
 public:
 	CryAutoLock(LockClass &Lock) : m_Lock(Lock) { m_Lock.Lock(); }
@@ -242,15 +208,150 @@ template<class Runnable = CryRunnable> class CrySimpleThread;
 template<class Runnable = CryRunnable> class CryThread;
 
 // Include architecture specific code.
-#if defined(LINUX) || defined(PS3)
+#if defined(PS3)
+#include <CryThread_ps3.h>
+#elif defined(LINUX)
 #include <CryThread_pthreads.h>
 #elif defined(WIN32) || defined(WIN64)
+
+// Select one of the following implementations:
+
+// Old production implementation.
 #include <CryThread_windows.h>
+
+// Implementation based on generation counters.
+//#include <CryThread_wingc.h>
+
+// Implementation based on the PTW32 concept.
+//#include <CryThread_ptw32.h>
+
 #elif defined(XENON)
+// Note: After verifying one of the new CryThread implementations for
+// Win32/Win64, the XENON should switch to the same implementation.
 #include <CryThread_windows.h>
 #else
 // Put other platform specific includes here!
+#include <CryThread_dummy.h>
 #endif
+
+#if !defined _CRYTHREAD_CONDLOCK_GLITCH
+#define CryCondLock CryLock
+#endif // !_CRYTHREAD_CONDLOCK_GLITCH
+
+// The the architecture specific code does not define a class CryRWLock, then
+// a default implementation is provided here.
+#if !defined _CRYTHREAD_HAVE_RWLOCK && !defined _CRYTHREAD_CONDLOCK_GLITCH
+class CryRWLock
+{
+	CryFastLock m_lockExclusiveAccess;
+	CryFastLock m_lockSharedAccessComplete;
+	CryCond<CryFastLock> m_condSharedAccessComplete;
+
+	int m_nSharedAccessCount;
+	int m_nCompletedSharedAccessCount;
+	bool m_bExclusiveAccess;
+
+	CryRWLock(const CryRWLock &);
+	CryRWLock &operator= (const CryRWLock &);
+
+	void AdjustSharedAccessCount()
+	{
+		m_nSharedAccessCount -= m_nCompletedSharedAccessCount;
+		m_nCompletedSharedAccessCount = 0;
+	}
+
+public:
+	CryRWLock()
+		: m_nSharedAccessCount(0),
+			m_nCompletedSharedAccessCount(0),
+			m_bExclusiveAccess(false)
+	{ }
+
+	void RLock()
+	{
+		m_lockExclusiveAccess.Lock();
+		if (++m_nSharedAccessCount == INT_MAX)
+		{
+			m_lockSharedAccessComplete.Lock();
+			AdjustSharedAccessCount();
+			m_lockSharedAccessComplete.Unlock();
+		}
+		m_lockExclusiveAccess.Unlock();
+	}
+
+	bool TryRLock()
+	{
+		if (!m_lockExclusiveAccess.TryLock())
+			return false;
+		if (++m_nSharedAccessCount == INT_MAX)
+		{
+			m_lockSharedAccessComplete.Lock();
+			AdjustSharedAccessCount();
+			m_lockSharedAccessComplete.Unlock();
+		}
+		m_lockExclusiveAccess.Unlock();
+		return true;
+	}
+
+	void WLock()
+	{
+		m_lockExclusiveAccess.Lock();
+		m_lockSharedAccessComplete.Lock();
+		assert(!m_bExclusiveAccess);
+		AdjustSharedAccessCount();
+		if (m_nSharedAccessCount > 0)
+		{
+			m_nCompletedSharedAccessCount -= m_nSharedAccessCount;
+			do
+			{
+				m_condSharedAccessComplete.Wait(m_lockSharedAccessComplete);
+			}
+			while (m_nCompletedSharedAccessCount < 0);
+			m_nSharedAccessCount = 0;
+		}
+		m_bExclusiveAccess = true;
+	}
+
+	bool TryWLock()
+	{
+		if (!m_lockExclusiveAccess.TryLock())
+			return false;
+		if (!m_lockSharedAccessComplete.TryLock())
+		{
+			m_lockExclusiveAccess.Unlock();
+			return false;
+		}
+		assert(!m_bExclusiveAccess);
+		AdjustSharedAccessCount();
+		if (m_nSharedAccessCount > 0)
+		{
+			m_lockSharedAccessComplete.Unlock();
+			m_lockExclusiveAccess.Unlock();
+			return false;
+		}
+		else
+			m_bExclusiveAccess = true;
+		return true;
+	}
+
+	void Unlock()
+	{
+		if (!m_bExclusiveAccess)
+		{
+			m_lockSharedAccessComplete.Lock();
+			if (++m_nCompletedSharedAccessCount == 0)
+				m_condSharedAccessComplete.NotifySingle();
+			m_lockSharedAccessComplete.Unlock();
+		}
+		else
+		{
+			m_bExclusiveAccess = false;
+			m_lockSharedAccessComplete.Unlock();
+			m_lockExclusiveAccess.Unlock();
+		}
+	}
+};
+#endif // !defined _CRYTHREAD_HAVE_RWLOCK
 
 // Thread class.
 //
@@ -259,8 +360,8 @@ template<class Runnable = CryRunnable> class CryThread;
 template<class Runnable> class CryThread
 	: public CrySimpleThread<Runnable>
 {
-	CryFastLock m_Lock;
-	CryCond<CryFastLock> m_Cond;
+	CryCondLock<CRYLOCK_RECURSIVE> m_Lock;
+	CryCond< CryCondLock<CRYLOCK_RECURSIVE> > m_Cond;
 
 	CryThread(const CryThread<Runnable>&);
 	void operator = (const CryThread<Runnable>&);

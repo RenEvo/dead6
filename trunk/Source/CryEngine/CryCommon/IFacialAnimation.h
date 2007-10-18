@@ -28,22 +28,16 @@ class IJoystickSet;
 
 //--------------------------------------------------------------------------------
 
-enum EFacialManagerLayer
+enum EFacialSequenceLayer
 {
-	eFacialManagerLayer_Dialogue,              // (one shot with sound, requested together with wave file)
-	eFacialManagerLayer_AGStateAndAIAlertness, // per animation-state and per ai-alertness (looping, requested/cleared by AG state node enter/leave)
-	eFacialManagerLayer_AIExpression,          // (looping, requested/cleared by goalpipe/goalop)
-	eFacialManagerLayer_FlowGraph,             // just in case we will need it later =).
+	eFacialSequenceLayer_Preview,								// Used in facial editor.
+	eFacialSequenceLayer_Dialogue,              // (one shot with sound, requested together with wave file)
+	eFacialSequenceLayer_Trackview,							// Triggered via trackview sequence
+	eFacialSequenceLayer_AGStateAndAIAlertness, // per animation-state and per ai-alertness (looping, requested/cleared by AG state node enter/leave)
+	eFacialSequenceLayer_AIExpression,          // (looping, requested/cleared by goalpipe/goalop)
+	eFacialSequenceLayer_FlowGraph,             // just in case we will need it later =).
 
-	eFacialManagerLayer_COUNT,
-};
-
-//--------------------------------------------------------------------------------
-
-struct IFacialManager
-{
-	virtual void RequestFacial(const char* name, EFacialManagerLayer layer) =0;
-	virtual void Update(ICharacterInstance* pCharacter) = 0;
+	eFacialSequenceLayer_COUNT,
 };
 
 //--------------------------------------------------------------------------------
@@ -231,13 +225,14 @@ struct IFacialInstance
 	virtual void StopEffectorChannel(uint32 nChannelID, float fFadeOutTime) = 0;
 	virtual void PreviewEffector( IFacialEffector *pEffector,float fWeight,float fBalance=0.0f ) = 0;
 	virtual void PreviewEffectors( IFacialEffector **pEffectors,float *fWeights,float *fBalances,int nEffectorsCount ) = 0;
-	virtual IFacialAnimSequence *LoadSequence( const char *sSequenceName ) = 0;
-	virtual void PlaySequence( IFacialAnimSequence *pSequence,bool bExclusive=false,bool bLooping=false ) = 0;
-	virtual void StopSequence( IFacialAnimSequence *pSequence ) = 0;
-	virtual void StopAllSequences() = 0;
-	virtual bool IsPlaySequence( IFacialAnimSequence *pSequence ) = 0;
+	virtual IFacialAnimSequence *LoadSequence( const char *sSequenceName, bool addToCache=true ) = 0;
+	virtual void PrecacheFacialExpression(const char *sSequenceName) = 0;
+	virtual void PlaySequence( IFacialAnimSequence *pSequence,EFacialSequenceLayer layer, bool bExclusive=false,bool bLooping=false ) = 0;
+	virtual void StopSequence( EFacialSequenceLayer layer ) = 0;
+	virtual bool IsPlaySequence( IFacialAnimSequence *pSequence, EFacialSequenceLayer layer ) = 0;
+	virtual void PauseSequence( EFacialSequenceLayer layer, bool bPaused ) = 0;
 	// Seek sequence current time to the specified time offset from the begining of sequence playback time.
-	virtual void SeekSequence( IFacialAnimSequence *pSequence,float fTime ) = 0;
+	virtual void SeekSequence( EFacialSequenceLayer layer,float fTime ) = 0;
 	// Start/Stop Lip syncing with the sound.
 	virtual void LipSyncWithSound( uint32 nSoundId, bool bStop=false ) = 0;
 	virtual void OnExpressionLibraryLoad() = 0;
@@ -246,6 +241,8 @@ struct IFacialInstance
 	virtual void SetForcedRotations(int numForcedRotations, CFacialAnimForcedRotationEntry* forcedRotations) = 0;
 
 	virtual void SetMasterCharacter(ICharacterInstance* pMasterInstance) = 0;
+
+	virtual void TemporarilyEnableBoneRotationSmoothing() = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -276,14 +273,18 @@ struct IFacialAnimation
 {
 	virtual IPhonemeLibrary* GetPhonemeLibrary() = 0;
 
+	virtual void ClearAllCaches() = 0;
+
 	// Creates a new effectors library.
 	virtual IFacialEffectorsLibrary* CreateEffectorsLibrary() = 0;
 	// Loads effectors library from the file.
+	virtual void ClearEffectorsLibraryFromCache(const char* filename) = 0;
 	virtual IFacialEffectorsLibrary* LoadEffectorsLibrary( const char *filename ) = 0;
 	
 	// Creates a new animation sequence.
 	virtual IFacialAnimSequence* CreateSequence() = 0;
-	virtual IFacialAnimSequence* LoadSequence( const char *filename,bool bNoWarnings=false ) = 0;
+	virtual void ClearSequenceFromCache(const char* filename) = 0;
+	virtual IFacialAnimSequence* LoadSequence( const char *filename,bool bNoWarnings=false, bool addToCache=true ) = 0;
 
 	// Access the joystick functionality.
 	virtual IJoystickContext* GetJoystickContext() = 0;
@@ -329,6 +330,13 @@ struct IFacialSentence
 	virtual bool GetWord( int index,Word &wrd ) = 0;
 	// Add a new word into the sentence.
 	virtual void AddWord( const Word &wrd ) = 0;
+
+	struct ChannelSample
+	{
+		const char* phoneme;
+		float strength;
+	};
+	virtual int Evaluate(float fTime, float fInputPhonemeStrength, int maxSamples, ChannelSample* samples) = 0;
 };
 
 //////////////////////////////////////////////////////////////////////////
@@ -346,6 +354,7 @@ struct IFacialAnimChannel
 		FLAG_CATEGORY_BALANCE = 0x00010, // This channel controls the balance of the expressions in a certain folder.
 		FLAG_PROCEDURAL_STRENGTH = 0x00020, // This channel controls the strength of procedural animation.
 		FLAG_LIPSYNC_CATEGORY_STRENGTH = 0x00040, // This channel dampens all expressions in a folder during lipsyncing.
+		FLAG_BAKED_LIPSYNC_GROUP = 0x00080, // The contents of this folder override the auto-lipsynch.
 		FLAG_UI_SELECTED = 0x01000,
 		FLAG_UI_EXTENDED = 0x02000,
 	};
@@ -402,6 +411,18 @@ struct IFacialAnimSoundEntry
 };
 
 //////////////////////////////////////////////////////////////////////////
+struct IFacialAnimSkeletonAnimationEntry
+{
+	// Set the name of the animation associated with this entry.
+	virtual void SetName(const char* skeletonAnimationFile) = 0;
+	virtual const char* GetName() const = 0;
+
+	// Set the starting time of the animation.
+	virtual void SetStartTime(float time) = 0;
+	virtual float GetStartTime() const = 0;
+};
+
+//////////////////////////////////////////////////////////////////////////
 struct IFacialAnimSequence
 {
 	enum EFlags
@@ -412,7 +433,9 @@ struct IFacialAnimSequence
 	enum ESerializationFlags
 	{
 		SFLAG_SOUND_ENTRIES = 0x00000001,
-		SFLAG_ALL = 0xFFFFFFFF
+		SFLAG_CAMERA_PATH =   0x00000002,
+		SFLAG_ANIMATION =     0x00000004,
+		SFLAG_ALL =           0xFFFFFFFF
 	};
 
 	virtual void AddRef() = 0;
@@ -428,9 +451,6 @@ struct IFacialAnimSequence
 
 	virtual Range GetTimeRange() = 0;
 	virtual void SetTimeRange( Range range ) = 0;
-
-	virtual void SetPaused( bool bPaused ) = 0;
-	virtual bool IsPaused() = 0;
 
 	//////////////////////////////////////////////////////////////////////////
 	// Access to channels.
@@ -448,9 +468,11 @@ struct IFacialAnimSequence
 	virtual void DeleteSoundEntry(int index) = 0;
 	virtual IFacialAnimSoundEntry* GetSoundEntry(int index) = 0;
 
-	// Access the filename of the skeleton animation associated with this facial sequence.
-	virtual void SetSkeletonAnimation(const char* skeletonAnimationFile) = 0;
-	virtual const char* GetSkeletonAnimation() const = 0;
+	// Access the skeleton animations associated with this facial sequence.
+	virtual int GetSkeletonAnimationEntryCount() = 0;
+	virtual void InsertSkeletonAnimationEntry(int index) = 0;
+	virtual void DeleteSkeletonAnimationEntry(int index) = 0;
+	virtual IFacialAnimSkeletonAnimationEntry* GetSkeletonAnimationEntry(int index) = 0;
 
 	// Set the name of the joysticks associated with this sequence.
 	virtual void SetJoystickFile(const char* joystickFile) = 0;
@@ -459,6 +481,10 @@ struct IFacialAnimSequence
 	virtual void Serialize( XmlNodeRef &xmlNode,bool bLoading,ESerializationFlags flags=SFLAG_ALL ) = 0;
 
 	virtual void MergeSequence(IFacialAnimSequence* pMergeSequence, const Functor1wRet<const char*, MergeCollisionAction>& collisionStrategy) = 0;
+
+	virtual ISplineInterpolator* GetCameraPathPosition() = 0;
+	virtual ISplineInterpolator* GetCameraPathOrientation() = 0;
+	virtual ISplineInterpolator* GetCameraPathFOV() = 0;
 };
 
 static const float FACIAL_EDITOR_FPS = 30.0f;

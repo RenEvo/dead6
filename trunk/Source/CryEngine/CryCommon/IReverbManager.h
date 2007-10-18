@@ -25,13 +25,13 @@
 #define REVERB_PRESETS_FILENAME_LUA	"Libs/ReverbPresets/ReverbPresetDB.lua"
 #define REVERB_PRESETS_FILENAME_XML	"Libs/ReverbPresets/ReverbPresets.xml"
 
-#define REVERB_INSTANCES 3
-
-#define REVERB_TYPE_EAX 0
-#define REVERB_TYPE_FREEVERB 1  // built in FMOD reverb
-#define REVERB_TYPE_VST_CLASSIC_REVERB 2
-#define REVERB_TYPE_VST_PRINCETON2016 3
-#define REVERB_TYPE_VST_ROOMMACHINE844 4
+#define REVERB_TYPE_NONE 0
+#define REVERB_TYPE_HARDWARE 1
+#define REVERB_TYPE_SOFTWARE 2
+#define REVERB_TYPE_FREEVERB 3  // built in FMOD reverb
+#define REVERB_TYPE_VST_CLASSIC_REVERB 4
+#define REVERB_TYPE_VST_PRINCETON2016 5
+#define REVERB_TYPE_VST_ROOMMACHINE844 6
 
 // Reverb Presets
 //////////////////////////////////////////////////////////////////////////////////////////////

@@ -9,6 +9,10 @@
 #include <IVehicleSystem.h>
 #include <StringUtils.h>
 
+#if defined(WHOLE_PROJECT)
+	#define GetPlayer GetPlayerSensor
+#endif
+
 CPlayer* GetPlayer(EntityId id)
 {
 	if (id == 0)
@@ -62,7 +66,7 @@ public:
 				IVehicle* pVehicle = g_pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(m_vehicleId);
 				if (pVehicle)
 				{
-					pVehicle->RegisterVehicleEventListener(this);
+					pVehicle->RegisterVehicleEventListener(this, "CFlowNode_ActorSensor");
 				}
 				else
 					m_vehicleId = 0;
@@ -78,6 +82,10 @@ public:
 		EOP_ITEMPICKEDUP,
 		EOP_ITEMDROPPED,
 		EOP_ITEMUSED,
+		EOP_NPCGRABBED,
+		EOP_NPCTHROWN,
+		EOP_OBJECTGRABBED,
+		EOP_OBJECTTHROWN,
 		EOP_STANCECHANGED,
 		EOP_SPECIALMOVE,
 		EOP_ONDEATH,
@@ -99,6 +107,10 @@ public:
 			OutputPortConfig<EntityId> ( "ItemPickedUp", _HELP("Triggered when an item is picked up")),
 			OutputPortConfig<EntityId> ( "ItemDropped", _HELP("Triggered when an item is dropped")),
 			OutputPortConfig<EntityId> ( "ItemUsed", _HELP("Triggered when an item is used")),
+			OutputPortConfig<EntityId> ( "NPCGrabbed", _HELP("Triggered when an NPC is grabbed")),
+			OutputPortConfig<EntityId> ( "NPCThrown", _HELP("Triggered when an NPC is thrown")),
+			OutputPortConfig<EntityId> ( "ObjectGrabbed", _HELP("Triggered when an object is grabbed")),
+			OutputPortConfig<EntityId> ( "ObjectThrown", _HELP("Triggered when an object is thrown")),
 			OutputPortConfig<int>      ( "StanceChanged", _HELP("Triggered when Stance changed. 0=Stand,1=Crouch,2=Prone,3=Relaxed,4=Stealth,5=Swim,6=ZeroG")),
 			OutputPortConfig<int>      ( "SpecialMove", _HELP("Triggered On SpecialMove. 0=Jump,1=SpeedSprint,2=StrengthJump")),
 			OutputPortConfig<int>      ( "OnDeath", _HELP("Triggered when Actor dies. Outputs 0 if not god. 1 if god.")),
@@ -170,10 +182,15 @@ public:
 		if (pActor->GetEntityId() != m_entityId)
 			return;
 		CPlayer* pPlayer = static_cast<CPlayer*> (pActor);
+		if(m_vehicleId)
+		{
+			if(IVehicle *pVehicle = GetVehicle(m_vehicleId))
+				pVehicle->UnregisterVehicleEventListener(this);
+		}
 		IVehicle* pVehicle = pPlayer->GetLinkedVehicle();
 		if (pVehicle == 0)
 			return;
-		pVehicle->RegisterVehicleEventListener(this);
+		pVehicle->RegisterVehicleEventListener(this, "CFlowNode_ActorSensor");
 		m_vehicleId = pVehicle->GetEntityId();
 		ActivateOutput(&m_actInfo, EOP_ENTER, m_vehicleId);
 		IVehicleSeat* pSeat = pVehicle->GetSeatForPassenger(m_entityId);
@@ -195,6 +212,7 @@ public:
 		}
 		ActivateOutput(&m_actInfo, EOP_EXIT, m_vehicleId);
 		pVehicle->UnregisterVehicleEventListener(this);
+		m_vehicleId = 0;
 	}
 
 	virtual void OnToggleThirdPerson(IActor *pActor,bool bThirdPerson)
@@ -226,6 +244,13 @@ public:
 	{
 		ActivateOutput(&m_actInfo, EOP_ONDEATH, bIsGod ? 1 : 0);
 	}
+	virtual void OnObjectGrabbed(IActor* pActor, bool bIsGrab, EntityId objectId, bool bIsNPC, bool bIsTwoHanded)
+	{
+		if (bIsGrab)
+			ActivateOutput(&m_actInfo, bIsNPC ? EOP_NPCGRABBED : EOP_OBJECTGRABBED, objectId);
+		else
+			ActivateOutput(&m_actInfo, bIsNPC ? EOP_NPCTHROWN : EOP_OBJECTTHROWN, objectId);
+	}
 	// ~IPlayerEventListener
 
 	// IVehicleEventListener
@@ -240,6 +265,7 @@ public:
 				return;
 			}
 			pVehicle->UnregisterVehicleEventListener(this);
+			m_vehicleId = 0;
 		}
 		else if (event == eVE_PassengerChangeSeat)
 		{
@@ -319,5 +345,146 @@ public:
 	}
 };
 
+// THIS FLOWNODE IS A SINGLETON, although it has member variables!
+// THIS IS INTENDED!!!!
+class CFlowNode_OverrideFOV : public CFlowBaseNode 
+{
+	enum INPUTS
+	{
+		EIP_SetFOV = 0,
+		EIP_GetFOV,
+		EIP_ResetFOV
+	};
+
+	enum OUTPUTS
+	{
+		EOP_CurFOV = 0,
+		EOP_ResetDone,
+	};
+
+public:
+	CFlowNode_OverrideFOV( SActivationInfo * pActInfo ) { m_storedFOV = 0.0f; }
+
+	~CFlowNode_OverrideFOV()
+	{
+		if (m_storedFOV > 0.0f)
+		{
+			ICVar* pCVar = (gEnv && gEnv->pConsole) ? gEnv->pConsole->GetCVar("cl_fov") : 0;
+			if (pCVar)
+				pCVar->Set(m_storedFOV);
+		}
+	}
+
+	void GetConfiguration( SFlowNodeConfig& config )
+	{
+		static const SInputPortConfig in_ports[] = 
+		{
+			InputPortConfig<float> ( "SetFOV", _HELP("Trigger to override Camera's FieldOfView." )),
+			InputPortConfig_Void   ( "GetFOV", _HELP("Trigger to get current Camera's FieldOfView." )),
+			InputPortConfig_Void   ( "ResetFOV", _HELP("Trigger to reset FieldOfView to default value." )),
+			{0}
+		};
+		static const SOutputPortConfig out_ports[] = 
+		{
+			OutputPortConfig<float>  ( "CurFOV", _HELP("Current FieldOfView") ),
+			OutputPortConfig_Void    ( "ResetDone", _HELP("Triggered after Reset") ),
+			{0}
+		};
+		config.pInputPorts = in_ports;
+		config.pOutputPorts = out_ports;
+		config.sDescription = _HELP("Override Camera's FieldOfView. Cutscene ONLY!");
+		config.SetCategory(EFLN_ADVANCED);
+	}
+
+	virtual void GetMemoryStatistics(ICrySizer * s)
+	{
+		s->Add(*this);
+	}
+
+	void Serialize(SActivationInfo* pActInfo, TSerialize ser)
+	{
+		ICVar* pCVar = gEnv->pConsole->GetCVar("cl_fov");
+
+		if (ser.IsWriting())
+		{
+			float curFOV = 0.0f;
+
+			// in case we're currently active, store current value as well
+			if (m_storedFOV > 0.0f && pCVar)
+				curFOV = pCVar->GetFVal();
+
+			ser.Value("m_storedFOV", m_storedFOV);
+			ser.Value("curFOV", curFOV);
+		}
+		else
+		{
+			float storedFOV = 0.0f;
+			float curFOV = 0.0f;
+			ser.Value("m_storedFOV", storedFOV);
+			ser.Value("curFOV", curFOV);
+
+			// if we're currently active, restore first
+			if(m_storedFOV > 0.0f)
+			{
+				if (pCVar)
+					pCVar->Set(m_storedFOV);
+				m_storedFOV = 0.0f;
+			}
+
+			m_storedFOV = storedFOV;
+			if (m_storedFOV > 0.0f && curFOV > 0.0f && pCVar)
+				pCVar->Set(curFOV);
+		}
+	}
+
+	void ProcessEvent( EFlowEvent event, SActivationInfo *pActInfo )
+	{
+		ICVar* pCVar = gEnv->pConsole->GetCVar("cl_fov");
+		if (pCVar == 0)
+			return;
+
+		switch (event)
+		{
+		case eFE_Initialize:
+			if (m_storedFOV > 0.0f)
+			{
+				pCVar->Set(m_storedFOV);
+				m_storedFOV = 0.0f;
+			}
+			break;
+
+		case eFE_Activate:
+			// get fov
+			if (IsPortActive(pActInfo, EIP_GetFOV))
+				ActivateOutput(pActInfo, EOP_CurFOV, pCVar->GetFVal());
+
+			// set fov (store backup if not already done)
+			if (IsPortActive(pActInfo, EIP_SetFOV))
+			{
+				if (m_storedFOV <= 0.0f)
+					m_storedFOV = pCVar->GetFVal();
+				pCVar->Set(GetPortFloat(pActInfo, EIP_SetFOV));
+			}
+			if (IsPortActive(pActInfo, EIP_ResetFOV))
+			{
+				if (m_storedFOV > 0.0f)
+				{
+					pCVar->Set(m_storedFOV);
+					m_storedFOV = 0.0f;
+				}
+			}
+			break;
+		}
+	}
+
+	float m_storedFOV;
+};
+
 REGISTER_FLOW_NODE("Game:ActorSensor",	CFlowNode_ActorSensor);
 REGISTER_FLOW_NODE_SINGLETON("Game:DifficultyLevel",	CFlowNode_DifficultyLevel);
+REGISTER_FLOW_NODE_SINGLETON("Camera:OverrideFOV",	CFlowNode_OverrideFOV); // Intended: Singleton although contains members!
+
+#if defined(WHOLE_PROJECT)
+	#undef GetPlayer
+#endif
+

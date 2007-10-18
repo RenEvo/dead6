@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include "ISerialize.h"
+
 struct IServerBrowser;
 struct IServerListener;
 struct INetworkChat;
@@ -63,7 +65,7 @@ struct INetworkService : public CMultiThreadRefCount
   virtual IServerBrowser*   GetServerBrowser() = 0;
   virtual INetworkChat*     GetNetworkChat() = 0;
   virtual IServerReport*    GetServerReport() = 0;
-  virtual IStatsTrack*      GetStatsTrack(IStatsTrackListener*const) = 0;
+  virtual IStatsTrack*      GetStatsTrack(int version) = 0;
   virtual INatNeg*          GetNatNeg(INatNegListener*const) = 0;
   virtual INetworkProfile*  GetNetworkProfile() = 0;
   virtual ITestInterface*   GetTestInterface() = 0;
@@ -71,6 +73,7 @@ struct INetworkService : public CMultiThreadRefCount
   virtual void              GetMemoryStatistics(ICrySizer* pSizer) = 0;
 	virtual IPatchCheck* 			GetPatchCheck()=0;
 	//etc
+	virtual ~INetworkService(){}
 };
 
 struct INetworkInterface
@@ -100,6 +103,7 @@ struct SBasicServerInfo
   bool          m_voicecomm;
   bool          m_friendlyfire;
   bool          m_dedicated;
+	bool					m_gamepadsonly;
 	ushort        m_hostPort;
   ushort        m_publicPort;
 	uint32			  m_publicIP;
@@ -108,6 +112,7 @@ struct SBasicServerInfo
 	const char*		m_mapName;
 	const char*		m_gameVersion;
 	const char*		m_gameType;
+	const char*		m_country;
 };
 
 enum EServerBrowserError
@@ -190,6 +195,8 @@ struct IChatListener
 	virtual void Message(const char* from, const char* message, ENetworkChatMessageType type)=0;
 	virtual void ChatUser(const char* nick, EChatUserStatus st)=0;
   virtual void OnError(int err)=0;
+	virtual void OnChatKeys(const char* user, int num, const char** keys, const char** values)=0;
+	virtual void OnGetKeysFailed(const char* user)=0;
 };
 
 struct INetworkChat:public INetworkInterface
@@ -199,6 +206,8 @@ struct INetworkChat:public INetworkInterface
   virtual void SetListener(IChatListener* lst)=0;
 	virtual void Say(const char* message)=0;
 	virtual void SendData(const char* nick, const char* message)=0;
+	virtual void SetChatKeys(int num, const char** keys, const char** value) = 0;
+	virtual void GetChatKeys(const char* user, int num, const char** keys) = 0;
 };
 
 enum EServerReportError
@@ -214,18 +223,12 @@ struct IServerReportListener
 {
 	virtual void OnError(EServerReportError) = 0;
 	virtual void OnPublicIP(uint,unsigned short) = 0;
-
-//  virtual void OnNatCookie(int) = 0;
-//	virtual void OnAuthRequest(int playerid, const char* challenge) = 0;
-//	virtual void OnAuthResult(int playerid, bool ok) = 0;
 }; 
 
 struct	IServerReport : public INetworkInterface
 {
-	virtual void AuthPlayer(EntityId playerid, uint ip, const char* challenge, const char* responce) = 0;
-	virtual void ReAuthPlayer(EntityId playerid, const char* responce) = 0;
-  virtual void PlayerDisconnected(EntityId playerid) = 0;
-
+	virtual void AuthPlayer(int playerid, uint ip, const char* challenge, const char* responce) = 0;
+	virtual void ReAuthPlayer(int playerid, const char* responce) = 0;
 
 	virtual void SetReportParams(int numplayers, int numteams) = 0;
 	
@@ -259,21 +262,26 @@ struct IStatsTrackListener
 
 struct	IStatsTrack : public INetworkInterface
 {
-	virtual int AddPlayer() = 0;
-	virtual int AddTeam() = 0;
+	virtual void  SetListener(IStatsTrackListener*) = 0;
+	//These will return id that should be used in all other calls
+	virtual int   AddPlayer(int id) = 0;//player
+	virtual int   AddTeam(int id) = 0;//team
 
-	virtual void RemovePlayer(int) = 0;
-	virtual void RemoveTeam(int) = 0;
+	virtual void  PlayerDisconnected(int id) = 0;//user left the game
+	virtual void  PlayerConnected(int id) = 0;//user returned to game
 
-	virtual void SetServerValue(const char* key, const char*) = 0;
-	virtual void SetPlayerValue(int, const char* key, const char*) = 0;
-	virtual void SetTeamValue(int, const char* key, const char*) = 0;
+	virtual void  StartGame() = 0;//clear data
+	virtual void  EndGame() = 0;//send data off
+	virtual void  Reset() = 0;//reset game... don't send anything
 
-	virtual void StartGame() = 0;
-	virtual void SendSnapShot() = 0;
-	virtual void EndGame() = 0;
+	virtual void  SetServerValue(int key, const char* value) = 0;
+	virtual void  SetPlayerValue(int, int key, const char* value) = 0;
+	virtual void  SetTeamValue(int, int key, const char* value) = 0;
+
+	virtual void  SetServerValue(int key, int value) = 0;
+	virtual void  SetPlayerValue(int, int key, int value) = 0;
+	virtual void  SetTeamValue(int, int key, int value) = 0;
 };
-
 
 struct INatNegListener
 {
@@ -289,6 +297,12 @@ struct INatNeg : public INetworkInterface
 };
 
 
+struct IDownloadStream
+{
+	virtual void GotData( const uint8 * pData, uint32 length ) = 0;
+	virtual void Complete( bool success ) = 0;
+};
+
 struct SFileDownloadParameters
 {
 	SFileDownloadParameters()
@@ -299,6 +313,7 @@ struct SFileDownloadParameters
 		for(int i=0; i<16; ++i)
 			md5[i] = 0;
 		fileSize = 0;
+		pStream = 0;
 	}
 
 	string sourceFilename;		// eg "http://www.server.com/file.ext"
@@ -306,6 +321,8 @@ struct SFileDownloadParameters
 	string destPath;					// eg "Game\Levels\Multiplayer\IA\LevelName\"
 	unsigned char md5[16];		// md5 checksum of the file
 	int fileSize;
+
+	IDownloadStream * pStream; // replaces destFilename if set - direct to memory downloads
 
 	virtual void SerializeWith( TSerialize ser )
 	{
@@ -377,6 +394,8 @@ struct IPatchCheck : public INetworkInterface
 	// store and retrieve the place the patch was downloaded to
 	virtual void SetPatchFileName(const char* filename) = 0;
 	virtual const char* GetPatchFileName() const = 0;
+
+	virtual void TrackUsage() = 0;
 };
 
 const int MAX_PROFILE_STRING_LEN = 31;
@@ -401,16 +420,40 @@ struct SNetworkProfileUserStatus
 enum ENetworkProfileError
 {
 	eNPE_ok,
-	eNPE_network,
-	eNPE_fatal,
-	eNPE_password,
-	eNPE_nick
+	
+	eNPE_connectFailed,			//cannot connect to server
+	eNPE_disconnected,			//disconnected from GP
+
+	eNPE_loginFailed,				//check your account/password
+	eNPE_loginTimeout,			//timeout
+	eNPE_anotherLogin,			//another login
+
+	eNPE_actionFailed,			//generic action failed
+
+	eNPE_nickTaken,					//nick already take
+	eNPE_registerAccountError,//mail/pass not match
+	eNPE_registerGeneric,		//register failed
+		
+	eNPE_nickTooLong,				//no longer than 20 chars
+	eNPE_nickFirstNumber,		//no first digits
+	eNPE_nickSlash,					//no slash in nicks
+	eNPE_nickFirstSpecial,		//no first specials @+#:
+	eNPE_nickNoSpaces,			//no spaces in nick
+	eNPE_nickEmpty,					//empty nicks
+	
+	eNPE_profileEmpty,			//empty profile name
+	
+	eNPE_passTooLong,				//no longer than 30 chars
+	eNPE_passEmpty,					//empty passwords
+	
+	eNPE_mailTooLong,				//no longer than 50 chars
+	eNPE_mailEmpty,					//no longer than 50 chars
 };
 
 struct INetworkProfileListener
 {
   virtual void AddNick(const char* nick) = 0;
-  virtual void UpdateFriend(int id, const char* nick, EUserStatus, const char* status) = 0;
+  virtual void UpdateFriend(int id, const char* nick, EUserStatus, const char* status, bool foreign) = 0;
   virtual void RemoveFriend(int id) = 0;
   virtual void OnFriendRequest(int id, const char* message) = 0;
   virtual void OnMessage(int id, const char* message) = 0;
@@ -421,30 +464,32 @@ struct INetworkProfileListener
   virtual void OnSearchResult(int id, const char* nick) = 0;
   virtual void OnSearchComplete() = 0;
   virtual void OnUserId(const char* nick, int id) = 0;
-  virtual void OnUserNick(int id, const char* nick) = 0;
+  virtual void OnUserNick(int id, const char* nick, bool foreign_name) = 0;
 };
 
 struct IStatsAccessor
 {
   //input
   virtual const char* GetTableName() = 0;
-  virtual int         GetFieldsNum() = 0;
-  virtual const char* GetFieldName(int i) = 0;
+  virtual void        End(bool success) = 0;
 };
 
 struct IStatsReader : public IStatsAccessor
 {
-  //output
+	virtual int         GetFieldsNum() = 0;
+	virtual const char* GetFieldName(int i) = 0;
+	//output
   virtual void        NextRecord(int id) = 0;
   virtual void        OnValue(int field, const char* val) = 0;
   virtual void        OnValue(int field, int val) = 0;
   virtual void        OnValue(int field, float val) = 0;
-  virtual void        End(bool error) = 0;
 };
 
 struct IStatsWriter : public IStatsAccessor
 {
-  //input
+	virtual int         GetFieldsNum() = 0;
+	virtual const char* GetFieldName(int i) = 0;
+	//input
   virtual int   GetRecordsNum() = 0;
   virtual int   NextRecord() = 0;
   virtual bool  GetValue(int field, const char*& val) = 0;
@@ -454,13 +499,36 @@ struct IStatsWriter : public IStatsAccessor
   virtual void  OnResult(int idx, int id, bool success) = 0;
 };
 
+struct IStatsDeleter : public IStatsAccessor
+{
+	virtual int   GetRecordsNum() = 0;
+	virtual int   NextRecord() = 0;
+	virtual void  OnResult(int idx, int id, bool success) = 0;
+	virtual void  End(bool success) = 0;
+};
+
+struct SRegisterDayOfBirth
+{
+	SRegisterDayOfBirth(){}
+	SRegisterDayOfBirth(uint8 d, uint8 m, uint16 y):day(d),month(m),year(y){}
+
+	//hm...
+	SRegisterDayOfBirth(uint32 i):day(i&0xFF),month((i>>8)&0xFF),year(i>>16){}
+	operator uint32()const{return (uint32(year)<<16) + (uint32(month)<<8) + day;}
+
+	uint8		day;
+	uint8		month;
+	uint16	year;
+};
+
 struct INetworkProfile : public INetworkInterface
 {
   virtual void AddListener(INetworkProfileListener* ) = 0;
   virtual void RemoveListener(INetworkProfileListener* ) = 0;
 
-  virtual void Register(const char* nick, const char* email, const char* password) = 0;
+  virtual void Register(const char* nick, const char* email, const char* password, const char* country, SRegisterDayOfBirth dob) = 0;
   virtual void Login(const char* nick, const char* password) = 0;
+	virtual void LoginProfile(const char* email, const char* password, const char* profile) = 0;
   virtual void Logoff() = 0;
   virtual void SetStatus(EUserStatus status, const char* location) = 0;
   virtual void EnumUserNicks(const char* email, const char* password) = 0;
@@ -477,8 +545,10 @@ struct INetworkProfile : public INetworkInterface
   //Player Stats
   virtual void ReadStats(IStatsReader* reader) = 0;
   virtual void WriteStats(IStatsWriter* writer) = 0;
+	virtual void DeleteStats(IStatsDeleter* deleter) = 0;
   //Other Player's Stats
-  virtual void ReadStats(int id, IStatsReader* reader) = 0;
+	virtual void ReadStats(int id, IStatsReader* reader) = 0;
+	virtual void RetrievePassword(const char* email) = 0;
 };
 #endif /*__INETWORKSERVICE_H__*/
 

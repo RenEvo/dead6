@@ -10,7 +10,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#include "CryTypeInfo.h"
+#include "TypeInfo_impl.h"
 #include "ParticleParams_info.h"
 
 // Implementation of TCurveSpline<T> functions.
@@ -121,7 +121,11 @@ struct TCurveTypeInfo: CTypeInfo
 	}
 	virtual size_t GetMemoryUsage(ICrySizer* pSizer, const void* data) const
 	{
+#if defined(PS3)
+		return 0;
+#else
 		return ((STRUCTYPE*)data)->GetMemoryUsage();
+#endif
 	}
 };
 

@@ -38,7 +38,7 @@ struct IAIGroup
 	virtual bool				IsMember(const IAIObject* pAI) const = 0;
 	/// Sets specified unit's properties, see EUnitProperties.
 	virtual void				SetUnitProperties(const IAIObject* obj, uint32 properties) = 0;
-	virtual IAIObject*	GetAttentionTarget(bool bHostileOnly, bool bLiveOnly) const = 0;
+	virtual IAIObject*	GetAttentionTarget(bool bHostileOnly, bool bLiveOnly, const IAIObject* pSkipTarget = NULL) const = 0;
 	virtual Vec3				GetAveragePosition(eAvPositionMode mode = AVMODE_ANY, uint32 unitClass = UNIT_ALL) const = 0;
 	virtual int					GetUnitCount(uint32 unitPropMask=UPR_ALL) const = 0;
 	/// Notifies tactical evaluation of specified state change.
@@ -51,6 +51,8 @@ struct IAIGroup
 	virtual bool				RequestReadabilitySound(int id, float duration) = 0;
 	/// Gets the number of attention targets in the group
 	virtual int					GetTargetCount(bool bHostileOnly, bool bLiveOnly) const = 0;
+	/// triggers reinforcements state
+	virtual void				NotifyReinfDone(const IAIObject* obj, bool isDone) = 0;
 };
 
 
@@ -65,6 +67,8 @@ enum EGroupStateType
 	GE_DEFEND_POS,
 	GE_LEADER_COUNT,
 	GE_MOST_LOST_UNIT,
+	GE_MOVEMENT_SIGNAL,
+	GE_NEAREST_SEEK,
 };
 
 /// Notify types for AIGroupTactic.Notify.
@@ -82,11 +86,11 @@ enum EGroupNotifyType
 	GN_NOTIFY_WEAK_COVERING,
 	GN_NOTIFY_HIDING,
 	GN_NOTIFY_SEEKING,
+	GN_NOTIFY_ALERTED,
 	GN_NOTIFY_UNAVAIL,
 	GN_NOTIFY_IDLE,
 	GN_NOTIFY_SEARCHING,
 	GN_NOTIFY_REINFORCE,
-	GN_NOTIFY_RESET_SEARCH,
 };
 
 /// State describing the over group state.
@@ -109,6 +113,7 @@ enum EGroupUnitType
 	GU_HUMAN_COVER,
 	GU_HUMAN_SNEAKER,
 	GU_HUMAN_LEADER,
+	GU_HUMAN_SNEAKER_SPECOP,
 	GU_ALIEN_MELEE,
 	GU_ALIEN_ASSAULT,
 	GU_ALIEN_MELEE_DEFEND,

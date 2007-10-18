@@ -40,7 +40,7 @@ public:
   virtual ~CRESky();
   virtual void mfPrepare();
   virtual bool mfDraw(CShader *ef, SShaderPass *sfm);
-  virtual float mfDistanceToCameraSquared(const CRenderObject & thisObject);
+  virtual float mfDistanceToCameraSquared(Matrix34& matInst);
   void DrawSkySphere(float fHeight);
 	bool DrawFogLayer();
 	bool DrawBlackPortal();
@@ -52,7 +52,9 @@ public:
 	CREHDRSky()
 	: m_pRenderParams(0)
 	, m_skyDomeTextureLastTimeStamp(-1)
+	, m_frameReset(0)
 	, m_pStars(0)
+	, m_pTmpStorage(0)
 	{
 		mfSetType(eDATA_HDRSky);
 		mfUpdateFlags(FCEF_TRANSFORM);
@@ -61,7 +63,7 @@ public:
 	virtual ~CREHDRSky();
 	virtual void mfPrepare();
 	virtual bool mfDraw(CShader *ef, SShaderPass *sfm);
-	virtual float mfDistanceToCameraSquared(const CRenderObject & thisObject);
+	virtual float mfDistanceToCameraSquared(Matrix34& matInst);
 
 public:
 	const SSkyLightRenderParams* m_pRenderParams;
@@ -69,7 +71,9 @@ public:
 
 private:
 	int m_skyDomeTextureLastTimeStamp;
+	int m_frameReset;
 	CStars* m_pStars;
+	unsigned char* m_pTmpStorage;
 };
 
 

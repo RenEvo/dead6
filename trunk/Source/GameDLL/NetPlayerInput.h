@@ -31,6 +31,9 @@ public:
 	{
 		return NETPLAYER_INPUT;
 	};
+
+	ILINE virtual uint32 GetMoveButtonsState() const { return 0; }
+	ILINE virtual uint32 GetActions() const { return 0; }
 	// ~IPlayerInput
 
 private:

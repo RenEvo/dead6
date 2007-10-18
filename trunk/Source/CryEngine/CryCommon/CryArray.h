@@ -58,12 +58,12 @@ protected:
 // Allocation functors.
 struct FModuleAlloc
 {
-	static void* Alloc( void* oldptr, size_t oldsize,size_t newsize )	{ return ModuleAlloc( oldptr, newsize ); }
+	static void* Alloc( void* oldptr, size_t oldsize, size_t newsize )	{ return ModuleAlloc( oldptr, newsize ); }
 };
 
 struct FSafeModuleAlloc
 {
-	static void* Alloc( void* oldptr, size_t oldsize,size_t newsize ) { return SafeAlloc( ModuleAlloc, oldptr, newsize ); }
+	static void* Alloc( void* oldptr, size_t oldsize, size_t newsize ) { return SafeAlloc( ModuleAlloc, oldptr, newsize ); }
 };
 
 //---------------------------------------------------------------------------
@@ -246,7 +246,7 @@ struct DynArray
 		if (capacity())
 		{
 			destroy(begin(), end());
-			A::Alloc(header(),get_alloc_size(),0);
+			A::Alloc(header(), get_alloc_size(), 0);
 			m_aElems = null();
 		}
 	}
@@ -265,10 +265,10 @@ protected:
 
 	T*				m_aElems;
 
-	struct Header
-	{
-		size_type	nCapacity, nSize;
-	};
+  struct Header
+  {
+    size_type	nCapacity, nSize;
+  };
 
 	static T* null()
 	{
@@ -300,12 +300,19 @@ protected:
 			resize_raw(nCount, nCount);
 		else if (nCount > capacity())
 		{
+//PS3HACK -> Remove/ allowed to further load level
+#if defined(PS3)
+			const	size_type CurrentCap	=	capacity();
+			const	size_type nCap				=	CurrentCap+(CurrentCap>>3);
+			resize_raw(nCount, nCap>nCount?nCap:nCount);
+#else
 			// Grow if needed, to next power-of-two.
 			size_type nCap = 4;
 			nCap = 4;
 			while (nCap < nCount)
 				nCap <<= 1;
 			resize_raw(nCount, nCap);
+#endif
 		}
 		else
 		{
@@ -321,13 +328,13 @@ protected:
 		{
 			if (nAlloc == 0)
 			{
-				A::Alloc(mem(), get_alloc_size(),0);
+				A::Alloc(mem(), get_alloc_size(), 0);
 				m_aElems = null();
 			}
 			else
 			{
 				size_t nSize = sizeof(Header) + nAlloc * sizeof(T);
-				void* newMem = A::Alloc(mem(), get_alloc_size(),nSize);
+				void* newMem = A::Alloc(mem(), get_alloc_size(), nSize);
 				Header* head = (Header*)newMem;
 				head->nCapacity = nAlloc;
 				m_aElems = (T*)(head+1);
@@ -397,10 +404,50 @@ protected:
 		for (; first < final; first++)
 			first->~T();
 	}
+  friend struct FModuleAlloc16;
+};
+
+// 16 byte alligned allocator
+struct FModuleAlloc16
+{
+  static void* Alloc( void* oldptr, size_t oldsize, size_t newsize )
+  {
+    unsigned char *bActualPtr = (unsigned char *)oldptr;
+    if (bActualPtr)
+    {
+      bActualPtr -= sizeof(DynArray<char>::Header);
+      bActualPtr = ((unsigned char **)bActualPtr)[-1];
+    }
+    if (newsize)
+    {
+      unsigned char *pData = (unsigned char *)ModuleAlloc( NULL, newsize+16+sizeof(char *)+sizeof(DynArray<char>::Header) );
+      unsigned char *bPtrRes = (unsigned char *)((int)(pData+16+sizeof(char *)) & ~0xf);
+      ((unsigned char**)bPtrRes)[-1] = pData;
+      if (oldptr)
+      {
+        memcpy(&bPtrRes[sizeof(DynArray<char>::Header)], oldptr, oldsize);
+        ModuleAlloc( bActualPtr, 0 );
+      }
+      return &bPtrRes[sizeof(DynArray<char>::Header)];
+    }
+    else
+    if (oldptr)
+    {
+      return ModuleAlloc( bActualPtr, newsize );
+    }
+    return NULL;
+  }
+};
+
+
+template<class T>
+struct DynArray16 : public DynArray<T, FModuleAlloc16>
+{
 };
 
 // Convenient iteration macros
 #define for_array(i, arr)									for (uint i = 0; i < arr.size(); i++)
+#define for_array_ptr(TYPE, p, arr)				for (TYPE* p = (arr).begin(); p != (arr).end(); ++p)
 #define for_all(cont)											for_array (_i, cont) cont[_i]
 #define if_pointer(pointer)								if (pointer) (pointer)
 #define for_all_pointer(array, pointer)		for_array (_i, array) if_pointer (array[_i].pointer)

@@ -23,7 +23,7 @@
 enum ESurfaceTypeFlags
 {
 	SURFACE_TYPE_NO_PHYSICALIZE         = BIT(1), // This surface should not be physicalized.
-	SURFACE_TYPE_NO_COLLIDE             = BIT(2), // Players should not collide with this surface.
+	SURFACE_TYPE_NO_COLLIDE             = BIT(2), // Should only be set for vegetation canopy mats
 	SURFACE_TYPE_VEHICLE_ONLY_COLLISION = BIT(3),
 	SURFACE_TYPE_CAN_SHATTER            = BIT(4), // This surface type can shatter
 };
@@ -47,6 +47,7 @@ struct ISurfaceType
 	struct SSurfaceTypeAIParams
 	{
 		float fImpactRadius;
+		float fImpactSoundRadius;
 		float fFootStepRadius;
 		float proneMult;
 		float crouchMult;
@@ -54,8 +55,9 @@ struct ISurfaceType
 
 		SSurfaceTypeAIParams()
 		{
-			fImpactRadius = 5.0f;
-			fFootStepRadius = 15.0f;
+			fImpactRadius = 2.5f;
+			fImpactSoundRadius = 20.0f;
+			fFootStepRadius = 20.0f;
 			proneMult = 0.2f;
 			crouchMult = 0.5f;
 			movingMult = 2.5f;

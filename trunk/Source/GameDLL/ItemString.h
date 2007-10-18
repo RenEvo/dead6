@@ -24,70 +24,6 @@
 
 namespace SharedString
 {
-	static size_t fasthash_no_len(const char* str)
-	{
-		FUNCTION_PROFILER(gEnv->pSystem, PROFILE_GAME);
-		uint32 hash = 0;
-		const uchar* s = reinterpret_cast<const uchar*> (str);
-		while (*s)
-		{
-			hash += *s++;
-			hash += (hash << 10);
-			hash ^= (hash >> 6);
-		}
-		hash += (hash << 3);
-		hash ^= (hash >> 11);
-		hash += (hash << 15);
-		return hash;
-	}
-
-	static size_t fasthash(const char* str, size_t length)
-	{
-		FUNCTION_PROFILER(gEnv->pSystem, PROFILE_GAME);
-		// This hash is designed to work on 16-bit chunks at a time. But since the normal case
-		// (above) is to hash UTF-16 characters, we just treat the 8-bit chars as if they
-		// were 16-bit chunks, which will give matching results.
-		static const uint32 PHI = 0x9e3779b9U;
-
-		uint32 len = length; // up to 2^32 = 2 GB strings should be enough
-		const uchar* s = reinterpret_cast<const uchar*> (str);
-		uint32 hash = PHI;
-		uint32 tmp;
-
-		uint32 rem = len & 1;
-		len >>= 1;
-
-		// Main loop
-		for (; len > 0; len--) {
-			hash += s[0];
-			tmp = (s[1] << 11) ^ hash;
-			hash = (hash << 16) ^ tmp;
-			s += 2;
-			hash += hash >> 11;
-		}
-
-		// Handle end case
-		if (rem) {
-			hash += s[0];
-			hash ^= hash << 11;
-			hash += hash >> 17;
-		}
-
-		// Force "avalanching" of final 127 bits
-		hash ^= hash << 3;
-		hash += hash >> 5;
-		hash ^= hash << 2;
-		hash += hash >> 15;
-		hash ^= hash << 10;
-
-		// this avoids ever returning a hash code of 0, since that is used to
-		// signal "hash not computed yet", using a value that is likely to be
-		// effectively the same as 0 when the low bits are masked
-		if (hash == 0)
-			hash = 0x80000000;
-		return hash;
-  }
-
 	template <class Key>
 	class hash_strcmp
 	{
@@ -98,10 +34,11 @@ namespace SharedString
 
 			size_t operator()( const Key& key ) const
 			{
-				const char* szKey = stl::constchar_cast(key);
-				assert (szKey);
-				// return fasthash(szKey, strlen(szKey));
-				return fasthash_no_len(szKey);
+				unsigned int h = 0; 
+				const char *s = stl::constchar_cast(key);
+				assert (s);
+				for (; *s; ++s) h = 5*h + tolower(*(unsigned char*)s);
+				return size_t(h);
 			};
 
 			bool LessThan( const Key& key1,const Key& key2 ) const

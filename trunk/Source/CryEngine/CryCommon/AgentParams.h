@@ -12,6 +12,13 @@ struct AgentPerceptionParameters
 
 	// How far can the agent see
 	float	sightRange;
+	// How far can the agent see if the target is vehicle
+	float	sightRangeVehicle;
+
+	// Sign envelope threshold percentage on normal and alarmed conditions.
+	float sightEnvScaleNormal;
+	float sightEnvScaleAlarmed;
+
 	// how movement velocity affects perception
 	//VELmultyplier = (velBase + velScale*CurrentVel^2);
 	//current priority gets scaled by VELmultyplier
@@ -34,8 +41,6 @@ struct AgentPerceptionParameters
 	float		camoScale;
 	// Equivalent to camo scale, used with thermal vision.
 	float		heatScale;
-	// Reaction speed, default=1. This 
-	float		reactionSpeed;
 
 	float		targetPersistence;
 
@@ -48,13 +53,16 @@ struct AgentPerceptionParameters
 	float		forgetfulnessMemory;		//	when below PERCEPTION_SOMETHING_SEEN_VALUE
 
 	bool		isAffectedByLight;		// flag indicating if the agent perception is affected by light conditions.
+	float		minAlarmLevel;
 
+	float bulletHitRadius; // radius for perceiving bullet hits nearby
 	struct { float visual; float audio; } perceptionScale;
 
-	AgentPerceptionParameters():sightRange(0),FOVPrimary(-1),FOVSecondary(-1),camoScale(1),velBase(1.0f),velScale(.3f),audioScale(1),
-		stanceScale(1.0f), bThermalVision(false),heatScale(1),reactionSpeed(1),targetPersistence(0.f),forgetfulness(1.f),
+	AgentPerceptionParameters():sightRange(0),sightRangeVehicle(-1),FOVPrimary(-1),FOVSecondary(-1),camoScale(1),velBase(1.0f),velScale(.3f),audioScale(1),
+		stanceScale(1.0f), bThermalVision(false),heatScale(1),targetPersistence(0.f),forgetfulness(1.f),
 		forgetfulnessTarget(1.f),forgetfulnessSeek(1.f),forgetfulnessMemory(1.f), collisionReactionScale(1.0f), stuntReactionTimeOut(3.0f),
-		isAffectedByLight(false)
+		isAffectedByLight(false),bulletHitRadius(0.f),minAlarmLevel(0.0f),sightEnvScaleNormal(0.2f),sightEnvScaleAlarmed(0.5f)
+
 	{
 		perceptionScale.visual=1.f;perceptionScale.audio=1.f;
 	}
@@ -72,11 +80,7 @@ typedef struct AgentParameters
 	int m_CombatClass;
 
 	//-------------
-	float m_fGravityMultiplier;
 	float m_fAccuracy;
-	float	m_fShootingReactionTime;
-	float m_fOriginalAccuracy;
-	float m_fResponsiveness;
 	float	m_fPassRadius;
 	float m_fStrafingPitch;		//if this > 0, will do a strafing draw line firing. 04/12/05 Tetsuji
 	float m_fDistanceToHideFrom;
@@ -86,15 +90,9 @@ typedef struct AgentParameters
 	float m_fCommRange;
 	float m_fAttackZoneHeight;
 	float m_fPreferredCombatDistance;
+	float m_fGrenadeThrowDistScale;	// Controls the preferred throw distance of a grenade. In range [0..1].
 
 	int	m_weaponAccessories;
-
-	//-----------
-	// indices
-	//-------------
-	float m_fAggression;
-	float m_fOriginalAggression;
-	float m_fCohesion;
 
 	//-----------
 	// hostility data
@@ -117,7 +115,6 @@ typedef struct AgentParameters
 	int			m_trackPatternContinue;	// Signals to continue to advance on the pattern, this is a three state flag, 0 means no change (default), 1=continue, 2=stop
 
 	bool  m_bAiIgnoreFgNode;
-	bool  m_bIgnoreTargets;
 	bool  m_bPerceivePlayer;
 	float m_fAwarenessOfPlayer;
 	bool  m_bSpecial;
@@ -126,6 +123,7 @@ typedef struct AgentParameters
 	//--------------------------
 	bool	m_bInvisible;
 	float	m_fCloakScale;	// 0- no cloaked, 1- complitly cloaked (invisible)
+	float	m_fCloakScaleTarget;	// cloak scale should fade to this value
 
 	//--------------------------
 	//	Turn speed
@@ -145,11 +143,7 @@ typedef struct AgentParameters
 	void Reset()
 	{
 		m_CombatClass = -1;
-		m_fGravityMultiplier = 1.0f;
 		m_fAccuracy = 0.0f;
-		m_fShootingReactionTime = 2.0;
-		m_fOriginalAccuracy = 0.0f;
-		m_fResponsiveness = 0.0f;
 		m_fPassRadius = 0.4f;
 		m_fStrafingPitch = 0.0f;
 		m_fDistanceToHideFrom = 0.0f;
@@ -157,9 +151,6 @@ typedef struct AgentParameters
 		m_fCommRange = 0.0f;
 		m_fAttackZoneHeight = 0.0f;
 		m_fPreferredCombatDistance = 0.0f;
-		m_fAggression = 0.0f;
-		m_fOriginalAggression = 0.0f;
-		m_fCohesion = 0.0f;
 		m_bSpeciesHostility = true;
 		m_fGroupHostility = 0.0f;
 		m_fMeleeDistance = 2.0f;
@@ -169,17 +160,18 @@ typedef struct AgentParameters
 		m_trackPatternName = "";
 		m_trackPatternContinue = 0;
 		m_bAiIgnoreFgNode = false;
-		m_bIgnoreTargets = false;
 		m_bPerceivePlayer = true;
 		m_fAwarenessOfPlayer = 0;
 		m_bSpecial = false;
 		m_bInvisible = false;
 		m_fCloakScale = 0.0f;
+		m_fCloakScaleTarget = 0.0f;
 		m_weaponAccessories = 0;
 		m_lookIdleTurnSpeed = -1;
 		m_lookCombatTurnSpeed = -1;
 		m_aimTurnSpeed = -1;
 		m_fireTurnSpeed = -1;
+		m_fGrenadeThrowDistScale = 1.0f;
 	}
 	
 } AgentParameters;

@@ -18,6 +18,9 @@
 # pragma once
 #endif
 
+#if defined __GNUC__
+# include <vector>
+#endif
 
 #include <Cry_Geo.h>
 
@@ -138,8 +141,6 @@ namespace Overlap {
 				}
 			}
 			return (0 != count);
-
-			return true;
 		}
 
 	template<typename F, typename VecContainer>

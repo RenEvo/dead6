@@ -32,7 +32,6 @@ enum EActorPhysicalization
 	eAP_Ragdoll,
 	eAP_Sleep,
 	eAP_Frozen,
-	eAP_DemoRecording,
 	eAP_Linked,
 	eAP_Spectator,
 };
@@ -106,6 +105,9 @@ struct IActor:
   virtual IVehicle* GetLinkedVehicle() const = 0;
   virtual IEntity* GetLinkedEntity() const = 0;
 
+	// for look ik in vehicles
+	virtual void SetViewInVehicle(Quat viewRotation) = 0;
+
 	// get current item (from inventory / in hands)
 	//virtual IItem *GetCurrentItem() const = 0;
 
@@ -125,11 +127,19 @@ struct IActor:
 	virtual void SwitchDemoModeSpectator(bool activate) = 0;
 
 	virtual void RequestFacialExpression(const char* pExpressionName = NULL) = 0;
+	virtual void PrecacheFacialExpression(const char* pExpressionName) = 0;
 
 	virtual void SetAnimTentacleParams(pe_params_rope& rope, float animBlend) = 0;
 
 	virtual void AnimationEvent(ICharacterInstance *pCharacter, const AnimEventInstance &event) = 0;
 	virtual IAnimatedCharacter * GetAnimatedCharacter() = 0;
+	virtual bool IsFallen() const = 0;
+
+	virtual void NotifyInventoryAmmoChange(IEntityClass* pAmmoClass, int amount) = 0;
+
+	virtual EntityId	GetGrabbedEntityId() const = 0;
+
+	virtual void HideAllAttachments(bool isHiding) = 0;
 };
 
 

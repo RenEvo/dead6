@@ -65,7 +65,7 @@ public:
   void  Reset();
 
   //clients can vote
-  void  Vote(int id, int team);
+  void  Vote(int id, int team, bool yes);
   bool  CanVote(int id)const;
 private:
   CTimeValue            m_startTime;
@@ -77,6 +77,7 @@ private:
 
   std::vector<int>      m_votes;
   int                   m_teamVotes;
+	int										m_numVotes;
   //recent voting
   std::vector<SVoting>  m_votings;
 };

@@ -15,8 +15,9 @@ History:
 #include "Weapon.h"
 #include "Player.h"
 #include "HUD/HUD.h"
+#include "HUD/HUDRadar.h"
 #include "GameRules.h"
-
+#include "GameCVars.h"
 #include <IActorSystem.h>
 #include <IAISystem.h>
 #include <IAgent.h>
@@ -63,39 +64,41 @@ void CWeapon::OnShoot(EntityId shooterId, EntityId ammoId, IEntityClass* pAmmoTy
 
 		CPlayer *pPlayer=static_cast<CPlayer *>(pActor);
 		CNanoSuit *pSuit=pPlayer->GetNanoSuit();
-		if(pSuit)
+
+		if(m_fm && strcmp(m_fm->GetType(), "Repair"))
 		{
-			if (pSuit->GetMode() == NANOMODE_STRENGTH && !IsMounted())
-				pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-3.0f);
-			else if(pSuit->GetMode() == NANOMODE_CLOAK)
-				pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-25.0f);
+			if(pSuit)
+			{
+				if (pSuit->GetMode() == NANOMODE_STRENGTH && !IsMounted())
+					pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-g_pGameCVars->g_suitRecoilEnergyCost);
+				else if(pSuit->GetMode() == NANOMODE_CLOAK)
+					pSuit->SetSuitEnergy(0.0f);
+			}
 		}
 
+		if (gEnv->bServer && pSuit && pSuit->IsInvulnerable())
+			pSuit->SetInvulnerability(false);
 	}
 	
 	if (pClientActor && m_fm && strcmp(m_fm->GetType(), "Thrown"))	
 	{
-		CHUD *pHUD = g_pGame->GetHUD(); 
 		// inform the HUDRadar about the sound event
-		if (pHUD)
-		{
-			Vec3 vPlayerPos=pClientActor->GetEntity()->GetWorldPos();
-			float fDist2=(vPlayerPos-pos).len2();
-			if (fDist2<250.0f*250.0f)
-			{			
-				//if (pClientActor->GetEntityId() != shooterId) 
-					//	pHUD->ShowSoundOnRadar(pos);
-					
-				if(gEnv->bMultiplayer)
-				{
-					CGameRules *pGameRules = g_pGame->GetGameRules();
-					if(pGameRules->GetTeamCount() < 2 || (pGameRules->GetTeam(shooterId) != pGameRules->GetTeam(pClientActor->GetEntityId())))
-						pHUD->GetRadar()->AddEntityTemporarily(shooterId, 5.0f);
-				}
-
-				if ((!IsSilencerAttached()) && fDist2<sqr(pHUD->GetBattleRange())) 				
-					pHUD->TickBattleStatus(1.0f); 									
+		Vec3 vPlayerPos=pClientActor->GetEntity()->GetWorldPos();
+		float fDist2=(vPlayerPos-pos).len2();
+		if (fDist2<250.0f*250.0f)
+		{			
+			//if (pClientActor->GetEntityId() != shooterId) 
+				//	pHUD->ShowSoundOnRadar(pos);
+				
+			if(gEnv->bMultiplayer)
+			{
+				CGameRules *pGameRules = g_pGame->GetGameRules();
+				if(pGameRules->GetTeamCount() < 2 || (pGameRules->GetTeam(shooterId) != pGameRules->GetTeam(pClientActor->GetEntityId())))
+					SAFE_HUD_FUNC(GetRadar()->AddEntityTemporarily(shooterId, 5.0f));
 			}
+
+			if ((!IsSilencerAttached()) && fDist2<sqr(SAFE_HUD_FUNC_RET(GetBattleRange())))
+				SAFE_HUD_FUNC(TickBattleStatus(1.0f));
 		}
 	}
 }
@@ -104,6 +107,22 @@ void CWeapon::OnShoot(EntityId shooterId, EntityId ammoId, IEntityClass* pAmmoTy
 void CWeapon::OnStartFire(EntityId shooterId)
 {
 	BROADCAST_WEAPON_EVENT(OnStartFire, (this, shooterId));
+
+	if (gEnv->bServer)
+	{
+		if(CActor* pOwner = static_cast<CActor *>(g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(shooterId)))
+		{
+			if (pOwner->GetActorClass()==CPlayer::GetActorClassType())
+			{
+				CPlayer *pPlayer = static_cast<CPlayer *>(pOwner);
+				if(CNanoSuit *pSuit = pPlayer->GetNanoSuit())
+				{
+					if (pSuit->IsInvulnerable())
+						pSuit->SetInvulnerability(false);
+				}
+			}
+		}
+	}
 }
 
 //------------------------------------------------------------------------
@@ -163,6 +182,9 @@ void CWeapon::OnPickedUp(EntityId actorId, bool destroyed)
 
 	CItem::OnPickedUp(actorId, destroyed);
 
+	GetEntity()->SetFlags(GetEntity()->GetFlags() | ENTITY_FLAG_NO_PROXIMITY);
+	GetEntity()->SetFlags(GetEntity()->GetFlags() & ~ENTITY_FLAG_ON_RADAR);
+
 	if(GetISystem()->IsSerializingFile() == 1)
 		return;
 
@@ -200,6 +222,12 @@ void CWeapon::OnPickedUp(EntityId actorId, bool destroyed)
 			}
 		}
 	}
+
+	if(!gEnv->bMultiplayer && !m_initialSetup.empty() && pActor->IsClient())
+	{
+		for (TAccessoryMap::iterator it=m_accessories.begin(); it!=m_accessories.end(); ++it)
+			FixAccessories(GetAccessoryParams(it->first), true);
+	}
 }
 
 //------------------------------------------------------------------------
@@ -208,6 +236,9 @@ void CWeapon::OnDropped(EntityId actorId)
 	BROADCAST_WEAPON_EVENT(OnDropped, (this, actorId));
 
 	CItem::OnDropped(actorId);
+
+	GetEntity()->SetFlags(GetEntity()->GetFlags() & ~ENTITY_FLAG_NO_PROXIMITY);
+	GetEntity()->SetFlags(GetEntity()->GetFlags() | ENTITY_FLAG_ON_RADAR);
 }
 
 
@@ -215,6 +246,39 @@ void CWeapon::OnDropped(EntityId actorId)
 void CWeapon::OnMelee(EntityId shooterId)
 {
 	BROADCAST_WEAPON_EVENT(OnMelee, (this, shooterId));
+
+	if(CActor* pOwner = static_cast<CActor *>(g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(shooterId)))
+	{
+		if (pOwner->GetActorClass()==CPlayer::GetActorClassType())
+		{
+			CPlayer *pPlayer = static_cast<CPlayer *>(pOwner);
+			if(CNanoSuit *pSuit = pPlayer->GetNanoSuit())
+			{
+				ENanoMode curMode = pSuit->GetMode();
+				if (curMode == NANOMODE_SPEED)
+				{
+					if (gEnv->bServer)
+						pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-20.0f);
+				}
+				else if (curMode == NANOMODE_STRENGTH)
+				{
+					if (gEnv->bServer)
+						pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-40.0f);
+					pSuit->PlaySound(STRENGTH_MELEE_SOUND, (pSuit->GetSlotValue(NANOSLOT_STRENGTH))*0.01f);
+				}
+				else if (curMode == NANOMODE_CLOAK)
+				{
+					if (gEnv->bServer)
+						pSuit->SetSuitEnergy(0.0f);
+				}
+
+				if (gEnv->bServer && pSuit->IsInvulnerable())
+					pSuit->SetInvulnerability(false);
+			}
+
+			pPlayer->PlaySound(CPlayer::ESound_Melee);
+		}
+	}
 }
 
 //------------------------------------------------------------------------
@@ -227,4 +291,10 @@ void CWeapon::OnStartTargetting(IWeapon *pWeapon)
 void CWeapon::OnStopTargetting(IWeapon *pWeapon)
 {
 	BROADCAST_WEAPON_EVENT(OnStopTargetting,(this));
+}
+
+//------------------------------------------------------------------------
+void CWeapon::OnSelected(bool selected)
+{
+	BROADCAST_WEAPON_EVENT(OnSelected,(this, selected));
 }

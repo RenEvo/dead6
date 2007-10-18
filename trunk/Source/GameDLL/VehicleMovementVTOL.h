@@ -35,6 +35,8 @@ public:
 	virtual void ProcessActions(const float deltaTime);
 	virtual void ProcessAI(const float deltaTime);
 	virtual void Update(const float deltaTime);
+
+	void Serialize(TSerialize ser, unsigned aspects);
 	// ~IVehicleMovement
 
 	// CVehicleMovementHelicopter
@@ -47,6 +49,9 @@ public:
 	// ~CVehicleMovementHelicopter
 
 protected:
+
+	void SetHorizontalMode(float horizontal);
+	float GetDamageMult();
 
 	bool m_isOveridingImpulse;
 
@@ -63,9 +68,13 @@ protected:
 	float m_horizontal;
 	float m_maxFwdSpeedHorizMode;
 	float m_maxUpSpeedHorizMode;
+	float m_strafeForce;
+
+	float m_angleLift;
 
 	float m_relaxForce;
-	float m_relaxTime;
+	float m_relaxRollTime;
+	float m_relaxPitchTime;
 
 	float m_timeUntilWingsRotate;
 
@@ -77,6 +86,13 @@ protected:
 	float m_wingsSpeed;
 
 	SPID m_fwdPID;
+
+	// player variables
+
+	float m_strafeAction;
+	float m_relaxTimer;
+	float m_soundParamTurn;
+	float m_liftPitchAngle;
 	
 	// variables updated in ProcessMovement/Update
 	float m_wingsTimer;

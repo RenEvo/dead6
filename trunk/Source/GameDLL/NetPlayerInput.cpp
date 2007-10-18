@@ -48,82 +48,6 @@ void CNetPlayerInput::PreUpdate()
 	IPhysicalEntity * pPhysEnt = m_pPlayer->GetEntity()->GetPhysics();
 	if (!pPhysEnt)
 		return;
-	pe_status_pos posStatus;
-	pPhysEnt->GetStatus( &posStatus );
-	pe_status_dynamics dynStatus;
-	pPhysEnt->GetStatus( &dynStatus );
-
-
-
-
-
-
-	/*
-	static const float grabDataTimeSlice = 0.05f;
-	CTimeValue now = gEnv->pTimer->GetFrameStartTime();
-	if (m_previousData.Empty() || (m_previousData.Back().when + grabDataTimeSlice < now))
-	{
-	SPrevPos pp;
-	pp.when = now;
-	pp.where = posStatus.pos;
-	pp.howFast = dynStatus.v;
-	m_previousData.CyclePush( pp );
-	}
-
-	IPersistantDebug * pPD = g_pGame->GetIGameFramework()->GetIPersistantDebug();
-	while (!m_previousData.Empty())
-	{
-	pPD->Begin("netpredict", true);
-
-	static float kval = 0.1666667f;
-	static float clampval = 0.3f;
-
-	Vec3 p1 = m_previousData.Front().where;
-	Vec3 v1 = m_previousData.Front().howFast;
-	Vec3 p2 = posStatus.pos;
-	Vec3 v2 = dynStatus.v;
-	float tm = (now - m_previousData.Front().when).GetSeconds();
-
-	Vec3 bump(0,0,0.1f);
-	pPD->AddSphere( p1+bump, 0.1f, ColorF(1,0,0,1), 1 );
-	pPD->AddSphere( p1+v1+bump, 0.05f, ColorF(1,0,0.5f,1), 1 );
-	pPD->AddSphere( p2+bump, 0.1f, ColorF(1,1,0,1), 1 );
-	pPD->AddSphere( p2+v2+bump, 0.05f, ColorF(1,1,0.5f,1), 1 );
-	pPD->AddLine( p1+bump, p1+v1+bump, ColorF(1,0,0,1), 1 );
-	pPD->AddLine( p2+bump, p2+v2+bump, ColorF(1,1,0,1), 1 );
-
-	float badness = 0;
-	for (TPreviousData::SIterator it = m_previousData.Begin(); it != m_previousData.End(); ++it)
-	{
-	float s = (it->when - m_previousData.Front().when).GetSeconds() / tm;
-	Vec3 predicted = HermiteInterpolate( s, p1, v1, p2, v2 );
-	float thisBadness = predicted.GetSquaredDistance( it->where );
-	if (thisBadness > badness)
-	badness = thisBadness;
-
-	pPD->AddLine( predicted+bump, it->where+bump, ColorF(1,0,1,1), 1 );
-	}
-	CryLogAlways("badness[%d] %s: %f", m_previousData.Size(), m_pPlayer->GetEntity()->GetName(), badness);
-
-	if (badness > sqr(clampval))
-	{
-	m_previousData.Pop();
-	continue;
-	}
-
-
-	for (float t = 0.0f; t < 1.0f; t += 0.1f)
-	{
-	pPD->AddSphere( HermiteInterpolate(1+t,p1,v1,p2,v2)+bump, 0.3f, ColorF(1,0,1,1), 1 );
-	}
-	break;
-	}
-	*/	
-
-
-
-
-
 
 	CMovementRequest moveRequest;
 	SMovementState moveState;
@@ -133,7 +57,7 @@ void CNetPlayerInput::PreUpdate()
 	// absolutely ensure length is correct
 	deltaMovement = deltaMovement.GetNormalizedSafe(ZERO) * m_curInput.deltaMovement.GetLength();
 	moveRequest.AddDeltaMovement( deltaMovement );
-	if(GetISystem()->IsDemoMode() == 2)
+	if( IsDemoPlayback() )
 	{
 		Vec3 localVDir(m_pPlayer->GetViewQuatFinal().GetInverted() * m_curInput.lookDirection);
 		Ang3 deltaAngles(asin(localVDir.z),0,cry_atan2f(-localVDir.x,localVDir.y));
@@ -192,12 +116,6 @@ void CNetPlayerInput::PreUpdate()
 			//gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(moveState.eyePosition, 0.04f, ColorF(0.3f,0.2f,0.7f,1.0f));
 		}
 
-	//	uint32 g_YLine=400;
-	//	float fColor[4] = {1,1,0,1};
-	//	gEnv->pRenderer->Draw2dLabel( 1,g_YLine, 1.3f, fColor, false,"Network lookTarget: %12.8f %12.8f %12.8f", lookTarget.x, lookTarget.y, lookTarget.z );	
-	//	g_YLine+=16.0f;
-		
-
 		moveRequest.SetLookTarget( lookTarget );
 		moveRequest.SetAimTarget( lookTarget );
 		if (m_curInput.deltaMovement.GetLengthSquared() > sqr(0.2f)) // 0.2f is almost stopped
@@ -213,9 +131,6 @@ void CNetPlayerInput::PreUpdate()
 		pseudoSpeed = m_pPlayer->CalculatePseudoSpeed(m_curInput.sprint);
 	}
 	moveRequest.SetPseudoSpeed(pseudoSpeed);
-
-	if (m_curInput.jump)
-		moveRequest.SetJump();
 
 	float lean=0.0f;
 	if (m_curInput.leanl)
@@ -234,11 +149,6 @@ void CNetPlayerInput::PreUpdate()
 		m_pPlayer->m_actions |= ACTION_SPRINT;
 	else
 		m_pPlayer->m_actions &= ~ACTION_SPRINT;
-
-	if (m_curInput.jump)
-		m_pPlayer->m_actions |= ACTION_JUMP;
-	else
-		m_pPlayer->m_actions &= ~ACTION_JUMP;
 
 	if (m_curInput.leanl)
 		m_pPlayer->m_actions |= ACTION_LEANLEFT;
@@ -270,7 +180,7 @@ void CNetPlayerInput::Update()
 	if (gEnv->bServer && (g_pGameCVars->sv_input_timeout>0) && ((gEnv->pTimer->GetFrameStartTime()-m_lastUpdate).GetMilliSeconds()>=g_pGameCVars->sv_input_timeout))
 	{
 		m_curInput.deltaMovement.zero();
-		m_curInput.sprint=m_curInput.jump=m_curInput.leanl=m_curInput.leanr=false;
+		m_curInput.sprint=m_curInput.leanl=m_curInput.leanr=false;
 		m_curInput.stance=STANCE_NULL;
 
 		m_pPlayer->GetGameObject()->ChangedNetworkState( INPUT_ASPECT );
@@ -295,6 +205,13 @@ void CNetPlayerInput::GetState( SSerializedPlayerInput& input )
 
 void CNetPlayerInput::Reset()
 {
+	SSerializedPlayerInput i(m_curInput);
+	i.leanl=i.leanr=i.sprint=false;
+	i.deltaMovement.zero();
+
+	DoSetState(i);
+
+	m_pPlayer->GetGameObject()->ChangedNetworkState(IPlayerInput::INPUT_ASPECT);
 }
 
 void CNetPlayerInput::DisableXI(bool disabled)
@@ -307,17 +224,10 @@ void CNetPlayerInput::DoSetState(const SSerializedPlayerInput& input )
 	m_curInput = input;
 	m_pPlayer->GetGameObject()->ChangedNetworkState( INPUT_ASPECT );
 
-	IPhysicalEntity * pPhysEnt = m_pPlayer->GetEntity()->GetPhysics();
-	if (!pPhysEnt)
-		return;
-
-	pe_status_pos posStatus;
-	pPhysEnt->GetStatus( &posStatus );
-
 	CMovementRequest moveRequest;
 	moveRequest.SetStance( (EStance)m_curInput.stance );
 
-	if((GetISystem()->IsDemoMode() == 2))
+	if(IsDemoPlayback())
 	{
 		Vec3 localVDir(m_pPlayer->GetViewQuatFinal().GetInverted() * m_curInput.lookDirection);
 		Ang3 deltaAngles(asin(localVDir.z),0,cry_atan2f(-localVDir.x,localVDir.y));
@@ -325,7 +235,7 @@ void CNetPlayerInput::DoSetState(const SSerializedPlayerInput& input )
 	}
 	//else
 	{
-		moveRequest.SetLookTarget( posStatus.pos + 10.0f * m_curInput.lookDirection );
+		moveRequest.SetLookTarget( m_pPlayer->GetEntity()->GetWorldPos() + 10.0f * m_curInput.lookDirection );
 		moveRequest.SetAimTarget(moveRequest.GetLookTarget());
 	}
 
@@ -336,8 +246,6 @@ void CNetPlayerInput::DoSetState(const SSerializedPlayerInput& input )
 	}
 	moveRequest.SetPseudoSpeed(pseudoSpeed);
 	moveRequest.SetAllowStrafing(true);
-	if (m_curInput.jump)
-		moveRequest.SetJump();
 
 	float lean=0.0f;
 	if (m_curInput.leanl)

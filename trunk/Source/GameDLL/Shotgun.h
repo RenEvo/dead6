@@ -43,7 +43,7 @@ public:
 	virtual bool CanFire(bool considerAmmo) const;
 
 	virtual bool Shoot(bool resetAnimation, bool autoreload = true , bool noSound = false );
-	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, int ph);
+	virtual void NetShootEx(const Vec3 &pos, const Vec3 &dir, const Vec3 &vel, const Vec3 &hit, float extra, int ph);
 
 	virtual void ResetParams(const struct IItemParamsNode *params);
 	virtual void PatchParams(const struct IItemParamsNode *patch);
@@ -54,5 +54,7 @@ protected:
 	bool					 m_reload_pump;
 	bool					 m_break_reload;
 	bool					 m_reload_was_broken;
+
+	int            m_max_shells;
 
 };

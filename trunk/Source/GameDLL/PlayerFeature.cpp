@@ -15,6 +15,11 @@ History:
 #include "ItemParamReader.h"
 #include "Player.h"
 
+//--------------------------------------------------------------------
+CPlayerFeature::CPlayerFeature()
+{
+	m_notPickUp = false;
+}
 
 //------------------------------------------------------------------------
 void CPlayerFeature::PostInit(IGameObject *pGameObject)
@@ -35,6 +40,7 @@ bool CPlayerFeature::ReadItemParams(const IItemParamsNode *root)
 		return false;
 
 	m_features.resize(0);
+	m_notPickUp = false;
 
 	const IItemParamsNode *features = root->GetChild("features");
 	if (features)
@@ -48,6 +54,11 @@ bool CPlayerFeature::ReadItemParams(const IItemParamsNode *root)
 				const char *name = feature->GetAttribute("name");
 				if (name && name[0])
 					m_features.push_back(name);
+				
+				int noPickUp = 0;
+				feature->GetAttribute("noPickUp",noPickUp);
+				if(noPickUp!=0)
+					m_notPickUp = true;
 			}
 		}
 	}
@@ -65,6 +76,14 @@ void CPlayerFeature::OnReset()
 		ActivateFeature(pActor, it->c_str());
 }
 
+//-------------------------------------------------------------------------
+void CPlayerFeature::PickUp(EntityId pickerId, bool sound, bool select, bool keepHistory)
+{
+	if(m_notPickUp)
+		OnPickedUp(pickerId,true);
+	else
+		CItem::PickUp(pickerId,sound,select,keepHistory);
+}
 //------------------------------------------------------------------------
 void CPlayerFeature::OnPickedUp(EntityId pickerId, bool destroyed)
 {
@@ -86,6 +105,8 @@ void CPlayerFeature::ActivateFeature(CActor *pActor, const char *feature)
 		AlienCloak(pActor);
 	else if (!stricmp("nightvision", feature))
 		NightVision(pActor);
+	else if (!stricmp("dualSOCOM", feature))
+		DualSOCOM(pActor);
 	else
 		CryLogAlways("%s - Unknown Player Feature '%s'...", GetEntity()->GetName(), feature);
 }
@@ -134,5 +155,22 @@ void CPlayerFeature::NightVision(CActor *pActor)
 		CPlayer *pPlayer=static_cast<CPlayer *>(pActor);
 		if (CNanoSuit *pSuit=pPlayer->GetNanoSuit())
 			pSuit->EnableNightVision(true);
+	}
+}
+
+//-------------------------------------------------------------------------
+void CPlayerFeature::DualSOCOM(CActor *pActor)
+{
+	if(pActor && !pActor->IsPlayer())
+	{
+		IInventory *pInventory=GetActorInventory(pActor);
+		if (pInventory)
+		{
+			if (IsServer())
+			{
+					m_pItemSystem->GiveItem(pActor, "SOCOM", false, false,false);
+					//m_pItemSystem->SetActorItem(pActor,"SOCOM",true);
+			}
+		}
 	}
 }

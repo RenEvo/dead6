@@ -12,6 +12,7 @@
 
 *************************************************************************/
 #include "StdAfx.h"
+#include <StringUtils.h>
 #include "Game.h"
 #include "GameCVars.h"
 #include "Actor.h"
@@ -22,17 +23,18 @@
 #include <IGameTokens.h>
 #include <IItemSystem.h>
 #include <IInteractor.h>
-#include <ISound.h>
-#include <ISoundMoodManager.h>
 #include "Item.h"
 #include "Weapon.h"
 #include "Player.h"
 #include "GameRules.h"
 #include <IMaterialEffects.h>
 #include "HUD/HUD.h"
+#include "HUD/HUDRadar.h"
+#include "HUD/HUDTagNames.h"
 #include "IVehicleSystem.h"
 #include "OffHand.h"
 #include "IAgent.h"
+#include "IPlayerInput.h"
 
 #include "IFacialAnimation.h"
 
@@ -108,11 +110,11 @@ void SIKLimb::Update(IEntity *pOwner,float frameTime)
 
 	lAnimPosLast = lAnimPos;
 	// pvl: the correction for translation is to be removed once character offsets are redone
-//	lAnimPos = pCharacter->GetISkeleton()->GetAbsJQuatByID(endBoneID).t - pOwner->GetSlotLocalTM (characterSlot, false).GetTranslation ();
+//	lAnimPos = pCharacter->GetISkeleton()->GetAbsJointByID(endBoneID).t - pOwner->GetSlotLocalTM (characterSlot, false).GetTranslation ();
 
-	Vec3 vRootBone = pCharacter->GetISkeleton()->GetAbsJQuatByID(0).t; // - pOwner->GetSlotLocalTM (characterSlot, false).GetTranslation ();
+	Vec3 vRootBone = pCharacter->GetISkeletonPose()->GetAbsJointByID(0).t; // - pOwner->GetSlotLocalTM (characterSlot, false).GetTranslation ();
 	vRootBone.z=0;
-	lAnimPos = pCharacter->GetISkeleton()->GetAbsJQuatByID(endBoneID).t-vRootBone;// - pOwner->GetSlotLocalTM (characterSlot, false).GetTranslation ();
+	lAnimPos = pCharacter->GetISkeletonPose()->GetAbsJointByID(endBoneID).t-vRootBone;// - pOwner->GetSlotLocalTM (characterSlot, false).GetTranslation ();
   
   assert(!_isnan(lAnimPos.len2()));
 
@@ -126,6 +128,8 @@ void SIKLimb::Update(IEntity *pOwner,float frameTime)
 
 		//float middle(0.5f-fabs(0.5f - (blendTime / blendTimeMax)));
 		//finalPos.z += middle * 2.0f * 5.0f;
+
+		if (blendTime == 0.0011f) blendTime = 0.0f;
 
 		finalPos -= (finalPos - limbWPos) * min(blendTime / blendTimeMax,1.0f);
 		currentWPos = finalPos;
@@ -158,29 +162,29 @@ void SIKLimb::Update(IEntity *pOwner,float frameTime)
 	if (setLimbPos)
 	{
 		if (flags & IKLIMB_RIGHTHAND)
-			pCharacter->GetISkeleton()->SetHumanLimbIK(finalPos,CA_ARM_RIGHT); //SetRArmIK(finalPos);
+			pCharacter->GetISkeletonPose()->SetHumanLimbIK(finalPos,CA_ARM_RIGHT); //SetRArmIK(finalPos);
 		else if (flags & IKLIMB_LEFTHAND)
-			pCharacter->GetISkeleton()->SetHumanLimbIK(finalPos,CA_ARM_LEFT);  //SetLArmIK(finalPos);
+			pCharacter->GetISkeletonPose()->SetHumanLimbIK(finalPos,CA_ARM_LEFT);  //SetLArmIK(finalPos);
 		else if (middleBoneID>-1)
 		{
-			pCharacter->GetISkeleton()->SetCustomArmIK(finalPos,rootBoneID,middleBoneID,endBoneID);
+			pCharacter->GetISkeletonPose()->SetCustomArmIK(finalPos,rootBoneID,middleBoneID,endBoneID);
 		}
 		else
 		{
-			ISkeleton* pISkeleton = pCharacter->GetISkeleton();
-			uint32 numJoints	= pISkeleton->GetJointCount();
+			ISkeletonPose* pISkeletonPose = pCharacter->GetISkeletonPose();
+			uint32 numJoints	= pISkeletonPose->GetJointCount();
 			QuatT* pRelativeQuatIK = (QuatT*)alloca( numJoints*sizeof(QuatT) );
 			QuatT* pAbsoluteQuatIK = (QuatT*)alloca( numJoints*sizeof(QuatT) );
 
-			pISkeleton->CCDInitIKBuffer(pRelativeQuatIK,pAbsoluteQuatIK);
-			pISkeleton->CCDInitIKChain(rootBoneID,endBoneID);
+			pISkeletonPose->CCDInitIKBuffer(pRelativeQuatIK,pAbsoluteQuatIK);
+			pISkeletonPose->CCDInitIKChain(rootBoneID,endBoneID);
 
 			Vec3 limbEndNormal(0,0,0);
 			//limbEndNormal = Matrix33(pISkeleton->GetAbsJMatrixByID(endBoneID)).GetColumn(0);
 			//gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(finalPos, ColorB(0,255,0,100), finalPos + limbEndNormal * 3.0f, ColorB(255,0,0,100));
-			pISkeleton->CCDRotationSolver(finalPos,0.02f,0.25f,100,goalNormal,pRelativeQuatIK,pAbsoluteQuatIK);
-			pISkeleton->CCDTranslationSolver(finalPos,pRelativeQuatIK,pAbsoluteQuatIK);
-			pISkeleton->CCDUpdateSkeleton(pRelativeQuatIK,pAbsoluteQuatIK);
+			pISkeletonPose->CCDRotationSolver(finalPos,0.02f,0.25f,100,goalNormal,pRelativeQuatIK,pAbsoluteQuatIK);
+			pISkeletonPose->CCDTranslationSolver(finalPos,pRelativeQuatIK,pAbsoluteQuatIK);
+			pISkeletonPose->CCDUpdateSkeleton(pRelativeQuatIK,pAbsoluteQuatIK);
 		}
 
 		//gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(finalPos,0.2f,ColorB(0,255,255,255) );
@@ -194,7 +198,9 @@ IVehicle *SLinkStats::GetLinkedVehicle()
 		return NULL;
 	else
 	{
-		IVehicle *pVehicle = g_pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(linkID);
+		IVehicle *pVehicle = NULL;
+		if(g_pGame && g_pGame->GetIGameFramework() && g_pGame->GetIGameFramework()->GetIVehicleSystem())
+			pVehicle = g_pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(linkID);
 		//if the vehicle doesnt exist and this is supposed to be a vehicle linking forget about it.
 		if (!pVehicle && flags & LINKED_VEHICLE)
 			UnLink();
@@ -203,21 +209,20 @@ IVehicle *SLinkStats::GetLinkedVehicle()
 	}
 }
 
-void SLinkStats::Serialize(TSerialize ser, unsigned aspects)
+void SLinkStats::Serialize(TSerialize ser)
 {
-	if (ser.GetSerializationTarget() != eST_Network)
-	{
-		ser.BeginGroup("PlayerLinkStats");
+	assert(ser.GetSerializationTarget() != eST_Network);
 
-		//when reading, reset the structure first.
-		if (ser.IsReading())
-			*this = SLinkStats();
+	ser.BeginGroup("PlayerLinkStats");
 
-		ser.Value("linkID", linkID);
-		ser.Value("flags", flags);
+	//when reading, reset the structure first.
+	if (ser.IsReading())
+		*this = SLinkStats();
 
-		ser.EndGroup();
-	}
+	ser.Value("linkID", linkID);
+	ser.Value("flags", flags);
+
+	ser.EndGroup();
 }
 //--------------------
 
@@ -229,8 +234,8 @@ CActor::CActor()
 , m_maxHealth(0)
 , m_pMovementController(0)
 , m_stance(STANCE_NULL)
-, m_stanceCollider(STANCE_NULL)
-, m_forceUpdateStanceCollider(false)
+, m_desiredStance(STANCE_NULL)
+, m_zoomSpeedMultiplier(1.0f)
 , m_frozenAmount(0.f)
 , m_screenEffects(0)
 , m_bHasHUD(false)
@@ -246,11 +251,19 @@ CActor::CActor()
 , m_pInventory(0)
 , m_pInteractor(0)
 , m_sleepTimer(0.0f)
+, m_sleepTimerOrg(0.0f)
 , m_currentFootID(BONE_FOOT_L)
 , m_lostHelmet(0)
+, m_pWeaponAM(0)
 {
+	m_currentPhysProfile=GetDefaultProfile(eEA_Physics);
 	//memset(&m_stances,0,sizeof(m_stances));
 	//SetupStance(STANCE_NULL,&SStanceInfo());
+
+	m_timeImpulseRecover = 0.0f;
+	m_airResistance = 0.0f;
+	m_airControl = 1.0f;
+	m_netLastSelectablePickedUp = 0;
 }
 
 //------------------------------------------------------------------------
@@ -271,15 +284,17 @@ CActor::~CActor()
 	if (m_pAnimatedCharacter)
 		GetGameObject()->ReleaseExtension("AnimatedCharacter");
 	GetGameObject()->ReleaseView( this );
-	GetGameObject()->ReleasePhysics( this );
+	GetGameObject()->ReleaseProfileManager( this );
 
 	if(m_lostHelmet)
 		gEnv->pEntitySystem->RemoveEntity(m_lostHelmet);
 
-	g_pGame->GetIGameFramework()->GetIActorSystem()->RemoveActor( GetEntityId() );
-	SAFE_DELETE(m_screenEffects);
+	if(g_pGame && g_pGame->GetIGameFramework() && g_pGame->GetIGameFramework()->GetIActorSystem())
+		g_pGame->GetIGameFramework()->GetIActorSystem()->RemoveActor( GetEntityId() );
 
+	SAFE_DELETE(m_screenEffects);
 	SAFE_DELETE(m_pGrabHandler);
+	SAFE_DELETE(m_pWeaponAM);
 }
 
 void CActor::ClearExtensionCache()
@@ -295,6 +310,20 @@ void CActor::ClearExtensionCache()
 		m_pInteractor = 0;
 	}
 }
+//------------------------------------------------------------------------
+void CActor::CrapDollize()
+{
+	// make sure dead AI is not affected by explosions
+#ifdef CRAPDOLLS
+	IPhysicalEntity* pPhysicalEntity=GetEntity()->GetPhysics();
+	if (pPhysicalEntity)
+	{
+		pe_params_part ppp;
+		ppp.flagsAND = ~(geom_colltype_explosion|geom_colltype_ray|geom_colltype_foliage_proxy);
+		pPhysicalEntity->SetParams(&ppp);
+	}
+#endif //CRAPDOLLS
+}
 
 //------------------------------------------------------------------------
 bool CActor::Init( IGameObject * pGameObject )
@@ -303,7 +332,7 @@ bool CActor::Init( IGameObject * pGameObject )
 
 	if (!GetGameObject()->CaptureView(this))
 		return false;
-	if (!GetGameObject()->CapturePhysics(this))
+	if (!GetGameObject()->CaptureProfileManager(this))
 		return false;
 
 	m_pMovementController = CreateMovementController();
@@ -360,11 +389,40 @@ void CActor::PostInit( IGameObject * pGameObject )
 	{
 		ICharacterInstance *pCharacter = GetEntity()->GetCharacter(0);
 		if (pCharacter)
-			pCharacter->GetISkeleton()->SetAimIKFadeOut(0);
+			pCharacter->GetISkeletonPose()->SetAimIKFadeOut(0);
 	}
 
-	//C4 face attachments
-	CreateActorFaceAttachments();
+	InitActorAttachments();
+}
+
+//----------------------------------------------------------------------
+void CActor::InitActorAttachments()
+{
+	if(m_pWeaponAM)
+		SAFE_DELETE(m_pWeaponAM);
+	
+	//Weapon attachments stuff
+	m_pWeaponAM = new CWeaponAttachmentManager(this);
+	if(!m_pWeaponAM->Init())
+	{
+		SAFE_DELETE(m_pWeaponAM);
+	}
+}
+
+//------------------------------------------------------------------------
+void CActor::HideAllAttachments(bool isHiding)
+{
+	if (m_pWeaponAM)
+	{
+		m_pWeaponAM->HideAllAttachments(isHiding);
+	}
+}
+
+//------------------------------------------------------------------------
+void CActor::InitClient(int channelId)
+{
+	if (GetHealth()<=0 && !GetSpectatorMode())
+		GetGameObject()->InvokeRMI(ClSimpleKill(), NoParams(), eRMI_ToClientChannel, channelId);
 }
 
 //------------------------------------------------------------------------
@@ -382,8 +440,16 @@ void CActor::Revive( bool fromInit )
 
 	SetActorModel(); // set the model before physicalizing
 
+	m_stance = STANCE_NULL;
+	m_desiredStance = STANCE_NULL;
+
 	if (gEnv->bServer)
-		GetGameObject()->SetPhysicalizationProfile(eAP_Alive);
+	{
+		Physicalize();
+		GetGameObject()->SetAspectProfile(eEA_Physics, eAP_Alive);
+	}
+
+	Freeze(false);
 
   if (IPhysicalEntity* pPhysics = GetEntity()->GetPhysics())
   {
@@ -399,8 +465,7 @@ void CActor::Revive( bool fromInit )
 		pPhysics->Action(&actionVel);
   }
 
-	m_stance = STANCE_NULL;
-	m_stanceCollider = STANCE_NULL;
+	m_zoomSpeedMultiplier = 1.0f;
 
 	memset(m_boneIDs,-1,sizeof(m_boneIDs));
 
@@ -427,20 +492,25 @@ void CActor::Revive( bool fromInit )
 	if (m_screenEffects)
 		m_screenEffects->ClearAllBlendGroups(true);
 
+  if (IsClient())
+    gEnv->p3DEngine->ResetPostEffects();
+
 	//reset some AG inputs
 	if (m_pAnimatedCharacter)
 	{
+		UpdateAnimGraph(m_pAnimatedCharacter->GetAnimationGraphState());
 		m_pAnimatedCharacter->GetAnimationGraphState()->SetInput("Action", "idle" );
 		m_pAnimatedCharacter->GetAnimationGraphState()->SetInput("waterLevel", 0 );
 		m_pAnimatedCharacter->SetParams( m_pAnimatedCharacter->GetParams().ModifyFlags(eACF_EnableMovementProcessing,0));
+		m_pAnimatedCharacter->GetAnimationGraphState()->SetInput( m_inputHealth, GetMaxHealth() );
 	}
 
 //	m_footstepAccumDistance = 0.0f;
 
 	ResetHelmetAttachment();
 
-	m_bLastItemCloaked = false;
-	m_lastCloakMat = 0;
+	if (ICharacterInstance* pCharacter = GetEntity()->GetCharacter(0))
+		pCharacter->EnableProceduralFacialAnimation(GetMaxHealth() > 0);
 }
 
 IGrabHandler *CActor::CreateGrabHanlder()
@@ -450,7 +520,7 @@ IGrabHandler *CActor::CreateGrabHanlder()
 }
 
 //------------------------------------------------------------------------
-void CActor::Physicalize()
+void CActor::Physicalize(EStance stance)
 {
 	//FIXME:this code is duplicated from scriptBind_Entity.cpp, there should be a function that fill a SEntityPhysicalizeParams struct from a script table.
 	IScriptTable* pScriptTable = GetEntity()->GetScriptTable();
@@ -483,17 +553,39 @@ void CActor::Physicalize()
 		physicsParams->GetValue("partid",pp.nAttachToPart);
 		physicsParams->GetValue("stiffness_scale",pp.fStiffnessScale);
 
+
+		SmartScriptTable props;
+		if(GetEntity()->GetScriptTable()->GetValue("Properties", props))
+		{
+			float massMult = 1.0f;
+			props->GetValue("physicMassMult", massMult);
+			pp.mass *= massMult;
+		}
+
 		SmartScriptTable livingTab;
 		if (physicsParams->GetValue( "Living",livingTab ))
 		{
 			// Player Dimensions
-			livingTab->GetValue( "height",playerDim.heightCollider );
-			livingTab->GetValue( "size",playerDim.sizeCollider );
-			livingTab->GetValue( "height_eye",playerDim.heightEye );
-			livingTab->GetValue( "height_pivot",playerDim.heightPivot );
-			livingTab->GetValue( "head_radius",playerDim.headRadius );
-			livingTab->GetValue( "height_head",playerDim.heightHead );
-			livingTab->GetValue( "use_capsule",playerDim.bUseCapsule );
+			if (stance==STANCE_NULL)
+			{
+				livingTab->GetValue( "height",playerDim.heightCollider );
+				livingTab->GetValue( "size",playerDim.sizeCollider );
+				livingTab->GetValue( "height_eye",playerDim.heightEye );
+				livingTab->GetValue( "height_pivot",playerDim.heightPivot );
+				livingTab->GetValue( "use_capsule",playerDim.bUseCapsule );
+			}
+			else
+			{
+				const SStanceInfo *sInfo = GetStanceInfo(stance);
+				playerDim.heightCollider = sInfo->heightCollider;
+				playerDim.sizeCollider = sInfo->size;
+				playerDim.heightPivot = sInfo->heightPivot;
+				playerDim.maxUnproj = max(0.0f,sInfo->heightPivot);
+				playerDim.bUseCapsule = sInfo->useCapsule;
+			}
+
+			playerDim.headRadius = 0.0f;
+			playerDim.heightEye = 0.0f;
 
 			// Player Dynamics.
 			livingTab->GetValue( "inertia",playerDyn.kInertia );
@@ -508,6 +600,41 @@ void CActor::Physicalize()
 			livingTab->GetValue( "min_fall_angle",playerDyn.minFallAngle );
 			livingTab->GetValue( "max_vel_ground",playerDyn.maxVelGround );
 			livingTab->GetValue( "timeImpulseRecover",playerDyn.timeImpulseRecover );
+
+			SActorParams* params = GetActorParams();
+
+
+			if(!is_unused(playerDyn.timeImpulseRecover))
+				m_timeImpulseRecover = playerDyn.timeImpulseRecover;
+			else
+				m_timeImpulseRecover = 0.0f;
+
+			if(!is_unused(playerDyn.kAirResistance))
+				m_airResistance = playerDyn.kAirResistance;
+			else
+				m_airResistance = 0.0f;
+
+			if(!is_unused(playerDyn.kAirControl))
+				m_airControl = playerDyn.kAirControl;
+			else
+				m_airControl = 1.0f;
+
+			const char *colliderMat=0;
+			if (livingTab->GetValue( "colliderMat", colliderMat) && colliderMat && colliderMat[0])
+			{
+				if (ISurfaceType *pSurfaceType=gEnv->p3DEngine->GetMaterialManager()->GetSurfaceTypeByName(colliderMat))
+					playerDyn.surface_idx=pSurfaceType->GetId();
+			}
+		}
+
+		if (IPhysicalEntity *pPrevPE=GetEntity()->GetPhysics())
+		{
+			Ang3 rot(GetEntity()->GetWorldAngles());
+			GetEntity()->SetRotation(Quat::CreateRotationZ(rot.z));
+
+			SEntityPhysicalizeParams nop;
+			nop.type = PE_NONE;
+			GetEntity()->Physicalize(nop);
 		}
 
 		GetEntity()->Physicalize(pp);
@@ -519,13 +646,14 @@ void CActor::Physicalize()
 		primitives::capsule prim;
 
 		prim.axis.Set(0,0,1);
-		prim.center.zero(); prim.r = 0.4f; prim.hh = 0.3f;
+		prim.center.zero(); prim.r = 0.4f; prim.hh = 0.2f;
 		IGeometry *pPrimGeom = gEnv->pPhysicalWorld->GetGeomManager()->CreatePrimitive(primitives::capsule::type, &prim);
 		phys_geometry *pGeom = gEnv->pPhysicalWorld->GetGeomManager()->RegisterGeometry(pPrimGeom, 0);
 		pe_geomparams gp;
- 		gp.pos = Vec3(0.0f,0.3f,0.9f);
-		gp.flags = geom_colltype0;
+ 		gp.pos = Vec3(0.0f,0.2f,0.7f);
+		gp.flags = geom_colltype_foliage;
 		gp.flagsCollider = 0;
+		pGeom->nRefCount = 0;
 		//just some arbitrary id, except 100, which is the main cylinder
 		GetEntity()->GetPhysics()->AddGeometry(pGeom, &gp, 101);
 	}
@@ -539,7 +667,7 @@ void CActor::SetActorModel()
 {
 	// this should be pure-virtual, but for the moment to support alien scripts
   if (IScriptTable* pScriptTable = GetEntity()->GetScriptTable())
-	  Script::CallMethod(pScriptTable, "SetActorModel");
+	  Script::CallMethod(pScriptTable, "SetActorModel", IsClient());
 }
 
 //------------------------------------------------------------------------
@@ -547,8 +675,9 @@ void CActor::PostPhysicalize()
 {
 	//force the physical proxy to be rebuilt
 	m_stance = STANCE_NULL;
-	m_stanceCollider = STANCE_NULL;
 	SetStance(STANCE_STAND);
+
+	GetGameObject()->RequestRemoteUpdate(eEA_Physics | eEA_GameClientDynamic | eEA_GameServerDynamic | eEA_GameClientStatic | eEA_GameServerStatic);
 
 //	if (m_pAnimatedCharacter)
 //		m_pAnimatedCharacter->ResetState();
@@ -568,6 +697,18 @@ void CActor::PostPhysicalize()
 			}
 		}
 	}
+}
+
+//------------------------------------------------------------------------
+void CActor::SetZoomSpeedMultiplier(float m)
+{
+	m_zoomSpeedMultiplier=m;
+}
+
+//------------------------------------------------------------------------
+float CActor::GetZoomSpeedMultiplier() const
+{
+	return m_zoomSpeedMultiplier;
 }
 
 //------------------------------------------------------------------------
@@ -605,7 +746,15 @@ void CActor::RagDollize( bool fallAndPlay )
 		pp.pPlayerDimensions = &playerDim;
 		pp.pPlayerDynamics = &playerDyn;
 
+		IPhysicalEntity *pPhysicalEntity=GetEntity()->GetPhysics();
+		if (!pPhysicalEntity || pPhysicalEntity->GetType()!=PE_LIVING)
+			pp.nLod = 1;
+
 		GetEntity()->Physicalize(pp);
+
+		// make sure dead AI is not affected by explosions
+		if (!fallAndPlay || GetHealth()<=0)
+			CrapDollize();
 
 		pStats->isRagDoll = true;
 
@@ -622,116 +771,24 @@ void CActor::RagDollize( bool fallAndPlay )
 }
 
 //------------------------------------------------------------------------
-void CActor::Freeze(bool freeze)
-{
-  SActorStats* pStats = GetActorStats();
-  if (pStats)
-    pStats->isFrozen = freeze;
-
-	if (m_pAnimatedCharacter)
-	{
-		m_pAnimatedCharacter->GetAnimationGraphState()->Pause(freeze, eAGP_Freezing);
-		
-		UpdateAnimGraph(m_pAnimatedCharacter->GetAnimationGraphState());
-	}
-
-	ICharacterInstance *pCharacter = GetEntity()->GetCharacter(0);
-	if (!pCharacter)
-		return;
-
-
-	ISoundMoodManager *pSoundMoodManager = NULL;
-	if(gEnv->pSoundSystem)
-		pSoundMoodManager = gEnv->pSoundSystem->GetIMoodManager();
-
-	if (freeze)
-	{	
-    SetFrozenAmount(1.f);
-
-		if (GetEntity()->GetAI() && GetGameObject()->GetChannelId()==0)
-			GetEntity()->GetAI()->Event(AIEVENT_DISABLE, 0);
-
-    IPhysicalEntity* pPhysicalEntity = GetEntity()->GetPhysics();
-    assert(pPhysicalEntity);      
-    if (!pPhysicalEntity)
-      return;
-    
-		pe_status_dynamics dyn;
-		pPhysicalEntity->GetStatus(&dyn);
-
-		ISkeleton* pSkeleton = pCharacter->GetISkeleton();
-		pSkeleton->DestroyCharacterPhysics();
-
-		SEntityPhysicalizeParams params;
-		params.nSlot = 0;
-		params.mass = dyn.mass;
-		params.type = PE_RIGID;
-		GetEntity()->Physicalize(params);
-
-		pPhysicalEntity = GetEntity()->GetPhysics();
-
-		pSkeleton->BuildPhysicalEntity(pPhysicalEntity, params.mass, -1, 1);
-
-		pe_params_flags flags;
-		flags.flagsOR = pef_log_collisions;
-		pPhysicalEntity->SetParams(&flags);
-
-		pe_action_awake awake;
-		awake.bAwake=1;
-
-		pPhysicalEntity->Action(&awake);
-		
-		if (pPhysicalEntity)
-		{
-			pe_action_move actionMove;
-			actionMove.dir = Vec3(0,0,0);
-			pPhysicalEntity->Action(&actionMove);
-		}
-
-		// stop all layers
-		for (int i=0; i<16; i++)
-		{
-			pSkeleton->SetLayerUpdateMultiplier(i,0);
-			pSkeleton->StopAnimationInLayer(i,0.0f); 
-		}
-		pCharacter->EnableStartAnimation(false);
-
-		if(pSoundMoodManager && gEnv->bClient)
-		{
-			pSoundMoodManager->RegisterSoundMood("frozen");
-			pSoundMoodManager->UpdateSoundMood("frozen",1,500);
-		}
-	}
-	else
-	{	
-    SetFrozenAmount(0.f);
-
-		if (GetEntity()->GetAI() && GetGameObject()->GetChannelId()==0)
-			GetEntity()->GetAI()->Event(AIEVENT_ENABLE, 0);
-
-		// restart all layers
-		for (int i=0; i<16; i++)
-			pCharacter->GetISkeleton()->SetLayerUpdateMultiplier(i, 1.0f);
-
-		pCharacter->EnableStartAnimation(true);
-
-		if(pSoundMoodManager && gEnv->bClient)
-		{
-			pSoundMoodManager->UpdateSoundMood("frozen",0,500);
-		}
-	}
-}
-
-//------------------------------------------------------------------------
 bool CActor::IsFallen() const
 {
 	const SActorStats *pStats = GetActorStats();
-	return pStats && pStats->isRagDoll && GetHealth() > 0;
+	return (pStats && pStats->isRagDoll || m_sleepTimer > 0.0f) && GetHealth() > 0;
 }
 
 //------------------------------------------------------------------------
-void CActor::Fall(Vec3 hitPos, bool forceFall)
+void CActor::Fall(Vec3 hitPos, bool forceFall, float sleepTime /*=0.0f*/)
 {
+	if(!g_pGameCVars->g_enableFriendlyFallAndPlay)
+	{
+		if ((m_pAnimatedCharacter->GetPhysicalColliderMode() == eColliderMode_NonPushable) ||
+			(m_pAnimatedCharacter->GetPhysicalColliderMode() == eColliderMode_PushesPlayersOnly))
+		{
+			return;
+		}
+	}
+
 	// player doesn't fall in single-player for now
 	if(IsPlayer() && !gEnv->bMultiplayer)
 		if(!forceFall)
@@ -740,12 +797,31 @@ void CActor::Fall(Vec3 hitPos, bool forceFall)
 	if(IsFallen())
 		return;
 
-	if(GetLinkedVehicle())
+	bool inVehicle = GetLinkedVehicle() != NULL;
+	if ( inVehicle == true )
 		return;
 
 	SActorStats *pStats = GetActorStats();
 	if(pStats && pStats->inZeroG)
 		return;
+
+	//we don't want noDeath (tutorial) AIs to loose their weapon, since we don't have pickup animations yet
+	bool	dropWeapon(true);
+	bool  hasDamageTable = false;
+	SmartScriptTable props;
+	SmartScriptTable propsDamage;
+	if(GetEntity()->GetScriptTable() && GetEntity()->GetScriptTable()->GetValue("Properties", props))
+		if(props->GetValue("Damage", propsDamage))
+			hasDamageTable = true;
+
+	if(!hasDamageTable)
+		return;
+
+	int noDeath(0);
+	int	fallPercentage(0);
+	if(	propsDamage->GetValue("bNoDeath", noDeath) && noDeath!=0 ||
+		propsDamage->GetValue("FallPercentage", fallPercentage) && fallPercentage>0 )
+		dropWeapon = false;
 
 	IAISystem *pAISystem=gEnv->pAISystem;
 	if (pAISystem)
@@ -754,45 +830,43 @@ void CActor::Fall(Vec3 hitPos, bool forceFall)
 		{
 			if(IAIObject* pAIObj=pEntity->GetAI())
 			{
-				IAISignalExtraData *pEData = pAISystem->CreateSignalExtraData();	// no leak - this will be deleted inside SendAnonymousSignal
-
-				pEData->point = Vec3(0,0,0);
 				IAIActor* pAIActor = CastToIAIActorSafe(GetEntity()->GetAI());
 				if(pAIActor)
 				{
-					pAIActor->SetSignal(1,"TRANQUILIZED",0,pEData);
+					IAISignalExtraData *pEData = pAISystem->CreateSignalExtraData();	// no leak - this will be deleted inside SendAnonymousSignal
+					pEData->point = Vec3(0,0,0);
+					pAIActor->SetSignal(1,"OnFallAndPlay",0,pEData);
 				}
 			}
 		}
 	}
 
 	CreateScriptEvent("sleep", 0);
-	GetGameObject()->SetPhysicalizationProfile(eAP_Sleep);
-
-	//we don't want noDeath (tutorial) AIs to loose their weapon, since we don't have pickup animations yet
-	bool	dropWeapon(true);
-	SmartScriptTable props;
-	GetEntity()->GetScriptTable()->GetValue("Properties", props);
-	SmartScriptTable propsDamage;
-	props->GetValue("Damage", propsDamage);
-
-	int noDeath(0);
-	int	fallPercentage(0);
-	if(	propsDamage->GetValue("bNoDeath", noDeath) && noDeath!=0 ||
-			propsDamage->GetValue("FallPercentage", fallPercentage) && fallPercentage>0 )
-		dropWeapon = false;
+	if ( inVehicle )
+	{
+		if ( IAnimationGraphState *animGraph = GetAnimationGraphState() )
+			animGraph->SetInput( "Signal", "fall" );
+	}
+	else
+	{
+		GetGameObject()->SetAspectProfile(eEA_Physics, eAP_Sleep);
+	}
 
 	//Do we want this for the player? (Sure not for AI)
-	if(IsPlayer() && dropWeapon)
+	if(IsPlayer() && dropWeapon && !inVehicle)
+	{
 		DropItem(GetCurrentItemId(), 1.0f, false);
+		if (GetCurrentItemId(false))
+			HolsterItem(true);
+	}
 
 	// stop shooting
 	if ( EntityId currentItem = GetCurrentItemId(true) )
 		if ( CWeapon* pWeapon = GetWeapon(currentItem) )
-			pWeapon->StopFire( GetGameObject()->GetEntityId() );
+			pWeapon->StopFire();
 
 	//add some twist
-	if(!IsClient() && hitPos.len())
+	if(!IsClient() && hitPos.len() && !inVehicle)
 	{
 		if(IPhysicalEntity *pPE = GetEntity()->GetPhysics())
 		{
@@ -825,31 +899,85 @@ void CActor::Fall(Vec3 hitPos, bool forceFall)
 	if(r > 0.5f && r < 0.6f)
 		LooseHelmet();
 
-	float sleepTime(0);
-	if(!propsDamage->GetValue("FallSleepTime", sleepTime))
-		SetSleepTimer(5.0f);
+	float sleep(3.0f);
+	if(sleepTime>0.0f)
+		SetSleepTimer(sleepTime);
+	else if(!propsDamage->GetValue("FallSleepTime", sleepTime))
+		SetSleepTimer(3.0f);
 	else if(IsClient())
 		SetSleepTimer(3.0f);
 	else
-		SetSleepTimer(sleepTime);
+		SetSleepTimer(sleep);
+
+	IAnimationGraphState* pAGState = GetAnimationGraphState();
+	if ( pAGState && m_pAnimatedCharacter )
+	{
+		ICharacterInstance* pCharacter = GetEntity()->GetCharacter(0);
+		if ( pCharacter )
+		{
+			ISkeletonPose* pSkeletonPose = pCharacter->GetISkeletonPose();
+			if ( pSkeletonPose )
+			{
+				int fnpGroudId = 0;
+				IAnimationSet* pAnimSet = pCharacter->GetIAnimationSet();
+				if ( pAnimSet )
+				{
+					char stance[256];
+					pAGState->GetInput( m_inputStance, stance );
+					if ( stance[0] == 0 )
+						strcpy( stance, "combat" );
+					char item[256];
+					pAGState->GetInput( pAGState->GetInputId( "Item" ), item );
+					if ( item[0] == 0 )
+						strcpy( item, "nw" );
+
+					int maxScore = 0;
+					const char* groupName = NULL;
+					for ( int i = 0; (groupName = pAnimSet->GetFnPAnimGroupName(i)) != NULL && groupName[0] != 0; ++i )
+					{
+						int score = 0;
+						if ( CryStringUtils::stristr( groupName, item ) != NULL )
+							score += 2;
+						if ( CryStringUtils::stristr( groupName, stance ) != NULL )
+							score += 1;
+						if ( score > maxScore )
+						{
+							maxScore = score;
+							fnpGroudId = i;
+						}
+					}
+				}
+				pSkeletonPose->SetFnPAnimGroup( fnpGroudId );
+			}
+		}
+	}
 }
 
 //------------------------------------------------------------------------
 void CActor::GoLimp()
 {
 	ICharacterInstance *pCharacter=GetEntity()->GetCharacter(0);
-	if (pCharacter && pCharacter->GetISkeleton())
-		pCharacter->GetISkeleton()->GoLimp();
+	if (pCharacter && pCharacter->GetISkeletonAnim())
+		pCharacter->GetISkeletonPose()->GoLimp();
 }
 
 //------------------------------------------------------------------------
 void CActor::StandUp()
 {
-	if ( GetGameObject()->GetPhysicalizationProfile() != eAP_Sleep )
-		return;
-	// if m_sleepTimer > 0.0f it means waking up is scheduled already for later so we just ignore this for now!
-	if ( m_sleepTimer <= 0.0f && GetGameObject()->GetPhysicalizationProfile() == eAP_Sleep )
-		GetGameObject()->SetPhysicalizationProfile(eAP_Alive);
+	if ( GetHealth() <= 0 )
+	{
+		GoLimp();
+	}
+	else
+	{
+		// if m_sleepTimer > 0.0f it means waking up is scheduled already for later so we just ignore this for now!
+		if ( m_sleepTimer > 0.0f )
+			return;
+		if ( GetLinkedVehicle() )
+			GetAnimationGraphState()->Hurry();
+		else if ( m_currentPhysProfile == eAP_Sleep )
+			GetGameObject()->SetAspectProfile(eEA_Physics, eAP_Alive);
+	}
 }
 
 
@@ -863,6 +991,9 @@ void CActor::SetupStance(EStance stance,SStanceInfo *info)
 //------------------------------------------------------
 void CActor::SetStance(EStance desiredStance)
 {
+	m_desiredStance = desiredStance;
+
+/*
 	//Player should not change stance if the physical cylinder collider can not change too
 	if (desiredStance != m_stance)
 	{
@@ -872,12 +1003,16 @@ void CActor::SetStance(EStance desiredStance)
 
 	if (m_pAnimatedCharacter && !m_pAnimatedCharacter->InStanceTransition() && (desiredStance != m_stance))
 		m_pAnimatedCharacter->RequestStance( desiredStance, GetStanceInfo(desiredStance)->name );
+*/
 }
 
 
 //------------------------------------------------------
 IEntity *CActor::LinkToVehicle(EntityId vehicleId) 
 {
+	// did this link actually change, or are we just re-linking?
+	bool changed=(m_linkStats.linkID!=vehicleId);
+
 	m_linkStats = SLinkStats(vehicleId,LINKED_VEHICLE);
 	
 	IVehicle *pVehicle = m_linkStats.GetLinkedVehicle();
@@ -899,22 +1034,26 @@ IEntity *CActor::LinkToVehicle(EntityId vehicleId)
 			params.flags &= ~eACF_NoLMErrorCorrection;
 		}
 		
-		m_pAnimatedCharacter->SetParams( params );
-		m_pAnimatedCharacter->RequestPhysicalColliderMode(enabled ? eColliderMode_Disabled : eColliderMode_Undefined, eColliderModeLayer_Game);
-
 		if(gEnv->bServer)
 		{
 			if(enabled)
-				GetGameObject()->SetPhysicalizationProfile(eAP_Linked);
+			{
+				if (changed)
+					GetGameObject()->SetAspectProfile(eEA_Physics, eAP_Linked);
+			}
 			else if(IPhysicalEntity *pPhys = GetEntity()->GetPhysics())
 			{
 				pe_type type = pPhys->GetType();
 				if(type == PE_LIVING)
-					GetGameObject()->SetPhysicalizationProfile(eAP_Alive);
+					GetGameObject()->SetAspectProfile(eEA_Physics, eAP_Alive);
 				else if(type == PE_ARTICULATED)
-					GetGameObject()->SetPhysicalizationProfile(eAP_Ragdoll);
+					GetGameObject()->SetAspectProfile(eEA_Physics, eAP_Ragdoll);
 			}
 		}
+
+		m_pAnimatedCharacter->SetParams( params );
+		m_pAnimatedCharacter->ForceRefreshPhysicalColliderMode();
+		m_pAnimatedCharacter->RequestPhysicalColliderMode(enabled ? eColliderMode_Disabled : eColliderMode_Undefined, eColliderModeLayer_Game, "Actor::LinkToVehicle");
 	}
   
   if (pLinked)  
@@ -932,7 +1071,7 @@ IEntity *CActor::LinkToVehicleRemotely(EntityId vehicleId)
 	return m_linkStats.GetLinked();
 }
 
-IEntity *CActor::LinkToEntity(EntityId entityId) 
+IEntity *CActor::LinkToEntity(EntityId entityId, bool bKeepTransformOnDetach) 
 {
 	m_linkStats = SLinkStats(entityId,LINKED_FREELOOK);
 
@@ -955,13 +1094,14 @@ IEntity *CActor::LinkToEntity(EntityId entityId)
 		}
 
 		m_pAnimatedCharacter->SetParams( params );
-		m_pAnimatedCharacter->RequestPhysicalColliderMode(enabled ? eColliderMode_Disabled : eColliderMode_Undefined, eColliderModeLayer_Game);
+		m_pAnimatedCharacter->ForceRefreshPhysicalColliderMode();
+		m_pAnimatedCharacter->RequestPhysicalColliderMode(enabled ? eColliderMode_Disabled : eColliderMode_Undefined, eColliderModeLayer_Game, "Actor::LinkToEntity");
 	}
 
   if (pLinked)
     pLinked->AttachChild(GetEntity(), 0);
   else
-    GetEntity()->DetachThis(IEntity::ATTACHMENT_KEEP_TRANSFORMATION);
+		GetEntity()->DetachThis(bKeepTransformOnDetach ? IEntity::ATTACHMENT_KEEP_TRANSFORMATION : 0, bKeepTransformOnDetach ? ENTITY_XFORM_USER : 0);
 
 	return pLinked;
 }
@@ -976,6 +1116,8 @@ void CActor::ProcessEvent(SEntityEvent& event)
 			IItem *pItem=GetCurrentItem();
 			if (pItem)
 				pItem->GetEntity()->Hide(true);
+			if(!IsPlayer() && m_pWeaponAM)
+				m_pWeaponAM->HideAllAttachments(true);
 		}	
 		break;
 	case ENTITY_EVENT_UNHIDE:
@@ -984,13 +1126,18 @@ void CActor::ProcessEvent(SEntityEvent& event)
 			IItem *pItem=GetCurrentItem();
 			if (pItem)
 				pItem->GetEntity()->Hide(false);
+			if(!IsPlayer() && m_pWeaponAM)
+				m_pWeaponAM->HideAllAttachments(false);
+			GetGameObject()->RequestRemoteUpdate(eEA_Physics | eEA_GameClientDynamic | eEA_GameServerDynamic | eEA_GameClientStatic | eEA_GameServerStatic);
 		}	
 		break;
 	case ENTITY_EVENT_START_GAME:
 		UpdateAnimGraph( m_pAnimatedCharacter? m_pAnimatedCharacter->GetAnimationGraphState() : 0 );
+		GetGameObject()->RequestRemoteUpdate(eEA_Physics | eEA_GameClientDynamic | eEA_GameServerDynamic | eEA_GameClientStatic | eEA_GameServerStatic);
 		break;
   case ENTITY_EVENT_RESET:
     Reset(event.nParam[0]==1);
+		GetGameObject()->RequestRemoteUpdate(eEA_Physics | eEA_GameClientDynamic | eEA_GameServerDynamic | eEA_GameClientStatic | eEA_GameServerStatic);
     break;
 	case ENTITY_EVENT_ANIM_EVENT:
 		{
@@ -1023,19 +1170,52 @@ void CActor::Update(SEntityUpdateContext& ctx, int slot)
 	if (m_sleepTimer>0.0f && gEnv->bServer)
 	{
 		pe_status_dynamics dynStat;
-		IPhysicalEntity* pEnt = GetEntity()->GetPhysics();
-		if (!pEnt || !pEnt->GetStatus(&dynStat) || dynStat.nContacts>2 || dynStat.v.IsZero() || dynStat.waterResistance>0.01f)
+		dynStat.submergedFraction = 0;
+		if (GetLinkedVehicle())
+		{
 			m_sleepTimer-=ctx.fFrameTime;
+		}
+		else
+		{
+			IPhysicalEntity* pEnt = GetEntity()->GetPhysics();
+			dynStat.nContacts = 0;
+			if (!pEnt || !pEnt->GetStatus(&dynStat) || dynStat.nContacts>2 || dynStat.energy<100.0f || dynStat.submergedFraction>0.1f)
+				m_sleepTimer-=ctx.fFrameTime;
+			if (dynStat.nContacts>=4 && dynStat.energy<dynStat.mass*sqr(0.3f) && m_sleepTimer<m_sleepTimerOrg-1)
+				if (m_sleepTimerOrg>10.0f) // tranquilized mode
+				{
+					if (m_sleepTimer<m_sleepTimerOrg-2)
+					{
+						ICharacterInstance *pCharacter=GetEntity()->GetCharacter(0);
+						if (pCharacter && pCharacter->GetISkeletonPose())
+							pCharacter->GetISkeletonPose()->GoLimp();
+					}
+				} else
+					m_sleepTimer = 0;
+		}
 		//float waterLevel = gEnv->p3DEngine->GetWaterLevel(cp);
 		if (m_sleepTimer<=0.0f)
 		{
 			m_sleepTimer=0.0f;
 			if(!(IsClient() && g_pGame->GetHUD() && g_pGame->GetHUD()->IsFakeDead()))	//fake death handles standup seperately
 			{
-				if (dynStat.waterResistance>0.01f)
+				if (dynStat.submergedFraction>0.5f)
 				{
-					SetHealth(0);
-					CreateScriptEvent("kill",0);
+					float waterLevel = gEnv->p3DEngine->GetWaterLevel(&cp);
+					float terrainLevel = gEnv->p3DEngine->GetTerrainElevation(cp.x,cp.y);
+					//Prevent AI dying in shallow water
+					if(waterLevel>(terrainLevel+0.5f))
+					{
+						SetHealth(0);
+						CreateScriptEvent("kill",0);
+						CrapDollize();
+						// drop item is not managed inside kill event
+						IItem* currentItem = GetCurrentItem();
+						if(currentItem)
+							DropItem(currentItem->GetEntityId());
+					}
+					else 
+						StandUp();
 				}
 				else
 					StandUp();
@@ -1060,13 +1240,20 @@ void CActor::Update(SEntityUpdateContext& ctx, int slot)
 	if (GetHealth() > 0.0f)
 		UpdateFootSteps(ctx.fFrameTime);
 	
-	if (!m_pAnimatedCharacter)
-		GameWarning("%s has no AnimatedCharacter!", GetEntity()->GetName());
+	//if (!m_pAnimatedCharacter)
+	//	GameWarning("%s has no AnimatedCharacter!", GetEntity()->GetName());
 
 	UpdateStance();
 
-	float perception = gEnv->pAISystem? gEnv->pAISystem->GetDetectionValue(NULL) : 0;
-	if (perception > 0.9f)
+	float threat = 0;
+	if (gEnv->pAISystem)
+	{
+		SAIDetectionLevels levels;
+		gEnv->pAISystem->GetDetectionLevels(0, levels);
+		threat = max(levels.vehicleThreat, levels.puppetThreat);
+	}
+
+	if (threat >= 0.9f)
 		InitiateCombat();
 
 	if (m_combatTimer > 0.0f)
@@ -1075,14 +1262,14 @@ void CActor::Update(SEntityUpdateContext& ctx, int slot)
 		{
 			m_enterCombat = false;
 			m_inCombat = true;
-			// Entered combat, do an effect if we're the client
-			if (IsClient() && GetScreenEffects() != 0)
-			{
-				CWaveBlend *blend = new CWaveBlend();
-				CPostProcessEffect *effect = new CPostProcessEffect(GetEntityId(),"Global_Saturation", .8f);
-				GetScreenEffects()->ClearBlendGroup(m_saturationID, false);
-				GetScreenEffects()->StartBlend(effect, blend, 1.0f/15.0f, m_saturationID);
-			}
+			//// Entered combat, do an effect if we're the client
+			//if (IsClient() && GetScreenEffects() != 0)
+			//{
+			//	CWaveBlend *blend = new CWaveBlend();
+			//	CPostProcessEffect *effect = new CPostProcessEffect(GetEntityId(),"Global_Saturation", .8f);
+			//	GetScreenEffects()->ClearBlendGroup(m_saturationID, false);
+			//	GetScreenEffects()->StartBlend(effect, blend, 1.0f/15.0f, m_saturationID);
+			//}
 		}
 		
 		m_combatTimer -= ctx.fFrameTime;
@@ -1092,14 +1279,14 @@ void CActor::Update(SEntityUpdateContext& ctx, int slot)
 	{
 		m_combatTimer = 0.0f;
 		m_inCombat = false;
-		// Not in combat
-		if (IsClient() && GetScreenEffects() != 0)
-		{
-			CWaveBlend *blend = new CWaveBlend();
-			CPostProcessEffect *effect = new CPostProcessEffect(GetEntityId(), "Global_Saturation", 1.0f);
-			GetScreenEffects()->ClearBlendGroup(m_saturationID, false);
-			GetScreenEffects()->StartBlend(effect, blend, 1.0f/5.0f, m_saturationID);
-		}
+		//// Not in combat
+		//if (IsClient() && GetScreenEffects() != 0)
+		//{
+		//	CWaveBlend *blend = new CWaveBlend();
+		//	CPostProcessEffect *effect = new CPostProcessEffect(GetEntityId(), "Global_Saturation", 1.0f);
+		//	GetScreenEffects()->ClearBlendGroup(m_saturationID, false);
+		//	GetScreenEffects()->StartBlend(effect, blend, 1.0f/5.0f, m_saturationID);
+		//}
 	}
 	//should be this at the end of the update loop?
 	//if yes, a PostUpdate function should be created.
@@ -1111,7 +1298,10 @@ void CActor::Update(SEntityUpdateContext& ctx, int slot)
 		}
 	}
 	
-	UpdateGrab(ctx.fFrameTime);
+	// NOTE Sep 13, 2007: <pvl> UpdateGrab() moved into an animation system callback -
+	// due to complexities in update ordering previous frame's bone positions
+	// were still used by the GrabHandler when updated from here.
+	//UpdateGrab(ctx.fFrameTime);
 	UpdateAnimGraph( m_pAnimatedCharacter?m_pAnimatedCharacter->GetAnimationGraphState():NULL );
 
 	//
@@ -1172,25 +1362,65 @@ void CActor::UpdateScriptStats(SmartScriptTable &rTable)
 
 bool CActor::UpdateStance()
 {
-	if ((m_stance != GetStance()) || m_forceUpdateStanceCollider)
+	if (m_stance != m_desiredStance)
 	{
-		EStance oldStance = m_stance;
-		m_stance = GetStance();
-		StanceChanged( oldStance );
+		// If character is animated, postpone stance change until state transition is finished (i.e. in steady state).
+		if ((m_pAnimatedCharacter != NULL) && m_pAnimatedCharacter->InStanceTransition())
+			return false;
+
+		if (!TrySetStance(m_desiredStance))
+			return false;
+
+		StanceChanged(m_stance);
+
+		m_stance = m_desiredStance;
+
+		// Request new animation stance.
+		// AnimatedCharacter has it's own understanding of stance, which might be in conflict.
+		// Ideally the stance should be maintained only in one place. Currently the Actor (gameplay) rules.
+		if (m_pAnimatedCharacter != NULL)
+			m_pAnimatedCharacter->RequestStance(m_stance, GetStanceInfo(m_stance)->name);
 
 		IPhysicalEntity *pPhysEnt = GetEntity()->GetPhysics();
-		if (pPhysEnt)
+		if (pPhysEnt != NULL)
 		{
 			pe_action_awake aa;
 			aa.bAwake = 1;
 			pPhysEnt->Action(&aa);
 		}
-
-		return TrySetStance(m_stance);
 	}
 
 	return true;
 }
+
+//------------------------------------------------------
+
+bool CActor::TrySetStance(EStance stance)
+{
+	//  if (stance == STANCE_NULL)
+	//	  return true;
+
+	IPhysicalEntity *pPhysEnt = GetEntity()->GetPhysics();
+	int result = 0;
+	if (pPhysEnt)
+	{
+		const SStanceInfo *sInfo = GetStanceInfo(stance);
+
+		pe_player_dimensions playerDim;
+		playerDim.heightEye = 0.0f;
+		playerDim.heightCollider = sInfo->heightCollider;
+		playerDim.sizeCollider = sInfo->size;
+		playerDim.heightPivot = sInfo->heightPivot;
+		playerDim.maxUnproj = max(0.0f,sInfo->heightPivot);
+		playerDim.bUseCapsule = sInfo->useCapsule;
+
+		result = pPhysEnt->SetParams(&playerDim);
+	}
+
+	return (result != 0);
+}
+
+
 
 void CActor::SetStats(SmartScriptTable &rTable)
 {
@@ -1264,58 +1494,120 @@ bool CActor::CreateCodeEvent(SmartScriptTable &rTable)
 
 void CActor::AnimationEvent(ICharacterInstance *pCharacter, const AnimEventInstance &event)
 {
-	CreateScriptEvent("animationevent",0,event.m_EventName);
+	// Luciano - to do: use a proper customizable parameter type for CreateScriptEvent, now only float are allowed
+	CreateScriptEvent("animationevent",atof(event.m_CustomParameter),event.m_EventName);
 }
 
 
 void CActor::RequestFacialExpression(const char* pExpressionName /* = NULL */) 
 {
-	IAnimatedCharacter* pAnimChar = GetAnimatedCharacter();
-	if (pAnimChar == NULL)
-		return;
-
-	pAnimChar->GetFacialManager()->RequestFacial(pExpressionName, eFacialManagerLayer_AIExpression);
+	ICharacterInstance* pCharacter = GetEntity()->GetCharacter(0);
+	IFacialInstance* pFacialInstance = (pCharacter ? pCharacter->GetFacialInstance() : 0);
+	IFacialAnimSequence* pSequence = (pFacialInstance ? pFacialInstance->LoadSequence(pExpressionName) : 0);
+	if (pFacialInstance)
+		pFacialInstance->PlaySequence(pSequence, eFacialSequenceLayer_AIExpression);
 }
 
-void CActor::Serialize( TSerialize ser, unsigned aspects )
+void CActor::PrecacheFacialExpression(const char* pExpressionName)
+{
+	ICharacterInstance* pCharacter = GetEntity()->GetCharacter(0);
+	IFacialInstance* pFacialInstance = (pCharacter ? pCharacter->GetFacialInstance() : 0);
+	if (pFacialInstance)
+		pFacialInstance->PrecacheFacialExpression(pExpressionName);
+}
+
+void CActor::FullSerialize( TSerialize ser )
 {	
-	if (ser.GetSerializationTarget() != eST_Network)
+	assert(ser.GetSerializationTarget() != eST_Network);
+
+	ser.BeginGroup("CActor");
+	int oldHealth = (int)m_health;
+	ser.Value("health", m_health);		
+	ser.Value("maxHealth", m_maxHealth);
+	if(ser.IsReading() && oldHealth <= 0 && m_health > 0)
+		Revive(true);
+	if(ser.IsReading() && m_health <= 0 && oldHealth > 0)
 	{
-		ser.BeginGroup("CActor");
-		int oldHealth = (int)m_health;
-		ser.Value("health", m_health);
-		if(ser.IsReading() && oldHealth <= 0 && m_health > 0)
-			Revive(true); //Init(GetGameObject());
-		ser.Value("maxHealth", m_maxHealth);
-		ser.EndGroup();
-
-		m_linkStats.Serialize(ser, aspects);
-
-		bool serializeGrab(m_pGrabHandler?true:false);
-		ser.Value("serializeGrab", serializeGrab);
-
-		EntityId lostHelmet = m_lostHelmet;
-		ser.Value("LostHelmet", lostHelmet);
-		string lostHelmetObj = m_lostHelmetObj;
-		ser.Value("LostHelmetObj", lostHelmetObj);
-		if(ser.IsReading())
-		{
-			if(lostHelmet != m_lostHelmet)
-			{
-				if(lostHelmet && !m_lostHelmet)
-					LooseHelmet();
-				else if(m_lostHelmet && !lostHelmet)
-					ResetHelmetAttachment();
-			}
-		}
-
-		//FIXME:not sure how safe this is
-		if (ser.IsReading() && serializeGrab && !m_pGrabHandler)
-			CreateGrabHanlder();
-
-		if (m_pGrabHandler)
-			m_pGrabHandler->Serialize(ser,aspects);
+		Kill();
+		RagDollize(false);
 	}
+
+	ser.Value("sleepTimer", m_sleepTimer);
+	if(IPhysicalEntity *pPhys = GetEntity()->GetPhysics())
+	{
+		if(ser.IsReading() && m_sleepTimer)
+		{
+			if(pPhys->GetType() != PE_ARTICULATED)
+			{
+				float sleep = m_sleepTimer;
+				m_sleepTimer = 0.0f;
+				Fall();
+				m_sleepTimer = sleep; //was reset
+			}	
+		}
+	}
+
+	ser.EndGroup();
+
+	m_linkStats.Serialize(ser);
+
+	bool serializeGrab(m_pGrabHandler?true:false);
+	ser.Value("serializeGrab", serializeGrab);
+
+	m_serializeLostHelmet = m_lostHelmet;
+	ser.Value("LostHelmet", m_serializeLostHelmet);
+	m_serializelostHelmetObj = m_lostHelmetObj;
+	ser.Value("LostHelmetObj", m_serializelostHelmetObj);
+	ser.Value("LostHelmetAttachmentPosition", m_lostHelmetPos);
+	ser.Value("LostHelmetMaterial", m_lostHelmetMaterial);
+
+	//FIXME:not sure how safe this is
+	if (ser.IsReading() && serializeGrab && !m_pGrabHandler)
+		CreateGrabHanlder();
+
+	if (m_pGrabHandler)
+		m_pGrabHandler->Serialize(ser);
+}
+
+void CActor::PostSerialize()
+{
+	//helmet serialization
+	if(m_serializeLostHelmet != m_lostHelmet) //sync helmet status
+	{
+		if(m_serializeLostHelmet && !m_lostHelmet)
+		{
+			if(IEntity *pEntity = gEnv->pEntitySystem->GetEntity(m_serializeLostHelmet)) //helmet lost AND on the character (character was reset)
+			{
+				if(IMaterial *pMat = gEnv->p3DEngine->GetMaterialManager()->LoadMaterial(m_lostHelmetMaterial.c_str()))
+					pEntity->SetMaterial(pMat);
+
+				//get rid of new helmet attachment
+				ICharacterInstance* pCharacter = GetEntity()->GetCharacter(0);
+				IAttachmentManager *pAttachmentManager = pCharacter->GetIAttachmentManager();
+				IAttachment *pAttachment = pAttachmentManager->GetInterfaceByName(m_lostHelmetPos.c_str());
+				if(pAttachment && pAttachment->GetIAttachmentObject())
+					pAttachment->ClearBinding();
+
+				m_lostHelmet = m_serializeLostHelmet;
+			}
+			else
+				LooseHelmet();
+		}
+		else if(m_lostHelmet && !m_serializeLostHelmet)
+			ResetHelmetAttachment();
+	}
+	else if(m_lostHelmet)	//reset material for dropped helmets
+	{
+		if(IEntity *pEntity = gEnv->pEntitySystem->GetEntity(m_lostHelmet))
+		{
+			if(IMaterial *pMat = gEnv->p3DEngine->GetMaterialManager()->LoadMaterial(m_lostHelmetMaterial.c_str()))
+				pEntity->SetMaterial(pMat);
+		}
+	}
+
+  if(ICharacterInstance *pCharacter = GetEntity()->GetCharacter(0))
+    if(ISkeletonPose *pSkelPose = pCharacter->GetISkeletonPose())
+      pSkelPose->SetForceSkeletonUpdate(2);
 }
 
 void CActor::SetChannelId(uint16 id)
@@ -1334,6 +1626,18 @@ void CActor::SetHealth( int health )
 			if (gEnv->pAISystem && GetEntity() && GetEntity()->GetAI())
 				gEnv->pAISystem->DebugReportDeath(GetEntity()->GetAI());
 		}
+
+		SActorStats *pStats = GetActorStats();
+
+		if (pStats && pStats->isRagDoll)
+		{
+			CrapDollize();
+		}
+	}
+
+	if (gEnv->bServer && !gEnv->bClient && gEnv->pSystem->IsDedicated() && g_pGameCVars->sv_pacifist && health < m_health)
+	{
+		return;
 	}
 
 	int prevHealth=(int)m_health;
@@ -1344,7 +1648,7 @@ void CActor::SetHealth( int health )
 		IWeapon *pWeapon = pItem ? pItem->GetIWeapon() : NULL;
 
 		if (pWeapon)
-			pWeapon->StopFire(GetGameObject()->GetEntityId());
+			pWeapon->StopFire();
 	}
 }
 
@@ -1407,14 +1711,16 @@ void CActor::DamageInfo(EntityId shooterID, EntityId weaponID, float damage, con
 }
 
 void CActor::SetFrozenAmount(float amount)
-{
-  //CryLog("SetFrozenAmount <%s> ->%.2f", GetEntity()->GetName(), amount);
+{ 
   m_frozenAmount = max(0.f, min(1.f, amount)); 
+
+  if (g_pGameCVars->cl_debugFreezeShake)
+    CryLog("SetFrozenAmount <%s> -> %.2f", GetEntity()->GetName(), m_frozenAmount);
 }
 
 void CActor::AddFrost(float frost)
 {
-  // add scaling/multipliers here if needed
+  // add scaling/multipliers here if needed    
   
   if (!IsFrozen())
     SetFrozenAmount(m_frozenAmount+frost);
@@ -1441,6 +1747,8 @@ void CActor::Kill()
 
 	if(g_pGame->GetHUD())
 		g_pGame->GetHUD()->ActorDeath(this);
+
+	m_sleepTimer = 0.0f;
 
 	if (IVehicle* pVehicle = GetLinkedVehicle())
 	{
@@ -1470,7 +1778,6 @@ void CActor::SetParams(SmartScriptTable &rTable,bool resetFirst)
 				{
 					SStanceInfo sInfo;
 					const char *name;
-
 					{
 						CScriptSetGetChain stanceTableChain(stanceTable);
 						stanceTableChain.GetValue("normalSpeed",sInfo.normalSpeed);
@@ -1517,114 +1824,161 @@ bool CActor::IsClient() const
 	return m_isClient;
 }
 
-bool CActor::SetProfile( uint8 profile )
+bool CActor::SetAspectProfile( EEntityAspects aspect, uint8 profile )
 {
-	//CryLog("%s::SetProfile(%d): %s", GetEntity()->GetName(), profile, profile==eAP_Alive?"alive":(profile==eAP_Ragdoll?"ragdoll":(profile==eAP_Spectator?"spectator":"unknown")));
-
-	if (profile!=eAP_Frozen && GetGameObject()->GetPhysicalizationProfile()==eAP_Frozen)
-		Freeze(false);
-
 	bool res(false);
-	switch (profile)
+
+	if (aspect == eEA_Physics)
 	{
-	case eAP_NotPhysicalized:
-		{
-			SEntityPhysicalizeParams params;
-			params.type = PE_NONE;
-			GetEntity()->Physicalize(params);
-		}
-		break;
-	case eAP_Spectator:
-	case eAP_Alive:
-		{
-			// if we were asleep, we just want to wakeup
-			uint8 prevProfile = GetGameObject()->GetPhysicalizationProfile();
+		/*CryLog("%s::SetProfile(%d): %s (was: %d %s)", GetEntity()->GetName(),
+			profile, profile==eAP_Alive?"alive":(profile==eAP_Ragdoll?"ragdoll":(profile==eAP_Spectator?"spectator":(profile==eAP_Frozen?"frozen":"unknown"))),
+			m_currentPhysProfile, m_currentPhysProfile==eAP_Alive?"alive":(m_currentPhysProfile==eAP_Ragdoll?"ragdoll":(m_currentPhysProfile==eAP_Spectator?"spectator":(m_currentPhysProfile==eAP_Frozen?"frozen":"unknown"))));
+*/
+		if (m_currentPhysProfile==profile && !gEnv->pSystem->IsSerializingFile()) //rephysicalize when loading savegame
+			return true;
 
-			if (profile==eAP_Alive && (prevProfile==eAP_Sleep))
+		bool wasFrozen=(m_currentPhysProfile==eAP_Frozen);
+		m_currentPhysProfile = profile;
+
+		switch (profile)
+		{
+		case eAP_NotPhysicalized:
 			{
-				ICharacterInstance *pCharacter=GetEntity()->GetCharacter(0);
-				if (pCharacter && pCharacter->GetISkeleton())
-				{
-					IPhysicalEntity *pPhysicalEntity=0;
-					Matrix34 delta(IDENTITY);
-
-					pCharacter->GetISkeleton()->StandUp(GetEntity()->GetWorldTM(), false, pPhysicalEntity, delta);
-
-					if (pPhysicalEntity)
-					{
-						IEntityPhysicalProxy *pPhysicsProxy=static_cast<IEntityPhysicalProxy *>(GetEntity()->GetProxy(ENTITY_PROXY_PHYSICS));
-						if (pPhysicsProxy)
-						{
-							GetEntity()->SetWorldTM(delta);
-							pPhysicsProxy->AssignPhysicalEntity(pPhysicalEntity);
-						}
-					}
-					m_pAnimatedCharacter->ForceTeleportAnimationToEntity();
-				}
+				SEntityPhysicalizeParams params;
+				params.type = PE_NONE;
+				GetEntity()->Physicalize(params);
 			}
-			else
+			res=true;
+			break;
+		case eAP_Spectator:
+		case eAP_Alive:
 			{
-				Physicalize();
-
-				if (profile==eAP_Spectator)
+				// if we were asleep, we just want to wakeup
+				if (profile==eAP_Alive && (m_currentPhysProfile==eAP_Sleep))
 				{
-					if (ICharacterInstance *pCharacter=GetEntity()->GetCharacter(0))
-						pCharacter->GetISkeleton()->DestroyCharacterPhysics(1);
-					m_pAnimatedCharacter->RequestPhysicalColliderMode( eColliderMode_Disabled, eColliderModeLayer_Game );
-				}
-				else if (profile==eAP_Alive)
-				{
-					if (prevProfile==eAP_Spectator)
+					ICharacterInstance *pCharacter=GetEntity()->GetCharacter(0);
+					if (pCharacter && pCharacter->GetISkeletonAnim())
 					{
-						m_pAnimatedCharacter->RequestPhysicalColliderMode( eColliderMode_Undefined, eColliderModeLayer_Game );
-						if (IPhysicalEntity *pPhysics=GetEntity()->GetPhysics())
-						{
-							if (ICharacterInstance *pCharacter=GetEntity()->GetCharacter(0))
-							{
-								pCharacter->GetISkeleton()->DestroyCharacterPhysics(2);
+						IPhysicalEntity *pPhysicalEntity=0;
+						Matrix34 delta(IDENTITY);
 
-								if (IPhysicalEntity *pCharPhysics=pCharacter->GetISkeleton()->GetCharacterPhysics())
+						pCharacter->GetISkeletonPose()->StandUp(GetEntity()->GetWorldTM(), false, pPhysicalEntity, delta);
+
+						if (pPhysicalEntity)
+						{
+							IEntityPhysicalProxy *pPhysicsProxy=static_cast<IEntityPhysicalProxy *>(GetEntity()->GetProxy(ENTITY_PROXY_PHYSICS));
+							if (pPhysicsProxy)
+							{
+								GetEntity()->SetWorldTM(delta);
+								pPhysicsProxy->AssignPhysicalEntity(pPhysicalEntity);
+							}
+						}
+						m_pAnimatedCharacter->ForceTeleportAnimationToEntity();
+						m_pAnimatedCharacter->ForceRefreshPhysicalColliderMode();
+					}
+				}
+				else
+				{
+					Physicalize(wasFrozen?STANCE_PRONE:STANCE_NULL);
+
+					if (profile==eAP_Spectator)
+					{
+						if (ICharacterInstance *pCharacter=GetEntity()->GetCharacter(0))
+							pCharacter->GetISkeletonPose()->DestroyCharacterPhysics(1);
+						m_pAnimatedCharacter->ForceRefreshPhysicalColliderMode();
+						m_pAnimatedCharacter->RequestPhysicalColliderMode( eColliderMode_Spectator, eColliderModeLayer_Game, "Actor::SetAspectProfile");
+					}
+					else if (profile==eAP_Alive)
+					{
+						if (m_currentPhysProfile==eAP_Spectator)
+						{
+							m_pAnimatedCharacter->RequestPhysicalColliderMode( eColliderMode_Undefined, eColliderModeLayer_Game, "Actor::SetAspectProfile");
+							if (IPhysicalEntity *pPhysics=GetEntity()->GetPhysics())
+							{
+								if (ICharacterInstance *pCharacter=GetEntity()->GetCharacter(0))
 								{
-									pe_params_articulated_body body;
-									body.pHost=pPhysics;
-									pCharPhysics->SetParams(&body);
+									pCharacter->GetISkeletonPose()->DestroyCharacterPhysics(2);
+
+									if (IPhysicalEntity *pCharPhysics=pCharacter->GetISkeletonPose()->GetCharacterPhysics())
+									{
+										pe_params_articulated_body body;
+										body.pHost=pPhysics;
+										pCharPhysics->SetParams(&body);
+									}
 								}
 							}
 						}
 					}
 				}
 			}
-
-			res = true;
+			res=true;
+			break;
+		case eAP_Linked:
+			// make sure we are alive, for when we transition from ragdoll to linked...
+			if (!GetEntity()->GetPhysics() || GetEntity()->GetPhysics()->GetType()!=PE_LIVING)
+				Physicalize();
+			res=true;
+			break;
+		case eAP_Sleep:
+			RagDollize(true);
+			res=true;
+			break;
+		case eAP_Ragdoll:
+			// killed while sleeping?
+			if (m_currentPhysProfile==eAP_Sleep) 
+				GoLimp();
+			else
+				RagDollize(false);
+			res=true;
+			break;
+		case eAP_Frozen:
+			if (!GetEntity()->GetPhysics() || ((GetEntity()->GetPhysics()->GetType()!=PE_LIVING) && (GetEntity()->GetPhysics()->GetType()!=PE_ARTICULATED)))
+				Physicalize();
+			Freeze(true);
+			res=true;
+			break;
 		}
-		break;
-	case eAP_Linked:
-		// make sure we are alive, for when we transition from ragdoll to linked...
-		if (!GetEntity()->GetPhysics() || GetEntity()->GetPhysics()->GetType()!=PE_LIVING)
-			Physicalize();
-		res = true;
-		break;
-	case eAP_Sleep:
-		RagDollize(true);
-		res = true;
-		break;
-	case eAP_Ragdoll:
-		// killed while sleeping?
-		if (GetGameObject()->GetPhysicalizationProfile()==eAP_Sleep) 
-			GoLimp();
-		else
-			RagDollize(false);
-		res = true;
-		break;
-	case eAP_Frozen:
-		Freeze(true);
-		break;
-	//case eAP_DemoRecording:
-	//	break;
-	}
 
-	if (res)
-		ProfileChanged(profile);
+		IPhysicalEntity *pPE=GetEntity()->GetPhysics();
+		pe_player_dynamics pdyn;
+
+		if (profile!=eAP_Frozen && wasFrozen)
+		{
+			Freeze(false);
+
+			if (profile==eAP_Alive)
+			{
+				EStance stance;
+				if (!TrySetStance(stance=STANCE_STAND))
+					if (!TrySetStance(stance=STANCE_CROUCH))
+					{
+						pdyn.bActive=0;
+						pPE->SetParams(&pdyn);
+
+						if (!TrySetStance(stance=STANCE_PRONE))
+							stance=STANCE_NULL;
+
+						pdyn.bActive=1;
+						pPE->SetParams(&pdyn);
+					}
+					
+				if (stance!=STANCE_NULL)
+				{
+					m_stance=STANCE_NULL;
+					m_desiredStance=stance;
+
+					UpdateStance();
+				}
+
+				GetGameObject()->ChangedNetworkState(IPlayerInput::INPUT_ASPECT);
+			}
+		}
+
+		if (res)
+			ProfileChanged(profile);
+
+		m_currentPhysProfile = profile;
+	}
 
 	return res;
 }
@@ -1643,79 +1997,75 @@ void CActor::ProfileChanged( uint8 newProfile )
 	}
 }
 
-bool CActor::SerializeProfile( TSerialize ser, uint8 profile, int pflags )
+bool CActor::NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int pflags )
 {
-	uint8 currentProfile = 255;
-
-	pe_type type = PE_NONE;
-	switch (profile)
+	if (aspect == eEA_Physics)
 	{
-	case eAP_NotPhysicalized:
-		type = PE_NONE;
-		break;
-	case eAP_Spectator:
-		type = PE_LIVING;
-		break;
-	case eAP_Alive:
-		type = PE_LIVING;
-		break;
-	case eAP_Sleep:
-		type = PE_ARTICULATED;
-		break;
-	case eAP_Frozen:
-		type = PE_RIGID;
-		break;
-	case eAP_Ragdoll:
-		type = PE_ARTICULATED;
-		break;
-	//case eAP_DemoRecording:	//used to serialize the physicalization profile in demo recorder mode
-	//	if(ser.IsWriting())
-	//		currentProfile = (pe_type)(GetGameObject()->GetPhysicalizationProfile());
-	//	ser.Value("PhysicalizationProfile", currentProfile);
-	//	if(ser.IsReading())
-	//		SetProfile(currentProfile);
-	//	return SerializeProfile(ser, currentProfile, pflags);
-	case eAP_Linked: 	//if actor is attached to a vehicle - don't serialize actor physics additionally
-		return true;
-		break;
-	default:
-		return false;
-	}
+		uint8 currentProfile = 255;
 
-	// TODO: remove this when craig fixes it in the network system
-	if (profile==eAP_Spectator)
-	{
-		int x=0;	
-		ser.Value("unused", x, 'skip');
-	}
-	else if (profile==eAP_Sleep)
-	{
-		int x=0;	
-		ser.Value("unused1", x, 'skip');
-		ser.Value("unused2", x, 'skip');
-	}
-
-
-	ser.Value("ActorMass", GetActorStats()->mass, 'aMas');  //needed for physicalization
-
-	if (type == PE_NONE)
-		return true;
-
-	IEntityPhysicalProxy * pEPP = (IEntityPhysicalProxy *) GetEntity()->GetProxy(ENTITY_PROXY_PHYSICS);
-	if (ser.IsWriting())
-	{
-		if (!pEPP || !pEPP->GetPhysicalEntity() || pEPP->GetPhysicalEntity()->GetType() != type)
+		pe_type type = PE_NONE;
+		switch (profile)
 		{
-			gEnv->pPhysicalWorld->SerializeGarbageTypedSnapshot( ser, type, 0 );
+		case eAP_NotPhysicalized:
+			type = PE_NONE;
+			break;
+		case eAP_Spectator:
+			type = PE_LIVING;
+			break;
+		case eAP_Alive:
+			type = PE_LIVING;
+			break;
+		case eAP_Sleep:
+			type = PE_ARTICULATED;
+			break;
+		case eAP_Frozen:
+			type = PE_RIGID;
+			break;
+		case eAP_Ragdoll:
+			type = PE_ARTICULATED;
+			break;
+		case eAP_Linked: 	//if actor is attached to a vehicle - don't serialize actor physics additionally
 			return true;
+			break;
+		default:
+			return false;
 		}
-	}
-	else if (!pEPP)
-	{
-		return false;
-	}
 
-	pEPP->SerializeTyped( ser, type, pflags );
+		// TODO: remove this when craig fixes it in the network system
+		if (profile==eAP_Spectator)
+		{
+			int x=0;	
+			ser.Value("unused", x, 'skip');
+		}
+		else if (profile==eAP_Sleep)
+		{
+			int x=0;	
+			ser.Value("unused1", x, 'skip');
+			ser.Value("unused2", x, 'skip');
+		}
+
+
+		ser.Value("ActorMass", GetActorStats()->mass, 'aMas');  //needed for physicalization
+
+		if (type == PE_NONE)
+			return true;
+
+		IEntityPhysicalProxy * pEPP = (IEntityPhysicalProxy *) GetEntity()->GetProxy(ENTITY_PROXY_PHYSICS);
+		if (ser.IsWriting())
+		{
+			if (!pEPP || !pEPP->GetPhysicalEntity() || pEPP->GetPhysicalEntity()->GetType() != type)
+			{
+				gEnv->pPhysicalWorld->SerializeGarbageTypedSnapshot( ser, type, 0 );
+				return true;
+			}
+		}
+		else if (!pEPP)
+		{
+			return false;
+		}
+
+		pEPP->SerializeTyped( ser, type, pflags );
+	}
 
 	return true;
 }
@@ -1743,7 +2093,7 @@ void CActor::HandleEvent( const SGameObjectEvent& event )
 	}
 	else if (event.event == eCGE_Ragdoll)
 	{
-		GetGameObject()->SetPhysicalizationProfile( eAP_Ragdoll );
+		GetGameObject()->SetAspectProfile(eEA_Physics, eAP_Ragdoll);
 	}
 	else if (event.event == eCGE_EnableFallAndPlay)
 	{
@@ -1755,11 +2105,11 @@ void CActor::HandleEvent( const SGameObjectEvent& event )
 	}
 	else if (event.event == eCGE_EnablePhysicalCollider)
 	{
-		m_pAnimatedCharacter->RequestPhysicalColliderMode(eColliderMode_Undefined, eColliderModeLayer_Game);
+		m_pAnimatedCharacter->RequestPhysicalColliderMode(eColliderMode_Undefined, eColliderModeLayer_Game, "Actor::HandleEvent");
 	}
 	else if (event.event == eCGE_DisablePhysicalCollider)
 	{
-		m_pAnimatedCharacter->RequestPhysicalColliderMode(eColliderMode_Disabled, eColliderModeLayer_Game);
+		m_pAnimatedCharacter->RequestPhysicalColliderMode(eColliderMode_Disabled, eColliderModeLayer_Game, "Actor::HandleEvent");
 	}
 	else if (event.event == eCGE_RebindAnimGraphInputs)
 	{
@@ -1777,6 +2127,10 @@ void CActor::HandleEvent( const SGameObjectEvent& event )
 	{
 		m_isClient = true;
 		GetGameObject()->EnablePrePhysicsUpdate( ePPU_Always );
+
+		// always update client's character
+		if (ICharacterInstance * pCharacter = GetEntity()->GetCharacter(0))
+			pCharacter->SetFlags(pCharacter->GetFlags() | CS_FLAG_UPDATE_ALWAYS);
 	}
 }
 
@@ -1808,12 +2162,9 @@ void CActor::UpdateAnimGraph( IAnimationGraphState * pState )
 		if (pStats)
 		{
 			pState->SetInput(m_inputFiring, pStats->inFiring);
-			pState->SetInput(m_inputWaterLevel, pStats->waterLevel);
+			pState->SetInput(m_inputWaterLevel, pStats->relativeWaterLevel);
 
-			if (pStats->inFreefall.Value() == 1)
-				SetAnimationInput("Action", "freefall");
-			else if (pStats->inFreefall.Value() == 3) //3 means opening, 2 already opened 
-				SetAnimationInput("Action", "parachute");
+			// NOTE: freefall & parachute was moved to ChangeParachuteState() in Player.cpp.
 		}
 	}
 	//state.pHealth = &m_health;
@@ -1866,7 +2217,7 @@ int CActor::GetBoneID(int ID,int slot) const
 
 		}
 
-		m_boneIDs[ID] = pCharacter->GetISkeleton()->GetIDByName(boneStr);
+		m_boneIDs[ID] = pCharacter->GetISkeletonPose()->GetJointIDByName(boneStr);
 	}
 
 	return m_boneIDs[ID];
@@ -1882,12 +2233,12 @@ Vec3 CActor::GetLocalEyePos(int slot) const
 		int id_left = GetBoneID(BONE_EYE_L);
 		if (id_right>-1 && id_left>-1)
 		{
-			Vec3 reye = pCharacter->GetISkeleton()->GetAbsJQuatByID(id_right).t;
-			Vec3 leye = pCharacter->GetISkeleton()->GetAbsJQuatByID(id_left).t;
+			Vec3 reye = pCharacter->GetISkeletonPose()->GetAbsJointByID(id_right).t;
+			Vec3 leye = pCharacter->GetISkeletonPose()->GetAbsJointByID(id_left).t;
 			return (reye+leye)*0.5f;
 		}
 	}
-	return GetStanceInfo(m_stanceCollider)->viewOffset;
+	return GetStanceInfo(m_stance)->viewOffset;
 }
 
 Vec3 CActor::GetLocalEyePos2(int slot) const
@@ -1902,13 +2253,13 @@ Vec3 CActor::GetLocalEyePos2(int slot) const
 
 		Vec3 PelvisPos=Vec3(ZERO);
 		if (id_pelvis>-1)
-		//	PelvisPos = Quat::CreateRotationZ(-gf_PI/2)*pCharacter->GetISkeleton()->GetAbsJQuatByID(id_pelvis).t;
-		PelvisPos = pCharacter->GetISkeleton()->GetAbsJQuatByID(id_pelvis).t;
+		//	PelvisPos = Quat::CreateRotationZ(-gf_PI/2)*pCharacter->GetISkeleton()->GetAbsJointByID(id_pelvis).t;
+		PelvisPos = pCharacter->GetISkeletonPose()->GetAbsJointByID(id_pelvis).t;
 
 		if (id_right>-1 && id_left>-1)
 		{
-			Vec3 reye = pCharacter->GetISkeleton()->GetAbsJQuatByID(id_right).t;
-			Vec3 leye = pCharacter->GetISkeleton()->GetAbsJQuatByID(id_left).t;
+			Vec3 reye = pCharacter->GetISkeletonPose()->GetAbsJointByID(id_right).t;
+			Vec3 leye = pCharacter->GetISkeletonPose()->GetAbsJointByID(id_left).t;
 			PelvisPos.z=0;
 			return ((reye+leye)*0.5f - PelvisPos);
 		}
@@ -1952,22 +2303,36 @@ void CActor::UpdateZeroG(float frameTime)
 		if (ppList[i]->GetStatus(&scp))
 		{
 			pe_params_foreign_data fd;
-			ppList[i]->GetParams(&fd);
-      
-			//check for all zeroG areas to compute the average up vector for the gyroscope.
-			if (fd.iForeignData == ZEROG_AREA_ID)
+			if (ppList[i]->GetParams(&fd) != 0)
 			{
-				pe_status_pos sp;
-				ppList[i]->GetStatus(&sp);
+				//check for all zeroG areas to compute the average up vector for the gyroscope.
+				if (fd.iForeignData == ZEROG_AREA_ID)
+				{
+/*
+					pe_simulation_params simpar;
+					if ((ppList[i]->GetParams(&simpar) != 0) && simpar.gravity.IsZero())
+					{
+*/
+						pe_status_pos sp;
+						if (ppList[i]->GetStatus(&sp) != 0)
+						{
+							//AABB bbox(sp.BBox);
 
-				//AABB bbox(sp.BBox);
+							pStats->zeroGUp += sp.q.GetColumn2();
+							pStats->zeroGUp.NormalizeSafe(Vec3(0,0,1));
 
-				pStats->zeroGUp += sp.q.GetColumn2();
-				pStats->zeroGUp.NormalizeSafe(Vec3(0,0,1));
+							//gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(wpos, ColorB(0,0,255,255), wpos + pStats->zeroGUp * 2.0f, ColorB(0,0,255,255));
 
-				//gEnv->pRenderer->GetIRenderAuxGeom()->DrawLine(wpos, ColorB(0,0,255,255), wpos + pStats->zeroGUp * 2.0f, ColorB(0,0,255,255));
-			
-				pStats->inZeroG = true;
+							pStats->inZeroG = true;
+						}
+/*
+					}
+					else
+					{
+						pStats->inZeroG = false;
+					}
+*/
+				}
 			}
 		}
 	}
@@ -1981,7 +2346,7 @@ void CActor::ProcessBonesRotation(ICharacterInstance *pCharacter,float frameTime
 	ProcessIKLimbs(pCharacter,frameTime);
 }
 
-
+// when these rules change,the method CheckVirtualInventoryRestrictions needs to be updated as welll
 bool CActor::CheckInventoryRestrictions(const char *itemClassName)
 {
 	bool noLimit = false;
@@ -2014,6 +2379,43 @@ bool CActor::CheckInventoryRestrictions(const char *itemClassName)
 
 	return true;
 }
+
+bool CActor::CheckVirtualInventoryRestrictions(const std::vector<string> &inventory, const char *itemClassName)
+{
+	bool noLimit = false;
+
+	if(gEnv->pConsole->GetCVar("i_noweaponlimit")->GetIVal() != 0)
+		noLimit = true;
+
+	const char *itemCategory = m_pItemSystem->GetItemCategory(itemClassName);
+	if (!itemCategory)
+	{
+		GameWarning("Item class %s has no category", itemClassName);
+		return false;
+	}
+
+	if (!strcmp(itemCategory,"medium") || !strcmp(itemCategory,"heavy"))
+	{
+		int mediumCount=0;
+		int heavyCount=0;
+
+		for (std::vector<string>::const_iterator it=inventory.begin(); it!=inventory.end(); ++it)
+		{
+			const char *category=m_pItemSystem->GetItemCategory(*it);
+			
+			if (!stricmp(category, "medium"))
+				++mediumCount;
+			else if (!stricmp(category, "heavy"))
+				++heavyCount;
+		}
+
+		if ((mediumCount + heavyCount) >= 2 && !noLimit)
+			return false;
+	}
+
+	return true;
+}
+
 
 //grabbing and such
 bool CActor::CanPickUpObject(IEntity *obj, float& heavyness, float& volume)
@@ -2111,7 +2513,7 @@ void CActor::CreateIKLimb(int characterSlot, const char *limbName, const char *r
 	if (pCharacter)
 	{
 		SIKLimb newLimb;
-		newLimb.SetLimb(characterSlot,limbName,pCharacter->GetISkeleton()->GetIDByName(rootBone),pCharacter->GetISkeleton()->GetIDByName(midBone),pCharacter->GetISkeleton()->GetIDByName(endBone),flags);
+		newLimb.SetLimb(characterSlot,limbName,pCharacter->GetISkeletonPose()->GetJointIDByName(rootBone),pCharacter->GetISkeletonPose()->GetJointIDByName(midBone),pCharacter->GetISkeletonPose()->GetJointIDByName(endBone),flags);
 
 		if (newLimb.endBoneID>-1 && newLimb.rootBoneID>-1)
 			m_IKLimbs.push_back(newLimb);
@@ -2136,22 +2538,6 @@ void CActor::ProcessIKLimbs(ICharacterInstance *pCharacter,float frameTime)
 
 	if (m_pGrabHandler)
 	{
-#if 0
-		SGrabStats *pGrabStats = m_pGrabHandler->GetStats();
-		if (pGrabStats->grabId>0 && pCharacter && pGrabStats->followBoneID>-1)
-		{
-			Matrix34 entMtx(GetEntity()->GetSlotWorldTM(0));
-			//entMtx.NoScale();
-			Vec3 bonePos(pCharacter->GetISkeleton()->GetAbsJQuatByID(pGrabStats->followBoneID).t);
-
-			//static float color[] = {1,1,1,1};
-			//gEnv->pRenderer->Draw2dLabel(100,50,1.5,color,false,"bonePos:%f,%f,%f", bonePos.x,bonePos.y,bonePos.z);
-
-			pGrabStats->followBoneWPos = entMtx * bonePos;
-		}
-		else
-			pGrabStats->followBoneWPos.zero();
-#endif
 		m_pGrabHandler->ProcessIKLimbs(pCharacter);
 	}
 }
@@ -2199,20 +2585,7 @@ void CActor::SelectNextItem(int direction, bool keepHistory, const char *categor
 
 	if (currentItemId)
 		startSlot = pInventory->FindItem(currentItemId);
-	IItem *curItem = gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(currentItemId);
-	bool oldCloaked = false;
-	IMaterial *oldCloakMat = 0;
-	if (curItem && curItem->IsCloaked())
-	{
-		oldCloakMat = curItem->Cloak(false);
-		oldCloaked = true;
-	}
-	if (m_bLastItemCloaked)
-	{
-		oldCloaked = true;
-		oldCloakMat = m_lastCloakMat;
-		m_bLastItemCloaked = false;
-	}
+
 	int skip = pInventory->GetCount(); // maximum number of interactions
 	while(skip)
 	{
@@ -2229,25 +2602,15 @@ void CActor::SelectNextItem(int direction, bool keepHistory, const char *categor
 		EntityId itemId = pInventory->GetItem(slot);
 		IItem *pItem = m_pItemSystem->GetItem(itemId);
 
-		if (pItem && pItem->CanSelect() && (!category || !strcmp(m_pItemSystem->GetItemCategory(pItem->GetEntity()->GetClass()->GetName()), category)))
+		if (pItem && pItem->CanSelect() && !pItem->GetDualWieldMasterId() && (!category || !strcmp(m_pItemSystem->GetItemCategory(pItem->GetEntity()->GetClass()->GetName()), category)))
 		{
-			if (oldCloaked)
-			{
-				pItem->Cloak(true, oldCloakMat);
-			}
-			m_pItemSystem->SetActorItem(this, pItem->GetEntityId());
+			SelectItem(pItem->GetEntityId(), true);
 
 			return;
 		}
 
 		startSlot = slot;
 		--skip;
-	}
-
-	if(oldCloaked && currentItemId == pInventory->GetCurrentItem())	//fix cloak when item didn't change
-	{
-		if(curItem)
-			curItem->Cloak(true, oldCloakMat);
 	}
 }
 
@@ -2289,38 +2652,21 @@ CWeapon *CActor::GetWeaponByClass(IEntityClass* pClass) const
 
 
 //------------------------------------------------------------------------
-void CActor::SelectLastItem(bool keepHistory)
+void CActor::SelectLastItem(bool keepHistory, bool forceNext /* = false */)
 {
 	IInventory *pInventory = GetInventory();
 	if (!pInventory)
 		return;
-	IItem *curItem = gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(pInventory->GetCurrentItem());
-	bool oldCloaked = false;
-	IMaterial *oldCloakMat = 0;
-	if (curItem && curItem->IsCloaked())
-	{
-		oldCloakMat = curItem->Cloak(false);
-		oldCloaked = true;
-	}
-	if (m_bLastItemCloaked)
-	{
-		oldCloaked = true;
-		oldCloakMat = m_lastCloakMat;
-		m_bLastItemCloaked = false;
-	}
+
 	EntityId itemId = pInventory->GetLastItem();
 	IItem *pItem = m_pItemSystem->GetItem(itemId);
 
 	if (pItem)
-	{
-		if (oldCloaked)
-		{
-			pItem->Cloak(true, oldCloakMat);
-		}
-		m_pItemSystem->SetActorItem(this, pItem->GetEntityId());
-	}
+		SelectItem(pItem->GetEntityId(), keepHistory);
+	else if(forceNext)
+		SelectNextItem(1,keepHistory,NULL); //Prevent binoculars to get stuck under certain circumstances
 	else
-		m_pItemSystem->SetActorItem(this, (EntityId)0, false);
+		m_pItemSystem->SetActorItem(this, (EntityId)0, keepHistory);
 }
 
 //------------------------------------------------------------------------
@@ -2332,71 +2678,36 @@ void CActor::SelectItemByName(const char *name, bool keepHistory)
 
 	if (pInventory->GetCount() < 1)
 		return;
-	IItem *curItem = gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(pInventory->GetCurrentItem());
-	bool oldCloaked = false;
-	IMaterial *oldCloakMat = 0;
-	if (curItem && curItem->IsCloaked())
-	{
-		oldCloakMat = curItem->Cloak(false);
-		oldCloaked = true;
-	}
-	if (m_bLastItemCloaked)
-	{
-		oldCloaked = true;
-		oldCloakMat = m_lastCloakMat;
-		m_bLastItemCloaked = false;
-	}
+
 	IEntityClass* pClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(name);
 	EntityId itemId = pInventory->GetItemByClass(pClass);
 	IItem *pItem = m_pItemSystem->GetItem(itemId);
 
 	if (pItem)
-	{
-		if (oldCloaked)
-		{
-			pItem->Cloak(true, oldCloakMat);
-		}
-		m_pItemSystem->SetActorItem(this, pItem->GetEntityId());
-	}
+		SelectItem(pItem->GetEntityId(), keepHistory);
 }
 
 //------------------------------------------------------------------------
 void CActor::SelectItem(EntityId itemId, bool keepHistory)
 {
-	IInventory *pInventory = GetInventory();
-	if (!pInventory)
-		return;
+	if (IItem * pItem = m_pItemSystem->GetItem(itemId))
+	{
+		IInventory *pInventory = GetInventory();
+		if (!pInventory)
+			return;
 
-	if (pInventory->GetCount() < 1)
-		return;
+		if (pInventory->GetCount() < 1)
+			return;
 
-	if (pInventory->FindItem(itemId) < 0)
-	{
-		GameWarning("Trying to select an item which is not in %s's inventory!", GetEntity()->GetName());
-		return;
-	}
-
-	IItem *pItem = m_pItemSystem->GetItem(itemId);
-	IItem *curItem = gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(pInventory->GetCurrentItem());
-	bool oldCloaked = false;
-	IMaterial *oldCloakMat = 0;
-	if (curItem && curItem->IsCloaked())
-	{
-		oldCloakMat = curItem->Cloak(false);
-		oldCloaked = true;
-	}
-	if (m_bLastItemCloaked)
-	{
-		oldCloaked = true;
-		oldCloakMat = m_lastCloakMat;
-		m_bLastItemCloaked = false;
-	}
-	if (pItem)
-	{
-		if (oldCloaked)
+		if (pInventory->FindItem(itemId) < 0)
 		{
-			pItem->Cloak(true, oldCloakMat);
+			//GameWarning("Trying to select an item which is not in %s's inventory!", GetEntity()->GetName());
+			return;
 		}
+
+		if(pItem->GetEntityId() == pInventory->GetHolsteredItem()) //unholster selected weapon
+			pInventory->HolsterItem(false);
+
 		m_pItemSystem->SetActorItem(this, pItem->GetEntityId());
 	}
 }
@@ -2439,8 +2750,7 @@ bool CActor::PickUpItem(EntityId itemId, bool sound)
 	if (!pItem || GetHealth()<=0)
 		return false;
 
-	//Work-around for MP (needs proper fix?)
-	if(!gEnv->bMultiplayer)
+	if(IsClient())
 	{
 		if(EntityId offHandId = GetInventory()->GetItemByClass(CItem::sOffHandClass))
 		{
@@ -2452,7 +2762,7 @@ bool CActor::PickUpItem(EntityId itemId, bool sound)
 			}
 		}
 	}
-
+	
 	float heavyness(0); //this is used to select a strength-sound intensity based on mass/volume (not well designed)
 	float volume(0);
 
@@ -2463,14 +2773,9 @@ bool CActor::PickUpItem(EntityId itemId, bool sound)
 		DropItem(pItem->GetEntityId(), false);
 		return false;
 	}
-	IItem *prev = gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(GetInventory()->GetCurrentItem());
 	if (gEnv->bServer || (pItem->GetEntity()->GetFlags()&(ENTITY_FLAG_CLIENT_ONLY|ENTITY_FLAG_SERVER_ONLY)))
 	{
-		if (prev && prev->IsCloaked())
-		{
-			IMaterial *oldMat = prev->Cloak(false);
-			pItem->Cloak(true, oldMat);
-		}
+		pItem->PickUp(GetEntityId(), true);
 
 		if(heavyness == 1.0f) // nanosuit has to be used
 		{
@@ -2481,8 +2786,6 @@ bool CActor::PickUpItem(EntityId itemId, bool sound)
 					pSuit->SetSuitEnergy(pSuit->GetSuitEnergy()-25.0f);
 			}
 		}
-
-		pItem->PickUp(GetEntityId(), true);
 
 		if(GetActorClass() == CPlayer::GetActorClassType())
 		{
@@ -2515,34 +2818,65 @@ bool CActor::DropItem(EntityId itemId, float impulseScale, bool selectNext, bool
 	//Fix editor reseting issue
 	//Player dies - Don't drop weapon
 	//m_noDrop is only true when leaving the game mode into the editor (see EVENT_RESET in Item.cpp)
-	if(IsPlayer() && gEnv->pSystem->IsEditor() && ((GetHealth()<=0)||pItem->m_noDrop))
+	if(IsClient() && gEnv->pSystem->IsEditor() && ((GetHealth()<=0)||pItem->m_noDrop))
 	{
 		return false;
+	}
+
+	if(IsClient())
+	{
+		if(COffHand* pOffHand = static_cast<COffHand*>(GetItemByClass(CItem::sOffHandClass)))
+			if(pOffHand->GetOffHandState()&(eOHS_SWITCHING_GRENADE|eOHS_TRANSITIONING|eOHS_HOLDING_GRENADE|eOHS_THROWING_GRENADE))
+				return false;
 	}
 
 	bool bOK = false;
 	if (pItem->CanDrop())
 	{
-		if (pItem->IsCloaked())
-		{
-			m_bLastItemCloaked = true;
-			m_lastCloakMat = pItem->Cloak(false);
-		}
+		bool performCloakFade = IsCloaked();
+		if (pItem->IsDualWield())
+			performCloakFade = false;
+
 		if (gEnv->bServer)
 		{
 			pItem->Drop(impulseScale, selectNext, bydeath);
 
 			if (!bydeath)
-				m_pGameplayRecorder->Event(GetEntity(), GameplayEvent(eGE_ItemDropped, 0, 0, (void *)pItem->GetEntityId()));
+				m_pGameplayRecorder->Event(GetEntity(), GameplayEvent(eGE_ItemDropped, 0, 0, (void *)itemId));
+		
 		}
 		else
 			GetGameObject()->InvokeRMI(SvRequestDropItem(), DropItemParams(itemId, impulseScale, selectNext), eRMI_ToServer);
+
+		if (performCloakFade)
+			pItem->CloakEnable(false, true);
 
 		bOK = true;
 	}
 	return bOK;
 }
 
+//---------------------------------------------------------------------
+void CActor::DropAttachedItems()
+{
+	//Drop weapons attached to the back
+	if(gEnv->bServer && GetWeaponAttachmentManager())
+	{
+		CWeaponAttachmentManager::TAttachedWeaponsList weaponList = GetWeaponAttachmentManager()->GetAttachedWeapons();
+		CWeaponAttachmentManager::TAttachedWeaponsList::iterator it = weaponList.begin();
+		while(it!=weaponList.end())
+		{
+			CItem* pItemBack = static_cast<CItem*>(m_pItemSystem->GetItem(*it));
+			if(pItemBack)
+			{
+				pItemBack->Drop(1.0f,false,true);
+				m_pGameplayRecorder->Event(GetEntity(), GameplayEvent(eGE_ItemDropped, 0, 0, (void *)pItemBack->GetEntityId()));	
+			}
+
+			it++;
+		}
+	}
+}
 //------------------------------------------------------------------------
 IItem *CActor::GetCurrentItem(bool includeVehicle/*=false*/) const
 {
@@ -2610,8 +2944,7 @@ EntityId CActor::NetGetCurrentItem() const
 //------------------------------------------------------------------------
 void CActor::NetSetCurrentItem(EntityId id)
 {	
-//	if (GetInventory() && GetInventory()->FindItem(id)>-1 /*&& !(GetISystem()->IsDemoMode() == 2)*/)
-	m_pItemSystem->SetActorItem(this, id, false);
+	SelectItem(id, false);
 }
 
 //------------------------------------------------------------------------
@@ -2671,11 +3004,7 @@ void CActor::ReplaceMaterial(const char *strMaterial)
 
 		IItem *curItem = gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(GetInventory()->GetCurrentItem());
 		if (curItem)
-		{
 			curItem->Cloak(true, mat);
-			if(curItem->GetDualWieldSlave())
-				curItem->GetDualWieldSlave()->Cloak(true, mat);
-		}
 	}
 	//restore original material
 	else
@@ -2694,11 +3023,7 @@ void CActor::ReplaceMaterial(const char *strMaterial)
 
 		IItem *curItem = gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(GetInventory()->GetCurrentItem());
 		if (curItem)
-		{
 			curItem->Cloak(false);
-			if(curItem->GetDualWieldSlave())
-				curItem->GetDualWieldSlave()->Cloak(false);
-		}
 		
 		m_testOldMats.clear();
 		m_attchObjMats.clear();
@@ -2737,7 +3062,7 @@ void CActor::SetMaterialRecursive(ICharacterInstance *charInst, bool undo, IMate
 				{
 
 					if (undo)
-						obj->SetMaterial(m_attchObjMats[obj]);
+						obj->SetMaterial(NULL);
 					else
 					{
 						IMaterial *oldMat = obj->GetMaterial();
@@ -2791,51 +3116,10 @@ ISerializableInfoPtr CActor::GetSpawnInfo()
 //------------------------------------------------------------------------
 void CActor::SetSleepTimer(float timer)
 {
-	m_sleepTimer=timer;
+	m_sleepTimerOrg=m_sleepTimer=timer;
 }
 
-//-----------------------------------------------------------------------
-void CActor::CreateActorFaceAttachments()
-{
-	//Only players, trooper and alien
-	if(GetActorSpecies()==eGCT_UNKNOWN)
-		return;
 
-	Vec3 c4FrontPos(-0.0105f,0.2233f,1.297f),c4BackPos(0.00281f,-0.2493f,1.325f);
-	Quat c4FrontRot(-0.0368f,-0.0278f,0.0783f,-0.9958f),c4BackRot(1,0,0,0);
-	//Creates on init c4 face attachments
-	if (ICharacterInstance* pCharInstance = GetEntity()->GetCharacter(0))
-	{
-		IAttachmentManager* pAttachmentManager = pCharInstance->GetIAttachmentManager(); 
-		IAttachment *pAttachment = NULL;
-		pAttachment = pAttachmentManager->GetInterfaceByName("c4_front");
-		if(!pAttachment)
-		{
-			//Attachment doesn't exist, create it
-			pAttachment= pAttachmentManager->CreateAttachment("c4_front",CA_FACE,0);
-			if(pAttachment)
-			{
-				pAttachment->SetRMWPosition(c4FrontPos);
-				pAttachment->SetRMWRotation(c4FrontRot);
-				pAttachment->ProjectAttachment();
-			}
-		}
-		pAttachment = NULL;
-		pAttachment = pAttachmentManager->GetInterfaceByName("c4_back");
-		if(!pAttachment)
-		{
-			//Attachment doesn't exist, create it
-			pAttachment= pAttachmentManager->CreateAttachment("c4_back",CA_FACE,0);
-			if(pAttachment)
-			{
-				pAttachment->SetRMWPosition(c4BackPos);
-				pAttachment->SetRMWRotation(c4BackRot);
-				pAttachment->ProjectAttachment();
-			}
-		}
-	}
-
-}
 //------------------------------------------------------------------------
 IMPLEMENT_RMI(CActor, SvRequestDropItem)
 {
@@ -2881,29 +3165,58 @@ IMPLEMENT_RMI(CActor, SvRequestPickUpItem)
 //------------------------------------------------------------------------
 IMPLEMENT_RMI(CActor, SvRequestUseItem)
 {
-	UseItem(params.itemId);
+	if (!IsFrozen())
+		UseItem(params.itemId);
 
 	return true;
 }
 
 //------------------------------------------------------------------------
-void CActor::NetReviveAt(const Vec3 &pos, const Quat &rot, bool cleanInv, int teamId)
+void CActor::NetReviveAt(const Vec3 &pos, const Quat &rot, int teamId)
 {
+	if (IVehicle *pVehicle=GetLinkedVehicle())
+	{
+		if (IVehicleSeat *pSeat=pVehicle->GetSeatForPassenger(GetEntityId()))
+			pSeat->Exit(false);
+	}
+
+	// stop using any mounted weapons before reviving
+	CItem *pItem=static_cast<CItem *>(GetCurrentItem());
+	if (pItem)
+	{
+		if (pItem->IsMounted())
+		{
+			pItem->StopUse(GetEntityId());
+			pItem=0;
+		}
+	}
+
 	SetHealth(GetMaxHealth());
 
 	m_teamId=teamId;
 	g_pGame->GetGameRules()->OnRevive(this, pos, rot, m_teamId);
 
-	if (cleanInv)
-		GetInventory()->Clear();
-
 	Revive();
 
 	GetEntity()->SetWorldTM(Matrix34::Create(Vec3(1,1,1), rot, pos));
 
-	CItem *pItem=static_cast<CItem *>(GetCurrentItem());
-	if (pItem && pItem->GetStats().fp)
-		pItem->AttachArms(true, true);
+	// This will cover the case when the ClPickup RMI comes in before we're revived
+	{
+		if (m_netLastSelectablePickedUp)
+			pItem=static_cast<CItem *>(m_pItemSystem->GetItem(m_netLastSelectablePickedUp));
+		m_netLastSelectablePickedUp=0;
+
+		if (pItem)
+		{
+			bool soundEnabled=pItem->IsSoundEnabled();
+			pItem->EnableSound(false);
+			pItem->Select(false);
+			pItem->EnableSound(soundEnabled);
+
+			m_pItemSystem->SetActorItem(this, (EntityId)0);
+			SelectItem(pItem->GetEntityId(), true);
+		}
+	}
 
 	if (IsClient())
 	{
@@ -2914,28 +3227,25 @@ void CActor::NetReviveAt(const Vec3 &pos, const Quat &rot, bool cleanInv, int te
 }
 
 //------------------------------------------------------------------------
-void CActor::NetReviveInVehicle(EntityId vehicleId, int seatId, bool cleanInv, int teamId)
+void CActor::NetReviveInVehicle(EntityId vehicleId, int seatId, int teamId)
 {
+	// stop using any mounted weapons before reviving
+	CItem *pItem=static_cast<CItem *>(GetCurrentItem());
+	if (pItem)
+	{
+		if (pItem->IsMounted())
+		{
+			pItem->StopUse(GetEntityId());
+			pItem=0;
+		}
+	}
+
 	SetHealth(GetMaxHealth());
 
 	m_teamId=teamId;
 	g_pGame->GetGameRules()->OnReviveInVehicle(this, vehicleId, seatId, m_teamId);
 
-	if (cleanInv)
-		GetInventory()->Clear();
-
 	Revive();
-
-	CItem *pItem=static_cast<CItem *>(GetCurrentItem());
-	if (pItem && pItem->GetStats().fp)
-		pItem->AttachArms(true, true);
-
-	if (IsClient())
-	{
-		SupressViewBlending(); // no view bleding when respawning // CActor::Revive resets it.
-		if (g_pGame->GetHUD())
-			g_pGame->GetHUD()->GetRadar()->Reset();
-	}
 
 	// fix our physicalization, since it's need for some vehicle stuff, and it will be set correctly before the end of the frame
 	// make sure we are alive, for when we transition from ragdoll to linked...
@@ -2944,22 +3254,146 @@ void CActor::NetReviveInVehicle(EntityId vehicleId, int seatId, bool cleanInv, i
 
 	IVehicle *pVehicle=m_pGameFramework->GetIVehicleSystem()->GetVehicle(vehicleId);
 	assert(pVehicle);
-	IVehicleSeat *pSeat=pVehicle->GetSeatById(seatId);
-	if (pSeat && (!pSeat->GetPassenger() || pSeat->GetPassenger()==GetEntityId()))
-		pSeat->Enter(GetEntityId(), false);
+	if(pVehicle)
+	{
+		IVehicleSeat *pSeat=pVehicle->GetSeatById(seatId);
+		if (pSeat && (!pSeat->GetPassenger() || pSeat->GetPassenger()==GetEntityId()))
+			pSeat->Enter(GetEntityId(), false);
+	}
+
+	// This will cover the case when the ClPickup RMI comes in before we're revived
+	if (m_netLastSelectablePickedUp)
+		pItem=static_cast<CItem *>(m_pItemSystem->GetItem(m_netLastSelectablePickedUp));
+	m_netLastSelectablePickedUp=0;
+
+	if (pItem)
+	{
+		bool soundEnabled=pItem->IsSoundEnabled();
+		pItem->EnableSound(false);
+		pItem->Select(false);
+		pItem->EnableSound(soundEnabled);
+
+		m_pItemSystem->SetActorItem(this, (EntityId)0);
+		SelectItem(pItem->GetEntityId(), true);
+	}
+
+	if (IsClient())
+	{
+		SupressViewBlending(); // no view bleding when respawning // CActor::Revive resets it.
+		if (g_pGame->GetHUD())
+			g_pGame->GetHUD()->GetRadar()->Reset();
+	}
 }
 
 //------------------------------------------------------------------------
-void CActor::NetKill(EntityId shooterId, EntityId weaponId, int damage, int material, bool headshot)
+void CActor::NetKill(EntityId shooterId, uint16 weaponClassId, int damage, int material, int hit_type)
 {
-	g_pGame->GetGameRules()->OnKill(this, shooterId, weaponId, damage, material, headshot);
+	static char weaponClassName[129]={0};
+	m_pGameFramework->GetNetworkSafeClassName(weaponClassName, 128, weaponClassId);
+
+	g_pGame->GetGameRules()->OnKill(this, shooterId, weaponClassName, damage, material, hit_type);
+
+	m_netLastSelectablePickedUp=0;
 
 	if (GetHealth()>0)
 		SetHealth(0);
 
 	Kill();
 
-	g_pGame->GetGameRules()->OnKillMessage(GetEntityId(), shooterId, weaponId, damage, material, headshot);
+	g_pGame->GetGameRules()->OnKillMessage(GetEntityId(), shooterId, weaponClassName, damage, material, hit_type);
+
+	CHUD *pHUD=g_pGame->GetHUD();
+	if (!pHUD)
+		return;
+
+	bool ranked=pHUD->GetPlayerRank(shooterId)!=0 || pHUD->GetPlayerRank(GetEntityId())!=0;
+
+	if(IsClient() && gEnv->bMultiplayer && shooterId != GetEntityId() && g_pGameCVars->g_deathCam != 0)
+	{
+		// use the spectator target to store who killed us (used for the MP death cam - not quite spectator mode but similar...).
+		if(g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(shooterId))
+		{
+			SetSpectatorTarget(shooterId);
+			
+			// Also display the name of the enemy who shot you...
+			if(g_pGame->GetGameRules()->GetTeam(shooterId) != g_pGame->GetGameRules()->GetTeam(GetEntityId()))
+				SAFE_HUD_FUNC(GetTagNames()->AddEnemyTagName(shooterId));
+
+			// ensure full body is displayed (otherwise player is headless)
+			if(!IsThirdPerson())
+				ToggleThirdPerson();
+		}
+	}
+
+	if (IsClient())
+	{
+		IActor *pActor=shooterId?m_pGameFramework->GetIActorSystem()->GetActor(shooterId):0;
+		if (!pActor || shooterId==GetEntityId())
+			pHUD->BattleLogEvent(eBLE_Warning, "@mp_BLYouDied");
+		else if (IGameRules *pGameRules = g_pGame->GetGameRules())
+		{
+			IActor *pActor=m_pGameFramework->GetIActorSystem()->GetActor(shooterId);
+			if (pActor && ranked)
+				g_pGame->GetHUD()->BattleLogEvent(eBLE_Warning, "@mp_BLKilledYouRank", pActor->GetEntity()->GetName(), pHUD->GetPlayerRank(shooterId, true));
+			else
+				g_pGame->GetHUD()->BattleLogEvent(eBLE_Warning, "@mp_BLKilledYou", pActor?pActor->GetEntity()->GetName():weaponClassName);
+		}
+	}
+	else
+	{
+		bool display=true;
+		bool clientShooter=(shooterId == m_pGameFramework->GetClientActorId());
+
+		if (!clientShooter)
+		{
+			display=false;
+
+			IActor *pClientActor=m_pGameFramework->GetClientActor();
+			if (pClientActor)
+			{
+				float distSq=(pClientActor->GetEntity()->GetWorldPos()-GetEntity()->GetWorldPos()).len2();
+				if (distSq<=40.0f*40.0f)
+					display=true;
+			}
+		}
+
+		if (display)
+		{
+			IActor *pActor=shooterId?m_pGameFramework->GetIActorSystem()->GetActor(shooterId):0;
+
+			if (clientShooter)
+			{
+				if (ranked)
+					pHUD->BattleLogEvent(eBLE_Information, "@mp_BLYouKilledRank", GetEntity()->GetName(), pHUD->GetPlayerRank(GetEntityId(), true));
+				else
+					pHUD->BattleLogEvent(eBLE_Information, "@mp_BLYouKilled", GetEntity()->GetName());
+			}
+			else if (pActor && shooterId!=GetEntityId())
+			{
+				IEntity *pEntity=gEnv->pEntitySystem->GetEntity(shooterId);
+				if (ranked)
+					pHUD->BattleLogEvent(eBLE_Information, "@mp_BLPlayerKilledRank", pEntity->GetName(), pHUD->GetPlayerRank(shooterId, true), GetEntity()->GetName(), pHUD->GetPlayerRank(GetEntityId(), true));
+				else
+					pHUD->BattleLogEvent(eBLE_Information, "@mp_BLPlayerKilled", pEntity->GetName(), GetEntity()->GetName());
+			}
+			else
+			{
+				if (ranked)
+					pHUD->BattleLogEvent(eBLE_Information, "@mp_BLPlayerDiedRank", GetEntity()->GetName(), pHUD->GetPlayerRank(GetEntityId(), true));
+				else
+					pHUD->BattleLogEvent(eBLE_Information, "@mp_BLPlayerDied", GetEntity()->GetName());
+			}
+		}
+	}
+}
+
+//------------------------------------------------------------------------
+void CActor::NetSimpleKill()
+{
+	if (GetHealth()>0)
+		SetHealth(0);
+
+	Kill();
 }
 
 //------------------------------------------------------------------------
@@ -2976,9 +3410,18 @@ bool CActor::LooseHelmet(Vec3 hitDir, Vec3 hitPos)
 	}
 
 	ICharacterInstance* pCharacter = GetEntity()->GetCharacter(0);
+	if(!pCharacter)
+		return false;
 	IAttachmentManager *pAttachmentManager = pCharacter->GetIAttachmentManager();
 	//get helmet attachment
+	bool hasProtection = true;
 	IAttachment *pAttachment = pAttachmentManager->GetInterfaceByName("helmet");
+	if(!pAttachment)
+	{
+		hasProtection = false;
+		pAttachment = pAttachmentManager->GetInterfaceByName("hat");
+	}
+
 	if(pAttachment)
 	{
 		IAttachmentObject *pAttachmentObj = pAttachment->GetIAttachmentObject();
@@ -2986,7 +3429,7 @@ bool CActor::LooseHelmet(Vec3 hitDir, Vec3 hitPos)
 		{
 			IEntityClassRegistry* pClassRegistry = gEnv->pEntitySystem->GetClassRegistry();
 			pClassRegistry->IteratorMoveFirst();
-			IEntityClass* pEntityClass = pClassRegistry->FindClass("BasicEntity");
+			IEntityClass* pEntityClass = pClassRegistry->FindClass("Default");
 			if(!pEntityClass)
 				return false;
 
@@ -3017,7 +3460,7 @@ bool CActor::LooseHelmet(Vec3 hitDir, Vec3 hitPos)
 			helmetName.append("_helmet");
 			SEntitySpawnParams params;
 			params.sName = helmetName.c_str();
-			params.nFlags = ENTITY_FLAG_CLIENT_ONLY;
+			params.nFlags = ENTITY_FLAG_CLIENT_ONLY | ENTITY_FLAG_MODIFIED_BY_PHYSICS | ENTITY_FLAG_SPAWNED;
 			params.pClass = pEntityClass;
 
 			IEntity* pEntity = gEnv->pEntitySystem->SpawnEntity(params, true);
@@ -3026,8 +3469,20 @@ bool CActor::LooseHelmet(Vec3 hitDir, Vec3 hitPos)
 
 			IAttachmentObject::EType type = pAttachmentObj->GetAttachmentType();
 			if(type != IAttachmentObject::eAttachment_StatObj)
+			{
+				gEnv->pEntitySystem->RemoveEntity(pEntity->GetId());
 				return false;
+			}
 			IStatObj *pStatObj = pAttachmentObj->GetIStatObj();
+			
+			//set helmet geometry to new entity
+			pEntity->SetStatObj(pStatObj, 0, true, 5);
+			IMaterial *pUsedMaterial = pAttachmentObj->GetMaterial();
+			if(pUsedMaterial)
+			{
+				pEntity->SetMaterial(pUsedMaterial);
+				m_lostHelmetMaterial = pUsedMaterial->GetName();
+			}
 
 			Vec3 pos(GetEntity()->GetWorldPos() + GetLocalEyePos(BONE_EYE_R));
 			pos.z += 0.2f;
@@ -3046,8 +3501,6 @@ bool CActor::LooseHelmet(Vec3 hitDir, Vec3 hitPos)
 				gEnv->pEntitySystem->RemoveEntity(pEntity->GetId());
 				return false;
 			}
-			//set helmet geometry to new entity
-			pEntity->SetStatObj(pStatObj, 0, true, 5);
 
 			SmartScriptTable props;
 			IScriptTable *pEntityScript=pEntity->GetScriptTable();
@@ -3070,6 +3523,7 @@ bool CActor::LooseHelmet(Vec3 hitDir, Vec3 hitPos)
 			pAttachment->ClearBinding();
 			m_lostHelmet = pEntity->GetId();
 			m_lostHelmetObj = pStatObj->GetFilePath();
+			m_lostHelmetPos = hasProtection?"helmet":"hat";
 
 			//add hair if necessary
 			IAttachment *pHairAttachment = pAttachmentManager->GetInterfaceByName("hair");
@@ -3079,7 +3533,9 @@ bool CActor::LooseHelmet(Vec3 hitDir, Vec3 hitPos)
 					pHairAttachment->HideAttachment(0);
 			}
 
-			return true;
+			if(hasProtection)
+				return true;
+			return false;
 		}
 	}
 
@@ -3094,7 +3550,7 @@ void CActor::ResetHelmetAttachment()
 	{
 		ICharacterInstance* pCharacter = GetEntity()->GetCharacter(0);
 		IAttachmentManager *pAttachmentManager = pCharacter->GetIAttachmentManager();
-		IAttachment *pAttachment = pAttachmentManager->GetInterfaceByName("helmet");
+		IAttachment *pAttachment = pAttachmentManager->GetInterfaceByName(m_lostHelmetPos.c_str());
 		if(pAttachment)
 		{
 			if(!pAttachment->GetIAttachmentObject())
@@ -3105,6 +3561,9 @@ void CActor::ResetHelmetAttachment()
 					CCGFAttachment *pStatObjAttachment = new CCGFAttachment;
 					pStatObjAttachment->pObj = pStatObj;
 					pAttachment->AddBinding(pStatObjAttachment);
+
+					if(IMaterial *pMat = gEnv->p3DEngine->GetMaterialManager()->LoadMaterial(m_lostHelmetMaterial.c_str()))
+						pStatObjAttachment->SetMaterial(pMat);
 
 					IAttachment *pHairAttachment = pAttachmentManager->GetInterfaceByName("hair");
 					if(pHairAttachment)
@@ -3136,9 +3595,16 @@ IMPLEMENT_RMI(CActor, ClSetSpectatorMode)
 }
 
 //------------------------------------------------------------------------
+IMPLEMENT_RMI(CActor, ClSetSpectatorHealth)
+{
+	SetSpectatorHealth(params.health);
+	return true;
+}
+
+//------------------------------------------------------------------------
 IMPLEMENT_RMI(CActor, ClRevive)
 {
-	NetReviveAt(params.pos, params.rot, params.cleaninv, params.teamId);
+	NetReviveAt(params.pos, params.rot, params.teamId);
 
 	return true;
 }
@@ -3146,7 +3612,7 @@ IMPLEMENT_RMI(CActor, ClRevive)
 //------------------------------------------------------------------------
 IMPLEMENT_RMI(CActor, ClReviveInVehicle)
 {
-	NetReviveInVehicle(params.vehicleId, params.seatId, params.cleaninv, params.teamId);
+	NetReviveInVehicle(params.vehicleId, params.seatId, params.teamId);
 
 	return true;
 }
@@ -3154,29 +3620,15 @@ IMPLEMENT_RMI(CActor, ClReviveInVehicle)
 //------------------------------------------------------------------------
 IMPLEMENT_RMI(CActor, ClKill)
 {
-	NetKill(params.shooterId, params.weaponId, (int)params.damage, params.material, params.headshot);
+	NetKill(params.shooterId, params.weaponClassId, (int)params.damage, params.material, params.hit_type);
 
-	if (IsClient() && g_pGame->GetHUD())
-		g_pGame->GetHUD()->BattleLogEvent(eBLE_Warning, "@mp_BLYouDied");
-	else
-	{
-		bool display=true;
-		if (m_pGameFramework->GetClientActor() && params.shooterId != m_pGameFramework->GetClientActor()->GetEntityId())
-		{
-			display=false;
+	return true;
+}
 
-			IEntity *pShooter=gEnv->pEntitySystem->GetEntity(params.shooterId);
-			if (pShooter)
-			{
-				float distSq=(m_pGameFramework->GetClientActor()->GetEntity()->GetWorldPos()-pShooter->GetWorldPos()).len2();
-				if (distSq<=30.0f*30.0f)
-					display=true;
-			}
-		}
-
-		if (display && g_pGame->GetHUD())
-			g_pGame->GetHUD()->BattleLogEvent(eBLE_Information, "@mp_BLPlayerDied", GetEntity()->GetName());
-	}
+//------------------------------------------------------------------------
+IMPLEMENT_RMI(CActor, ClSimpleKill)
+{
+	NetSimpleKill();
 
 	return true;
 }
@@ -3208,15 +3660,17 @@ IMPLEMENT_RMI(CActor, ClSetAmmo)
 				pInventory->SetAmmoCount(pClass,capacity);
 				if(IsClient() && g_pGame->GetHUD() && capacity - current > 0)
 				{
-					char buffer[5];
-					itoa(capacity - current, buffer, 10);
-					g_pGame->GetHUD()->DisplayFlashMessage("@grab_ammo", 3, Col_Wheat, true, (string("@")+pClass->GetName()).c_str(), buffer);
+					//char buffer[5];
+					//itoa(capacity - current, buffer, 10);
+					//g_pGame->GetHUD()->DisplayFlashMessage("@grab_ammo", 3, Col_Wheat, true, (string("@")+pClass->GetName()).c_str(), buffer);
+					if(g_pGame->GetHUD())
+						g_pGame->GetHUD()->DisplayAmmoPickup(pClass->GetName(), capacity - current);
 				}
 			}
 			else
 			{
 				if(IsClient() && g_pGame->GetHUD())
-					g_pGame->GetHUD()->DisplayFlashMessage("@ammo_maxed_out", 2, ColorF(1.0f, 0,0), true, pClass->GetName());
+					g_pGame->GetHUD()->DisplayFlashMessage("@ammo_maxed_out", 2, ColorF(1.0f, 0,0), true, (string("@")+pClass->GetName()).c_str());
 			}
 		}
 		else
@@ -3224,9 +3678,11 @@ IMPLEMENT_RMI(CActor, ClSetAmmo)
 			pInventory->SetAmmoCount(pClass, params.count);
 			if(IsClient() && g_pGame->GetHUD() && params.count - current > 0)
 			{
-				char buffer[5];
+				/*char buffer[5];
 				itoa(params.count - current, buffer, 10);
-				g_pGame->GetHUD()->DisplayFlashMessage("@grab_ammo", 3, Col_Wheat, true, (string("@")+pClass->GetName()).c_str(), buffer);
+				g_pGame->GetHUD()->DisplayFlashMessage("@grab_ammo", 3, Col_Wheat, true, (string("@")+pClass->GetName()).c_str(), buffer);*/
+				if(g_pGame->GetHUD())
+					g_pGame->GetHUD()->DisplayAmmoPickup(pClass->GetName(), params.count - current);
 			}
 		}
 	}
@@ -3248,15 +3704,17 @@ IMPLEMENT_RMI(CActor, ClAddAmmo)
 		if((!gEnv->pSystem->IsEditor()) && (pInventory->GetAmmoCount(pClass)+params.count > capacity))
 		{
 			if(IsClient() && g_pGame->GetHUD())
-				g_pGame->GetHUD()->DisplayFlashMessage("@ammo_maxed_out", 2, ColorF(1.0f, 0,0), true, pClass->GetName());
+				g_pGame->GetHUD()->DisplayFlashMessage("@ammo_maxed_out", 2, ColorF(1.0f, 0,0), true, (string("@")+pClass->GetName()).c_str());
 
 			//If still there's some place, full inventory to maximum...
 			pInventory->SetAmmoCount(pClass,capacity);
 			if(capacity != current && IsClient() && g_pGame->GetHUD() && capacity - current > 0)
 			{
-				char buffer[5];
+				/*char buffer[5];
 				itoa(capacity - current, buffer, 10);
-				g_pGame->GetHUD()->DisplayFlashMessage("@grab_ammo", 3, Col_Wheat, true, (string("@")+pClass->GetName()).c_str(), buffer);
+				g_pGame->GetHUD()->DisplayFlashMessage("@grab_ammo", 3, Col_Wheat, true, (string("@")+pClass->GetName()).c_str(), buffer);*/
+				if(g_pGame->GetHUD())
+					g_pGame->GetHUD()->DisplayAmmoPickup(pClass->GetName(), capacity - current);
 			}
 		}
 		else
@@ -3264,9 +3722,11 @@ IMPLEMENT_RMI(CActor, ClAddAmmo)
 			pInventory->SetAmmoCount(pClass, pInventory->GetAmmoCount(pClass)+params.count);
 			if(IsClient() && g_pGame->GetHUD() && params.count - current > 0)
 			{
-				char buffer[5];
+				/*char buffer[5];
 				itoa(params.count - current, buffer, 10);
-				g_pGame->GetHUD()->DisplayFlashMessage("@grab_ammo", 3, Col_Wheat, true, (string("@")+pClass->GetName()).c_str(), buffer);
+				g_pGame->GetHUD()->DisplayFlashMessage("@grab_ammo", 3, Col_Wheat, true, (string("@")+pClass->GetName()).c_str(), buffer);*/
+				if(g_pGame->GetHUD())
+					g_pGame->GetHUD()->DisplayAmmoPickup(pClass->GetName(), params.count - current);
 			}
 		}
 	}
@@ -3277,14 +3737,26 @@ IMPLEMENT_RMI(CActor, ClAddAmmo)
 //------------------------------------------------------------------------
 IMPLEMENT_RMI(CActor, ClPickUp)
 {
-	//CryLogAlways("%s::ClPickUp(%s)", GetEntity()->GetName(), pItem?pItem->GetEntity()->GetName():"null");
 	if (CItem *pItem=GetItem(params.itemId))
 	{
 		pItem->PickUp(GetEntityId(), params.sound, params.select);
 
-		if (IsClient() && params.sound && g_pGame->GetHUD())
-			g_pGame->GetHUD()->BattleLogEvent(eBLE_Information, "@mp_BLYouPickedup", pItem->GetEntity()->GetClass()->GetName());
+		const char *displayName=pItem->GetDisplayName();
+
+		if (IsClient() && params.sound && g_pGame->GetHUD() && displayName && displayName[0])
+			g_pGame->GetHUD()->BattleLogEvent(eBLE_Information, "@mp_BLYouPickedup", displayName);
+
+		if (params.select)
+			m_netLastSelectablePickedUp=params.itemId;
 	}
+
+	return true;
+}
+
+//------------------------------------------------------------------------
+IMPLEMENT_RMI(CActor, ClClearInventory)
+{
+	GetInventory()->Clear();
 
 	return true;
 }
@@ -3332,7 +3804,7 @@ void CActor::DumpActorInfo()
   CryLog("Active: %i", pEntity->IsActive());
   CryLog("Hidden: %i", pEntity->IsHidden());
   CryLog("Invisible: %i", pEntity->IsInvisible());  
-  CryLog("Profile: %i", GetGameObject()->GetPhysicalizationProfile());
+  CryLog("Profile: %i", m_currentPhysProfile);
   CryLog("Health: %i", GetHealth());  
   CryLog("Frozen: %.2f", GetFrozenAmount());
   
@@ -3370,3 +3842,43 @@ void CActor::DumpActorInfo()
 
   CryLog("=====================================");
 }
+
+//
+//-----------------------------------------------------------------------------
+Vec3 CActor::GetWeaponOffsetWithLean(EStance stance, float lean, const Vec3& eyeOffset)
+{
+	//for player just do it the old way - from stance info
+	if(IsPlayer())
+		return GetStanceInfo(stance)->GetWeaponOffsetWithLean(lean);
+
+	EntityId itemId = GetInventory()->GetCurrentItem();
+	if(itemId)
+	{
+		if(CWeapon* weap = GetWeapon(itemId))
+		{
+			if(weap->AIUseEyeOffset())
+				return eyeOffset;
+			Vec3	overrideOffset;
+			if(weap->AIUseOverrideOffset(stance, lean, overrideOffset))
+				return overrideOffset;
+		}
+	}
+	return GetStanceInfo(stance)->GetWeaponOffsetWithLean(lean);
+}
+
+//-------------------------------------------------------------------
+//This function is called from Equipment Manager only for the client actor
+void CActor::NotifyInventoryAmmoChange(IEntityClass* pAmmoClass, int amount)
+{
+	if(!pAmmoClass)
+		return;
+
+	/*char buffer[5];
+	itoa(amount, buffer, 10);
+	SAFE_HUD_FUNC(DisplayFlashMessage("@grab_ammo", 3, Col_Wheat, true, (string("@")+pAmmoClass->GetName()).c_str(), buffer));*/
+	if(g_pGame->GetHUD())
+		g_pGame->GetHUD()->DisplayAmmoPickup(pAmmoClass->GetName(), amount);
+}
+
+
+

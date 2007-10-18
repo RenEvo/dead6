@@ -29,6 +29,9 @@ void CItem::UpdateFPView(float frameTime)
 	if (!m_stats.fp && !m_stats.mounted)
 		return;
 
+	if (GetGameObject()->GetAspectProfile(eEA_Physics)!=eIPhys_NotPhysicalized)
+		return;
+
 	if (m_camerastats.animating)
 	{
 		if (m_camerastats.position)
@@ -47,9 +50,9 @@ void CItem::UpdateFPView(float frameTime)
 	if (IItem *pSlave = GetDualWieldSlave())
 		pSlave->UpdateFPView(frameTime);
 
-	// vehicle weapons should update here, since they don't get the PostFilterView call
-	if (m_stats.mounted && GetOwnerActor() && GetOwnerActor()->IsClient() && GetOwnerActor()->GetLinkedVehicle())
-		UpdateMounted(frameTime);
+	//UpdateMounted() is only updated in CItem::Update()
+	//if (m_stats.mounted && GetOwnerActor() && GetOwnerActor()->IsClient())
+		//UpdateMounted(frameTime);
 }
 
 //------------------------------------------------------------------------
@@ -91,7 +94,7 @@ void CItem::UpdateFPCharacter(float frameTime)
 	{
 		ICharacterInstance *pCharacter = GetEntity()->GetCharacter(eIGS_FirstPerson);
 
-		if (pCharacter && !m_idleAnimation[eIGS_FirstPerson].empty() && pCharacter->GetISkeleton()->GetNumAnimsInFIFO(0)<1)
+		if (pCharacter && !m_idleAnimation[eIGS_FirstPerson].empty() && pCharacter->GetISkeletonAnim()->GetNumAnimsInFIFO(0)<1)
 			PlayAction(m_idleAnimation[eIGS_FirstPerson], 0, true);
 	}
 
@@ -107,9 +110,9 @@ void CItem::UpdateFPCharacter(float frameTime)
 				Matrix34 mloc = GetEntity()->GetSlotLocalTM(i,false);
 				Matrix34 m34=GetEntity()->GetWorldTM()*mloc;
 				QuatT renderLocation = QuatT(m34);
-				pCharacter->GetISkeleton()->SetForceSkeletonUpdate(8);
-				pCharacter->SkeletonPreProcess(renderLocation, renderLocation, GetISystem()->GetViewCamera() );
-				pCharacter->SkeletonPostProcess(renderLocation, renderLocation, 0 );
+				pCharacter->GetISkeletonPose()->SetForceSkeletonUpdate(8);
+				pCharacter->SkeletonPreProcess(renderLocation, renderLocation, GetISystem()->GetViewCamera(),0x55 );
+				pCharacter->SkeletonPostProcess(renderLocation, renderLocation, 0, 1.0f, 0x55 );
 			}
 		}
 	}
@@ -160,10 +163,6 @@ void CItem::PostFilterView(struct SViewParams &viewParams)
 
 	if (m_camerastats.animating && m_stats.mounted && !m_camerastats.helper.empty() && IsOwnerFP())
 	{
-		//Mounted Shi-Ten camera helper stuff
-		//I need to Update here, because I need the final entity position/orientation 
-		//before I get the camera helper data
-		UpdateMounted(0.0f);
 		viewParams.position = GetSlotHelperPos(eIGS_FirstPerson, m_camerastats.helper, true);
 		viewParams.rotation = Quat(GetSlotHelperRotation(eIGS_FirstPerson, m_camerastats.helper, true));    
 		viewParams.blend = true;
@@ -202,6 +201,8 @@ bool CItem::IsCurrentItem()
 //------------------------------------------------------------------------
 void CItem::UpdateMounted(float frameTime)
 {
+	IRenderAuxGeom* pAuxGeom = gEnv->pRenderer->GetIRenderAuxGeom();
+
 	if (!m_ownerId || !m_stats.mounted)
 		return;
 
@@ -217,7 +218,7 @@ void CItem::UpdateMounted(float frameTime)
 	  {
 		  ICharacterInstance *pCharacter = GetEntity()->GetCharacter(eIGS_FirstPerson);
 
-		  if (pCharacter && !m_idleAnimation[eIGS_FirstPerson].empty() && pCharacter->GetISkeleton()->GetNumAnimsInFIFO(0)<1)
+		  if (pCharacter && !m_idleAnimation[eIGS_FirstPerson].empty() && pCharacter->GetISkeletonAnim()->GetNumAnimsInFIFO(0)<1)
 			  PlayAction(m_idleAnimation[eIGS_FirstPerson], 0, true);
 	  }
 
@@ -233,83 +234,118 @@ void CItem::UpdateMounted(float frameTime)
 					Matrix34 mloc = GetEntity()->GetSlotLocalTM(i,false);
 					Matrix34 m34 = GetEntity()->GetWorldTM()*mloc;
 					QuatT renderLocation = QuatT(m34);
-					pCharacter->GetISkeleton()->SetForceSkeletonUpdate(9);
-					pCharacter->SkeletonPreProcess(renderLocation, renderLocation, GetISystem()->GetViewCamera() );
-					pCharacter->SkeletonPostProcess(renderLocation, renderLocation, 0 );		
+					pCharacter->GetISkeletonPose()->SetForceSkeletonUpdate(9);
+					pCharacter->SkeletonPreProcess(renderLocation, renderLocation, GetISystem()->GetViewCamera(),0x55 );
+					pCharacter->SkeletonPostProcess(renderLocation, renderLocation, 0, 0.0f, 0x55 );		
 				}
 			}
 		}
 
-		if (!pActor->GetLinkedVehicle())
+	//	f32 fColor[4] = {1,1,0,1};
+	//	f32 g_YLine=60.0f;
+	//	gEnv->pRenderer->Draw2dLabel( 1,g_YLine, 1.3f, fColor, false, "Mounted Gun Code" ); 
+
+		//adjust the orientation of the gun based on the aim-direction
+
+
+		SMovementState info;
+		IMovementController* pMC = pActor->GetMovementController();		
+		pMC->GetMovementState(info);
+		Matrix34 tm = Matrix33::CreateRotationVDir(info.aimDirection.GetNormalized());
+		Vec3 vGunXAxis=tm.GetColumn0();
+
+		if (pActor->GetLinkedVehicle()==0)
 		{
 			if (IMovementController * pMC = pActor->GetMovementController())
 			{
 				SMovementState info;
 				pMC->GetMovementState(info);
-
+				
 				Vec3 dir = info.aimDirection.GetNormalized();
-				if (!pActor->IsPlayer())
-					dir=pActor->GetEntity()->GetWorldRotation().GetColumn1();
+				
+				if(!pActor->IsPlayer())
+				{
+					// prevent snapping direction
+					Vec3 currentDir = GetEntity()->GetWorldRotation().GetColumn1();
+					float dot = currentDir.Dot(dir);
+					dot = CLAMP(dot,-1,1);
+					float reqAngle = cry_acosf(dot);
+					const float maxRotSpeed = 2.0f;
+					float maxAngle = frameTime * maxRotSpeed;
+					if(fabs(reqAngle) > maxAngle)
+					{
+						Vec3 axis = currentDir.Cross(dir);
+						if(axis.GetLengthSquared()>0.001f) // current dir and new dir are enough different
+							dir = currentDir.GetRotated(axis.GetNormalized(),sgn(reqAngle)*maxAngle);
+					}
+				}				
+				//adjust the orientation of the gun based on the aim-direction
+				Matrix34 tm = Matrix33::CreateRotationVDir(dir);
+				Vec3 vWPos=GetEntity()->GetWorldPos();
+				tm.SetTranslation(vWPos);
+				GetEntity()->SetWorldTM(tm);  //set the new orientation of the mounted gun
 
-				Matrix34 tm = Matrix34(Matrix33::CreateRotationVDir(dir));
-				tm.SetTranslation(GetEntity()->GetWorldPos());
+				vGunXAxis=tm.GetColumn0();
+				Vec3 vInitialAimDirection = m_stats.mount_dir;
+				Matrix33 vInitialPlayerOrientation = Matrix33::CreateRotationVDir(vInitialAimDirection);
+				assert( vInitialAimDirection.IsUnit() );
 
-				GetEntity()->SetWorldTM(tm);
-	  		
-				float	dist = m_mountparams.eye_distance;
+	  		Vec3 newp;
+
 				if (pActor->IsThirdPerson())
-					dist = m_mountparams.body_distance;
+				{
+					//third person
+					f32 dist = m_mountparams.body_distance*1.3f;
+					Vec3 oldp = pActor->GetEntity()->GetWorldPos();
+					newp = GetEntity()->GetWorldPos()-vInitialAimDirection*dist; //mounted gun
+					newp.z = oldp.z;
+				}
+				else
+				{
+					//first person
+					f32 fMoveBack = (1.0f+(dir.z*dir.z*dir.z*dir.z*4.0f))*0.75f;
+					f32	dist = m_mountparams.eye_distance*fMoveBack;
+					Vec3 oldp = pActor->GetEntity()->GetWorldPos();
+					newp = GetEntity()->GetWorldPos()-dir*dist; //mounted gun
+					//newp.z -= 0.75f;
+					newp.z = oldp.z;
+				}
 
-				Vec3 oldp = pActor->GetEntity()->GetWorldPos();
-				Vec3 newp = GetEntity()->GetWorldPos()-dir*dist;
-				newp.z = oldp.z;
 
-			//	Matrix34 actortm(Matrix33::CreateRotationVDir(dir).GetTransposed());
 				Matrix34 actortm(pActor->GetEntity()->GetWorldTM());
+
+				//if (pActor->IsThirdPerson())
+				actortm=vInitialPlayerOrientation;
+
 				actortm.SetTranslation(newp);
 				pActor->GetEntity()->SetWorldTM(actortm, ENTITY_XFORM_USER);
 				pActor->GetAnimationGraphState()->SetInput("Action","gunnerMounted");
+				
+				//f32 g_YLine=80.0f;
+				//gEnv->pRenderer->Draw2dLabel( 1,g_YLine, 1.3f, fColor, false, "Mounted Gun Active for FP and AI" ); 
 
 				if (ICharacterInstance *pCharacter = pActor->GetEntity()->GetCharacter(0))
 				{
-					ISkeleton *pSkeleton = pCharacter->GetISkeleton();
-					assert(pSkeleton);
+					ISkeletonAnim *pSkeletonAnim = pCharacter->GetISkeletonAnim();
+					assert(pSkeletonAnim);
 
-					if (uint32 numAnimsLayer = pSkeleton->GetNumAnimsInFIFO(0))
+					uint32 numAnimsLayer = pSkeletonAnim->GetNumAnimsInFIFO(0);
+					for(uint32 i=0; i<numAnimsLayer; i++)
 					{
-						CAnimation &animation = pSkeleton->GetAnimFromFIFO(0, 0);
+						CAnimation &animation = pSkeletonAnim->GetAnimFromFIFO(0, i);
 						if (animation.m_AnimParams.m_nFlags & CA_MANUAL_UPDATE)
 						{
-							Vec2 d(dir.x, dir.y);
-							d.NormalizeSafe();
-							float dx=d.x;
-							float dy=d.y;
-							float value=0.0f;
-	  					
-							value=atan2(dy, dx);
+							f32 aimrad = Ang3::CreateRadZ(Vec2(vInitialAimDirection),Vec2(dir));
+							animation.m_fAnimTime = clamp_tpl(aimrad/gf_PI,-1.0f,+1.0f)*0.5f+0.5f;
+							//if (pActor->IsThirdPerson()==0)
+								//animation.m_fAnimTime=0.6f; //Ivo & Benito: high advanced future code. don't ask what it is 
+							                                //Benito - Not needed any more ;)
 
-							value=value/(gf_PI*0.5f);
-							value = fabs_tpl(value);  //Just in case it was negative...
-
-							while(value>1.0f)
-								value-=1.0f;
-							animation.m_fAnimTime=1.0f-value;
-
-							//added ivo
-							assert(animation.m_fAnimTime>=0.0f && animation.m_fAnimTime<=1.0f);
-							if (animation.m_fAnimTime<0.0f || animation.m_fAnimTime>1.0f)
-							{
-								GetISystem()->Warning( VALIDATOR_MODULE_ANIMATION,VALIDATOR_WARNING, VALIDATOR_FLAG_FILE,0,	"not normalized animation time: %f",animation.m_fAnimTime);
-								if (animation.m_fAnimTime<0.0f)
-									animation.m_fAnimTime=0.0f;
-								if (animation.m_fAnimTime>1.0f)
-									animation.m_fAnimTime=1.0f;
-							}
-
-							//if (dir.Dot(m_stats.mount_last_aimdir)<0.999f)
-							//	animation.m_fAnimTime += (Random()-0.5f)*0.01f;
+							//f32 g_YLine=100.0f;
+							//gEnv->pRenderer->Draw2dLabel( 1,g_YLine, 1.3f, fColor, false, "AnimTime: %f    MyAimAngle: %f deg:%   distance:%f", animation.m_fAnimTime, aimrad, RAD2DEG(aimrad),m_mountparams.body_distance ); 
 						}
 					}
+
 				}
 
 				m_stats.mount_last_aimdir = dir;
@@ -319,34 +355,35 @@ void CItem::UpdateMounted(float frameTime)
     
     if (ICharacterInstance* pCharInstance = pActor->GetEntity()->GetCharacter(0))
 		{
-       if (ISkeleton* pSkeleton = pCharInstance->GetISkeleton())
+      if (ISkeletonAnim* pSkeletonAnim = pCharInstance->GetISkeletonAnim())
       {   
         OldBlendSpace ap;				
         if (GetAimBlending(ap))
         {
-					pSkeleton->SetBlendSpaceOverride(eMotionParamID_TurnSpeed, 0.5f - 0.5f * ap.m_turn, true);
+					pSkeletonAnim->SetBlendSpaceOverride(eMotionParamID_TurnSpeed, 0.5f + 0.5f * ap.m_turn, true);
         }        
       }        
     } 
 
-    UpdateIKMounted(pActor);
+    UpdateIKMounted(pActor, vGunXAxis*0.1f);
    
 		RequireUpdate(eIUS_General);
   }
 }
 
 //------------------------------------------------------------------------
-void CItem::UpdateIKMounted(IActor* pActor)
+void CItem::UpdateIKMounted(IActor* pActor, const Vec3& vGunXAxis)
 {
-  if (!m_mountparams.left_hand_helper.empty() || !m_mountparams.right_hand_helper.empty())
+	
+	if (!m_mountparams.left_hand_helper.empty() || !m_mountparams.right_hand_helper.empty())
   { 
     Vec3 lhpos=GetSlotHelperPos(eIGS_FirstPerson, m_mountparams.left_hand_helper.c_str(), true);
     Vec3 rhpos=GetSlotHelperPos(eIGS_FirstPerson, m_mountparams.right_hand_helper.c_str(), true);
-    pActor->SetIKPos("leftArm", lhpos, 1);
-    pActor->SetIKPos("rightArm", rhpos, 1);
-
-    //gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(lhpos, 0.125f, ColorB(255, 255, 255, 255));
-    //gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(rhpos, 0.125f, ColorB(128, 128, 128, 255));
+    pActor->SetIKPos("leftArm",		lhpos-vGunXAxis, 1);
+    pActor->SetIKPos("rightArm",	rhpos+vGunXAxis, 1);
+    
+	 // gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(lhpos, 0.075f, ColorB(255, 255, 255, 255));
+   // gEnv->pRenderer->GetIRenderAuxGeom()->DrawSphere(rhpos, 0.075f, ColorB(128, 128, 128, 255));
   }
 }
 

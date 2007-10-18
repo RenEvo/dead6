@@ -35,7 +35,7 @@ public:
   }
   virtual bool mfDraw(CShader *ef, SShaderPass *sfm);
   virtual void mfPrepare();
-  virtual float mfDistanceToCameraSquared(const CRenderObject & thisObject) { return 999999999.0f; }
+  virtual float mfDistanceToCameraSquared(Matrix34& matInst) { return 999999999.0f; }
 };
 
 class CRETerrainDetailTextureLayers: public CRECommon

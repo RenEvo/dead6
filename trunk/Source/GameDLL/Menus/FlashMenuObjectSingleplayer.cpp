@@ -111,23 +111,23 @@ void CFlashMenuObject::StartSingleplayerGame(const char *strDifficulty)
 	if(!strcmp(strDifficulty,"Easy"))
 	{
 		iDifficulty = 1;
-		gEnv->pConsole->ExecuteString("exec diff_easy");
 	}
 	else if(!strcmp(strDifficulty,"Normal"))
 	{
-		gEnv->pConsole->ExecuteString("exec diff_normal");
 		iDifficulty = 2;
 	}
 	else if(!strcmp(strDifficulty,"Realistic"))
 	{
-		gEnv->pConsole->ExecuteString("exec diff_hard");
 		iDifficulty = 3;
 	}
 	else if(!strcmp(strDifficulty,"Delta"))
 	{
-		gEnv->pConsole->ExecuteString("exec diff_bauer");
 		iDifficulty = 4;
 	}
+
+	// load configuration from disk
+	if (iDifficulty != 0)
+		LoadDifficultyConfig(iDifficulty);
 
 	if(m_pPlayerProfileManager)
 	{
@@ -135,21 +135,56 @@ void CFlashMenuObject::StartSingleplayerGame(const char *strDifficulty)
 		if(pProfile)
 		{
 			pProfile->SetAttribute("Singleplayer.LastSelectedDifficulty",(TFlowInputData)iDifficulty);
-			m_pPlayerProfileManager->SaveProfile(m_pPlayerProfileManager->GetCurrentUser());
+			IPlayerProfileManager::EProfileOperationResult result;
+			m_pPlayerProfileManager->SaveProfile(m_pPlayerProfileManager->GetCurrentUser(), result);
 		}
 	}
 	StopVideo();
 	m_bDestroyStartMenuPending = true;
 	m_stateEntryMovies = eEMS_GameStart;
+	if(m_pMusicSystem)
+		m_pMusicSystem->EndTheme(EThemeFade_StopAtOnce, 0, true);
+	PlaySound(ESound_MenuAmbience,false);
 }
 
+ILINE void expandSeconds(int secs, int& days, int& hours, int& minutes, int& seconds)
+{
+	days  = secs / 86400;
+	secs -= days * 86400;
+	hours = secs / 3600;
+	secs -= hours * 3600;
+	minutes = secs / 60;
+	seconds = secs - minutes * 60;
+}
+
+void secondsToString(int secs, wstring& outString)
+{
+	int d,h,m,s;
+	expandSeconds(secs, d, h, m, s);
+	string str;
+	if (d > 1)
+		str.Format("%d @ui_days %02d:%02d:%02d", d, h, m, s);
+	else if (d > 0)
+		str.Format("%d @ui_day %02d:%02d:%02d", d, h, m, s);
+	else if (h > 0)
+		str.Format("%02d:%02d:%02d", h, m, s);
+	else
+		str.Format("%02d:%02d", m, s);
+	gEnv->pSystem->GetLocalizationManager()->LocalizeString(str, outString);
+}
 
 void CFlashMenuObject::UpdateSaveGames()
 {
 	CFlashMenuScreen* pScreen = m_pCurrentFlashMenuScreen;
 	if(!pScreen)
 		return;
+
+	//*************************************************************************
+
+	std::vector<SaveGameMetaData> saveGameData;
 	
+	//*************************************************************************
+
 	pScreen->CheckedInvoke("resetSPGames");
 
 	// TODO: find a better place for this as it needs to be set only once -- CW
@@ -162,67 +197,164 @@ void CFlashMenuObject::UpdateSaveGames()
 	if(!pProfile)
 		return;
  
+	ILocalizationManager* pLocMgr = gEnv->pSystem->GetLocalizationManager();
 	ISaveGameEnumeratorPtr pSGE = pProfile->CreateSaveGameEnumerator();
 	ISaveGameEnumerator::SGameDescription desc;	
-	char dateBuf[256];
-	char timeBuf[256];
-	struct tm timePtr;
 
+	//get the meta data into the struct
 	for (int i=0; i<pSGE->GetCount(); ++i)
 	{
 		pSGE->GetDescription(i, desc);
-		timePtr = *localtime(&desc.metaData.saveTime);
-		const char* dateString = dateBuf;
-		const char* timeString = timeBuf;
-		bool bDateOk = (strftime(dateBuf, sizeof(dateBuf), "%#x", &timePtr) != 0);
-		bool bTimeOk = (strftime(timeBuf, sizeof(timeBuf), "%X", &timePtr) != 0);
-		if (!bDateOk || !bTimeOk)
-		{
-			timeString = asctime(&timePtr);
-			dateString = "";
-		}
-		SFlashVarValue args[9] = {desc.name, desc.description, desc.humanName, desc.metaData.levelName, desc.metaData.gameRules, desc.metaData.fileVersion, desc.metaData.buildVersion, timeString, dateString};
-		pScreen->CheckedInvoke("addGameToList", args, 9);
+
+		int kills = 0;
+		float levelPlayTimeSec = 0.0f;
+		float gamePlayTimeSec = 0.0f;
+		int difficulty = g_pGameCVars->g_difficultyLevel;
+		desc.metaData.xmlMetaDataNode->getAttr("sp_kills", kills);
+		desc.metaData.xmlMetaDataNode->getAttr("sp_levelPlayTime", levelPlayTimeSec);
+		desc.metaData.xmlMetaDataNode->getAttr("sp_gamePlayTime", gamePlayTimeSec);
+		desc.metaData.xmlMetaDataNode->getAttr("sp_difficulty", difficulty);
+
+		SaveGameMetaData data;
+		data.name = desc.name;
+		data.buildVersion = desc.metaData.buildVersion;
+		data.description = desc.description;
+		data.fileVersion = desc.metaData.fileVersion;
+		data.gamePlayTimeSec = gamePlayTimeSec;
+		data.gameRules = desc.metaData.gameRules;
+		data.humanName = desc.humanName;
+		data.levelName = g_pGame->GetMappedLevelName(desc.metaData.levelName);
+		data.levelPlayTimeSec = levelPlayTimeSec;
+		data.saveTime = desc.metaData.saveTime;
+		data.kills = kills;
+		data.difficulty = difficulty;
+		saveGameData.push_back(data);
 	}
+
+	if(saveGameData.size())
+	{
+		//sort by the set sorting rules
+		std::sort(saveGameData.begin(), saveGameData.end(), SaveGameDataCompare(m_eSaveGameCompareMode));
+
+		//send sorted data to flash
+		int start = (m_bSaveGameSortUp)?0:saveGameData.size()-1;
+		int end = (m_bSaveGameSortUp)?saveGameData.size():-1;
+		int inc = (m_bSaveGameSortUp)?1:-1;
+		for(int i = start; i != end; i+=inc)
+		{
+			SaveGameMetaData data = saveGameData[i];
+
+			wstring levelPlayTimeString;
+			pLocMgr->LocalizeDuration((int)data.levelPlayTimeSec, levelPlayTimeString);
+
+			wstring gamePlayTimeSecString;
+			pLocMgr->LocalizeDuration((int)data.gamePlayTimeSec, gamePlayTimeSecString);
+
+			wstring dateString;
+			pLocMgr->LocalizeDate(data.saveTime, true, true, true, dateString);
+
+			wstring timeString;
+			pLocMgr->LocalizeTime(data.saveTime, true, false, timeString);
+
+			dateString+=L" ";
+			dateString+=timeString;
+
+			bool levelStart = (ValidateName(data.name))?true:false;
+
+			SFlashVarValue args[12] =
+			{
+				data.name, 
+				data.description, 
+				data.humanName, 
+				data.levelName, 
+				data.gameRules, 
+				data.fileVersion, 
+				data.buildVersion, 
+				levelPlayTimeString.c_str(),
+				dateString.c_str(),
+				levelStart,
+				data.kills,
+				data.difficulty
+			};		
+			pScreen->CheckedInvoke("addGameToList", args, sizeof(args) / sizeof(args[0]));
+		}
+	}
+
 	pScreen->CheckedInvoke("updateGameList");
 }
 
 void CFlashMenuObject::LoadGame(const char *fileName)
 {
-	gEnv->pGame->GetIGameFramework()->LoadGame(fileName, false);
+	//overwrite the last savegame with the to be loaded one
+	m_sLastSaveGame = fileName;
+	gEnv->pGame->GetIGameFramework()->LoadGame(fileName, false, true);
 }
 
 void CFlashMenuObject::DeleteSaveGame(const char *fileName)
 {
-	CryLogAlways("DeleteSaveGame(%s)",fileName);
-	if(!m_pPlayerProfileManager)
-		return;
 
-	IPlayerProfile *pProfile = m_pPlayerProfileManager->GetCurrentProfile(m_pPlayerProfileManager->GetCurrentUser());
-	if(!pProfile)
-		return;
-	pProfile->DeleteSaveGame(fileName);
-	UpdateSaveGames();
-}
-
-void CFlashMenuObject::SaveGame(const char *fileName)
-{
-	string sSaveFileName = fileName;
-	string sScreenFileName = fileName;
-	sSaveFileName.append(".CRYSISJMSF");
-	sScreenFileName.append(".jpg");
-	gEnv->pGame->GetIGameFramework()->SaveGame(sSaveFileName,true, false);
-	/*string sScreenPath = g_pGame->GetOptions()->GetCurrentProfileDirectory();
-	if(sScreenPath)
+	const char *reason = ValidateName(fileName);
+	if(reason)
 	{
-		sScreenPath.append("savegames\\");
-		sScreenPath.append(sScreenFileName);
-		m_sScreenshot = sScreenPath;
+		ShowMenuMessage(reason);
+		return;
 	}
 	else
-	{*/
-		m_sScreenshot = sScreenFileName;
-	//}
-	m_bTakeScreenshot = false;
-	UpdateSaveGames();
+	{
+		if(!m_pPlayerProfileManager)
+			return;
+
+		IPlayerProfile *pProfile = m_pPlayerProfileManager->GetCurrentProfile(m_pPlayerProfileManager->GetCurrentUser());
+		if(!pProfile)
+			return;
+		pProfile->DeleteSaveGame(fileName);
+		UpdateSaveGames();
+	}
+}
+
+bool CFlashMenuObject::SaveGame(const char *fileName)
+{
+	string sSaveFileName = fileName;
+	const char *reason = ValidateName(fileName);
+	if(reason)
+	{
+		ShowMenuMessage(reason);
+		return false;
+	}
+	else
+	{
+		IActor *pActor = g_pGame->GetIGameFramework()->GetClientActor();
+		if(pActor && pActor->GetHealth() <= 0)
+		{
+			ShowMenuMessage("@ui_dead_no_save");
+			return false;
+		}
+
+		sSaveFileName.append(".CRYSISJMSF");
+		const bool bSuccess =	gEnv->pGame->GetIGameFramework()->SaveGame(sSaveFileName,true, false, eSGR_QuickSave, true);
+		if (!bSuccess)
+			return false;
+
+		UpdateSaveGames();
+	}
+	return true;
+}
+
+const char* CFlashMenuObject::ValidateName(const char *fileName)
+{
+	string sFileName(fileName);
+	int index = sFileName.rfind('.');
+	if(index>=0)
+	{
+		sFileName = sFileName.substr(0,index);
+	}
+	index = sFileName.rfind('_');
+	if(index>=0)
+	{
+		string check(sFileName.substr(index+1,sFileName.length()-(index+1)));
+		//if(!stricmp(check, "levelstart")) //because of the french law we can't do this ...
+		if(!stricmp(check, "crysis"))
+			return "@ui_error_levelstart";
+	}
+	return NULL;
 }

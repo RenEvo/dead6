@@ -20,6 +20,7 @@
 #include "HUDRadar.h"
 #include "HUD/HUDPowerStruggle.h"
 #include "HUD/HUDCrosshair.h"
+#include "Menus/FlashMenuObject.h"
 
 //------------------------------------------------------------------------
 CScriptBind_HUD::CScriptBind_HUD(ISystem *pSystem, IGameFramework *pGameFramework)
@@ -62,6 +63,7 @@ void CScriptBind_HUD::RegisterMethods()
 	SCRIPT_REG_TEMPLFUNC(SetObjectiveStatus,"objective,status,silent");
 	SCRIPT_REG_TEMPLFUNC(GetObjectiveStatus,"");
 	SCRIPT_REG_TEMPLFUNC(SetMainObjective, "objective");
+	SCRIPT_REG_FUNC(GetMainObjective);
 	SCRIPT_REG_TEMPLFUNC(SetObjectiveEntity,"objective,entity");
 	SCRIPT_REG_TEMPLFUNC(DrawStatusText, "text");
 	SCRIPT_REG_TEMPLFUNC(SetUsability, "objId, message");
@@ -71,23 +73,33 @@ void CScriptBind_HUD::RegisterMethods()
 	SCRIPT_REG_FUNC(HitIndicator);
 	SCRIPT_REG_TEMPLFUNC(DamageIndicator, "weaponId, shooterId, direction, onVehicle");
 	SCRIPT_REG_TEMPLFUNC(EnteredBuyZone, "zoneId, entered");
+	SCRIPT_REG_TEMPLFUNC(EnteredServiceZone, "zoneId, entered");
 	SCRIPT_REG_TEMPLFUNC(UpdateBuyList, "");
 	SCRIPT_REG_TEMPLFUNC(RadarShowVehicleReady, "vehicleId");
 	SCRIPT_REG_TEMPLFUNC(AddEntityToRadar, "entityId");
+	SCRIPT_REG_TEMPLFUNC(RemoveEntityFromRadar, "entityId");
 	SCRIPT_REG_TEMPLFUNC(ShowKillZoneTime, "active, seconds");
 	SCRIPT_REG_TEMPLFUNC(OnPlayerVehicleBuilt, "vehicleId, playerId");
 	SCRIPT_REG_FUNC(StartPlayerFallAndPlay);
 	SCRIPT_REG_TEMPLFUNC(ShowDeathFX, "type");
 	SCRIPT_REG_TEMPLFUNC(BattleLogEvent, "type, msg, [p1], [p2], [p3], [p4]");
-	SCRIPT_REG_TEMPLFUNC(OnItemBought, "success");
+	SCRIPT_REG_TEMPLFUNC(OnItemBought, "success, itemName");
 	SCRIPT_REG_FUNC(FakeDeath);
 	SCRIPT_REG_TEMPLFUNC(ShowWarningMessage, "warning, text");
 	SCRIPT_REG_TEMPLFUNC(GetMapGridCoord, "x, y");
+	SCRIPT_REG_TEMPLFUNC(OpenPDA, "show, buymenu");
 
 	SCRIPT_REG_TEMPLFUNC(ShowCaptureProgress, "show");
 	SCRIPT_REG_TEMPLFUNC(SetCaptureProgress, "progress");
+	SCRIPT_REG_TEMPLFUNC(SetCaptureContested, "contested");
 	SCRIPT_REG_TEMPLFUNC(ShowConstructionProgress, "show, queued, constructionTime");
-	SCRIPT_REG_TEMPLFUNC(ReviveCycle, "totalTime, remainingTime");
+	SCRIPT_REG_TEMPLFUNC(ShowReviveCycle, "show");
+	SCRIPT_REG_TEMPLFUNC(SpawnGroupInvalid, "");
+	
+	SCRIPT_REG_TEMPLFUNC(SetProgressBar, "show, percent, text");
+	SCRIPT_REG_TEMPLFUNC(DisplayBigOverlayFlashMessage, "msg, duration, posX, posY, color");
+	SCRIPT_REG_TEMPLFUNC(FadeOutBigOverlayFlashMessage, "");
+	SCRIPT_REG_TEMPLFUNC(GetLastInGameSave, "");
 	
 #undef SCRIPT_REG_CLASSNAME
 }
@@ -138,6 +150,16 @@ int CScriptBind_HUD::SetMainObjective(IFunctionHandler* pH, const char* pObjecti
 }
 
 //------------------------------------------------------------------------
+int CScriptBind_HUD::GetMainObjective(IFunctionHandler* pH)
+{
+	CHUD* pHUD = g_pGame->GetHUD();
+	if(!pHUD)
+		return pH->EndFunction();
+
+	return pH->EndFunction(pHUD->GetMainObjective());
+}
+
+//------------------------------------------------------------------------
 int CScriptBind_HUD::SetObjectiveEntity(IFunctionHandler *pH,const char* pObjectiveID, ScriptHandle entityID)
 {
 	CHUD *pHUD = g_pGame->GetHUD();
@@ -167,25 +189,17 @@ int CScriptBind_HUD::SetUsability(IFunctionHandler *pH, int objId, const char *m
 	{
 		if(IVehicle *pVehicle = gEnv->pGame->GetIGameFramework()->GetIVehicleSystem()->GetVehicle(objId))
 		{
-			if(pVehicle->IsLocked())
+			textLabel = "@use_vehicle";
+			if(IActor *pActor = g_pGame->GetIGameFramework()->GetClientActor())
 			{
-				usable = 2;
-				textLabel = "@use_vehicle_locked";
-				if(IActor *pActor = g_pGame->GetIGameFramework()->GetClientActor())
+				int pteamId=g_pGame->GetGameRules()->GetTeam(pActor->GetEntityId());
+				int vteamId=g_pGame->GetGameRules()->GetTeam(objId);
+			
+				if (vteamId && vteamId!=pteamId)
 				{
-					EntityId owner = pVehicle->GetOwnerId();
-					if((!owner && g_pGame->GetGameRules()->GetTeam(objId) == g_pGame->GetGameRules()->GetTeam(pActor->GetEntityId()))
-							|| pActor->GetEntityId() == owner)
-					{
-						usable = 1;
-						textLabel = "@use_vehicle";
-					}
+					usable = 2;
+					textLabel = "@use_vehicle_locked";
 				}
-			}
-			else
-			{
-				if(!gotMessage)
-					textLabel = "@use_vehicle";
 			}
 		}
 		else if(IItem *pItem = gEnv->pGame->GetIGameFramework()->GetIItemSystem()->GetItem(objId))
@@ -193,24 +207,26 @@ int CScriptBind_HUD::SetUsability(IFunctionHandler *pH, int objId, const char *m
 			CActor *pActor = (CActor*)(gEnv->pGame->GetIGameFramework()->GetClientActor());
 			if(pActor)
 			{
-				if(!pActor->CheckInventoryRestrictions(pItem->GetEntity()->GetClass()->GetName()))
+				if(!gotMessage)
+					return pH->EndFunction(); 
+				//Offhand controls pick up messages
+				/*if(!pActor->CheckInventoryRestrictions(pItem->GetEntity()->GetClass()->GetName()))
 				{
 					usable = 2;
-					textLabel = "@cannot_pick_item";
+					textLabel = "@inventory_full";
 				}
 				else
 				{
 					if(!gotMessage)
-					{
-						textLabel = "@pick_item";
-						param = pItem->GetEntity()->GetName();
-					}
-				}
+						return pH->EndFunction();  
+				}*/
 			}
 		}
 		else
 		{
-			if(!gotMessage)
+			if(gEnv->bMultiplayer && !gotMessage)
+				usable = 0; 
+			else if(!gotMessage)
 				textLabel = "@pick_object";
 		}
 	}
@@ -282,6 +298,16 @@ int CScriptBind_HUD::EnteredBuyZone(IFunctionHandler *pH, ScriptHandle zoneId, b
 	return pH->EndFunction();
 }
 
+int CScriptBind_HUD::EnteredServiceZone(IFunctionHandler *pH, ScriptHandle zoneId, bool entered)
+{
+	// call the hud, tell him we entered a service zone
+	// the hud itself needs to keep track of which team owns the zone and enable/disable buying accordingly
+	CHUD *pHUD = g_pGame->GetHUD();
+	if (pHUD && pHUD->GetPowerStruggleHUD())
+		pHUD->GetPowerStruggleHUD()->UpdateServiceZone(entered, (EntityId)zoneId.n);
+
+	return pH->EndFunction();
+}
 
 int CScriptBind_HUD::UpdateBuyList(IFunctionHandler *pH)
 {
@@ -292,6 +318,7 @@ int CScriptBind_HUD::UpdateBuyList(IFunctionHandler *pH)
 	{
 		pHUD->GetPowerStruggleHUD()->UpdateBuyList();
 		pHUD->GetPowerStruggleHUD()->UpdateBuyZone(true, 0);
+		pHUD->GetPowerStruggleHUD()->UpdateServiceZone(true, 0);
 	}
 
 	return pH->EndFunction();
@@ -335,6 +362,15 @@ int CScriptBind_HUD::AddEntityToRadar(IFunctionHandler *pH, ScriptHandle entityI
 	return pH->EndFunction();
 }
 
+int CScriptBind_HUD::RemoveEntityFromRadar(IFunctionHandler *pH, ScriptHandle entityId)
+{
+	CHUD *pHUD = g_pGame->GetHUD();
+	if (pHUD)
+		pHUD->GetRadar()->RemoveFromRadar((EntityId)entityId.n);
+
+	return pH->EndFunction();
+}
+
 int CScriptBind_HUD::ShowKillZoneTime(IFunctionHandler *pH, bool active, int seconds)
 {
 	CHUD *pHUD = g_pGame->GetHUD();
@@ -367,11 +403,16 @@ int CScriptBind_HUD::ShowDeathFX(IFunctionHandler *pH, int type)
 	return pH->EndFunction();
 }
 
-int CScriptBind_HUD::OnItemBought(IFunctionHandler *pH, bool success)
+int CScriptBind_HUD::OnItemBought(IFunctionHandler *pH, bool success, const char* itemName)
 {
 	CHUD *pHUD = g_pGame->GetHUD();
 	if(pHUD)
 		pHUD->PlaySound(success?ESound_BuyBeep:ESound_BuyError);
+
+	if(success && itemName && pHUD->GetPowerStruggleHUD())
+	{
+		pHUD->GetPowerStruggleHUD()->SetLastPurchase(itemName);
+	}
 
 	return pH->EndFunction();
 }
@@ -445,10 +486,21 @@ int CScriptBind_HUD::GetMapGridCoord(IFunctionHandler *pH, float x, float y)
 	return pH->EndFunction();
 }
 
+int CScriptBind_HUD::OpenPDA(IFunctionHandler *pH, bool show, bool buyMenu)
+{
+	CHUD *pHUD = g_pGame->GetHUD();
+	if(!pHUD)
+		return pH->EndFunction();
+
+	pHUD->ShowPDA(show, buyMenu);
+
+	return pH->EndFunction();
+}
+
 int CScriptBind_HUD::ShowCaptureProgress(IFunctionHandler *pH, bool show)
 {
 	CHUD *pHUD = g_pGame->GetHUD();
-	if(pHUD)
+	if(pHUD && pHUD->GetPowerStruggleHUD())
 		pHUD->GetPowerStruggleHUD()->ShowCaptureProgress(show);
 
 	return pH->EndFunction();
@@ -457,26 +509,46 @@ int CScriptBind_HUD::ShowCaptureProgress(IFunctionHandler *pH, bool show)
 int CScriptBind_HUD::SetCaptureProgress(IFunctionHandler *pH, float progress)
 {
 	CHUD *pHUD = g_pGame->GetHUD();
-	if(pHUD)
+	if(pHUD && pHUD->GetPowerStruggleHUD())
 		pHUD->GetPowerStruggleHUD()->SetCaptureProgress(progress);
 
 	return pH->EndFunction();
 }
 
+
+int CScriptBind_HUD::SetCaptureContested(IFunctionHandler *pH, bool contested)
+{
+	CHUD *pHUD = g_pGame->GetHUD();
+	if(pHUD && pHUD->GetPowerStruggleHUD())
+		pHUD->GetPowerStruggleHUD()->SetCaptureContested(contested);
+
+	return pH->EndFunction();
+}
+
+
 int CScriptBind_HUD::ShowConstructionProgress(IFunctionHandler *pH, bool show, bool queued, float constructionTime)
 {
 	CHUD *pHUD = g_pGame->GetHUD();
-	if(pHUD)
+	if(pHUD && pHUD->GetPowerStruggleHUD())
 		pHUD->GetPowerStruggleHUD()->ShowConstructionProgress(show, queued, constructionTime);
 
 	return pH->EndFunction();
 }
 
-int CScriptBind_HUD::ReviveCycle(IFunctionHandler *pH, float totalTime, float remainingTime)
+int CScriptBind_HUD::ShowReviveCycle(IFunctionHandler *pH, bool show)
 {
 	CHUD *pHUD = g_pGame->GetHUD();
-	if(pHUD)
-		pHUD->GetPowerStruggleHUD()->ReviveCycle(totalTime, remainingTime);
+	if(pHUD && pHUD->GetPowerStruggleHUD())
+		pHUD->ShowReviveCycle(show);
+
+	return pH->EndFunction();
+}
+
+int CScriptBind_HUD::SpawnGroupInvalid(IFunctionHandler *pH)
+{
+	CHUD *pHUD = g_pGame->GetHUD();
+	if(pHUD && pHUD->GetPowerStruggleHUD())
+		pHUD->SpawnPointInvalid();
 
 	return pH->EndFunction();
 }
@@ -488,5 +560,47 @@ int CScriptBind_HUD::FakeDeath(IFunctionHandler *pH)
 	if (pHUD && !pHUD->IsFakeDead())
 		pHUD->FakeDeath();
 
+	return pH->EndFunction();
+}
+
+int CScriptBind_HUD::SetProgressBar(IFunctionHandler *pH, bool show, int progress, const char *text)
+{
+	if (CHUD *pHUD = g_pGame->GetHUD())
+	{
+		if (show)
+			pHUD->ShowProgress(CLAMP(progress, 0, 100), true, 400, 200, text);
+		else
+			pHUD->ShowProgress();
+	}
+
+	return pH->EndFunction();
+}
+
+int CScriptBind_HUD::DisplayBigOverlayFlashMessage(IFunctionHandler *pH, const char *msg, float duration, int posX, int posY, Vec3 color)
+{
+	if (CHUD *pHUD = g_pGame->GetHUD())
+	{
+		pHUD->DisplayBigOverlayFlashMessage(msg, duration, posX, posY, color);
+	}
+	return pH->EndFunction();
+}
+
+int CScriptBind_HUD::FadeOutBigOverlayFlashMessage(IFunctionHandler *pH)
+{
+	if (CHUD *pHUD = g_pGame->GetHUD())
+	{
+		pHUD->FadeOutBigOverlayFlashMessage();
+	}
+	return pH->EndFunction();
+}
+
+int CScriptBind_HUD::GetLastInGameSave(IFunctionHandler *pH)
+{
+	string *lastSave = g_pGame->GetMenu()->GetLastInGameSave();
+
+	if (lastSave)
+	{
+		return pH->EndFunction(lastSave->c_str());
+	}
 	return pH->EndFunction();
 }

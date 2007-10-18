@@ -33,7 +33,7 @@ public:
 
   CVehicleWeapon();
   
-  // IItem, IGameObjectExtension
+  // CWeapon
   virtual bool Init(IGameObject * pGameObject);
   virtual void PostInit(IGameObject * pGameObject);
   virtual void Reset();
@@ -43,8 +43,9 @@ public:
 	virtual void StartUse(EntityId userId);
 	virtual void StopUse(EntityId userId);
   virtual bool FilterView(SViewParams& viewParams);
+	virtual void ApplyViewLimit(EntityId userId, bool apply) {}; // should not be done for vehicle weapons
 
-  virtual void StartFire(EntityId shooterId);
+  virtual void StartFire();
    
   virtual void Update(SEntityUpdateContext& ctx, int update);
 
@@ -52,16 +53,22 @@ public:
   virtual void SetInventoryAmmoCount(IEntityClass* pAmmoType, int count);
 
   virtual bool GetAimBlending(OldBlendSpace& params);
-  virtual void UpdateIKMounted(IActor* pActor);
+  virtual void UpdateIKMounted(IActor* pActor, const Vec3& vGunXAxis);
   virtual void AttachArms(bool attach, bool shadow);
+  virtual bool CanZoom() const;
+
+	virtual void UpdateFPView(float frameTime);
 
 	virtual void GetMemoryStatistics(ICrySizer * s) { s->Add(*this); CWeapon::GetMemoryStatistics(s); }
-  // ~IItem
+
+  virtual bool ApplyActorRecoil() const { return (m_pOwnerSeat == m_pSeatUser); }  
+  // ~CWeapon
 
 protected:
 
   bool CheckWaterLevel() const;
   void CheckForFriendlyAI(float frameTime);
+	void CheckForFriendlyPlayers(float frameTime);
 
   IVehicle* m_pVehicle;
   IVehiclePart* m_pPart;
@@ -71,7 +78,7 @@ protected:
 private:
 	float	  m_timeToUpdate;
   float   m_dtWaterLevelCheck;
-	
+	IEntity *m_pLookAtEnemy;
 };
 
 

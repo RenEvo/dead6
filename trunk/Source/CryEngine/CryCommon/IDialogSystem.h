@@ -37,6 +37,7 @@ typedef _smart_ptr<IDialogScriptIterator> IDialogScriptIteratorPtr;
 
 struct IDialogSystem
 {
+	virtual void Update(const float dt) = 0;
 	virtual void Reset() = 0;
 	virtual bool ReloadScripts() = 0;
 	virtual IDialogScriptIteratorPtr CreateScriptIterator() = 0;

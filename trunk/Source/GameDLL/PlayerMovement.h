@@ -10,7 +10,8 @@
 class CPlayerMovement
 {
 public:
-	CPlayerMovement( const CPlayer& player, const SActorFrameMovementParams& movement, float frameTime );
+	// NOTE: Removed const from player, so that PlayerMovement ZeroG can play sounds through it.
+	CPlayerMovement(CPlayer& player, const SActorFrameMovementParams& movement, float frameTime );
 	void Process( CPlayer& player );
 	void Commit( CPlayer& player );
 
@@ -19,7 +20,7 @@ private:
 	const SPlayerParams& m_params;
 	const SPlayerStats& m_stats;
 	SActorFrameMovementParams m_movement;
-	const CPlayer& m_player;
+	CPlayer& m_player;
 	const Quat& m_viewQuat;
 	const Quat& m_baseQuat;
 	const Vec3& m_upVector;
@@ -34,7 +35,7 @@ private:
 	void ProcessTurning();
 	void ProcessParachute();
 
-	void AdjustMovementForEnvironment( Vec3& movement );
+	void AdjustMovementForEnvironment( Vec3& movement, bool sprinting );
 	void AdjustPlayerPositionOnLadder(CPlayer &player);
 
 	SCharacterMoveRequest m_request; // our primary output... how to move!
@@ -44,10 +45,13 @@ private:
 	bool m_jumped;
 	Vec3 m_gBootsSpotNormal;
 	float m_thrusters;
+	float m_zgDashTimer;
+	Vec3 m_zgDashWorldDir;
 	Quat m_turnTarget;
-	float m_thrusterSprint;
 	bool m_hasJumped;
 	float m_waveTimer, m_waveRandomMult;
+	float m_stickySurfaceTimer;
+	bool m_swimJumping;
 };
 
 

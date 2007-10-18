@@ -277,10 +277,8 @@ static void DeleteCriticalSection(CRITICAL_SECTION *lpCriticalSection){}
 extern bool QueryPerformanceCounter(LARGE_INTEGER *counter);
 extern bool QueryPerformanceFrequency(LARGE_INTEGER *frequency);
 
-extern DWORD GetTickCount();
-#define GetCurrentTime GetTickCount
-
-//int _mkdir(const char *dirname);
+#define GetTickCount CryGetTicks
+#define GetCurrentTime CryGetTicks
 
 #define IGNORE              0       // Ignore signal
 #define INFINITE            0xFFFFFFFF  // Infinite timeout
@@ -366,6 +364,7 @@ inline void SetLastError( DWORD dwErrCode ) { errno = dwErrCode; }
 #define ERROR_NO_SYSTEM_RESOURCES 1450L
 #define ERROR_INVALID_USER_BUFFER	1784L
 #define ERROR_NOT_ENOUGH_MEMORY   8L
+#define ERROR_PATH_NOT_FOUND      3L
 #define FILE_FLAG_SEQUENTIAL_SCAN 0x08000000
 
 //////////////////////////////////////////////////////////////////////////
@@ -395,7 +394,7 @@ extern BOOL SetFileTime(
 						const FILETIME *lpLastAccessTime,
 						const FILETIME *lpLastWriteTime );
 //////////////////////////////////////////////////////////////////////////
-extern BOOL GetFileTime(HANDLE hFile, LPFILETIME lpCreationTime, LPFILETIME lpLastAccessTime, LPFILETIME lpLastWriteTime);
+extern const uint64 GetFileModifTime(FILE* hFile);
 
 //////////////////////////////////////////////////////////////////////////
 extern DWORD GetFileSize(HANDLE hFile,DWORD *lpFileSizeHigh );
@@ -509,7 +508,7 @@ extern DWORD GetCurrentDirectory( DWORD nBufferLength, char* lpBuffer );
 #ifdef __cplusplus
 
 //helper function
-extern const bool getFilenameNoCase(const char *file, string &rAdjustedFilename, const bool cCreateNew = false);
+extern const bool GetFilenameNoCase(const char *file, char*, const bool cCreateNew = false);
 extern void adaptFilenameToLinux( char *rAdjustedFilename);
 extern const int comparePathNames(const char* cpFirst, const char* cpSecond, const unsigned int len);//returns 0 if identical
 extern void replaceDoublePathFilename(char *szFileName);//removes "\.\" to "\" and "/./" to "/"
@@ -553,6 +552,21 @@ extern "C" char* strupr(char * str);
 extern char * _ui64toa(unsigned long long value,	char *str, int radix);
 extern long long _atoi64( char *str );
 
+template <size_t SIZE>
+int strcpy_s(char (&dst)[SIZE], const char *src)
+{
+  strncpy(dst, src, SIZE - 1);
+  dst[SIZE - 1] = 0;
+  return 0;
+}
+
+inline int strcpy_s(char *dst, size_t size, const char *src)
+{
+	strncpy(dst, src, size);
+	dst[size - 1] = 0;
+	return 0;
+}
+
 //////////////////////////////////////////////////////////////////////////
 // function renaming
 #define _chmod chmod 
@@ -578,6 +592,7 @@ extern char *ltoa ( long i , char *a , int radix );
 #define itoa ltoa
 
 //////////////////////////////////////////////////////////////////////////
+#if 0
 inline long int abs(long int x)
 {
 	return labs(x);
@@ -593,10 +608,28 @@ inline double abs(double x)
 	return fabs(x);
 }
 
+inline float sqrt(float x)
+{
+	return sqrtf(x);
+}
+#else
+#include <cmath>
+using std::abs;
+using std::sqrt;
+#endif
+
 extern char* _strtime(char* date);
 extern char* _strdate(char* date);
 
+#define _MM_HINT_T0     (1)
+#define _MM_HINT_T1     (2)
+#define _MM_HINT_T2     (3)
+#define _MM_HINT_NTA    (0)
+inline void _mm_prefetch(const char *, int) { }
 
 #endif //__cplusplus
 
 #endif // __Linux_Win32Wrapper_h__
+
+// vim:ts=2
+

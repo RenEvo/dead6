@@ -44,7 +44,8 @@ enum EDataType
 	eDATA_FogVolume,
 	eDATA_WaterVolume,
   eDATA_WaterWave,
-  eDATA_WaterOcean
+  eDATA_WaterOcean,
+	eDATA_VolumeObject
 };
 
 #include <Cry_Color.h>
@@ -83,7 +84,6 @@ public:
 public:
   void *m_CustomData;
   int m_CustomTexBind[MAX_CUSTOM_TEX_BINDS_NUM];
-	void *m_SHData;//sh decompression matrix
 	
   static CRendElement m_RootGlobal;
   CRendElement *m_NextGlobal;
@@ -117,7 +117,6 @@ public:
     m_PrevGlobal = NULL;
     m_Flags = 0;
     m_CustomData = NULL;
-		m_SHData = NULL;
 		for(int i=0; i<MAX_CUSTOM_TEX_BINDS_NUM; i++)
 	    m_CustomTexBind[i] = -1;
     if (!m_RootGlobal.m_NextGlobal)
@@ -158,12 +157,12 @@ public:
     vMaxs.Set(0,0,0);
   }
   virtual void mfGetPlane(Plane& pl);
-  virtual float mfDistanceToCameraSquared(const CRenderObject & thisObject);
+  virtual float mfDistanceToCameraSquared(Matrix34& matInst);
   virtual bool mfCompile(CParserBin& Parser, SParserFrame& Frame) { return false; }
   virtual bool mfDraw(CShader *ef, SShaderPass *sfm);
   virtual void *mfGetPointer(ESrcPointer ePT, int *Stride, EParamType Type, ESrcPointer Dst, int Flags);
   virtual bool mfPreDraw(SShaderPass *sl) { return true; }
-  virtual float mfMinDistanceToCamera(CRenderObject *pObj) {return -1;};
+  virtual float mfMinDistanceToCamera(Matrix34& matInst) {return -1;};
   virtual bool mfCheckUpdate(int nVertFormat, int Flags) {return true;}
   virtual void mfPrecache(const SShaderItem& SH) {}
   virtual int Size() {return 0;}
@@ -184,6 +183,7 @@ public:
 #include "CREWaterWave.h" 
 #include "CREWaterOcean.h" 
 #include "CREParticle.h" 
+#include "CREVolumeObject.h" 
 
 #ifndef EXCLUDE_GPU_PARTICLE_PHYSICS
 #include "CREParticleGPU.h" 

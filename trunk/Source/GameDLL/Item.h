@@ -61,6 +61,7 @@ struct SItemStrings
 	ItemString begin_reload;				// "begin_reload";
 	ItemString cannon;							// "cannon";
 	ItemString change_firemode;		// "change_firemode";
+	ItemString change_firemode_zoomed; // "change_firemode_zoomed";
 	ItemString crawl;							// "crawl";
 	ItemString deactivate;					// "deactivate";
 	ItemString deselect;						// "deselect";
@@ -105,24 +106,28 @@ struct SItemStrings
   ItemString use_light;
 	ItemString LAM;
 	ItemString LAMRifle;
+	ItemString LAMFlashLight;
+	ItemString LAMRifleFlashLight;
 	ItemString Silencer;
 	ItemString SOCOMSilencer;
 
 	ItemString lever_layer_1;
 	ItemString lever_layer_2;
+
 };
 
 extern struct SItemStrings* g_pItemStrings;
 
 class CActor;
 class CItem :
-	public CGameObjectExtensionHelper<CItem, IItem>,
-	public IGameObjectPhysics
+	public CGameObjectExtensionHelper<CItem, IItem, 64>,
+	public IGameObjectProfileManager
 {
 	friend class CScriptBind_Item;
 public:
 	struct AttachAction;
 	struct DetachAction;
+	struct SelectAction;
 
 	//------------------------------------------------------------------------
 	// Typedefs
@@ -138,6 +143,7 @@ public:
 		eIGS_OffHand,
     eIGS_Destroyed,
     eIGS_Aux1,
+		eIGS_ThirdPersonAux,
 		eIGS_Last,
 	};
 
@@ -193,6 +199,13 @@ public:
 		eISET_ClientServer	= eISET_Client|eISET_Server
 	};
 
+	enum eItemBackAttachment
+	{
+		eIBA_Primary = 0,
+		eIBA_Secondary,
+		eIBA_Unknown
+	};
+
 	struct SStats
 	{
 		SStats()
@@ -211,7 +224,8 @@ public:
 			sound_enabled(true),
 			hand(eIH_Right),
       health(0.f),
-			first_selection(true)
+			first_selection(true),
+			backAttachment(eIBA_Unknown)
 		{
 		};
 
@@ -240,6 +254,10 @@ public:
       ser.Value("health", fHealth);   
 			bool bfirstSelection = first_selection;
 			ser.Value("first_selection", bfirstSelection);
+			int aback = (int)backAttachment;
+			ser.Value("backAttachment", aback);
+			bool pick = pickable;
+			ser.Value("pickable", pick);
 			ser.EndGroup();
 
 			if(ser.IsReading())
@@ -255,6 +273,8 @@ public:
 				//fp = firstPerson;
         health = fHealth;
 				first_selection = bfirstSelection;
+				backAttachment = (eItemBackAttachment)aback;
+				pickable = pick;
 			}
 		}
 
@@ -274,6 +294,7 @@ public:
 		bool	used:1;
 		bool	sound_enabled:1;
 		bool  first_selection:1;
+		eItemBackAttachment   backAttachment;
 	};
 
 	struct SEditorStats
@@ -307,7 +328,7 @@ public:
 			two_hand(0),      
 			mass(3.5f),
 			fly_timer(750),
-			drop_impulse(8.5f),
+			drop_impulse(12.5f),
 			drop_impulse_pos(0.0075f,0,0.0075f),
 			drop_angles(0,0,0),
 			select_override(0.0f),
@@ -316,11 +337,16 @@ public:
 			raise_distance(0.5f),
 			update_hud(true),
 			auto_droppable(false),
-			has_first_select(false)
+			has_first_select(false),
+			attach_to_back(false),
+			scopeAttachment(0),
+			attachment_gives_ammo(false)
 		{
 			pose = g_pItemStrings->nw;
 			attachment[eIH_Right]=g_pItemStrings->right_item_attachment;
 			attachment[eIH_Left]=g_pItemStrings->left_item_attachment;
+			bone_attachment_01.clear();
+			bone_attachment_02.clear();
 		};
 
 		void GetMemoryStatistics(ICrySizer * s)
@@ -329,6 +355,8 @@ public:
 			for (int i=0; i<eIH_Last; i++)
 				s->Add(attachment[i]);
 			s->Add(dual_wield_suffix);
+			s->Add(dual_wield_pose);
+			s->Add(display_name);
 		}
 
 		bool    prone_not_usable ;
@@ -352,13 +380,20 @@ public:
 		Vec3		drop_angles;
 		bool    update_hud;
 		bool		auto_droppable;
+		int     scopeAttachment;
+		bool    attachment_gives_ammo;
 
 		ItemString	pose;
 		ItemString	attachment[eIH_Last];
 		ItemString	dual_wield_suffix;
 		ItemString	dual_wield_pose;
+		ItemString	display_name;
 
 		bool				has_first_select;
+		bool				attach_to_back;
+
+		ItemString  bone_attachment_01;
+		ItemString  bone_attachment_02;
 	};
 
 
@@ -411,7 +446,7 @@ public:
 
 	struct SEntityProperties
 	{
-		SEntityProperties(): hitpoints(0), pickable(true), mounted(false), physics(false) { initialSetup.resize(0);};
+		SEntityProperties(): hitpoints(0), pickable(true), mounted(false), physics(false), usable(false) { initialSetup.resize(0);};
 
 		int hitpoints;
 		bool pickable;
@@ -491,7 +526,7 @@ public:
 
 	struct SAudio
 	{
-		SAudio():	isstatic(false), sphere(0.0f), airadius(0.0f) {};
+		SAudio():	isstatic(false), sphere(0.0f), airadius(0.0f),issynched(false) {};
 
 		void GetMemoryStatistics(ICrySizer * s)
 		{
@@ -502,13 +537,15 @@ public:
 		float			    airadius;
 		float			    sphere;
 		bool			    isstatic;
+		bool          issynched;
 	};
 
 	struct SInstanceAudio
 	{
-		SInstanceAudio(): id(INVALID_SOUNDID) {};
+		SInstanceAudio(): id(INVALID_SOUNDID),synch(false) {};
 		ItemString		static_name;
 		tSoundID	    id;
+		bool          synch;
 
 		void GetMemoryStatistics(ICrySizer * s)
 		{
@@ -632,7 +669,7 @@ public:
 		}
 		ItemString	name;
 		Vec3		position;
-		Vec3		angles;
+		Ang3		angles;
 		float		scale;
 	};
 
@@ -662,12 +699,15 @@ public:
 	virtual void PostInitClient(int channelId);
 	virtual void PostInit( IGameObject * pGameObject );
 	virtual void Release();
-	virtual void Serialize( TSerialize ser, unsigned aspects );
+	virtual void FullSerialize( TSerialize ser );
+	virtual bool NetSerialize( TSerialize ser, EEntityAspects aspect, uint8 profile, int flags );
 	virtual void PostSerialize();
+	virtual void SerializeLTL( TSerialize ser );
 	virtual void SerializeSpawnInfo( TSerialize ser ) {};
 	virtual ISerializableInfoPtr GetSpawnInfo() { return 0;};
 	virtual void Update( SEntityUpdateContext& ctx, int );
 	virtual void PostUpdate( float frameTime ) {};
+	virtual void PostRemoteSpawn() {};
 	virtual void HandleEvent( const SGameObjectEvent& );
 	virtual void ProcessEvent(SEntityEvent& );
 	virtual void SetChannelId(uint16 id) {};
@@ -721,9 +761,17 @@ public:
 	virtual void TriggerRespawn();
 	virtual void TakeAccessories(EntityId receiver);
 
-	virtual IMaterial *Cloak(bool cloak, IMaterial *cloakMat = 0);
-	virtual bool IsCloaked() const { return m_cloaked; };
+	virtual void Cloak(bool cloak, IMaterial *cloakMat = 0);
 	virtual void SetMaterialRecursive(ICharacterInstance *charInst, bool undo, IMaterial *newMat);
+
+	void CloakEnable(bool enable, bool fade);
+	void CloakSync(bool fade);
+	void FrostEnable(bool enable, bool fade);
+	void FrostSync(bool fade);
+	void WetEnable(bool enable, bool fade);
+	void WetSync(bool fade);
+	void ApplyMaterialLayerSettings(uint8 mask, uint32 blend);
+
 
 	virtual bool IsTwoHand() const;
 	virtual int TwoHandMode() const;
@@ -740,6 +788,7 @@ public:
 	virtual bool IsDualWieldSlave() const;
 
 	virtual Vec3 GetMountedAngleLimits() const;
+	virtual Vec3 GetMountedDir() const {return GetStats().mount_dir;}
 	virtual void SetMountedAngleLimits(float min_pitch, float max_pitch, float yaw_range);
 
 	virtual void EnableSelect(bool enable);	
@@ -751,6 +800,7 @@ public:
 	virtual void MountAtEntity(EntityId entityId, const Vec3 &pos, const Ang3 &angles);
 	virtual void StartUse(EntityId userId);
 	virtual void StopUse(EntityId  userId);
+	virtual void ApplyViewLimit(EntityId userId, bool apply);
 
 	virtual void EnableSound(bool enable);
 	virtual bool IsSoundEnabled() const;
@@ -760,11 +810,10 @@ public:
 	virtual void EnterWater(bool enter) {};
 	// ~IItem
 
-	// IGameObjectPhysics
-	virtual bool SetProfile( uint8 profile );
-	virtual bool SerializeProfile( TSerialize ser, uint8 profile, int pflags );
-	virtual uint8 GetDefaultProfile();
-	// ~IGameObjectPhysics
+	// IGameObjectProfileManager
+	virtual bool SetAspectProfile( EEntityAspects aspect, uint8 profile );
+	virtual uint8 GetDefaultProfile( EEntityAspects aspect );
+	// ~IGameObjectProfileManager
   
 	// Events
 	virtual void OnStartUsing();
@@ -780,6 +829,9 @@ public:
 	virtual const SStats &GetStats() const { return m_stats; };
 	virtual const SParams &GetParams() const { return m_params; };
 	virtual const SEntityProperties &GetProperties() const { return m_properties; };
+
+	// Silhouette purpose: we need to get all the currently attached accessories to highlight them
+	const TAccessoryMap *GetAttachedAccessories() const { return &m_accessories; }
 
 public:
 
@@ -802,7 +854,8 @@ public:
 	// accessories
 	virtual CItem *AddAccessory(const ItemString& name);
 	virtual void RemoveAccessory(const ItemString& name);
-	virtual void AttachAccessory(const ItemString& name, bool attach, bool noanim, bool force = false);
+	virtual void RemoveAllAccessories();
+	virtual void AttachAccessory(const ItemString& name, bool attach, bool noanim, bool force = false, bool initialSetup = false);
 	virtual void AttachAccessoryPlaceHolder(const ItemString& name, bool attach);
 	virtual CItem *GetAccessoryPlaceHolder(const ItemString& name);
 	virtual CItem *GetAccessory(const ItemString& name);
@@ -815,23 +868,28 @@ public:
 	virtual void ReAttachAccessory(EntityId id);
 	virtual void AccessoriesChanged();
 	virtual void FixAccessories(SAccessoryParams *newParams, bool attach) {};
-	virtual void ResetAccessoriesScreen();
+	virtual void ResetAccessoriesScreen(CActor* pOwner);
 
 	virtual void SwitchAccessory(const ItemString& accessory);
 	virtual void DoSwitchAccessory(const ItemString& accessory);
 	virtual void ScheduleAttachAccessory(const ItemString& accessoryName, bool attach);
 	virtual const char* CurrentAttachment(const ItemString& attachmentPoint);
 
-	virtual void AddAccessoryAmmoToInventory(IEntityClass* pAmmoType, int count);
+	virtual void AddAccessoryAmmoToInventory(IEntityClass* pAmmoType, int count, CActor* pOwner = NULL);
 	virtual int  GetAccessoryAmmoCount(IEntityClass* pAmmoType);
+	virtual bool GivesAmmo() { return (!m_bonusAccessoryAmmo.empty() || m_params.attachment_gives_ammo);}
 
 	// effects
 	uint AttachEffect(int slot, uint id, bool attach, const char *effectName=0, const char *helper=0,
 		const Vec3 &offset=Vec3Constants<float>::fVec3_Zero, const Vec3 &dir=Vec3Constants<float>::fVec3_OneY, float scale=1.0f, bool prime=true);
-  uint AttachLight(int slot, uint id, bool attach, bool ignoreSysSpec = false ,float radius=5.0f, const Vec3 &color=Vec3Constants<float>::fVec3_One,
+  uint AttachLight(int slot, uint id, bool attach, float radius=5.0f, const Vec3 &color=Vec3Constants<float>::fVec3_One,
 		const float fSpecularMult=1.0f, const char *projectTexture=0, float projectFov=0, const char *helper=0,
 		const Vec3 &offset=Vec3Constants<float>::fVec3_Zero, const Vec3 &dir=Vec3Constants<float>::fVec3_OneY, 
     const char* material=0, float fHDRDynamic=0.f );
+	uint AttachLightEx(int slot, uint id, bool attach, bool fakeLight = false , bool castShadows = false, IRenderNode* pCasterException = NULL, float radius=5.0f, const Vec3 &color=Vec3Constants<float>::fVec3_One,
+		const float fSpecularMult=1.0f, const char *projectTexture=0, float projectFov=0, const char *helper=0,
+		const Vec3 &offset=Vec3Constants<float>::fVec3_Zero, const Vec3 &dir=Vec3Constants<float>::fVec3_OneY, 
+		const char* material=0, float fHDRDynamic=0.f );
 	void SpawnEffect(int slot, const char *effectName, const char *helper, const Vec3 &offset=Vec3Constants<float>::fVec3_Zero,
 		const Vec3 &dir=Vec3Constants<float>::fVec3_OneY, float scale=1.0f);
 	IParticleEmitter *GetEffectEmitter(uint id) const;
@@ -841,7 +899,8 @@ public:
 	void SetLightRadius(float radius, uint id);
 
 	// misc
-	void AttachToHand(bool attach);
+	bool AttachToHand(bool attach, bool checkAttachment = false);
+	bool AttachToBack(bool attach);
 	void EnableUpdate(bool enable, int slot=-1);
 	void RequireUpdate(int slot=-1);
 	void Hide(bool hide);
@@ -851,6 +910,7 @@ public:
 	virtual bool IsBusy() const { return m_scheduler.IsBusy(); };
 	CItemScheduler *GetScheduler() { return &m_scheduler; };
 	IItemSystem *GetIItemSystem() { return m_pItemSystem; };
+	virtual void SetDualSlaveAccessory(bool noNetwork = false);
 
 	IEntity *GetOwner() const;
 	CActor *GetOwnerActor() const;
@@ -860,6 +920,13 @@ public:
 	EntityId GetActorItemId(IActor *pActor) const;
   EntityId GetHostId() const { return m_hostId; }
 	CActor *GetActorByNetChannel(INetChannel *pNetChannel) const;
+
+	const char *GetDisplayName() const;
+
+	virtual void ForcePendingActions() {}
+
+	//Special FP weapon render method
+	virtual void SetFPWeapon(float dt, bool registerByPosition = false);
 
 	// view
 	bool IsOwnerFP();
@@ -871,7 +938,7 @@ public:
 	void ResetRenderFlags();
   virtual void UseManualBlending(bool enable);
   virtual bool GetAimBlending(OldBlendSpace& params);
-  virtual void UpdateIKMounted(IActor* pActor);
+  virtual void UpdateIKMounted(IActor* pActor, const Vec3& vGunXAxis);
 
 	// character attachments
 	bool CreateCharacterAttachment(int slot, const char *name, int type, const char *bone);
@@ -895,7 +962,7 @@ public:
 	const THelperVector& GetAttachmentHelpers();
 
 	// freeze
-	void Freeze(bool freeze);
+	virtual void Freeze(bool freeze);
 
   // damage
   virtual void OnHit(float damage, const char* damageType);
@@ -905,7 +972,7 @@ public:
 	virtual void UpdateDamageLevel();
 
 	// resource
-	virtual bool SetGeometry(int slot, const ItemString& name, const Vec3 &poffset=Vec3(0,0,0), const Vec3 &aoffset=Vec3(0,0,0), float scale=1.0f, bool forceReload=false);
+	virtual bool SetGeometry(int slot, const ItemString& name, const Vec3& poffset=Vec3(0,0,0), const Ang3& aoffset=Ang3(0,0,0), float scale=1.0f, bool forceReload=false);
 	void SetDefaultIdleAnimation(int slot, const ItemString& actionName);
 	const char *GetDefaultIdleAnimation(int slot) { return m_idleAnimation[slot]; };
 	void ForceSkinning(bool always);
@@ -932,10 +999,10 @@ public:
 	void ReleaseStaticSound(SInstanceAudio *sound);
 	void ReleaseStaticSounds();
 
-	void SetActionSuffix(const char *suffix) { m_actionSuffix = suffix; };
+	void SetActionSuffix(const char *suffix) { m_actionSuffix = string(suffix); };
 	const char *GetActionSuffix(const char *suffix) const { return m_actionSuffix.c_str(); };
 
-	virtual void OnAttach(bool attach) {};
+	virtual void OnAttach(bool attach);
 
 	IEntitySoundProxy *GetSoundProxy(bool create=false);
 	IEntityRenderProxy *GetRenderProxy(bool create=false);
@@ -1193,8 +1260,6 @@ protected:
 
 	TDamageLevelVector		m_damageLevels;
 
-	float									m_fVolume;	//non-physics volume for player pick-up check
-
 	TInitialSetup					m_initialSetup;
 		
 	uint									m_effectGenId;
@@ -1215,6 +1280,7 @@ protected:
 	float									m_animationSpeed[eIGS_Last];
 
 	string								m_actionSuffix;
+	string								m_actionSuffixSerializationHelper;
 
 	ICharacterInstance		*m_pForcedArms;
 
@@ -1233,23 +1299,28 @@ protected:
 	static IGameplayRecorder*m_pGameplayRecorder;
 
 protected:
-	std::map< ICharacterInstance*, _smart_ptr<IMaterial> > m_testOldMats;
-	std::map< IAttachmentObject*, _smart_ptr<IMaterial> > m_attchObjMats;
-	_smart_ptr<IMaterial> m_pLastCloakMat;
 	ItemString						m_geometry[eIGS_Last];
 	bool									m_modifying;
 	bool									m_transitioning;
 	bool									m_cloaked;
+	bool									m_serializeCloaked; //used for cloaked serialization
 	bool									m_frozen;
 	bool									m_enableAnimations;
 
 	int										m_constraintId;
+
+	bool                  m_useFPCamSpacePP; //Enables special processing of FP weapons in camera space (prevent jittering)
+
+	Vec3									m_serializeActivePhysics;
+	bool									m_serializeDestroyed;
+	bool                  m_serializeRigidPhysics;
 
 public:
 
 	bool									m_noDrop;				//Fix reseting problem in editor
 	static IEntityClass*	sOffHandClass;
 	static IEntityClass*	sFistsClass;
+	static IEntityClass*	sAlienCloak;
 	static IEntityClass*	sSOCOMClass;
 	static IEntityClass*	sDetonatorClass;
 	static IEntityClass*	sC4Class;
@@ -1260,14 +1331,18 @@ public:
 	static IEntityClass*	sClaymoreExplosiveClass;
 	static IEntityClass*	sAVExplosiveClass;
 	static IEntityClass*	sDSG1Class;
-
+	static IEntityClass*	sTACGunClass;
+	static IEntityClass*	sTACGunFleetClass;
+	static IEntityClass*	sAlienMountClass;
+	static IEntityClass*	sRocketLauncherClass;
 	static IEntityClass*	sLAMFlashLight;
 	static IEntityClass*	sLAMRifleFlashLight;
-
 	static IEntityClass*	sFlashbangGrenade;
 	static IEntityClass*	sExplosiveGrenade;
 	static IEntityClass*	sEMPGrenade;
 	static IEntityClass*	sSmokeGrenade;
+
+	static IEntityClass*  sIncendiaryAmmo;
 };
 
 

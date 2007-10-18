@@ -163,13 +163,16 @@ public:
 	//virtual bool CanReload() const;
 
 	virtual bool CanFire(bool considerAmmo = true) const;
-	virtual void StartFire(EntityId shooterId);
-	virtual void StopFire(EntityId shooterId);
+	virtual void StartFire();
+	virtual void StopFire();
 
-	virtual void NetStartFire(EntityId shooterId);
-	virtual void NetStopFire(EntityId shooterId);
+	virtual void NetStartFire();
+	virtual void NetStopFire();
 	virtual const char *GetType() const { return "Beam"; };
+
 	//~IFireMode
+
+	virtual void Serialize(TSerialize ser) {};
 
 	virtual void DecalLine(const Vec3 &org0, const Vec3 &org1, const Vec3 &hit0, const Vec3 &hit1, float step);
 	virtual void Decal(const ray_hit &rayhit, const Vec3 &dir);
@@ -187,12 +190,16 @@ protected:
 	tSoundID					m_fireLoopId;
 	tSoundID					m_hitSoundId;
 	bool							m_lastHitValid;
+	bool							m_remote;
 	float							m_tickTimer;
 	float							m_ammoTimer;
 	float							m_spinUpTimer;
 
 	Vec3							m_lastHit;
 	Vec3							m_lastOrg;
+
+	bool              m_viewFP;
+
 };
 
 

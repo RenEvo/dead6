@@ -90,6 +90,7 @@ enum EAILightLevel
 	AILL_LIGHT,		// Light
 	AILL_MEDIUM,	// Medium	
 	AILL_DARK,		// Dark
+	AILL_LAST,		// this always has to be the last one
 };
 
 struct SNavigationShapeParams
@@ -157,10 +158,32 @@ struct SNavigationShapeParams
 // The priority is not enforced but may be used as a hint when handling the sound event.
 enum EAISoundEventType
 {
-	AISE_GENERIC,			// Generic sound event from collisions, etc.
-	AISE_MOVEMENT,		// Movement related sound event
-	AISE_WEAPON,			// Weapon firing related sound event
-	AISE_EXPLOSION,		// Explosion related sound event
+	AISE_GENERIC,					// Generic sound event
+	AISE_COLLISION,				// Sound event from collisions.
+	AISE_COLLISION_LOUD,	// Sound event from collisions, loud.
+	AISE_MOVEMENT,				// Movement related sound event
+	AISE_MOVEMENT_LOUD,		// Movement related sound event, very loud, like walking in water or a vehicle sound.
+	AISE_WEAPON,					// Weapon firing related sound event
+	AISE_EXPLOSION,				// Explosion related sound event
+};
+
+// Different grenade events reported into the AIsystem
+enum EAIGrenadeEventType
+{
+	AIGE_GRENADE_THROWN,
+	AIGE_GRENADE_COLLISION,
+	AIGE_FLASH_BANG,
+	AIGE_SMOKE,
+};
+
+// Different light events reported into the AIsystem
+enum EAILightEventType
+{
+	AILE_GENERIC,
+	AILE_MUZZLE_FLASH,
+	AILE_FLASH_LIGHT,
+	AILE_LASER,
+	AILE_LAST,
 };
 
 
@@ -480,9 +503,11 @@ typedef	std::list< CSmartObjectRuleData >	VectorSORuleData;
 // Obsolete data structure - to be removed soon!!!
 	struct SmartObjectHelper
 	{
+		SmartObjectHelper() : templateHelperIndex(-1) {}
 		QuatT qt;
 		string name;
 		string description;
+		int templateHelperIndex;
 	};
 
 	// MapSOHelpers contains all smart object helpers sorted by name of the smart object class to which they belong
@@ -523,6 +548,57 @@ private:
 	IAIObjectIter*	m_iter;
 };
 
+
+enum EAIEventType
+{
+	AIEVENT_SOUND				= 0x0001,
+	AIEVENT_EXPLOSION		= 0x0002,
+	AIEVENT_BULLET			= 0x0004,
+	AIEVENT_COLLISION		= 0x0008,
+};
+
+// AI event listener
+struct IAIEventListener
+{
+	virtual void OnAIEvent(EAIEventType type, const Vec3& pos, float radius, float threat, EntityId sender) = 0;
+};
+
+struct SAIDetectionLevels
+{
+	SAIDetectionLevels(float puppetExposure, float puppetThreat, float vehicleExposure, float vehicleThreat) :
+		puppetExposure(puppetExposure),
+		puppetThreat(puppetThreat),
+		vehicleExposure(vehicleExposure),
+		vehicleThreat(vehicleThreat)
+	{
+	}
+
+	SAIDetectionLevels()
+	{
+		Reset();
+	}
+
+	inline void Append(const SAIDetectionLevels& levels)
+	{
+		puppetExposure = max(puppetExposure, levels.puppetExposure);
+		puppetThreat = max(puppetThreat, levels.puppetThreat);
+		vehicleExposure = max(vehicleExposure, levels.vehicleExposure);
+		vehicleThreat = max(vehicleThreat, levels.vehicleThreat);
+	}
+
+	inline void Reset()
+	{
+		puppetExposure = 0;
+		puppetThreat = 0;
+		vehicleExposure = 0;
+		vehicleThreat = 0;
+	}
+
+	float puppetExposure;
+	float puppetThreat;
+	float vehicleExposure;
+	float vehicleThreat;
+};
 
 
 /*! Interface to AI system. Defines functions to control the ai system.
@@ -624,6 +700,7 @@ struct IAISystem
 	/// returns the basic AI system update interval
 	virtual float GetUpdateInterval() const = 0;
 
+	/// this called before loading (level load/serialization)
 	virtual void FlushSystem(void) = 0;
 	virtual void FlushSystemNavigation(void) = 0;
 
@@ -639,12 +716,12 @@ struct IAISystem
 	virtual IAIObject *GetNearestObjectOfTypeInRange(const Vec3 &pos, unsigned int type, float fRadiusMin, float fRadiusMax, IAIObject* pSkip=NULL, int nOption = 0) = 0;
 	virtual IAIObject *GetNearestObjectOfTypeInRange(IAIObject *pObject , unsigned int type, float fRadiusMin, float fRadiusMax, int nOption = 0) = 0;
 	virtual IAIObject *GetRandomObjectInRange(IAIObject * pRef, unsigned short nType, float fRadiusMin, float fRadiusMax, bool bFaceAttTarget=false) = 0;
-	virtual IAIObject *GetNearestToObjectInRange( IAIObject *pRef , unsigned short nType, float fRadiusMin, float fRadiusMax, float inCone=-1, bool bFaceAttTarget=false, bool bSeesAttTarget=false) = 0;
+	virtual IAIObject *GetNearestToObjectInRange( IAIObject *pRef , unsigned short nType, float fRadiusMin, float fRadiusMax, float inCone=-1, bool bFaceAttTarget=false, bool bSeesAttTarget=false, bool bDevalue=true) = 0;
 	virtual IAIObject *GetBehindObjectInRange(IAIObject * pRef, unsigned short nType, float fRadiusMin, float fRadiusMax) = 0;
 	virtual bool GetNearestPunchableObjectPosition(IAIObject* pRef, const Vec3& searchPos, float searchRad, const Vec3& targetPos, float minSize, float maxSize, float minMass, float maxMass, Vec3& posOut, Vec3& dirOut, IEntity** objEntOut) = 0;
 
 	// Devalues an AI object for the refence object only or for whole group.
-	virtual void			Devalue( IAIObject* pRef, IAIObject* pObject, bool group ) = 0;
+	virtual void			Devalue( IAIObject* pRef, IAIObject* pObject, bool group, float fDevalueTime=20.f ) = 0;
 
 	virtual ILeader*	GetILeader(int groupid) = 0;
 
@@ -657,11 +734,22 @@ struct IAISystem
 	virtual void RemoveObject(IAIObject *pObject) = 0;
 	virtual void RemoveSmartObject(IEntity *pEntity) = 0;
 
-	virtual void SoundEvent(const Vec3 &pos, float fRadius, EAISoundEventType type, IAIObject *pObject, float threatScale = 1.0f) = 0;
+	virtual void SoundEvent(const Vec3 &pos, float fRadius, EAISoundEventType type, IAIObject *pObject) = 0;
 	virtual void CollisionEvent(const Vec3& pos, const Vec3& vel, float mass, float radius, float impulse, IEntity* pCollider, IEntity* pTarget) = 0;
+	virtual void IgnoreCollisionEventsFrom(EntityId ent, float time) = 0;
+	virtual void BreakEvent(const Vec3& pos, float breakSize, float radius, float impulse, IEntity* pCollider) = 0;
 	virtual	void ExplosionEvent(const Vec3& pos, float radius, IAIObject* pShooter) = 0;
-	virtual	void DynOmniLightEvent(const Vec3& pos, float radius, IAIObject* pShooter, float time = 5.0f) = 0;
-	virtual	void DynSpotLightEvent(const Vec3& pos, const Vec3& dir, float radius, float fov, IAIObject* pShooter, float time = 5.0f) = 0;
+	virtual	void BulletHitEvent(const Vec3& pos, float radius, float soundRadius, IAIObject* pShooter) = 0;
+	virtual	void BulletShotEvent(const Vec3& pos, const Vec3& dir, float range, IAIObject* pShooter) = 0;
+	virtual	void DynOmniLightEvent(const Vec3& pos, float radius, EAILightEventType type, IAIObject* pShooter, float time = 5.0f) = 0;
+	virtual	void DynSpotLightEvent(const Vec3& pos, const Vec3& dir, float radius, float fov, EAILightEventType type, IAIObject* pShooter, float time = 5.0f) = 0;
+	virtual void GrenadeEvent(const Vec3& pos, float radius, EAIGrenadeEventType type, IEntity* pGrenade, IEntity* pShooter) = 0;
+
+	// Registers AI event listener. Only events overlapping the sphere will be sent.
+	// Register can be called again to update the listener position, radius and flags.
+	// If pointer to the listener is specified it will be used instead of the pointer to entity.
+	virtual void RegisterAIEventListener(IAIEventListener* pListener, const Vec3& pos, float rad, int flags) = 0;
+	virtual void UnregisterAIEventListener(IAIEventListener* pListener) = 0;
 
 	virtual bool CreateNavigationShape(const SNavigationShapeParams &params) = 0;
 
@@ -702,6 +790,7 @@ struct IAISystem
 		float fNodeAutoConnectDistance;
 	};
 	virtual bool GetBuildingInfo(int nBuildingID, SBuildingInfo& info) = 0;
+	virtual bool IsPointInBuilding(const Vec3& pos, int nBuildingID) = 0;
 
 	/// Automatically reconnect all waypoint nodes in all buildings,
 	/// and disconnects nodes not in buildings (only affects automatically
@@ -737,6 +826,8 @@ struct IAISystem
   /// Generates voxels for 3D nav regions and stores them (can cause memory problems) for subsequent
   /// debug viewing using ai_debugdrawvolumevoxels
   virtual void Generate3DDebugVoxels() = 0;
+
+	virtual void	ValidateNavigation() = 0;
 
   /// returns the names of the region files generated during volume generation
   virtual const std::vector<string> & GetVolumeRegionFiles(const char * szLevel, const char * szMission) = 0;
@@ -785,10 +876,15 @@ struct IAISystem
 	virtual void DebugDraw(IRenderer *pRenderer) = 0;
 	
 	virtual void	SetPerceptionDistLookUp( float* pLookUpTable, int tableSize ) = 0;	//look up table to be used when calculating visual time-out increment
+
+	// Returns the exposure and threat levels as perceived by the specified AIobject.
+	// If the AIobject is null, the local player values are returns
+	virtual void GetDetectionLevels(IAIObject *pObject, SAIDetectionLevels& levels) = 0;
+
 	// Returns how much an AI object is detected by enemy agents in range [0..1].
-	virtual float GetDetectionValue(IAIObject *pObject) = 0;
+//	virtual float GetDetectionValue(IAIObject *pObject) = 0;
 	// Returns an estimate how much an AI object is detectable in range [0..1].
-	virtual float GetAmbientDetectionValue(IAIObject *pObject) = 0;
+//	virtual float GetAmbientDetectionValue(IAIObject *pObject) = 0;
 
 	virtual int GetAITickCount() = 0;
 
@@ -837,10 +933,6 @@ struct IAISystem
 
 	virtual IAIObject* GetLeaderAIObject(IAIObject* pObject) = 0;
 
-	//virtual void RequestGroupAttack(int nGroupID, uint32 unitProperties, int actionType, float fDuration) =0;
-
-	virtual void SetSkip(IPhysicalEntity* pSkip = NULL) = 0;
-
 	virtual bool RequestVehicle(IAIObject* pRequestor, Vec3 &vSourcePos, IAIObject *pAIObjectTarget, const Vec3& vTargetPos, int iGoalType) = 0;
 	virtual TAIObjectList* GetVehicleList(IAIObject* pRequestor) = 0;
 
@@ -888,19 +980,20 @@ struct IAISystem
 	virtual void AbortAIAction( IEntity* pUser, int goalPipeId ) = 0;
 
 	// smart object events
-	virtual int SmartObjectEvent( const char* sEventName, IEntity*& pUser, IEntity*& pObject, const Vec3* pExtraPoint = NULL ) = 0;
+	virtual int SmartObjectEvent( const char* sEventName, IEntity*& pUser, IEntity*& pObject, const Vec3* pExtraPoint = NULL, bool bHighPriority = false ) = 0;
 
 	virtual int AllocGoalPipeId() const = 0;
 	virtual IAISignalExtraData* CreateSignalExtraData() const = 0;
 	virtual void FreeSignalExtraData( IAISignalExtraData* pData ) const = 0;
 
-	virtual void AddCombatClass( float *pScalesVector, int size ) = 0;
+	virtual void AddCombatClass(int combatClass, float* pScalesVector, int size, const char* szCustomSignal) = 0;
+	virtual const char* GetCustomOnSeenSignal(int combatClass) = 0;
+
 	virtual void AddObstructSphere( const Vec3& pos, float radius, float lifeTime, float fadeTime) = 0;
 
 	// Draws a fake tracer around the player.
 	virtual void DebugDrawFakeTracer(const Vec3& pos, const Vec3& dir) = 0;
 
-	virtual bool UseNewDamageControl() = 0;
 	virtual float ProcessBalancedDamage(IEntity* pShooterEntity, IEntity* pTargetEntity, float damage, const char* damageType) = 0;
 
 	//====================================================================
@@ -910,6 +1003,7 @@ struct IAISystem
 	virtual void	Record( const IAIObject* pTarget, IAIRecordable::e_AIDbgEvent event, const char* pString ) const = 0;
 	virtual void	SetDrawRecorderRange(float start, float end, float cursor) = 0;
 	virtual void	AddDebugLine( const Vec3& start, const Vec3& end, uint8 r, uint8 g, uint8 b, float time ) = 0;
+	virtual void	AddDebugSphere(const Vec3& pos, float radius, uint8 r, uint8 g, uint8 b, float time) = 0;
 
 	virtual void	DebugReportHitDamage(IEntity* pVictim, IEntity* pShooter, float damage, const char* material) = 0;
 	virtual void	DebugReportDeath(IAIObject* pVictim) = 0;

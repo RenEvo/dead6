@@ -16,12 +16,8 @@ enum CA_AssetFlags
 	CA_ASSET_LOADED			= 0x001,
 	// if this is true, then its possible to use this asset with the loop-flag
 	CA_ASSET_CYCLE			= 0x002,
-	// if this is true, this is a special cycle animation (loop-flag is also set) 
-	CA_ASSET_IDLECYCLE  = 0x004,
 	// if this is true, then the asset is a locomotion group
 	CA_ASSET_LMG				= 0x008,
-	// if this is true, then the asset is a CPM-locomotion group
-	CA_ASSET_CPM				= 0x010,
 	// if this is true, then the asset has been processed at loading time
 	CA_ASSET_LMG_VALID	= 0x020,
 	// if this is true, then the asset has been processed at loading time
@@ -113,12 +109,15 @@ enum CA_AnimationFlags
 
 	//Usually we always update animations, even when the object is not visible. For simple objects (e.g. boids) we want to 
 	//avoid even animation-update. This can lead to an overflow in the FIFO-queue. 
-	//To avoid the overflow, we clear the FIFO queue when the object is not visible.
-	CA_CLEAR_FIFO_WHEN_INVISIBLE	= 0x4000, 
+	//To avoid the overflow, we remove the first animation from the FIFO when there are more then 16 animation in the queue.
+	CA_REMOVE_FROM_FIFO	= 0x4000,  
+
+	CA_FULL_ROOT_PRIORITY	= 0x8000,  
 
 };
 
 static const int NUM_ANIMATION_USER_DATA_SLOTS = 8;
+
 
 
 struct OldBlendSpace
@@ -128,12 +127,28 @@ struct OldBlendSpace
 	f32 m_turn;
 	f32 m_slope;
 
-//	OldBlendSpace() {};
 
-	OldBlendSpace() : m_speed(0), m_strafe(0,1), m_turn(0), m_slope(0)	{	};
+	
+	f32 m_fAllowLeaningSmooth;		//just for debugging
+	f32 m_fAllowLeaningSmoothRate;//just for debugging
+	uint32 m_updates;							//just for debugging
+	QuatT m_AnimChar;							//just for debugging
+
+	OldBlendSpace()
+	{	
+		m_speed=0.0f;
+		m_strafe=Vec2(0,0); 
+		m_turn=0.0f; 
+		m_slope=0.0f;	
+		m_fAllowLeaningSmooth=1.0f;
+		m_fAllowLeaningSmoothRate=1.0f;
+		m_updates=0;
+		m_AnimChar.SetIdentity();
+	};
 
 	OldBlendSpace( f32 a, f32 b, f32 c, f32 d, f32 e ) 
-	{ m_speed		=a; 
+	{ 
+		m_speed		=a; 
 		m_strafe	=Vec2(b,c); 
 		m_turn		=d; 
 		m_slope		=e; 
@@ -142,12 +157,34 @@ struct OldBlendSpace
 	void Init() 
 	{ 
 		m_speed		=0; 
-		m_strafe	=Vec2(0,1); //forward direction
+		m_strafe	=Vec2(0,0); //forward direction
 		m_turn		=0; 
 		m_slope		=0; 
 	};
 
 };
+
+
+//--------------------------------------------------------------------------------
+
+enum EWeaponRaisedPose
+{
+	eWeaponRaisedPose_None				= 0x00,
+	eWeaponRaisedPose_Fists				= 0x10,
+	eWeaponRaisedPose_Rifle				= 0x20,
+	eWeaponRaisedPose_Pistol			= 0x30,
+	eWeaponRaisedPose_Rocket			= 0x40,
+	eWeaponRaisedPose_MG					= 0x50,
+
+	eWeaponRaisedPose_DualLft			= 0x01,
+	eWeaponRaisedPose_DualRgt			= 0x02,
+
+	eWeaponRaisedPose_PistolLft		= eWeaponRaisedPose_Pistol | eWeaponRaisedPose_DualLft,
+	eWeaponRaisedPose_PistolRgt		= eWeaponRaisedPose_Pistol | eWeaponRaisedPose_DualRgt,
+	eWeaponRaisedPose_PistolBoth	= eWeaponRaisedPose_Pistol | eWeaponRaisedPose_DualLft | eWeaponRaisedPose_DualRgt,
+};
+
+//--------------------------------------------------------------------------------
 
 enum EMotionParamID
 {
@@ -159,10 +196,13 @@ enum EMotionParamID
 	eMotionParamID_TurnSpeed,
 	eMotionParamID_TurnAngle,
 	eMotionParamID_Duration,
+	eMotionParamID_Curving,
 
 	eMotionParamID_COUNT,
 };
 extern char* g_szMotionParamID[eMotionParamID_COUNT];
+
+//--------------------------------------------------------------------------------
 
 enum EMotionParamUsage
 {
@@ -171,6 +211,8 @@ enum EMotionParamUsage
 	eMotionParamUsage_Cyclic,
 };
 extern char* g_szMotionParamUsage[eMotionParamID_COUNT];
+
+//--------------------------------------------------------------------------------
 
 struct MotionParamDesc
 {
@@ -203,9 +245,11 @@ struct MotionParamDesc
 		m_fMinAsset = 0.0f;
 		m_fMaxAsset = 0.0f;
 		m_fMaxChangeRate = 0.0f;
-		m_fAllowProcTurn = 1.0f;
+		m_fAllowProcTurn = 0.0f;
 	}
 };
+
+//--------------------------------------------------------------------------------
 
 struct LMGCapabilities
 {
@@ -218,6 +262,8 @@ struct LMGCapabilities
 	int8 m_bHasVelocity; // 1=has parameterized speed, 0=don't have but don't care, -1=don't like at all
 	int8 m_bHasDistance; // 1=has parameterized speed, 0=don't have but don't care, -1=don't like at all
 
+	int8 m_bHasCurving;
+
 	uint8 m_bpad1;
 	uint8 m_bpad2;
 
@@ -225,6 +271,8 @@ struct LMGCapabilities
 
 	f32 m_travelAngleChangeRate;
 	f32 m_travelSpeedChangeRate;
+	f32 m_turnSpeedChangeRate;
+	f32 m_curvingChangeRate;
 
 	f32 m_fSlowDuration;			//slow duration of the LMG with these settings
 	f32 m_fFastDuration;			//fast duration of the LMG with these settings
@@ -237,6 +285,8 @@ struct LMGCapabilities
 	f32 m_fFastTurnRight;
 	f32 m_fAllowDesiredTurning; //is a value between [0...1] 
 
+	f32 m_fDesiredLocalLocationLookaheadTime;
+
 	ILINE LMGCapabilities() 
 	{
 		m_bIsValid=0;			// by default not valid
@@ -247,6 +297,7 @@ struct LMGCapabilities
 		m_bHasSlopeAsset=0;    // 1=supports uphill/downhill
 		m_bHasVelocity=0;	// 1=has parameterized speed    0=don't have, don't care  -1=don't have, don't want at all (prevent)
 		m_bHasDistance=0;	// 1=has parameterized speed    0=don't have, don't care  -1=don't have, don't want at all (prevent)
+		m_bHasCurving=0;
 
 		m_bpad1=0;
 		m_bpad2=0;
@@ -255,6 +306,8 @@ struct LMGCapabilities
 
 		m_travelAngleChangeRate = 0.0f;
 		m_travelSpeedChangeRate = 0.0f;
+		m_turnSpeedChangeRate = 0.0f;
+		m_curvingChangeRate = 0.0f;
 
 		m_fSlowDuration=-1.0f;
 		m_fFastDuration=-1.0f;
@@ -266,7 +319,9 @@ struct LMGCapabilities
 		m_fSlowTurnRight=0;
 		m_fFastTurnLeft=0;
 		m_fFastTurnRight=0;
-		m_fAllowDesiredTurning=1;
+		m_fAllowDesiredTurning=0;
+
+		m_fDesiredLocalLocationLookaheadTime = 0.0f;
 	}
 
 	ILINE LMGCapabilities operator * (f32 k) const 
@@ -365,6 +420,8 @@ struct LMGCapabilities
 
 };
 
+//--------------------------------------------------------------------------------
+
 struct SAnimationSelectionProperties
 {
 	f32 m_fDurationMin;
@@ -396,6 +453,10 @@ struct SAnimationSelectionProperties
 	float m_fEndBodyAngleThreshold;
 	float m_fTravelDistanceThreshold;
 
+//#ifdef _DEBUG
+	uint32 DebugCapsCode;
+//#endif
+
 	SAnimationSelectionProperties()
 	{
 		init();
@@ -403,6 +464,10 @@ struct SAnimationSelectionProperties
 
 	void init()
 	{
+//#ifdef _DEBUG
+		DebugCapsCode = 0;
+//#endif
+
 		m_fDurationMin = 0.0f;
 		m_fDurationMax = 0.0f;
 		m_fStartTravelSpeedMin = 0.0f;
@@ -439,6 +504,10 @@ struct SAnimationSelectionProperties
 
 		#define EXPAND(name)		{ m_f##name##Min = min(m_f##name##Min, other->m_f##name##Min); m_f##name##Max = max(m_f##name##Max, other->m_f##name##Max); }
 
+//#ifdef _DEBUG
+		DebugCapsCode = 0xFFFF;
+//#endif
+
 		EXPAND(Urgency);
 		EXPAND(Duration);
 		EXPAND(StartTravelSpeed);
@@ -457,7 +526,7 @@ struct SAnimationSelectionProperties
 
 };
 
-
+//--------------------------------------------------------------------------------
 
 struct CryAnimationPath
 {
@@ -513,6 +582,8 @@ struct AnimTransRotParams
 struct AnimEventInstance
 {
 	f32 m_time; 
+	uint32 m_nAnimNumberInQueue;
+	f32 m_fAnimPriority; 
 	const char* m_AnimPathName; 
 	int m_AnimID;
 	const char* m_EventName; 
@@ -524,6 +595,8 @@ struct AnimEventInstance
 	AnimEventInstance()
 	{
 		m_time=0; 
+		m_nAnimNumberInQueue=0; 
+		m_fAnimPriority=0; 
 		m_AnimPathName=0; 
 		m_AnimID=0;
 		m_EventName=0; 
@@ -608,10 +681,10 @@ struct MotionParamBlendSpace
 
 	MotionParamBlendSpace()
 	{
-		m_fAssetBlend					= 0.5f;
+		m_fAssetBlend				  = 0.5f;
 		m_fProceduralOffset		= 0.0f;
 		m_fProceduralScale		= 1.0f;
-		m_fAllowPrceduralTurn = 1.0f;
+		m_fAllowPrceduralTurn = 0.0f;
 	}
 
 };
@@ -658,6 +731,7 @@ struct SLocoGroup
 	f32			m_fFootPlants[MAX_LMG_ANIMS];			//footplants   1-has footplants / 0-no foot-plants 
 	OldBlendSpace	m_BlendSpace;								//interpolation weights for blend-space 
 
+	float m_fDesiredLocalLocationLookaheadTime;
 	MotionParam m_params[eMotionParamID_COUNT];
 
 	SLocoGroup()
@@ -674,6 +748,8 @@ struct SLocoGroup
 			m_fBlendWeight[i]		= 0.0f;	 
 			m_fFootPlants[i]		= 0.0f;	 
 		}
+
+		m_fDesiredLocalLocationLookaheadTime = 0.0f;
 	}
 
 	void Serialize(TSerialize ser)
@@ -699,6 +775,7 @@ struct SLocoGroup
 				ser.EndGroup();
 			}
 
+			ser.Value("m_fDesiredLocalLocationLookaheadTime", m_fDesiredLocalLocationLookaheadTime);
 		}
 	}
 
@@ -824,12 +901,22 @@ struct CAnimation
 			m_LMG1.Serialize(ser);
 			ser.EndGroup();
 
+			ser.BeginGroup("AnimParams");
+			m_AnimParams.Serialize(ser);
+			ser.EndGroup();
 		}
 	}
 
 };
 
 static const int ANIM_FUTURE_PATH_LOOKAHEAD = 25;
+
+
+struct Joint
+{
+	int32 m_idxParent;
+	const char* m_strJointName;
+};
 
 
 #endif

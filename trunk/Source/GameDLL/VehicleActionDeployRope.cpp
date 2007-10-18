@@ -223,9 +223,13 @@ void CVehicleActionDeployRope::AttachOnRope(IEntity* pEntity)
 	typedef std::vector <Vec3> TVec3Vector;
 	TVec3Vector points;
 
+	int pointCount;
+
 	pe_status_rope ropeStatus;
-	pRopePhys->GetStatus(&ropeStatus);
-	int pointCount = ropeStatus.nSegments + 1;
+	if (pRopePhys->GetStatus(&ropeStatus))
+		pointCount = ropeStatus.nSegments + 1;
+	else
+		pointCount = 0;
 
 	if (pointCount < 2)
 		return;

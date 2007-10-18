@@ -25,6 +25,14 @@ CAutomatic::~CAutomatic()
 {
 }
 
+//--------------------------------------------------
+void CAutomatic::StartFire()
+{
+	CSingle::StartFire();
+
+	if(m_soundId==INVALID_SOUNDID && !m_automaticactions.automatic_fire.empty())
+		m_soundId = m_pWeapon->PlayAction(m_automaticactions.automatic_fire);
+}
 //------------------------------------------------------------------------
 void CAutomatic::Update(float frameTime, uint frameId)
 {
@@ -35,7 +43,7 @@ void CAutomatic::Update(float frameTime, uint frameId)
 }
 
 //------------------------------------------------------------------------
-void CAutomatic::StopFire(EntityId shooterId)
+void CAutomatic::StopFire()
 {
 	if (m_zoomtimeout > 0.0f)
 	{
@@ -58,11 +66,49 @@ void CAutomatic::StopFire(EntityId shooterId)
 		}
 		m_zoomtimeout = 0.0f;
 	}
+
+	if(m_firing)
+		SmokeEffect();
+
 	m_firing = false;
+
+	if(m_soundId)
+	{
+		m_pWeapon->StopSound(m_soundId);
+		m_soundId = INVALID_SOUNDID;
+	}
 }
 
 //------------------------------------------------------------------------
 const char *CAutomatic::GetType() const
 {
 	return "Automatic";
+}
+
+//---------------------------------------------------
+void CAutomatic::GetMemoryStatistics(ICrySizer * s)
+{
+	s->Add(*this);
+	CSingle::GetMemoryStatistics(s);
+	m_automaticactions.GetMemoryStatistics(s);
+}
+
+//------------------------------------------------------------------------
+void CAutomatic::ResetParams(const struct IItemParamsNode *params)
+{
+	CSingle::ResetParams(params);
+
+	const IItemParamsNode *actions = params?params->GetChild("actions"):0;
+
+	m_automaticactions.Reset(actions);
+}
+
+//------------------------------------------------------------------------
+void CAutomatic::PatchParams(const struct IItemParamsNode *patch)
+{
+	CSingle::PatchParams(patch);
+
+	const IItemParamsNode *actions = patch->GetChild("actions");
+
+	m_automaticactions.Reset(actions, false);
 }

@@ -48,21 +48,24 @@ public:
 	int RevivePlayerInVehicle(IFunctionHandler *pH, ScriptHandle playerId, ScriptHandle vehicleId, int seatId, int teamId, bool clearInventory);
 	int RenamePlayer(IFunctionHandler *pH, ScriptHandle playerId, const char *name);
 	int KillPlayer(IFunctionHandler *pH, ScriptHandle playerId, bool dropItem, bool ragdoll,
-		ScriptHandle shooterId, ScriptHandle weaponId, float damage, int material, bool headshot, Vec3 impulse);
+		ScriptHandle shooterId, ScriptHandle weaponId, float damage, int material, int hit_type, Vec3 impulse);
 	int MovePlayer(IFunctionHandler *pH, ScriptHandle playerId, Vec3 pos, Vec3 angles);
 	int GetPlayerByChannelId(IFunctionHandler *pH, int channelId);
+	int GetChannelId(IFunctionHandler *pH, ScriptHandle playerId);
 	int GetPlayerCount(IFunctionHandler *pH);
 	int GetSpectatorCount(IFunctionHandler *pH);
 	int GetPlayers(IFunctionHandler *pH);
 	int IsPlayerInGame(IFunctionHandler *pH, ScriptHandle playerId);
+	int IsProjectile(IFunctionHandler *pH, ScriptHandle entityId);
+	int IsSameTeam(IFunctionHandler *pH, ScriptHandle entityId0, ScriptHandle entityId1);
+	int IsNeutral(IFunctionHandler *pH, ScriptHandle entityId);
 
 	int AddSpawnLocation(IFunctionHandler *pH, ScriptHandle entityId);
 	int RemoveSpawnLocation(IFunctionHandler *pH, ScriptHandle id);
 	int GetSpawnLocationCount(IFunctionHandler *pH);
 	int GetSpawnLocationByIdx(IFunctionHandler *pH, int idx);
-	int GetSpawnLocation(IFunctionHandler *pH, ScriptHandle playerId, float safeDistance, bool ignoreTeam, bool includeNeutral);
+	int GetSpawnLocation(IFunctionHandler *pH, ScriptHandle playerId, bool ignoreTeam, bool includeNeutral);
 	int GetSpawnLocations(IFunctionHandler *pH);
-	int IsSpawnLocationSafe(IFunctionHandler *pH, ScriptHandle playerId, ScriptHandle spawnLocationId, float safeDistance, bool ignoreTeam);
 	int GetFirstSpawnLocation(IFunctionHandler *pH, int teamId);
 
 	int AddSpawnGroup(IFunctionHandler *pH, ScriptHandle groupId);
@@ -71,6 +74,7 @@ public:
 	int RemoveSpawnGroup(IFunctionHandler *pH, ScriptHandle groupId);
 	int GetSpawnLocationGroup(IFunctionHandler *pH, ScriptHandle spawnId);
 	int GetSpawnGroups(IFunctionHandler *pH);
+	int IsSpawnGroup(IFunctionHandler *pH, ScriptHandle entityId);
 
 	int GetTeamDefaultSpawnGroup(IFunctionHandler *pH, int teamId);
 	int SetTeamDefaultSpawnGroup(IFunctionHandler *pH, int teamId, ScriptHandle groupId);
@@ -85,7 +89,9 @@ public:
 	int GetInterestingSpectatorLocation(IFunctionHandler *pH);
 	// for 3rd person follow-cam mode
 	int GetNextSpectatorTarget(IFunctionHandler *pH, ScriptHandle playerId, int change);
-
+	int ChangeSpectatorMode(IFunctionHandler* pH, ScriptHandle playerId, int mode, ScriptHandle targetId);
+	int CanChangeSpectatorMode(IFunctionHandler* pH, ScriptHandle playerId);
+	
 	int AddMinimapEntity(IFunctionHandler *pH, ScriptHandle entityId, int type, float lifetime);
 	int RemoveMinimapEntity(IFunctionHandler *pH, ScriptHandle entityId);
 	int ResetMinimap(IFunctionHandler *pH);
@@ -103,10 +109,12 @@ public:
 	int GetTeamId(IFunctionHandler *pH, const char *teamName);
 	int GetTeamCount(IFunctionHandler *pH);
 	int GetTeamPlayerCount(IFunctionHandler *pH, int teamId);
+	int GetTeamChannelCount(IFunctionHandler *pH, int teamId);
 	int GetTeamPlayers(IFunctionHandler *pH, int teamId);
 
 	int SetTeam(IFunctionHandler *pH, int teamId, ScriptHandle playerId);
 	int GetTeam(IFunctionHandler *pH, ScriptHandle playerId);
+	int GetChannelTeam(IFunctionHandler *pH, int channelId);
 
 	int AddObjective(IFunctionHandler *pH, int teamId, const char *objective, int status, ScriptHandle entityId);
 	int SetObjectiveStatus(IFunctionHandler *pH, int teamId, const char *objective, int status);
@@ -130,11 +138,18 @@ public:
 	int ResetPreRoundTime(IFunctionHandler *pH);
 	int GetRemainingPreRoundTime(IFunctionHandler *pH);
 
+	int ResetReviveCycleTime(IFunctionHandler *pH);
+	int GetRemainingReviveCycleTime(IFunctionHandler *pH);
+
+	int ResetGameStartTimer(IFunctionHandler *pH, float time);
+	int GetRemainingStartTimer(IFunctionHandler *pH);
+
 	int	EndGame(IFunctionHandler *pH);
 	int NextLevel(IFunctionHandler *pH);
 
 	int RegisterHitMaterial(IFunctionHandler *pH, const char *materialName);
 	int GetHitMaterialId(IFunctionHandler *pH, const char *materialName);
+	int GetHitMaterialName(IFunctionHandler *pH, int materialId);
 	int ResetHitMaterials(IFunctionHandler *pH);
 
 	int RegisterHitType(IFunctionHandler *pH, const char *type);
@@ -158,6 +173,7 @@ public:
 	int GetSynchedEntityValue(IFunctionHandler *pH, ScriptHandle entityId, int key);
 
 	int ResetSynchedStorage(IFunctionHandler *pH);
+	int ForceSynchedStorageSynch(IFunctionHandler *pH, int channelId);
 
 	int IsDemoMode(IFunctionHandler *pH);
 
@@ -165,7 +181,6 @@ public:
 	int GetTimeLimit(IFunctionHandler *pH);
 	int GetRoundTime(IFunctionHandler *pH);
 	int GetPreRoundTime(IFunctionHandler *pH);
-	int GetSuddenDeathTime(IFunctionHandler *pH);
 	int GetRoundLimit(IFunctionHandler *pH);
 	int GetFragLimit(IFunctionHandler *pH);
 	int GetFragLead(IFunctionHandler *pH);
@@ -173,21 +188,33 @@ public:
   int GetReviveTime(IFunctionHandler *pH);
 	int GetMinPlayerLimit(IFunctionHandler *pH);
 	int GetMinTeamLimit(IFunctionHandler *pH);
+	int GetTeamLock(IFunctionHandler *pH);
 	
 	int IsFrozen(IFunctionHandler *pH, ScriptHandle entityId);
 	int FreezeEntity(IFunctionHandler *pH, ScriptHandle entityId, bool freeze, bool vapor);
 	int ShatterEntity(IFunctionHandler *pH, ScriptHandle entityId, Vec3 pos, Vec3 impulse);
 
   int DebugCollisionDamage(IFunctionHandler *pH);
+	int DebugHits(IFunctionHandler *pH);
 
-	int RequestHitIndicator(IFunctionHandler* pH, ScriptHandle shooterId);
-	int RequestDamageIndicator(IFunctionHandler* pH, ScriptHandle targetId);
+	int SendHitIndicator(IFunctionHandler* pH, ScriptHandle shooterId);
+	int SendDamageIndicator(IFunctionHandler* pH, ScriptHandle targetId, ScriptHandle shooterId, ScriptHandle weaponId);
+
+	int IsInvulnerable(IFunctionHandler* pH, ScriptHandle playerId);
+	int SetInvulnerability(IFunctionHandler* pH, ScriptHandle playerId, bool invulnerable);
+
 	// for the power struggle tutorial
 	int TutorialEvent(IFunctionHandler* pH, int eventType);
 
 	int GameOver(IFunctionHandler* pH, int localWinner);
 	int EnteredGame(IFunctionHandler* pH);
 	int EndGameNear(IFunctionHandler* pH, ScriptHandle entityId);
+
+	int SPNotifyPlayerKill(IFunctionHandler* pH, ScriptHandle targetId, ScriptHandle weaponId, bool bHeadShot);
+
+	// EMP Grenade
+	int ProcessEMPEffect(IFunctionHandler* pH, ScriptHandle targetId, float timeScale);
+	int PerformDeadHit(IFunctionHandler* pH);
 
 private:
 	void RegisterGlobals();

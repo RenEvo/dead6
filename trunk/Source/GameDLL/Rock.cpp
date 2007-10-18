@@ -17,16 +17,27 @@ History:
 #include <IEntitySystem.h>
 #include <IGameTokens.h>
 
+#include "WeaponSystem.h"
 
+VectorSet<CRock*> CRock::s_rocks;
 
 //------------------------------------------------------------------------
 CRock::CRock()
 {
+	s_rocks.insert(this);
+	if(s_rocks.size()>MAX_SPAWNED_ROCKS)
+	{
+		if(s_rocks[0]!=this)
+			s_rocks[0]->Destroy();
+		else
+			s_rocks[1]->Destroy(); //Just in case...??
+	}
 }
 
 //------------------------------------------------------------------------
 CRock::~CRock()
 {
+	s_rocks.erase(this);
 }
 
 //------------------------------------------------------------------------
@@ -45,7 +56,7 @@ void CRock::HandleEvent(const SGameObjectEvent &event)
 
 		IEntity *pTarget = pCollision->iForeignData[1]==PHYS_FOREIGN_ID_ENTITY ? (IEntity*)pCollision->pForeignData[1]:0;
 
-		if (!pTarget || pTarget->GetId()==m_ownerId)
+		if (!pTarget || pTarget->GetId()==m_ownerId || pTarget->GetId()==GetEntityId())
 			return;
 
 		Vec3 dir(0, 0, 0);
@@ -70,7 +81,9 @@ void CRock::HandleEvent(const SGameObjectEvent &event)
 
 		pGameRules->ClientHit(hitInfo);
 
-		m_damage =(int)(m_damage*0.25);
+		if(m_damage>10)
+			m_damage =(int)(m_damage*0.5f);
+
 	}
 }
 

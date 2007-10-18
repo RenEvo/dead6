@@ -14,9 +14,6 @@
 		<Platform
 			Name="x64"
 		/>
-		<Platform
-			Name="Xbox 360"
-		/>
 	</Platforms>
 	<ToolFiles>
 	</ToolFiles>
@@ -78,7 +75,6 @@
 				OutputFile="$(OutDir)/Dead6.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories=".\..\SDKs\STLPORT\lib"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(OutDir)/Dead6.pdb"
 				SubSystem="2"
@@ -167,7 +163,6 @@
 				OutputFile="$(OutDir)/Dead6.dll"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories=".\..\SDKs\STLPORT\lib"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(OutDir)/Dead6.pdb"
 				SubSystem="2"
@@ -454,7 +449,6 @@
 				OutputFile="$(OutDir)/Dead6.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories=".\..\SDKs\STLPORT\lib"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(OutDir)/Dead6.pdb"
 				LargeAddressAware="2"
@@ -547,9 +541,10 @@
 				OutputFile="$(OutDir)/Dead6.dll"
 				LinkIncremental="1"
 				SuppressStartupBanner="true"
-				AdditionalLibraryDirectories=".\..\SDKs\STLPORT\lib"
 				GenerateDebugInformation="true"
 				ProgramDatabaseFile="$(OutDir)/Dead6.pdb"
+				OptimizeReferences="2"
+				EnableCOMDATFolding="2"
 				BaseAddress="0x39000000"
 				TargetMachine="17"
 			/>
@@ -578,468 +573,297 @@
 				Name="VCPostBuildEventTool"
 			/>
 		</Configuration>
-		<Configuration
-			Name="DebugPS3|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)"
-			ConfigurationType="0"
-			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops;..\UserDebugSettings.vsprops"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCNMakeTool"
-				BuildCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe -j3 -s -k --no-print-directory alldebug -f Makefile"
-				ReBuildCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe -j3 -s -k --no-print-directory allcleandebug -f Makefile "
-				CleanCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe --no-print-directory cleandebug -f Makefile"
-				Output=""
-				PreprocessorDefinitions=""
-				IncludeSearchPath=""
-				ForcedIncludes=""
-				AssemblySearchPath=""
-				ForcedUsingAssemblies=""
-				CompileAsManaged=""
-			/>
-		</Configuration>
-		<Configuration
-			Name="DebugPS3|x64"
-			OutputDirectory="$(SolutionDir)$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)"
-			ConfigurationType="0"
-			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops;..\UserDebugSettings.vsprops"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCNMakeTool"
-				BuildCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe -j3 -s -k --no-print-directory alldebug -f Makefile"
-				ReBuildCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe -j3 -s -k --no-print-directory allcleandebug -f Makefile "
-				CleanCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe --no-print-directory cleandebug -f Makefile"
-				Output=""
-				PreprocessorDefinitions=""
-				IncludeSearchPath=""
-				ForcedIncludes=""
-				AssemblySearchPath=""
-				ForcedUsingAssemblies=""
-				CompileAsManaged=""
-			/>
-		</Configuration>
-		<Configuration
-			Name="ProfilePS3|Win32"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)"
-			ConfigurationType="0"
-			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops;..\UserDebugSettings.vsprops"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCNMakeTool"
-				BuildCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe -j3 -s -k --no-print-directory allrelease -f Makefile"
-				ReBuildCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe -j3 -s -k --no-print-directory allcleanrelease -f Makefile "
-				CleanCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe --no-print-directory cleanrelease -f Makefile"
-				Output=""
-				PreprocessorDefinitions=""
-				IncludeSearchPath=""
-				ForcedIncludes=""
-				AssemblySearchPath=""
-				ForcedUsingAssemblies=""
-				CompileAsManaged=""
-			/>
-		</Configuration>
-		<Configuration
-			Name="ProfilePS3|x64"
-			OutputDirectory="$(SolutionDir)$(PlatformName)\$(ConfigurationName)"
-			IntermediateDirectory="$(PlatformName)\$(ConfigurationName)"
-			ConfigurationType="0"
-			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops;..\UserDebugSettings.vsprops"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCNMakeTool"
-				BuildCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe -j3 -s -k --no-print-directory allrelease -f Makefile"
-				ReBuildCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe -j3 -s -k --no-print-directory allcleanrelease -f Makefile "
-				CleanCommandLine="$(SolutionDir)/../../BinPS3/makewrapper.exe --no-print-directory cleanrelease -f Makefile"
-				Output=""
-				PreprocessorDefinitions=""
-				IncludeSearchPath=""
-				ForcedIncludes=""
-				AssemblySearchPath=""
-				ForcedUsingAssemblies=""
-				CompileAsManaged=""
-			/>
-		</Configuration>
-		<Configuration
-			Name="Debug|Xbox 360"
-			OutputDirectory="$(SolutionDir)..\..\BinXB\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
-			ConfigurationType="2"
-			UseOfMFC="-1"
-			UseOfATL="0"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLX360CompilerTool"
-				Optimization="0"
-				AdditionalIncludeDirectories=".\;..\..\..\Code\CryEngine\CryCommon;..\..\..\Code\CryEngine\CryAction"
-				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
-				BufferSecurityCheck="true"
-				EnableFunctionLevelLinking="true"
-				ForceConformanceInForLoopScope="true"
-				OpenMP="true"
-				UsePrecompiledHeader="2"
-				PrecompiledHeaderThrough="StdAfx.h"
-				WarningLevel="3"
-				DebugInformationFormat="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCX360LinkerTool"
-				IgnoreImportLibrary="true"
-				AdditionalOptions="/ignore:4089 /dll /entry:&quot;_DllMainCRTStartup&quot; /include:&quot;XboxKrnlBuildNumber&quot;"
-				ModuleDefinitionFile="GameDll.def"
-				GenerateDebugInformation="true"
-				BaseAddress="0x0e800000"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCX360ImageTool"
-				OutputFileName="$(OutDir)\Base.dll"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCX360DeploymentTool"
-				RemoteRoot="devkit:\Game02\Main\"
-				DeploymentType="0"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-			<DebuggerTool
-			/>
-		</Configuration>
-		<Configuration
-			Name="Release|Xbox 360"
-			OutputDirectory="$(SolutionDir)..\..\BinXB\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
-			ConfigurationType="4"
-			UseOfMFC="-1"
-			UseOfATL="0"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLX360CompilerTool"
-				Optimization="3"
-				InlineFunctionExpansion="2"
-				EnableIntrinsicFunctions="true"
-				AdditionalIncludeDirectories=".\;..\..\..\Code\CryEngine\CryCommon;..\..\..\Code\CryEngine\CryAction"
-				StringPooling="true"
-				RuntimeLibrary="2"
-				EnableFunctionLevelLinking="true"
-				ForceConformanceInForLoopScope="true"
-				OpenMP="true"
-				UsePrecompiledHeader="2"
-				PrecompiledHeaderThrough="StdAfx.h"
-				WarningLevel="3"
-				DebugInformationFormat="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCLibrarianTool"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-			<DebuggerTool
-			/>
-		</Configuration>
-		<Configuration
-			Name="Profile|Xbox 360"
-			OutputDirectory="$(SolutionDir)..\..\BinXB\$(ConfigurationName)"
-			IntermediateDirectory="$(SolutionDir)BinTemp\$(PlatformName)\$(ConfigurationName)\$(ProjectName)\"
-			ConfigurationType="2"
-			UseOfMFC="-1"
-			UseOfATL="0"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLX360CompilerTool"
-				Optimization="3"
-				InlineFunctionExpansion="2"
-				EnableIntrinsicFunctions="true"
-				FavorSizeOrSpeed="2"
-				AdditionalIncludeDirectories=".\;..\..\..\Code\CryEngine\CryCommon;..\..\..\Code\CryEngine\CryAction"
-				StringPooling="true"
-				RuntimeLibrary="0"
-				BufferSecurityCheck="false"
-				EnableFunctionLevelLinking="true"
-				ForceConformanceInForLoopScope="true"
-				OpenMP="false"
-				UsePrecompiledHeader="2"
-				PrecompiledHeaderThrough="StdAfx.h"
-				WarningLevel="3"
-				DebugInformationFormat="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCX360LinkerTool"
-				AdditionalOptions="/ignore:4089 /dll /entry:&quot;_DllMainCRTStartup&quot; /include:&quot;XboxKrnlBuildNumber&quot;"
-				ModuleDefinitionFile="GameDll.def"
-				GenerateDebugInformation="true"
-				OptimizeReferences="2"
-				EnableCOMDATFolding="2"
-				BaseAddress="0x0e800000"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCX360ImageTool"
-				OutputFileName="$(OutDir)\Base.dll"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCX360DeploymentTool"
-				RemoteRoot="devkit:\Game02\Main\"
-				DeploymentType="0"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-			<DebuggerTool
-			/>
-		</Configuration>
-		<Configuration
-			Name="DebugPS3|Xbox 360"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)"
-			ConfigurationType="2"
-			UseOfMFC="-1"
-			UseOfATL="0"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLX360CompilerTool"
-				Optimization="0"
-				AdditionalIncludeDirectories=".\;.\..\SDKs\STLPORT\stlport\stl;.\..\SDKs\STLPORT\stlport;.\..\CryEngine\CryCommon;.\..\CryEngine\CryAction;.\Dead6;.\Dead6\Interfaces"
-				PreprocessorDefinitions="GAMEDLL_EXPORTS"
-				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
-				BufferSecurityCheck="true"
-				EnableFunctionLevelLinking="true"
-				ForceConformanceInForLoopScope="true"
-				OpenMP="true"
-				PrecompiledHeaderThrough="StdAfx.h"
-				WarningLevel="3"
-				DebugInformationFormat="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCX360LinkerTool"
-				IgnoreImportLibrary="true"
-				AdditionalOptions="/XEX:NO"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCX360ImageTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCX360DeploymentTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-			<DebuggerTool
-			/>
-		</Configuration>
-		<Configuration
-			Name="ProfilePS3|Xbox 360"
-			OutputDirectory="$(SolutionDir)$(ConfigurationName)"
-			IntermediateDirectory="$(ConfigurationName)"
-			ConfigurationType="2"
-			UseOfMFC="-1"
-			UseOfATL="0"
-			CharacterSet="2"
-			>
-			<Tool
-				Name="VCPreBuildEventTool"
-			/>
-			<Tool
-				Name="VCCustomBuildTool"
-			/>
-			<Tool
-				Name="VCXMLDataGeneratorTool"
-			/>
-			<Tool
-				Name="VCWebServiceProxyGeneratorTool"
-			/>
-			<Tool
-				Name="VCMIDLTool"
-			/>
-			<Tool
-				Name="VCCLX360CompilerTool"
-				Optimization="0"
-				AdditionalIncludeDirectories=".\;.\..\SDKs\STLPORT\stlport\stl;.\..\SDKs\STLPORT\stlport;.\..\CryEngine\CryCommon;.\..\CryEngine\CryAction;.\Dead6;.\Dead6\Interfaces"
-				PreprocessorDefinitions="GAMEDLL_EXPORTS"
-				MinimalRebuild="true"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="1"
-				BufferSecurityCheck="true"
-				EnableFunctionLevelLinking="true"
-				ForceConformanceInForLoopScope="true"
-				OpenMP="true"
-				PrecompiledHeaderThrough="StdAfx.h"
-				WarningLevel="3"
-				DebugInformationFormat="3"
-			/>
-			<Tool
-				Name="VCManagedResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCResourceCompilerTool"
-			/>
-			<Tool
-				Name="VCPreLinkEventTool"
-			/>
-			<Tool
-				Name="VCX360LinkerTool"
-				IgnoreImportLibrary="true"
-				AdditionalOptions="/XEX:NO"
-			/>
-			<Tool
-				Name="VCALinkTool"
-			/>
-			<Tool
-				Name="VCX360ImageTool"
-			/>
-			<Tool
-				Name="VCBscMakeTool"
-			/>
-			<Tool
-				Name="VCX360DeploymentTool"
-			/>
-			<Tool
-				Name="VCPostBuildEventTool"
-			/>
-			<DebuggerTool
-			/>
-		</Configuration>
 	</Configurations>
 	<References>
 	</References>
 	<Files>
 		<Filter
+			Name="Dead6 Core"
+			>
+			<Filter
+				Name="Interfaces"
+				>
+				<File
+					RelativePath=".\Dead6\Interfaces\IBaseManager.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\Interfaces\IBuildingController.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\Interfaces\IPurchaseSystem.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\Interfaces\ITeamManager.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+			</Filter>
+			<Filter
+				Name="Game Files"
+				>
+				<File
+					RelativePath=".\Dead6\CD6Game.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CD6Game.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+			</Filter>
+			<Filter
+				Name="Base Management"
+				>
+				<File
+					RelativePath=".\Dead6\CBaseManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CBaseManager.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\CBuildingController.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CBuildingController.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_BaseManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_BaseManager.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_BuildingController.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_BuildingController.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+			</Filter>
+			<Filter
+				Name="Core Startup Files"
+				>
+				<File
+					RelativePath=".\Dead6\d6platform_impl.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\d6platform_impl.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+			</Filter>
+			<Filter
+				Name="Team Management"
+				>
+				<File
+					RelativePath=".\Dead6\CTeamManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CTeamManager.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_TeamManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_TeamManager.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+			</Filter>
+			<Filter
+				Name="GameRules"
+				>
+				<File
+					RelativePath=".\Dead6\CD6GameFactory.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CD6GameFactory.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\CD6GameRules.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CD6GameRules.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+			</Filter>
+			<Filter
+				Name="Player"
+				>
+				<File
+					RelativePath=".\Dead6\CD6Player.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CD6Player.h"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+						/>
+					</FileConfiguration>
+				</File>
+			</Filter>
+			<Filter
+				Name="Vehicle Files"
+				>
+				<Filter
+					Name="Movement Files"
+					>
+					<File
+						RelativePath=".\Dead6\CVehicleMovementHarvester.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\Dead6\CVehicleMovementHarvester.h"
+						>
+						<FileConfiguration
+							Name="Debug|Win32"
+							>
+							<Tool
+								Name="VCCustomBuildTool"
+							/>
+						</FileConfiguration>
+					</File>
+				</Filter>
+			</Filter>
+			<Filter
+				Name="Nodes"
+				>
+				<File
+					RelativePath=".\Dead6\FlowHarvesterNodes.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\FlowMiscNodes.cpp"
+					>
+				</File>
+			</Filter>
+		</Filter>
+		<Filter
 			Name="Common"
 			>
+			<File
+				RelativePath=".\Crysis.ico"
+				>
+			</File>
+			<File
+				RelativePath=".\Cursor_Green.cur"
+				>
+			</File>
 			<File
 				RelativePath=".\GameDll.rc"
 				>
@@ -1116,6 +940,38 @@
 					/>
 				</FileConfiguration>
 				<FileConfiguration
+					Name="SP_DEMO|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="1"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="SP_DEMO|x64"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="1"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="CRYSIS_BETA|Win32"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="1"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="CRYSIS_BETA|x64"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+						UsePrecompiledHeader="1"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
 					Name="Debug|Xbox 360"
 					>
 					<Tool
@@ -1162,172 +1018,276 @@
 			</File>
 		</Filter>
 		<Filter
-			Name="Dead6 Core"
+			Name="Crysis"
 			>
 			<Filter
-				Name="Interfaces"
+				Name="Vehicle Files"
 				>
 				<File
-					RelativePath=".\Dead6\Interfaces\IBaseManager.h"
+					RelativePath=".\VehicleClient.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\Dead6\Interfaces\IBuildingController.h"
+					RelativePath=".\VehicleClient.h"
 					>
 				</File>
 				<File
-					RelativePath=".\Dead6\Interfaces\IPurchaseSystem.h"
+					RelativePath=".\VehicleMovementTweaks.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\Dead6\Interfaces\ITeamManager.h"
+					RelativePath=".\VehicleMovementTweaks.h"
 					>
 				</File>
-			</Filter>
-			<Filter
-				Name="Game Files"
-				>
-				<File
-					RelativePath=".\Dead6\CD6Game.cpp"
+				<Filter
+					Name="Movement Files"
 					>
-				</File>
-				<File
-					RelativePath=".\Dead6\CD6Game.h"
+					<File
+						RelativePath=".\VehicleMovementAmphibious.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementAmphibious.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementBase.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementBase.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementHelicopter.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementHelicopter.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementHovercraft.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementHovercraft.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementStdBoat.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementStdBoat.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementStdWheeled.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementStdWheeled.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementTank.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementTank.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementVTOL.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleMovementVTOL.h"
+						>
+					</File>
+				</Filter>
+				<Filter
+					Name="Damage Files"
 					>
-				</File>
-			</Filter>
-			<Filter
-				Name="Base Management"
-				>
-				<File
-					RelativePath=".\Dead6\CBaseManager.cpp"
+					<File
+						RelativePath=".\VehicleDamageBehaviorBurn.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleDamageBehaviorBurn.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleDamageBehaviorCameraShake.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleDamageBehaviorCameraShake.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleDamageBehaviorExplosion.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleDamageBehaviorExplosion.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleDamageBehaviorTire.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleDamageBehaviorTire.h"
+						>
+					</File>
+				</Filter>
+				<Filter
+					Name="Action Files"
 					>
-				</File>
-				<File
-					RelativePath=".\Dead6\CBaseManager.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\CBuildingController.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\CBuildingController.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\ScriptBind_BaseManager.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\ScriptBind_BaseManager.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\ScriptBind_BuildingController.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\ScriptBind_BuildingController.h"
-					>
-				</File>
-			</Filter>
-			<Filter
-				Name="Core Startup Files"
-				>
-				<File
-					RelativePath=".\Dead6\d6platform_impl.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\d6platform_impl.h"
-					>
-				</File>
-			</Filter>
-			<Filter
-				Name="Team Management"
-				>
-				<File
-					RelativePath=".\Dead6\CTeamManager.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\CTeamManager.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\ScriptBind_TeamManager.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\ScriptBind_TeamManager.h"
-					>
-				</File>
-			</Filter>
-			<Filter
-				Name="GameRules"
-				>
-				<File
-					RelativePath=".\Dead6\CD6GameFactory.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\CD6GameFactory.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\CD6GameRules.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\CD6GameRules.h"
-					>
-				</File>
-			</Filter>
-			<Filter
-				Name="Player"
-				>
-				<File
-					RelativePath=".\Dead6\CD6Player.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Dead6\CD6Player.h"
-					>
-				</File>
+					<File
+						RelativePath=".\VehicleActionAutomaticDoor.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleActionAutomaticDoor.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleActionDeployRope.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleActionDeployRope.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleActionEntityAttachment.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleActionEntityAttachment.h"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleActionLandingGears.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\VehicleActionLandingGears.h"
+						>
+					</File>
+				</Filter>
 			</Filter>
 			<Filter
 				Name="Nodes"
 				>
 				<File
-					RelativePath=".\Dead6\FlowHarvesterNodes.cpp"
+					RelativePath=".\Nodes\FlowActorSensor.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\Dead6\FlowMiscNodes.cpp"
+					RelativePath=".\Nodes\FlowFadeNode.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Nodes\FlowHitInfoNode.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Nodes\FlowNanoSuitNodes.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Nodes\FlowPlayerStagingNode.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Nodes\FlowPostFXNodes.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\FlowVehicleNodes.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Nodes\G2FlowBaseNode.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Nodes\HUDNodes.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Nodes\MPNodes.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Nodes\WeaponNodes.cpp"
 					>
 				</File>
 			</Filter>
 			<Filter
-				Name="Vehicle Files"
+				Name="Startup Files"
 				>
-				<Filter
-					Name="Movement Files"
+				<File
+					RelativePath=".\GameDll.cpp"
 					>
-					<File
-						RelativePath=".\Dead6\CVehicleMovementHarvester.cpp"
+					<FileConfiguration
+						Name="Debug|Xbox 360"
 						>
-					</File>
-					<File
-						RelativePath=".\Dead6\CVehicleMovementHarvester.h"
+						<Tool
+							Name="VCCLX360CompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="DebugPS3|Xbox 360"
 						>
-					</File>
-				</Filter>
+						<Tool
+							Name="VCCLX360CompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="ProfilePS3|Xbox 360"
+						>
+						<Tool
+							Name="VCCLX360CompilerTool"
+							UsePrecompiledHeader="0"
+						/>
+					</FileConfiguration>
+				</File>
 			</Filter>
-		</Filter>
-		<Filter
-			Name="Crysis"
-			>
+			<Filter
+				Name="Utility"
+				>
+				<File
+					RelativePath=".\LaptopUtil.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\LaptopUtil.h"
+					>
+				</File>
+				<File
+					RelativePath=".\NetInputChainDebug.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\NetInputChainDebug.h"
+					>
+				</File>
+				<File
+					RelativePath=".\ScriptUtils.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\ScriptUtils.h"
+					>
+				</File>
+			</Filter>
 			<Filter
 				Name="Actor Files"
 				>
@@ -1357,6 +1317,22 @@
 				</File>
 				<File
 					RelativePath=".\ScriptBind_Actor.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Shark.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Shark.h"
+					>
+				</File>
+				<File
+					RelativePath=".\SharkMovementController.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\SharkMovementController.h"
 					>
 				</File>
 				<Filter
@@ -1430,6 +1406,14 @@
 						RelativePath=".\PlayerView.h"
 						>
 					</File>
+					<File
+						RelativePath=".\WeaponAttachmentManager.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\WeaponAttachmentManager.h"
+						>
+					</File>
 				</Filter>
 				<Filter
 					Name="grab"
@@ -1445,22 +1429,90 @@
 				</Filter>
 			</Filter>
 			<Filter
-				Name="Music Logic"
+				Name="Menus"
 				>
 				<File
-					RelativePath=".\MusicLogic\MusicLogic.cpp"
+					RelativePath=".\Menus\CreateGame.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\MusicLogic\MusicLogic.h"
+					RelativePath=".\Menus\CreateGame.h"
 					>
 				</File>
 				<File
-					RelativePath=".\MusicLogic\ScriptBind_MusicLogic.cpp"
+					RelativePath=".\Menus\FlashMenuObject.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\MusicLogic\ScriptBind_MusicLogic.h"
+					RelativePath=".\Menus\FlashMenuObject.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\FlashMenuObjectOptions.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\FlashMenuObjectProfiles.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\FlashMenuObjectSingleplayer.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\FlashMenuScreen.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\FlashMenuScreen.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\GameNetworkProfile.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\GameNetworkProfile.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\MPHub.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\MPHub.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\MPLobbyUI.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\MPLobbyUI.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\MultiplayerMenu.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\MultiplayerMenu.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\OptionsManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\OptionsManager.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\QuickGame.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Menus\QuickGame.h"
 					>
 				</File>
 			</Filter>
@@ -1479,6 +1531,14 @@
 			<Filter
 				Name="Game Files"
 				>
+				<File
+					RelativePath=".\BulletTime.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\BulletTime.h"
+					>
+				</File>
 				<File
 					RelativePath=".\ClientSynchedStorage.cpp"
 					>
@@ -1550,18 +1610,26 @@
 							Name="VCCLCompilerTool"
 						/>
 					</FileConfiguration>
+					<FileConfiguration
+						Name="Profile|Win32"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Profile|x64"
+						ExcludedFromBuild="true"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+						/>
+					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\GameFactory.h"
 					>
-					<FileConfiguration
-						Name="Release|Win32"
-						ExcludedFromBuild="true"
-						>
-						<Tool
-							Name="VCCustomBuildTool"
-						/>
-					</FileConfiguration>
 				</File>
 				<File
 					RelativePath=".\MPTutorial.cpp"
@@ -1588,11 +1656,35 @@
 					>
 				</File>
 				<File
+					RelativePath=".\ScriptControlledPhysics.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\ScriptControlledPhysics.h"
+					>
+				</File>
+				<File
 					RelativePath=".\ServerSynchedStorage.cpp"
 					>
 				</File>
 				<File
 					RelativePath=".\ServerSynchedStorage.h"
+					>
+				</File>
+				<File
+					RelativePath=".\SoundMoods.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\SoundMoods.h"
+					>
+				</File>
+				<File
+					RelativePath=".\SPAnalyst.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\SPAnalyst.h"
 					>
 				</File>
 				<File
@@ -1744,6 +1836,14 @@
 					>
 				</File>
 				<File
+					RelativePath=".\HUD\HUDSilhouettes.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\HUD\HUDSilhouettes.h"
+					>
+				</File>
+				<File
 					RelativePath=".\HUD\HUDTagNames.cpp"
 					>
 				</File>
@@ -1864,6 +1964,10 @@
 					</File>
 					<File
 						RelativePath=".\HUD\HUDTextEvents.cpp"
+						>
+					</File>
+					<File
+						RelativePath=".\HUD\HUDWeaponAccessories.cpp"
 						>
 					</File>
 				</Filter>
@@ -2003,6 +2107,10 @@
 						>
 					</File>
 					<File
+						RelativePath=".\WeaponInput.cpp"
+						>
+					</File>
+					<File
 						RelativePath=".\WeaponSystem.cpp"
 						>
 					</File>
@@ -2054,27 +2162,11 @@
 							>
 						</File>
 						<File
-							RelativePath=".\Energise.cpp"
-							>
-						</File>
-						<File
-							RelativePath=".\Energise.h"
-							>
-						</File>
-						<File
 							RelativePath=".\FreezingBeam.cpp"
 							>
 						</File>
 						<File
 							RelativePath=".\FreezingBeam.h"
-							>
-						</File>
-						<File
-							RelativePath=".\Heal.cpp"
-							>
-						</File>
-						<File
-							RelativePath=".\Heal.h"
 							>
 						</File>
 						<File
@@ -2099,14 +2191,6 @@
 						</File>
 						<File
 							RelativePath=".\Rapid.h"
-							>
-						</File>
-						<File
-							RelativePath=".\Repair.cpp"
-							>
-						</File>
-						<File
-							RelativePath=".\Repair.h"
 							>
 						</File>
 						<File
@@ -2142,11 +2226,11 @@
 							>
 						</File>
 						<File
-							RelativePath=".\Tactical.cpp"
+							RelativePath=".\SingleTG.cpp"
 							>
 						</File>
 						<File
-							RelativePath=".\Tactical.h"
+							RelativePath=".\SingleTG.h"
 							>
 						</File>
 						<File
@@ -2155,6 +2239,14 @@
 						</File>
 						<File
 							RelativePath=".\Throw.h"
+							>
+						</File>
+						<File
+							RelativePath=".\WorkOnTarget.cpp"
+							>
+						</File>
+						<File
+							RelativePath=".\WorkOnTarget.h"
 							>
 						</File>
 					</Filter>
@@ -2175,6 +2267,14 @@
 						</File>
 						<File
 							RelativePath=".\Bullet.h"
+							>
+						</File>
+						<File
+							RelativePath=".\C4Projectile.cpp"
+							>
+						</File>
+						<File
+							RelativePath=".\C4Projectile.h"
 							>
 						</File>
 						<File
@@ -2215,14 +2315,6 @@
 						</File>
 						<File
 							RelativePath=".\Rocket.h"
-							>
-						</File>
-						<File
-							RelativePath=".\TacAlienBullet.cpp"
-							>
-						</File>
-						<File
-							RelativePath=".\TacAlienBullet.h"
 							>
 						</File>
 						<File
@@ -2290,6 +2382,14 @@
 							>
 						</File>
 						<File
+							RelativePath=".\C4Detonator.cpp"
+							>
+						</File>
+						<File
+							RelativePath=".\C4Detonator.h"
+							>
+						</File>
+						<File
 							RelativePath=".\DebugGun.cpp"
 							>
 						</File>
@@ -2330,6 +2430,14 @@
 							>
 						</File>
 						<File
+							RelativePath=".\RocketLauncher.cpp"
+							>
+						</File>
+						<File
+							RelativePath=".\RocketLauncher.h"
+							>
+						</File>
+						<File
 							RelativePath=".\ThrowableWeapon.cpp"
 							>
 						</File>
@@ -2351,14 +2459,6 @@
 					Name="Items"
 					>
 					<File
-						RelativePath=".\Flashlight.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\Flashlight.h"
-						>
-					</File>
-					<File
 						RelativePath=".\Lam.cpp"
 						>
 					</File>
@@ -2374,367 +2474,7 @@
 						RelativePath=".\PlayerFeature.h"
 						>
 					</File>
-					<File
-						RelativePath=".\TacticalAttachment.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\TacticalAttachment.h"
-						>
-					</File>
 				</Filter>
-			</Filter>
-			<Filter
-				Name="Menus"
-				>
-				<File
-					RelativePath=".\Menus\CreateGame.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\CreateGame.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\FlashMenuObject.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\FlashMenuObject.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\FlashMenuObjectOptions.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\FlashMenuObjectProfiles.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\FlashMenuObjectSingleplayer.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\FlashMenuScreen.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\FlashMenuScreen.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\GameNetworkProfile.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\GameNetworkProfile.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\MPHub.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\MPHub.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\MPLobbyUI.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\MPLobbyUI.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\MultiplayerMenu.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\MultiplayerMenu.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\OptionsManager.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\OptionsManager.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\QuickGame.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Menus\QuickGame.h"
-					>
-				</File>
-			</Filter>
-			<Filter
-				Name="Nodes"
-				>
-				<File
-					RelativePath=".\Nodes\FlowActorSensor.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\FlowFadeNode.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\FlowHitInfoNode.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\FlowMusicLogicControlNode.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\FlowNanoSuitNodes.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\FlowPlayerStagingNode.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\FlowPostFXNodes.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\FlowVehicleNodes.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\G2FlowBaseNode.h"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\HUDNodes.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\MPNodes.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\Nodes\WeaponNodes.cpp"
-					>
-				</File>
-			</Filter>
-			<Filter
-				Name="Vehicle Files"
-				>
-				<File
-					RelativePath=".\VehicleClient.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\VehicleClient.h"
-					>
-				</File>
-				<File
-					RelativePath=".\VehicleMovementTweaks.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\VehicleMovementTweaks.h"
-					>
-				</File>
-				<Filter
-					Name="Movement Files"
-					>
-					<File
-						RelativePath=".\AIMovementCommon.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\AIMovementCommon.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementAerodynamic.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementAerodynamic.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementBase.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementBase.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementHelicopter.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementHelicopter.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementHovercraft.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementHovercraft.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementStdBoat.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementStdBoat.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementStdWheeled.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementStdWheeled.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementTank.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementTank.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementVTOL.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleMovementVTOL.h"
-						>
-					</File>
-				</Filter>
-				<Filter
-					Name="Damage Files"
-					>
-					<File
-						RelativePath=".\VehicleDamageBehaviorBurn.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleDamageBehaviorBurn.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleDamageBehaviorExplosion.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleDamageBehaviorExplosion.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleDamageBehaviorTire.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleDamageBehaviorTire.h"
-						>
-					</File>
-				</Filter>
-				<Filter
-					Name="Action Files"
-					>
-					<File
-						RelativePath=".\VehicleActionAutomaticDoor.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleActionAutomaticDoor.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleActionDeployRope.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleActionDeployRope.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleActionEntityAttachment.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleActionEntityAttachment.h"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleActionLandingGears.cpp"
-						>
-					</File>
-					<File
-						RelativePath=".\VehicleActionLandingGears.h"
-						>
-					</File>
-				</Filter>
-			</Filter>
-			<Filter
-				Name="Startup Files"
-				>
-				<File
-					RelativePath=".\GameDll.cpp"
-					>
-					<FileConfiguration
-						Name="Debug|Xbox 360"
-						>
-						<Tool
-							Name="VCCLX360CompilerTool"
-							UsePrecompiledHeader="0"
-						/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="DebugPS3|Xbox 360"
-						>
-						<Tool
-							Name="VCCLX360CompilerTool"
-							UsePrecompiledHeader="0"
-						/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="ProfilePS3|Xbox 360"
-						>
-						<Tool
-							Name="VCCLX360CompilerTool"
-							UsePrecompiledHeader="0"
-						/>
-					</FileConfiguration>
-				</File>
-			</Filter>
-			<Filter
-				Name="Utility"
-				>
-				<File
-					RelativePath=".\NetInputChainDebug.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\NetInputChainDebug.h"
-					>
-				</File>
-				<File
-					RelativePath=".\ScriptUtils.cpp"
-					>
-				</File>
-				<File
-					RelativePath=".\ScriptUtils.h"
-					>
-				</File>
 			</Filter>
 		</Filter>
 	</Files>

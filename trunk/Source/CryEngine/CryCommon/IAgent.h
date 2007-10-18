@@ -62,17 +62,28 @@ class IPersonalInterestManager;
 #define AIOBJECT_ORDER				96
 #define	AIOBJECT_PLAYER 			100
 
-#define	AIOBJECT_GRENADE 			150
+#define	AIOBJECT_GRENADE 		150
 #define	AIOBJECT_RPG 			151
 
-#define AI_USE_HIDESPOTS	1<<15
+#define AI_USE_HIDESPOTS	(1<<14)
 
+
+// signal ids
+#define AISIGNAL_INCLUDE_DISABLED 0
+#define AISIGNAL_DEFAULT 1
+#define AISIGNAL_PROCESS_NEXT_UPDATE 3
+#define AISIGNAL_NOTIFY_ONLY 9
+#define AISIGNAL_ALLOW_DUPLICATES 10
+#define AISIGNAL_RECEIVED_PREV_UPDATE 30 // internal AI system use only, like AISIGNAL_DEFAULT but used for logging/recording
+																				 // a signal sent in the previous update and processed in the current (AISIGNAL_PROCESS_NEXT_UPDATE) 
+#define AISIGNAL_INITIALIZATION -100
 
 // anchors
 #define	AIANCHOR_FIRST												200
 #define	AIANCHOR_COMBAT_HIDESPOT							320
 #define	AIANCHOR_COMBAT_HIDESPOT_SECONDARY		330
 #define	AIANCHOR_REINFORCEMENT_SPOT						400
+#define	AIANCHOR_NOGRENADE_SPOT								405
 
 
 //! Event types
@@ -88,17 +99,16 @@ class IPersonalInterestManager;
 #define AIEVENT_REJECT					10
 #define AIEVENT_PATHFINDON			11
 #define AIEVENT_PATHFINDOFF			12
-#define AIEVENT_CLOAK						13
-#define AIEVENT_UNCLOAK					14
 #define AIEVENT_CLEAR						15
-#define AIEVENT_MOVEMENT_CONTROL	16		// based on parameters lets object know if he is allowed to move.
+//#define AIEVENT_MOVEMENT_CONTROL	16		// based on parameters lets object know if he is allowed to move.
 #define AIEVENT_DROPBEACON			17
-#define AIEVENT_JOINSQUAD				18
 #define AIEVENT_USE							19
 #define AIEVENT_CLEARACTIVEGOALS	22
 #define AIEVENT_DRIVER_IN				23		// to enable/disable AIVehicles
 #define AIEVENT_DRIVER_OUT			24		// to enable/disable AIVehicles
 #define AIEVENT_FORCEDNAVIGATION	25
+#define AIEVENT_ADJUSTPATH			26
+#define AIEVENT_LOWHEALTH				27
 
 #define AIEVENT_PLAYER_STUNT_SPRINT 101
 #define AIEVENT_PLAYER_STUNT_JUMP 102
@@ -124,6 +134,8 @@ class IPersonalInterestManager;
 #define AIGOALPIPE_NOTDUPLICATE	2
 #define AIGOALPIPE_HIGHPRIORITY		4	// it will be not removed when a goal pipe is selected
 #define AIGOALPIPE_SAMEPRIORITY		8	// sets the priority to be the same as active goal pipe
+#define AIGOALPIPE_DONT_RESET_AG	16	// don't reset the AG Input (by default AG Action input is reset to idle)
+#define AIGOALPIPE_KEEP_LAST_SUBPIPE	32	// keeps the last inserted subpipe
 
 #define SIGNALFILTER_SENDER					0
 #define SIGNALFILTER_LASTOP					1
@@ -192,7 +204,7 @@ class IPersonalInterestManager;
 #define HM_NEAREST_TOWARDS_TARGET				12 // same as HM_NEAREST_TO_TARGET, but forces the selection amongst obstacles towards the target only
 #define HM_NEAREST_BACKWARDS						13
 #define HM_NEAREST_PREFER_SIDES		14
-#define HM_NEAREST_HALF_SIDE			15		// consider half searh distance on sides and back
+//#define HM_NEAREST_HALF_SIDE			15		// consider half searh distance on sides and back
 #define HM_NEAREST_TO_ME			16		// same as HM_NEAREST, but the distance considered is to the puppet itself even if point is searched with HM_AROUND_LASTOP
 #define HM_NEAREST_TOWARDS_TARGET_PREFER_SIDES		17
 #define HM_NEAREST_TOWARDS_TARGET_LEFT_PREFER_SIDES		18
@@ -239,9 +251,12 @@ class IPersonalInterestManager;
 #define AI_JUMP_RELATIVE				(1<<2)
 #define AI_JUMP_MOVING_TARGET		(1<<3)
 
+#define AI_LOOKAT_CONTINUOUS (1<<0)
+#define AI_LOOKAT_USE_BODYDIR (1<<1)
+
 enum EJumpAnimType
 {
-	JUMP_ANIM_LOOP,
+	JUMP_ANIM_FLY,
 	JUMP_ANIM_LAND
 };
 
@@ -287,12 +302,17 @@ inline float IndexToMovementUrgency(int idx)
 #define	HIDESPOT_COVERAGE_ANGLE_COS			0.70710678118654f		// cos(45 degrees)
 
 //	path finder blockers types
-#define	PFB_NONE				0
-#define	PFB_ATT_TARGET	1
-#define	PFB_REF_POINT		2
-#define	PFB_BEACON			3
-#define	PFB_DEAD_BODIES	4
-#define	PFB_EXPLOSIVES	5
+enum ENavigationBlockers
+{
+	PFB_NONE,
+	PFB_ATT_TARGET,
+	PFB_REF_POINT,
+	PFB_BEACON,
+	PFB_DEAD_BODIES,
+	PFB_EXPLOSIVES,
+	PFB_PLAYER,
+	PFB_BETWEEN_NAV_TARGET,
+};
 
 enum EOPWaitType
 {
@@ -304,8 +324,8 @@ enum EOPWaitType
 
 enum EOPBranchType
 {
-	IF_ACTIVE_GOALS = 0,			// default as it was in Far Cry - jumps if there are active (not finished) goal operations
-	IF_ACTIVE_GOALS_HIDE,		// default as it was in Far Cry - jumps if there are active goals or hide spot wasn't found
+	IF_ACTIVE_GOALS = 0,			// default as it was in CryEngine1 - jumps if there are active (not finished) goal operations
+	IF_ACTIVE_GOALS_HIDE,		// default as it was in CryEngine1 - jumps if there are active goals or hide spot wasn't found
 	IF_NO_PATH,				// jumps if there wasn't a path in the last "pathfind" goal operation
 	IF_PATH_STILL_FINDING, // jumps if the current pathfind request hasn't been completed yet
 	IF_IS_HIDDEN,			// jumps if the last "hide" goal operation has succeed and distance to hide point is small
@@ -326,13 +346,18 @@ enum EOPBranchType
 	IF_NAV_WAYPOINT_HUMAN,		// jumps if the current navigation graph is waypoint (use for checking indoor)
 	IF_NAV_TRIANGULAR,		// jumps if the current navigation graph is triangular (use for checking outdoor)
 	IF_TARGET_DIST_LESS,		// jumps if the distance to target is less
+	IF_TARGET_DIST_LESS_ALONG_PATH,		// jumps if the distance along path to target is less
 	IF_TARGET_DIST_GREATER,		// jumps if the distance to target is more
 	IF_TARGET_IN_RANGE,		// jumps if the distance to target is less than the attackRannge
 	IF_TARGET_OUT_OF_RANGE,		// jumps if the distance to target is more than the attackRannge
 	IF_TARGET_TO_REFPOINT_DIST_LESS,		// jumps if the distance between target and refpoint is less
 	IF_TARGET_TO_REFPOINT_DIST_GREATER,		// jumps if the distance between target and refpoint is more
+	IF_TARGET_LOST_TIME_MORE,		// jumps if target lost time is more
+	IF_TARGET_LOST_TIME_LESS,		// jumps if target lost time is less
 	IF_LASTOP_DIST_LESS,		// jumps if the distance to last op result is less
+	IF_LASTOP_DIST_LESS_ALONG_PATH,		// jumps if the distance to last op result along path is less
 	IF_TARGET_MOVED_SINCE_START,		// jumps if the distance between current targetPos and targetPos when pipe started more than threshold
+	IF_TARGET_MOVED,		// jumps if the distance between current targetPos and targetPos when pipe started (or last time it was checked) more than threshold
 	IF_EXPOSED_TO_TARGET,	// jumps if the upper torso of the agent is visible towards the target.
 	IF_COVER_COMPROMISED,	// jumps if the current cover cannot be used for hiding or if the hide spots does not exists.
 	IF_COVER_NOT_COMPROMISED,	// negated version of IF_COVER_COMPROMISED.
@@ -375,14 +400,15 @@ enum EFireMode
 	FIREMODE_FORCED = 3,			// Fire continuously - allow any target.
 	FIREMODE_AIM = 4,					// Aim target only - allow any target.
 	FIREMODE_SECONDARY = 5,		// Fire secondary weapon (grenades,....).
-	FIREMODE_MELEE = 6,				// Melee
-	FIREMODE_KILL = 7,				// no missing, shoot directly at the target, no matter what aggression/attackRange/accuracy is
-	FIREMODE_BURST_WHILE_MOVING = 8, // [mikko] to be renamed.
-	FIREMODE_PANIC_SPREAD = 9,
-	FIREMODE_BURST_DRAWFIRE = 10,
-	FIREMODE_MELEE_FORCED = 11,	// Melee, without distance restrictions.
-	FIREMODE_BURST_SNIPE = 12,
-	FIREMODE_AIM_SWEEP = 13,
+	FIREMODE_SECONDARY_SMOKE = 6,		// Fire smoke grenade.
+	FIREMODE_MELEE = 7,				// Melee
+	FIREMODE_KILL = 8,				// no missing, shoot directly at the target, no matter what aggression/attackRange/accuracy is
+	FIREMODE_BURST_WHILE_MOVING = 9, // [mikko] to be renamed.
+	FIREMODE_PANIC_SPREAD = 10,
+	FIREMODE_BURST_DRAWFIRE = 11,
+	FIREMODE_MELEE_FORCED = 12,	// Melee, without distance restrictions.
+	FIREMODE_BURST_SNIPE = 13,
+	FIREMODE_AIM_SWEEP = 14,
 };
 
 enum EAIGoalFlags
@@ -390,6 +416,7 @@ enum EAIGoalFlags
 	AILASTOPRES_USE			= 0x01,
 	AILASTOPRES_LOOKAT	= 0x02,
 	AI_LOOK_FORWARD			= 0x04, 
+	AI_DONT_STEER_AROUND_TARGET = 0x08, // used in stick goal (not using AI_MOVE_BACKWARD) 
 	AI_MOVE_BACKWARD = 0x08, // default direction 
 	AI_MOVE_RIGHT = 0x10,
 	AI_MOVE_LEFT =0x20,
@@ -401,8 +428,11 @@ enum EAIGoalFlags
 	AI_BACKOFF_FROM_TARGET = 0x800,
 	AI_BREAK_ON_LIVE_TARGET = 0x1000,
 	AI_RANDOM_ORDER = 0x2000,
-	AI_USE_TIME = 0x4000, // when param can be interpretted as time or distance, use time
+	AI_CONSTANT_SPEED = 0x2000, // used in stick goal (not using AI_RANDOM_ORDER) 
+	AI_USE_TIME = 0x4000, // when param can be interpreted as time or distance, use time
 	AI_STOP_ON_ANIMATION_START = 0x8000,
+	AI_USE_TARGET_MOVEMENT = 0x10000, // when requesting a direction (AI_MOVE_LEFT/RIGHT etc), make it relative to target movement direction
+	AI_ADJUST_SPEED = 0x20000, // used in stick goal forces to adjust the speed based on the target.
 };
 
 // Unit properties for group behavior (see CLeader/CLeaderAction)
@@ -459,7 +489,6 @@ enum	ELeaderActionSubType{
 	LAS_LAST	// make sure this one is always the last!
 };
 
-
 enum EAIAlertStatus
 {
 	AIALERTSTATUS_SAFE,
@@ -468,17 +497,32 @@ enum EAIAlertStatus
 	AIALERTSTATUS_ACTION
 };
 
+enum EAITargetThreat
+{
+	AITHREAT_NONE,
+	AITHREAT_INTERESTING,
+	AITHREAT_THREATENING,
+	AITHREAT_AGGRESSIVE,
+	AITHREAT_LAST	// for serialization.
+};
+
 enum EAITargetType
 {
-	AITARGET_NONE,
-	AITARGET_FRIENDLY, // a friendly agent
+	// Atomic types.
+	AITARGET_NONE,				// No target
+	AITARGET_SOUND,				// Primary sensory from sound event.
+	AITARGET_MEMORY,			// Primary sensory from vis event, not visible.
+	AITARGET_VISUAL,			// Primary sensory from vis event, visible.
+
+	// Backwards compatibility for scriptbind
+	AITARGET_ENEMY,
+	AITARGET_FRIENDLY,
 	AITARGET_BEACON,
-	AITARGET_MEMORY,
-	AITARGET_SOUND,
 	AITARGET_GRENADE,
 	AITARGET_RPG,
-	AITARGET_ENEMY // an enemy living/vehicle target
 
+	// for serialization.
+	AITARGET_LAST	
 };
 
 enum EAIGoalType
@@ -571,47 +615,68 @@ struct AgentPathfindingProperties
 
 struct AgentMovementSpeeds
 {
-	enum EAgentMovementUrgency {AMU_SLOW, AMU_WALK, AMU_RUN, AMU_SPRINT, AMU_MANEUVER, AMU_NUM_VALUES};
-	enum EAgentMovementStance {AMS_NORMAL, AMS_STEALTH, AMS_CROUCH, AMS_PRONE, AMS_SWIM, AMS_NUM_VALUES};
-	enum EAgentMovementDir {AMD_FWD, AMD_SIDE, AMD_BWD, AMD_NUM_VALUES};
+	enum EAgentMovementUrgency {AMU_SLOW, AMU_WALK, AMU_RUN, AMU_SPRINT, AMU_NUM_VALUES};
+	enum EAgentMovementStance {AMS_RELAXED, AMS_COMBAT, AMS_STEALTH, AMS_CROUCH, AMS_PRONE, AMS_SWIM, AMS_NUM_VALUES};
+
+	struct SSpeedRange
+	{
+		float def, min, max;
+	};
 
 	AgentMovementSpeeds()
 	{
 		memset(this, 0, sizeof(*this));
 	}
 
-	// use this access to ensure type/index value checks
-	float &GetSpeed(EAgentMovementUrgency urgency, EAgentMovementStance stance, EAgentMovementDir dir)
-	{
-		assert(urgency < AMU_NUM_VALUES);
-		assert(stance < AMS_NUM_VALUES);
-		assert(dir < AMD_NUM_VALUES);
-		return speeds[urgency][stance][dir];
-	}
-	const float &GetSpeed(EAgentMovementUrgency urgency, EAgentMovementStance stance, EAgentMovementDir dir) const
-	{
-		assert(urgency < AMU_NUM_VALUES);
-		assert(stance < AMS_NUM_VALUES);
-		assert(dir < AMD_NUM_VALUES);
-		return speeds[urgency][stance][dir];
-	}
-
 	void SetBasicSpeeds(float slow, float walk, float run, float sprint, float maneuver)
 	{
-		for (int s = 0 ; s < AMS_NUM_VALUES ; ++s)
+		for (int s = 0 ; s < AMS_NUM_VALUES; ++s)
 		{
-			for (int d = 0 ; d < AMD_NUM_VALUES ; ++d)
-			{
-				speeds[AMU_SLOW][s][d] = slow;
-				speeds[AMU_WALK][s][d] = walk;
-				speeds[AMU_RUN][s][d] = run;
-				speeds[AMU_SPRINT][s][d] = sprint;
-				speeds[AMU_MANEUVER][s][d] = maneuver;
-			}
+			speedRanges[s][AMU_SLOW].def = slow;
+			speedRanges[s][AMU_SLOW].min = maneuver;
+			speedRanges[s][AMU_SLOW].max = slow;
+
+			speedRanges[s][AMU_WALK].def = walk;
+			speedRanges[s][AMU_WALK].min = maneuver;
+			speedRanges[s][AMU_WALK].max = walk;
+
+			speedRanges[s][AMU_RUN].def = run;
+			speedRanges[s][AMU_RUN].min = maneuver;
+			speedRanges[s][AMU_RUN].max = run;
+
+			speedRanges[s][AMU_SPRINT].def = sprint;
+			speedRanges[s][AMU_SPRINT].min = maneuver;
+			speedRanges[s][AMU_SPRINT].max = sprint;
 		}
+
 	}
+
+	void SetRanges(int stance, int urgency, float sdef, float smin, float smax)
+	{
+		assert(stance >= 0 && stance < AMS_NUM_VALUES);
+		assert(urgency >= 0 && urgency < AMU_NUM_VALUES);
+		speedRanges[stance][urgency].def = sdef;
+		speedRanges[stance][urgency].min = smin;
+		speedRanges[stance][urgency].max = smax;
+	}
+
+	void CopyRanges(int stance, int toUrgency, int fromUrgency)
+	{
+		assert(stance >= 0 && stance < AMS_NUM_VALUES);
+		assert(toUrgency >= 0 && toUrgency < AMU_NUM_VALUES);
+		assert(fromUrgency >= 0 && fromUrgency < AMU_NUM_VALUES);
+		speedRanges[stance][toUrgency] = speedRanges[stance][fromUrgency];
+	}
+
+	const SSpeedRange& GetRange(int stance, int urgency) const
+	{
+		assert(stance >= 0 && stance < AMS_NUM_VALUES);
+		assert(urgency >= 0 && urgency < AMU_NUM_VALUES);
+		return speedRanges[stance][urgency];
+	}
+
 private:
-	float speeds[AMU_NUM_VALUES][AMS_NUM_VALUES][AMD_NUM_VALUES];
+	SSpeedRange speedRanges[AMS_NUM_VALUES][AMU_NUM_VALUES];
 };
 
 //
@@ -631,6 +696,7 @@ struct AgentMovementAbility
 	float pathRadius;    // How wide the path should be treated
 	float pathSpeedLookAheadPerSpeed; // How far to look ahead to do speed control (mult this by the speed); -ve means use pathLookAhead
 	float cornerSlowDown; // slow down at corners: 0 to 1
+	float slopeSlowDown; // slow down on slopes uphill (0 to 1)
 	float optimalFlightHeight;
 	float minFlightHeight;
 	float maxFlightHeight;
@@ -646,6 +712,9 @@ struct AgentMovementAbility
 	bool teleportEnabled;
 	/// set to true, if the movement speed should be lowered in low light conditions.
 	bool  lightAffectsSpeed;
+	/// Adjust the movement speed based on the angel between body dir and move dir.
+	float directionalScaleRefSpeedMin;
+	float directionalScaleRefSpeedMax;
 
 	AgentMovementSpeeds movementSpeeds;
 
@@ -654,10 +723,12 @@ struct AgentMovementAbility
 	AgentMovementAbility():b3DMove(false),bUsePathfinder(true), usePredictiveFollowing(false), allowEntityClampingByAnimation(false),
 		maxAccel(std::numeric_limits<float>::max()), maxDecel(std::numeric_limits<float>::max()),
 		minTurnRadius(0), maxTurnRadius(0),
-		avoidanceRadius(0), pathLookAhead(3.0f), pathRadius(1.0f), pathSpeedLookAheadPerSpeed(-1), cornerSlowDown(0.0f),
+		avoidanceRadius(0), pathLookAhead(3.0f), pathRadius(1.0f), pathSpeedLookAheadPerSpeed(-1), cornerSlowDown(0.0f), slopeSlowDown(1.f),
 		optimalFlightHeight(0), minFlightHeight(0), maxFlightHeight(0), maneuverTrh(0.f),
 		velDecay(0.0f), pathFindPrediction(0), resolveStickingInTrace(true), pathRegenIntervalDuringTrace(0.0f),
-		teleportEnabled(false), lightAffectsSpeed(false)
+		teleportEnabled(false), lightAffectsSpeed(false),
+		directionalScaleRefSpeedMin(-1.0f), directionalScaleRefSpeedMax(-1.0f)
+
 	{}
 };
 
@@ -695,7 +766,7 @@ struct AIWeaponDescriptor
 	string smartObjectClass;
 
 
-	AIWeaponDescriptor(const string& fcHandler="instant", float chargeTime=-1.f,float speed=400.f, float damageRadius=-1.f):
+	AIWeaponDescriptor(const string& fcHandler="instant", float chargeTime=-1.0f,float speed=-1.0f, float damageRadius=-1.0f):
 	firecmdHandler(fcHandler),fSpeed(speed),fDamageRadius(damageRadius),fChargeTime(chargeTime),
 		fRangeMax(1000.f),fRangeMin(1.f),bSignalOnShoot(false), burstBulletCountMin(1), burstBulletCountMax(10),
 		burstPauseTimeMin(0.8f), burstPauseTimeMax(3.5f), singleFireTriggerTime(-1.0f), spreadRadius(1.0f), coverFireTime(2.0f),
@@ -720,6 +791,13 @@ struct IFireCommandHandler
 	virtual void DebugDraw(struct IRenderer *pRenderer) = 0;
 	// Return true if default effect should be used for special firemode.
 	virtual bool UseDefaultEffectFor(EFireMode fireMode) const = 0;
+	// called whenever weapon is reloaded
+	virtual void OnReload() = 0;
+	// called whenever shot is done (if weapon descriptor defines EnableWeaponListener)
+	virtual void OnShoot() = 0;
+	// how many shots were done
+	virtual int	 GetShotCount() const = 0;
+
 };
 
 // Fire command handler descriptor/factory.
@@ -869,6 +947,7 @@ enum EGoalOperations
 	AIOP_SEEKCOVER,
 	AIOP_PROXIMITY,
 	AIOP_MOVETOWARDS,
+	AIOP_DODGE,
 	LAST_AIOP
 };
 
@@ -900,14 +979,13 @@ struct SAIEVENT
 	int nDeltaHealth;
 	float fThreat;
 	int nType;
-	float	fForcedEventTimeout;
 	IAIObject *pSeen;
 	bool bPathFound;
 	Vec3 vPosition;
 	Vec3 vForcedNavigation;
 	EntityId targetId;
 
-	SAIEVENT():bFuzzySight(false),nDeltaHealth(0),fThreat(0.f),nType(0),fForcedEventTimeout(-1.f),
+	SAIEVENT():bFuzzySight(false),nDeltaHealth(0),fThreat(0.f),nType(0),
 		pSeen(NULL),bPathFound(false),vForcedNavigation(ZERO),targetId(0){}
 
 };
@@ -997,7 +1075,6 @@ public:
 	const CAIVehicle* CastToCAIVehicle() const { return _fastcast_CAIVehicle ? (const CAIVehicle*) this : NULL; }
 	CAIVehicle* CastToCAIVehicle() { return _fastcast_CAIVehicle ? (CAIVehicle*) this : NULL; }
 
-
 	virtual void SetRadius(float fRadius) = 0;
 	virtual float GetRadius() const = 0;
 	virtual void SetPos(const Vec3 &pos,const Vec3 &dirForw=Vec3(1,0,0)) = 0;
@@ -1056,7 +1133,7 @@ public:
 	virtual bool	IsAgent() const { return false; }
 
 	// Returns true if tho given point is in AIObject's (puppet, AIPlayer) field/range of view
-	virtual bool IsPointInFOVCone(const Vec3 &pos) = 0;
+	virtual bool IsPointInFOVCone(const Vec3 &pos, float distanceScale = 1.0f) = 0;
 
 	// Description:
 	//    Serialize proxy with a TSerialize
@@ -1107,6 +1184,7 @@ struct IAIActor
 	virtual void ParseParameters(const AIObjectParameters &params)=0;
 	virtual bool CanAcquireTarget(IAIObject* pOther) const = 0;
 	virtual IPersonalInterestManager* GetInterestManager(void) = 0;
+	virtual bool IsActive() const = 0;
 };
 
 struct IPipeUser;
@@ -1124,71 +1202,74 @@ enum EGoalPipeEvent
 	ePN_RefPointMoved, // sent to the last inserted goal pipe when the ref. point is moved
 };
 
-struct IGoalPipeListener
-{
-	virtual void OnGoalPipeEvent( IPipeUser* pPipeUser, EGoalPipeEvent event, int goalPipeId ) = 0;
-};
+struct IGoalPipeListener;
 
 // TODO: figure out better way to handle this, the structure is almost 1:1 to the SActorTargetParams.
 typedef uint32 TAnimationGraphQueryID;
 struct SAIActorTargetRequest
 {
 	SAIActorTargetRequest() :
-id(0),
-approachLocation(0,0,0),
-approachDirection(0,0,0),
-animLocation(0,0,0),
-animDirection(0,0,0),
-vehicleSeat(0),
-speed(0),
-directionRadius(0),
-locationRadius(0),
-startRadius(0),
-signalAnimation(true),
-stance(STANCE_NULL),
-pQueryStart(0),
-pQueryEnd(0)
-{
-}
+		id(0),
+		approachLocation(0,0,0),
+		approachDirection(0,0,0),
+		animLocation(0,0,0),
+		animDirection(0,0,0),
+		vehicleSeat(0),
+		speed(0),
+		directionRadius(0),
+		locationRadius(0),
+		startRadius(0),
+		signalAnimation(true),
+		projectEndPoint(true),
+		lowerPrecision(false),
+		stance(STANCE_NULL),
+		pQueryStart(0),
+		pQueryEnd(0)
+	{
+	}
 
-void Reset()
-{
-	id = 0;
-	approachLocation.Set(0,0,0);
-	approachDirection.Set(0,0,0);
-	animLocation.Set(0,0,0);
-	animDirection.Set(0,0,0);
-	vehicleSeat = 0;
-	speed = 0;
-	directionRadius = 0;
-	locationRadius = 0;
-	startRadius = 0;
-	signalAnimation = true;
-	stance = STANCE_NULL;
-	pQueryStart = 0;
-	pQueryEnd = 0;
-	vehicleName = "";
-	animation = "";
-}
+	void Reset()
+	{
+		id = 0;
+		approachLocation.Set(0,0,0);
+		approachDirection.Set(0,0,0);
+		animLocation.Set(0,0,0);
+		animDirection.Set(0,0,0);
+		vehicleSeat = 0;
+		speed = 0;
+		directionRadius = 0;
+		locationRadius = 0;
+		startRadius = 0;
+		signalAnimation = true;
+		projectEndPoint = true;
+		lowerPrecision = false;
+		stance = STANCE_NULL;
+		pQueryStart = 0;
+		pQueryEnd = 0;
+		vehicleName = "";
+		animation = "";
+	}
 
-void Serialize(TSerialize ser, class CObjectTracker& objectTracker);
+	void Serialize(TSerialize ser, class CObjectTracker& objectTracker);
 
-int id;	// id=0 means invalid
-Vec3 approachLocation;
-Vec3 approachDirection;
-Vec3 animLocation;
-Vec3 animDirection;
-string vehicleName;
-int vehicleSeat;
-float speed;
-float directionRadius;
-float locationRadius;
-float startRadius;
-bool signalAnimation;
-string animation;
-EStance stance;
-TAnimationGraphQueryID * pQueryStart;
-TAnimationGraphQueryID * pQueryEnd;
+	int id;	// id=0 means invalid
+	Vec3 approachLocation;
+	Vec3 approachDirection;
+	Vec3 animLocation;
+	Vec3 animDirection;
+	string vehicleName;
+	int vehicleSeat;
+	float speed;
+	float directionRadius;
+	float locationRadius;
+	float startRadius;
+	bool signalAnimation;
+	bool projectEndPoint;
+	bool lowerPrecision; // lower precision should be true when passing thru a navSO
+	string animation;
+	EStance stance;
+	TAnimationGraphQueryID * pQueryStart;
+	TAnimationGraphQueryID * pQueryEnd;
 };
 
 struct IPipeUser
@@ -1204,8 +1285,9 @@ struct IPipeUser
 	virtual bool RemoveSubPipe(int goalPipeId, bool keepInserted = false)=0;
 	virtual bool IsUsingPipe(const char *name)=0;
 	virtual IAIObject *GetAttentionTarget() const =0;
+	virtual EAITargetThreat GetAttentionTargetThreat() const = 0;
+	virtual EAITargetType GetAttentionTargetType() const = 0;
 	virtual IAIObject *GetLastOpResult()=0;
-	virtual void ResetCurrentPipe() = 0;
 	virtual IAIObject* GetSpecialAIObject(const char* objName, float range = 0.0f) =0;
 	virtual void MakeIgnorant(bool ignorant) = 0;
 	virtual bool SetCharacter(const char *character, const char* behaviour = NULL)=0;
@@ -1236,8 +1318,8 @@ struct IPipeUser
 	virtual EntityId GetLastUsedSmartObjectId() const=0;
 	virtual void ClearPath( const char* dbgString )=0;
 
-	virtual void SetFireMode( EFireMode mode, bool shootLastOpResult )=0;
-	virtual EFireMode GetFireMode() const=0;
+	virtual void SetFireMode(EFireMode mode) = 0;
+	virtual EFireMode GetFireMode() const = 0;
 
 	// Add the current hideobject position to unreachable list (will be avoided for some time).
 	virtual void SetCurrentHideObjectUnreachable() = 0;
@@ -1248,6 +1330,27 @@ struct IPipeUser
 	virtual Vec3 GetLastSOExitHelperPos() = 0;
 };
 
+
+struct IGoalPipeListener
+{
+	virtual void OnGoalPipeEvent( IPipeUser* pPipeUser, EGoalPipeEvent event, int goalPipeId ) = 0;
+
+private:
+	friend class CPipeUser;
+
+	typedef std::vector< std::pair< IPipeUser*, int > > VectorRegisteredPipes;
+	VectorRegisteredPipes _vector_registered_pipes;
+
+protected:
+	virtual ~IGoalPipeListener()
+	{
+		assert( _vector_registered_pipes.empty() );
+		while ( _vector_registered_pipes.empty() == false )
+		{
+			_vector_registered_pipes.back().first->UnRegisterGoalPipeListener( this, _vector_registered_pipes.back().second );
+		}
+	}
+};
 
 
 struct IPuppet 
@@ -1269,14 +1372,14 @@ struct IPuppet
 	virtual Vec3 GetFloorPosition(const Vec3& pos) = 0;
 	// get the distance of an AI object to this, along this' path; must be called with bInit=true first time
 	// and then false other time to avoid considering path regeneration after
-	virtual float	GetDistanceAlongPath(Vec3& pos, bool bInit) = 0;
+	virtual float	GetDistanceAlongPath(const Vec3& pos, bool bInit) = 0;
 	// Sets the shape that defines the Puppet territory.
 	virtual void SetTerritoryShapeName(const char* shapeName) = 0;
 	virtual const char* GetTerritoryShapeName() = 0;
 	virtual void EnableCoverFire(bool enable) =0;
 	virtual bool IsCoverFireEnabled() const =0;
 	virtual bool GetPosAlongPath(float dist, bool extrapolateBeyond, Vec3& retPos) const = 0;
-
+	virtual IFireCommandHandler* GetFirecommandHandler() const = 0;
 };
 
 
@@ -1330,10 +1433,14 @@ struct AISIGNAL
 		return m_nCrcText == crc;
 	}
 
-	AISIGNAL():
-	nSignal(0),
-		pSender(NULL),
-		pEData(NULL) {}
+	AISIGNAL()
+	: nSignal(0)
+	, pSender(NULL)
+	, pEData(NULL)
+	, m_nCrcText(0)
+	{
+		strText[0]=0;
+	}
 	void Serialize( TSerialize ser, class CObjectTracker& objectTracker );
 
 };
@@ -1364,12 +1471,24 @@ enum EAITargetStuntReaction
 	AITSR_NONE,
 	AITSR_SEE_STUNT_ACTION,
 	AITSR_SEE_CLOAKED,
+	AITSR_LAST
+};
+
+// current phase of actor target animation
+enum ERequestedSecondaryType
+{
+	RST_ANY,
+	RST_SMOKE_GRENADE,
+	RST_FLASHBANG_GRENADE,
+	RST_FRAG_GRENADE,
 };
 
 struct SAIPredictedCharacterState
 {
+	SAIPredictedCharacterState():predictionTime(0.f),position(0,0,0),velocity(0,0,0){}
 	void Set(const Vec3 &pos, const Vec3 vel, float predT) {
 		position = pos; velocity = vel; predictionTime = predT;}
+	void Serialize( TSerialize ser );
 
 	Vec3 position; 
 	Vec3 velocity; 
@@ -1378,7 +1497,10 @@ struct SAIPredictedCharacterState
 
 struct SAIPredictedCharacterStates
 {
-	enum {maxStates = 32};
+	SAIPredictedCharacterStates():nStates(0){}
+	void Serialize( TSerialize ser );
+
+	static const int maxStates = 32;
 	SAIPredictedCharacterState states[maxStates];
 	int nStates;
 };
@@ -1397,8 +1519,10 @@ struct SOBJECTSTATE
 	bool	fire;
 	bool	fireSecondary;
 	bool	fireMelee;
+	bool	aimObstructed;
+	bool	aimTargetIsValid;	// 
+	ERequestedSecondaryType	secondaryType;
 	int		weaponAccessories;	// weapon accessories to enable.
-	bool	aimLook;
 	bool	forceWeaponAlertness;
 	int		bodystate;
 	float	lean;
@@ -1434,10 +1558,8 @@ struct SOBJECTSTATE
 	bool bReevaluate;
 	bool bTakingDamage;
 	bool bTargetEnabled;
-	enum ETargetType {TTP_NONE, TTP_VISUAL, TTP_MEMORY, TTP_AUDIO, TTP_LAST};
-	ETargetType eTargetType;
-	enum ETargetThreatening {TGT_NONE, TGT_INTERESTING, TGT_THREAT, TGT_LAST};
-	ETargetThreatening eTargetThreat;
+	EAITargetType eTargetType;
+	EAITargetThreat eTargetThreat;
 	float fDistanceFromTarget;
 	EAITargetStuntReaction eTargetStuntReaction;
 	int nTargetType;
@@ -1464,8 +1586,8 @@ struct SOBJECTSTATE
 	{
 		DEBUG_controlDirection = 0;
 		bCloseContact = false;
-		eTargetThreat = TGT_NONE;
-		eTargetType = TTP_NONE;
+		eTargetThreat = AITHREAT_NONE;
+		eTargetType = AITARGET_NONE;
 		eTargetStuntReaction = AITSR_NONE;
 		vMoveDir(0,0,0);
 		vForcedNavigation(0.0f, 0.0f, 0.0f);
@@ -1491,8 +1613,10 @@ struct SOBJECTSTATE
 		fire = false;
 		fireSecondary = false;
 		fireMelee = false;
+		secondaryType = RST_ANY;
+		aimObstructed = false;
+		aimTargetIsValid = false;
 		weaponAccessories = AIWEPA_NONE;
-		aimLook = false;
 		allowStrafing = false;
 		bodystate = 0;
 		bTakingDamage = false;
@@ -1559,28 +1683,37 @@ struct SAIBodyInfo
 	bool		isAiming;
 	bool		isFiring;
 	float		lean;	// The amount the character is leaning.
+	float		slopeAngle;
 
 	IEntity *linkedVehicleEntity;
 	IEntity *linkedDriverEntity;
 
 	SAIBodyInfo() : vEyePos(ZERO), vEyeDir(ZERO), vEyeDirAnim(ZERO), vBodyDir(ZERO), vMoveDir(ZERO), vUpDir(ZERO), vFireDir(ZERO),
-		maxSpeed(0), normalSpeed(0), minSpeed(0), stance(STANCE_NULL), stanceSize(ZERO),
-		isAiming(false), isFiring(false), linkedVehicleEntity(0), linkedDriverEntity(0), lean(0.0f) {}
+		maxSpeed(0), normalSpeed(0), minSpeed(0), stance(STANCE_NULL),
+		isAiming(false), isFiring(false), linkedVehicleEntity(0), linkedDriverEntity(0), lean(0.0f), slopeAngle(0.0f)
+	{
+		stanceSize.min=Vec3(ZERO);
+		stanceSize.max=Vec3(ZERO);
+		colliderSize.min=Vec3(ZERO);
+		colliderSize.max=Vec3(ZERO);
+	}
 };
 
 struct IWeapon;
 
-struct SAIWeaponInfo {
-
+struct SAIWeaponInfo
+{
 	bool	canMelee;
 	bool	outOfAmmo;
 	bool	shotIsDone;
 	bool	hasLightAccessory;
 	bool	hasLaserAccessory;
 	bool	isReloading;
+	bool	isFiring;
+	CTimeValue lastShotTime;
 
 	SAIWeaponInfo() : outOfAmmo(false), shotIsDone(false), canMelee(false),
-		hasLightAccessory(false), hasLaserAccessory(false), isReloading(false) {}
+		hasLightAccessory(false), hasLaserAccessory(false), isReloading(false), isFiring(false), lastShotTime(0.0f) {}
 };
 
 
@@ -1590,6 +1723,12 @@ enum EAIAGInput
 {
 	AIAG_SIGNAL,
 	AIAG_ACTION,
+};
+
+enum EObjectResetType
+{
+	AIOBJRESET_INIT,
+	AIOBJRESET_SHUTDOWN,
 };
 
 struct IUnknownProxy
@@ -1603,13 +1742,14 @@ struct IUnknownProxy
 	virtual int GetAlertnessState() const = 0;
 	virtual bool IsCurrentBehaviorExclusive() const = 0;
 	virtual bool SetCharacter( const char* character, const char* behaviour=NULL ) = 0;
+	virtual const char* GetCharacter()  =0;
 	virtual void QueryBodyInfo( SAIBodyInfo& bodyInfo ) = 0;
 	virtual bool QueryBodyInfo( EStance stance, float lean, bool defaultPose, SAIBodyInfo& bodyInfo ) = 0;
 	virtual	void QueryWeaponInfo( SAIWeaponInfo& weaponInfo ) = 0;
 	virtual	EntityId GetLinkedDriverEntityId() = 0;
 	virtual	EntityId GetLinkedVehicleEntityId() = 0;
 	virtual void Release()=0;
-	virtual void Reset() = 0;
+	virtual void Reset(EObjectResetType type) = 0;
 	virtual void Serialize( TSerialize ser ) = 0;
 
 	virtual IPhysicalEntity* GetPhysics(bool wantCharacterPhysics=false) = 0;
@@ -1637,9 +1777,11 @@ struct IUnknownProxy
 	virtual int GetActorMaxHealth() = 0;
 	virtual int GetActorArmor() = 0;
 	virtual int GetActorMaxArmor() = 0;
+	virtual bool GetActorIsFallen() const = 0;
 
-	virtual IWeapon *GetCurrentWeapon() = 0;
-	virtual IWeapon *GetSecWeapon() const = 0;
+	virtual IWeapon *GetCurrentWeapon() const = 0;
+	virtual IWeapon *GetSecWeapon( ERequestedSecondaryType prefType=RST_ANY ) const = 0;
+	virtual IEntity* GetGrabbedEntity() const = 0;
 
 	// needed for debug drawing
 	virtual bool IsUpdateAlways() const = 0;
@@ -1653,11 +1795,16 @@ struct IPuppetProxy : public IUnknownProxy
 		Vec3* pTrajectory = 0, unsigned int* trajectorySizeInOut = 0) = 0;
 
 	/// Plays readability sound.
-	virtual void PlayReadabilitySound(const char* szReadability) = 0;
+	virtual int PlayReadabilitySound(const char* szReadability, bool stopPreviousSound) = 0;
 	/// Toggles readability testing on/off (called from a console command).
 	virtual void TestReadabilityPack(bool start, const char* szReadability) = 0;
 	/// Returns the amount of time to block the readabilities of same name in a group.
 	virtual void GetReadabilityBlockingParams(const char* text, float& time, int& id) = 0;
+
+	virtual bool QueryCurrentAnimationSpeedRange(float& smin, float& smax) = 0;
+
+	virtual bool CanJumpToPoint(Vec3& dest, float theta, float maxheight, int flags, Vec3& retVelocity, float& tDest, IPhysicalEntity* pSkipEnt, Vec3* pStartPos) = 0;
+
 };
 
 struct IAIVehicleProxy : public IUnknownProxy
@@ -1699,11 +1846,6 @@ struct IGraph {
 	/// If returnSuspect then a node may be returned even if it may not be reachable
 	virtual unsigned GetEnclosing(const Vec3 &pos, IAISystem::tNavCapMask navCapMask, float passRadius = 0.0f, unsigned startIndex = 0,
 		float range = 0.0f, Vec3 * closestValid = 0, bool returnSuspect = false, const char *requesterName = "") = 0;
-	/// Get all positions (up to a maximum) that might be considered as hiding spots up to
-	/// the distance from pos starting from node pNode. Returns the number of nodes found.
-	/// If start node is not known pass null. If directions are not required pass null.
-	virtual unsigned GetHidePositionsInRange(const Vec3 &pos, float range, unsigned nodeIndex,
-		IAISystem::tNavCapMask navCapMask, Vec3* positions, Vec3* directions, float* approxRadius, bool* collidable, unsigned maxNum) = 0;
 
 	/// Restores all node/links
 	virtual void RestoreAllNavigation() = 0;

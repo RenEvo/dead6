@@ -222,24 +222,31 @@ template <class T> struct Color_tpl
 
 		// +0.001/0.003 to get 1/3 in the case of very dark colors				
 		float RNorm = (r+0.001f)*fInv;
-		float BNorm = (b+0.001f)*fInv;
+//		float BNorm = (b+0.001f)*fInv;
+		float GNorm = (g+0.001f)*fInv;
 		float Scale = RGBSum/(3.0f);
 
 		if(RNorm<0)RNorm=0;				if(RNorm>1)RNorm=1;
-		if(BNorm<0)BNorm=0;				if(BNorm>1)BNorm=1;
+//		if(BNorm<0)BNorm=0;				if(BNorm>1)BNorm=1;
+		if(GNorm<0)GNorm=0;				if(GNorm>1)GNorm=1;
 
-		return Color_tpl<T>(RNorm,Scale,BNorm);
+//		return Color_tpl<T>(RNorm,Scale,BNorm);
+		return Color_tpl<T>(RNorm,GNorm,Scale);
 	}
 
 	// mCIE: adjusted to compensate problems of DXT compression (extra bit in green channel causes green/purple artefacts)
 	// explained in CryEngine2 wiki: ColorSpaces 
 	Color_tpl<T> mCIE2RGB() const
 	{
-    float fScale=g;
+//    float fScale=g;
+		float fScale=b;
 
-		Color_tpl<T> ret;
+		Color_tpl<T> ret = *this;
 
-		ret.g = 30.0f/31.0f-r-b;
+//		ret.g = 30.0f/31.0f-r-b;
+
+//	  ret.g = 30.0f/31.0f*0.997f-r-b;		// improved grey scale
+	  ret.b = 30.0f/31.0f*0.997f-r-g;		// improved grey scale
 		ret *= 3.0f*31.0f/30.0f*fScale;
 
 		ret.Clamp();
@@ -659,8 +666,11 @@ void Color_tpl<T>::grey(const Color_tpl<T> &c)
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 //#define RGBA8(r,g,b,a)   (ColorB((uint8)(r),(uint8)(g),(uint8)(b),(uint8)(a)))
-#define RGBA8(r,g,b,a)     ((uint32)(((uint8)(r)|((uint16)((uint8)(g))<<8))|(((uint32)(uint8)(b))<<16)) | (((uint32)(uint8)(a))<<24) )
-
+#if defined(NEED_ENDIAN_SWAP)
+	#define RGBA8(a,b,g,r)     ((uint32)(((uint8)(r)|((uint16)((uint8)(g))<<8))|(((uint32)(uint8)(b))<<16)) | (((uint32)(uint8)(a))<<24) )
+#else
+	#define RGBA8(r,g,b,a)     ((uint32)(((uint8)(r)|((uint16)((uint8)(g))<<8))|(((uint32)(uint8)(b))<<16)) | (((uint32)(uint8)(a))<<24) )
+#endif
 #define Col_Black		ColorF (0.0f, 0.0f, 0.0f)
 #define Col_White		ColorF (1.0f, 1.0f, 1.0f)
 #define Col_Aquamarine		ColorF (0.439216f, 0.858824f, 0.576471f)

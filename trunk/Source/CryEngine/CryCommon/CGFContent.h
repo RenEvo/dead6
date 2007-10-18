@@ -25,7 +25,7 @@
  
 struct CMaterialCGF;
 
-#define MAX_BONES_IN_BATCH (72)
+#define MAX_BONES_IN_BATCH (50)
 
 //////////////////////////////////////////////////////////////////////////
 // This structure represents CGF node.
@@ -239,6 +239,28 @@ struct CControllerInfo
   AUTO_STRUCT_INFO
 };
 
+struct MeshCollisionInfo
+{
+	AABB m_aABB;
+	OBB m_OBB;
+	Vec3 m_Pos;
+	DynArray<short int> m_arrIndexes;
+	int m_iBoneId;
+
+	MeshCollisionInfo()
+	{
+		// This didn't help much.
+		// The BBs are reset to opposite infinites, 
+		// but never clamped/grown by any member points.
+		m_aABB.min.zero();
+		m_aABB.max.zero();
+		m_OBB.m33.SetIdentity();
+		m_OBB.h.zero();
+		m_OBB.c.zero();
+		m_Pos.zero();
+	}
+};
+
 
 struct CSkinningInfo : public _reference_target_t
 {
@@ -249,8 +271,13 @@ struct CSkinningInfo : public _reference_target_t
 	DynArray<IntSkinVertex> m_arrIntVertices; 
 	DynArray<uint16> m_arrExt2IntMap;
 	DynArray<BONE_ENTITY> m_arrBoneEntities;			//physical-bones
+	DynArray<MeshCollisionInfo> m_arrCollisions;
 
 	uint32 m_numChunks;
+	bool m_bRotatedMorphTargets;
+	bool m_bProperBBoxes;
+
+	CSkinningInfo() : m_bRotatedMorphTargets(false), m_bProperBBoxes(false) {}
 
 	~CSkinningInfo()
 	{
@@ -404,5 +431,6 @@ private:
 	CPhysicalizeInfoCGF m_physicsInfo;
 	CExportInfoCGF m_exportInfo;
 };
+
 
 #endif //__CGFContent_h__

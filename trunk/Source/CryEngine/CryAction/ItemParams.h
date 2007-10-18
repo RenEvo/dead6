@@ -159,12 +159,14 @@ public:
 	virtual const char *GetAttributeName(int i) const;
 	virtual const char *GetAttribute(int i) const;
 	virtual bool GetAttribute(int i, Vec3 &attr) const;
+	virtual bool GetAttribute(int i, Ang3 &attr) const;
 	virtual bool GetAttribute(int i, float &attr) const;
 	virtual bool GetAttribute(int i, int &attr) const;
 	virtual int GetAttributeType(int i) const;
 
 	virtual const char *GetAttribute(const char *name) const;
 	virtual bool GetAttribute(const char *name, Vec3 &attr) const;
+	virtual bool GetAttribute(const char *name, Ang3 &attr) const;
 	virtual bool GetAttribute(const char *name, float &attr) const;
 	virtual bool GetAttribute(const char *name, int &attr) const;
 	virtual int GetAttributeType(const char *name) const;

@@ -16,9 +16,11 @@ History:
 
 #pragma once
 
+class CMPHub;
+
 struct CMultiPlayerMenu::SCreateGame
 {
-  SCreateGame(IFlashPlayer* plr);
+  SCreateGame(IFlashPlayer* plr, CMPHub* hub, bool lan);
   
   string  m_name;
   string  m_password;
@@ -39,7 +41,10 @@ struct CMultiPlayerMenu::SCreateGame
   float   m_TODStart;
   float   m_TODSpeed;
   bool    m_battleDust;
-
+	bool		m_lan;
+	
+	CMPHub*	m_hub;
+	
   IFlashPlayer* m_player;
 
   bool HandleFSCommand(EGsUiCommand cmd, const char* pArgs);

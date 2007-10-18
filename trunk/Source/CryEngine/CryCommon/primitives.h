@@ -40,7 +40,7 @@ namespace primitives {
 		vector2di size;
 		vector2di stride;
 
-		int inrange(int ix, int iy) {	return isneg(ix-size.x) & isnonneg(ix) & isneg(iy-size.y) & isnonneg(iy); }
+		int inrange(int ix, int iy) {	return -((ix-size.x & -1-ix & iy-size.y & -1-iy)>>31); }
 		int getcell_safe(int ix,int iy) { int mask=-inrange(ix,iy); return iy*stride.y+ix*stride.x&mask | size.x*size.y&~mask; }
 		AUTO_STRUCT_INFO
 	};

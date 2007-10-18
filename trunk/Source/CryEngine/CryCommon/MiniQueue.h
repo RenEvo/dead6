@@ -176,6 +176,9 @@ public:
 	SIterator Begin() { return SIterator(m_vValues, m_nOffset); }
 	SIterator End() { return SIterator(m_vValues, m_nOffset + m_nValues); }
 
+	SIterator RBegin() { return SIterator(m_vValues, m_nOffset + m_nValues - 1); }
+	SIterator REnd() { return SIterator(m_vValues, m_nOffset - 1); }
+
 	struct SConstIterator
 	{
 	public:
@@ -236,6 +239,9 @@ public:
 
 	SConstIterator Begin() const { return SConstIterator(m_vValues, m_nOffset); }
 	SConstIterator End() const { return SConstIterator(m_vValues, m_nOffset + m_nValues); }
+
+	SConstIterator RBegin() const { return SConstIterator(m_vValues, m_nOffset + m_nValues - 1); }
+	SConstIterator REnd() const { return SConstIterator(m_vValues, m_nOffset - 1); }
 
 	void Erase( SIterator where )
 	{

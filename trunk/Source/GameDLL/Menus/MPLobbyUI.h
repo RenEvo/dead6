@@ -67,12 +67,12 @@ enum EJoinButtonMode
 };
 
 struct  SMPServerList;
-struct  SMPUserList;
 struct  SMPChatText;
 struct  SUserInfo;
 
 class CMPLobbyUI
 {
+	struct  SMPUserList;
 public:
   struct SServerInfo 
   {
@@ -89,13 +89,15 @@ public:
     m_recent(false),
     m_private(false),
     m_official(false),
-    m_anticheat(false)
+    m_anticheat(false),
+		m_gamepadsonly(false),
+		m_canjoin(true)
     {
     }
     string    m_hostName;
     string    m_mapName;
     string    m_gameType;
-    string    m_gameTypeName;
+    wstring   m_gameTypeName;
     string    m_gameVersion;
    
     uint32    m_publicIP;
@@ -117,37 +119,47 @@ public:
     bool      m_friendlyfire;
     bool      m_dx10;
     bool      m_dedicated;
+    bool      m_gamepadsonly;
+
+		bool			m_canjoin;//determined on client side
   };
 
   struct SServerDetails
   {
     SServerDetails():
+		m_noResponce(false),
     m_friendlyfire(false),
     m_dedicated(false),
     m_timelimit(0),
+		m_timeleft(0),
     m_voicecomm(false),
     m_anticheat(false),
-    m_gamepadsonly(false)
+    m_gamepadsonly(false),
+		m_dx10(false)
     {
     }
 
+		bool		m_noResponce;
     bool    m_friendlyfire;
     bool    m_dedicated;
     int     m_timelimit;
+		int     m_timeleft;
     bool    m_voicecomm;
     bool    m_anticheat;
     bool    m_gamepadsonly;
+		bool		m_dx10;
     
     string  m_gamever;
     string  m_gamemode;
     
     struct  SPlayerDetails
     {
-      SPlayerDetails():m_team(0),m_kills(0),m_deaths(0){}
+      SPlayerDetails():m_team(0),m_kills(0),m_deaths(0),m_iRank(0){}
       string m_name;
       string m_rank;
       int    m_team;
       int    m_kills;
+			int		 m_iRank;
       int    m_deaths;
     };
     std::vector<SPlayerDetails> m_players;
@@ -174,22 +186,23 @@ public:
   void  ChangeTab(int tab);
   
   void  ClearUserList();
-  void  AddChatUser(EChatCategory cat, int id, const char *name);
+  void  AddChatUser(EChatCategory cat, int id, const char *name, bool foreign);
   void  ChatUserStatus(EChatCategory cat, int id, EUserStatus status, const char* descr);
   void  RemoveCharUser(EChatCategory cat, int id);
   void  AddFindPerson(int id, const char *name);
   void  UpdateUsers();
   void  BlinkChat(bool blink);
   void  EnableTabs(bool fav, bool recent, bool chat);
-  void  ExpandCategory(EChatCategory cat, bool expand);
-  void  SetChatHeader(const char* text);
+  void  SetChatHeader(const char* text, const char* name);
   void  AddSearchResult(int id, const char* nick);
   void  ClearSearchResults();
   void  EnableSearchButton(bool f);
   void  SetInfoScreenId(int id);
   void  EnableInfoScreenContorls(bool add, bool ignore);
   void  SetStatusString(const char* str);
+	void  SetStatusString(const char* fmt, const char* param);
   void  SetProfileInfo(const SUserInfo& ui);
+	void  SetProfileInfoNick(const char* nick);
 
   void  SetJoinButtonMode(EJoinButtonMode m);
   void  ShowRequestDialog(const char* nick);
@@ -197,8 +210,7 @@ public:
 
   void  AddChatText(const char *text);
   void  DisplayChatText();
-  
-
+	
   void  ShowProgress(const char* text);
   void  CloseProgress();
 
@@ -206,6 +218,8 @@ public:
   void  ShowInvitation(int id, const char* nick, const char* message);
 
   void  SetJoinPassword();
+
+	void	EnableResume(bool enable);
   
 protected:
   virtual void TestChatUI();
@@ -221,6 +235,8 @@ protected:
   virtual void OnJoinWithPassword(int id){}
   virtual void OnAddIgnore(const char* nick){}
   virtual void OnStopIgnore(const char* nick){}
+	virtual void OnAddFavorite(){}
+	virtual void OnRemoveFavorite(){}
   virtual bool CanAdd(EChatCategory cat, int id, const char* nick){return true;}
   virtual bool CanIgnore(EChatCategory cat, int id, const char* nick){return true;}
 private:
@@ -239,7 +255,6 @@ private:
   void  SelectUser(int id);
   void  SetSortParams(ESortColumn, ESortType);
   void  SetChatButtonsMode(bool info, int action);
-  const char* GetCategoryName(EChatCategory)const;
   void  SetBlinkChat(bool blink);
   
   IFlashPlayer*                 m_player;//TODO: maybe _smart_ptr here?

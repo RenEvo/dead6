@@ -31,9 +31,16 @@ CVehicleMovementVTOL::CVehicleMovementVTOL()
 : m_horizontal(0.0f),
 	m_isVTOLMovement(true),
 	m_forwardInverseMult(0.2f),
-	m_wingsAnimTime(0.0f)
+	m_wingsAnimTime(1.0f),
+	m_strafeAction(0.0f),
+	m_strafeForce(1.0f),
+	m_relaxTimer(0.0f),
+	m_soundParamTurn(0.0f),
+	m_liftPitchAngle(0.0f),
+	m_wingsTimer(0.0f),
+	m_relaxPitchTime(0.0f),
+	m_relaxRollTime(0.0f)
 {
-
 }
 
 //------------------------------------------------------------------------
@@ -45,6 +52,8 @@ bool CVehicleMovementVTOL::Init(IVehicle* pVehicle, const SmartScriptTable &tabl
 	MOVEMENT_VALUE("horizFwdForce", m_horizFwdForce);
 	MOVEMENT_VALUE("horizLeftForce", m_horizLeftForce);
 	MOVEMENT_VALUE("boostForce", m_boostForce);
+	MOVEMENT_VALUE("strafeForce", m_strafeForce);
+	MOVEMENT_VALUE("angleLift", m_angleLift);
 
 	m_playerDampingBase = 0.15f;
 	m_playerDampingRotation = 0.3f;
@@ -61,9 +70,6 @@ bool CVehicleMovementVTOL::Init(IVehicle* pVehicle, const SmartScriptTable &tabl
 	m_wingHorizontalStateId = InvalidVehicleAnimStateId;
 	m_wingVerticalStateId = InvalidVehicleAnimStateId;
 
-	pWingComponentLeft = NULL;
-	pWingComponentRight = NULL;
-
 	if (!table->GetValue("timeUntilWingsRotate", m_timeUntilWingsRotate))
 		m_timeUntilWingsRotate = 0.65f;
 
@@ -72,14 +78,6 @@ bool CVehicleMovementVTOL::Init(IVehicle* pVehicle, const SmartScriptTable &tabl
 	if (!table->GetValue("wingsSpeed", m_wingsSpeed))
 		m_wingsSpeed = 1.0f;
 
-	char* pWingComponentLeftName = 0;
-	if (table->GetValue("WingComponentLeft", pWingComponentLeftName))
-		pWingComponentLeft = m_pVehicle->GetComponent(pWingComponentLeftName);
-
-	char* pWingComponentRightName = 0;
-	if (table->GetValue("WingComponentRight", pWingComponentRightName))
-		pWingComponentRight = m_pVehicle->GetComponent(pWingComponentRightName);
-
 	m_playerDampingBase *= 3.0f;
 
 	m_fwdPID.Reset();
@@ -87,16 +85,26 @@ bool CVehicleMovementVTOL::Init(IVehicle* pVehicle, const SmartScriptTable &tabl
 	m_fwdPID.m_kD = 0.2f;
 	m_fwdPID.m_kI = 0.0f;
 
-	m_relaxForce = 85.0f;
-	m_relaxTime = 0.0f;
+	m_relaxForce = 0.50f;
+	m_relaxPitchTime = 0.0f;
+	m_relaxRollTime = 0.0f;
 
 	m_playerControls.RegisterValue(&m_forwardAction, false, 0.0f, "forward");
 	m_playerControls.RegisterAction(eVAI_MoveForward, CHelicopterPlayerControls::eVM_Positive, &m_forwardAction);
 	m_playerControls.RegisterAction(eVAI_MoveBack, CHelicopterPlayerControls::eVM_Negative, &m_forwardAction);
 
+	m_playerControls.RegisterValue(&m_strafeAction, false, 0.0f, "strafe");
+	m_playerControls.RegisterAction(eVAI_StrafeLeft, CHelicopterPlayerControls::eVM_Negative, &m_strafeAction);
+	m_playerControls.RegisterAction(eVAI_StrafeRight, CHelicopterPlayerControls::eVM_Positive, &m_strafeAction);
+
+	m_playerControls.SetActionMult(eVAI_RotateYaw, m_maxYawRate * 0.4f);
+	m_playerControls.SetActionMult(eVAI_RotatePitch, m_maxYawRate * 0.4f);
+
 	m_pStabilizeVTOL = gEnv->pConsole->GetCVar("v_stabilizeVTOL");
 
-	return (pWingComponentLeft && pWingComponentRight);
+	m_maxSpeed = 75.0f;
+
+	return true;
 }
 
 //------------------------------------------------------------------------
@@ -125,7 +133,44 @@ void CVehicleMovementVTOL::Reset()
 
 	m_isVTOLMovement = true;
 
-	m_wingsAnimTime = 0.0f;
+	m_wingsAnimTime = 1.0f;
+
+	m_relaxPitchTime = 0.0f;
+	m_relaxRollTime = 0.0f;
+
+	m_strafeAction = 0.0f;
+
+	m_relaxTimer = 0.0f;
+
+	m_soundParamTurn = 0.0f;
+
+	m_liftPitchAngle = 0.0f;
+}
+
+//------------------------------------------------------------------------
+void CVehicleMovementVTOL::SetHorizontalMode(float horizontal)
+{
+	if (horizontal > 0.0f)
+	{
+		m_horizontal = horizontal;
+
+		m_maxFwdSpeed = m_maxFwdSpeedHorizMode * 0.25f;
+		m_maxFwdSpeed += m_maxFwdSpeedHorizMode * 0.75f * m_horizontal;
+
+		m_maxUpSpeed = m_maxUpSpeedHorizMode * 0.50f;
+		m_maxUpSpeed += m_maxUpSpeedHorizMode * 0.5f * (1.0f - m_horizontal);
+
+		m_engineUpDir.Set(0.0f, 1.0f, 0.0f);
+	}
+	else
+	{
+		m_horizontal = 0.0f;
+
+		m_maxFwdSpeed = m_maxFwdSpeedHorizMode * 0.25f;
+		m_maxUpSpeed = m_maxUpSpeedHorizMode;
+
+		m_engineUpDir.Set(0.0f, 0.0f, 1.0f);
+	}
 }
 
 //------------------------------------------------------------------------
@@ -133,15 +178,36 @@ void CVehicleMovementVTOL::PreProcessMovement(const float deltaTime)
 {
 	CVehicleMovementHelicopter::PreProcessMovement(deltaTime);
 
+	if (abs(m_forwardAction) > 0.0f && m_timeOnTheGround <= 0.01f)
+		SetHorizontalMode(1.0f);
+	else
+		SetHorizontalMode(0.0f);
+
+	if (m_forwardAction > 0.0f && m_timeOnTheGround <= 0.01f)
+	{
+		m_wingsTimer += deltaTime;
+		m_wingsTimer = min(m_wingsTimer, m_timeUntilWingsRotate);
+	}
+	else
+	{
+		m_wingsTimer -= deltaTime * 0.65f;
+		m_wingsTimer = max(m_wingsTimer, 0.0f);
+	}
+
+	Interpolate(m_wingsAnimTime, 1.0f - (m_wingsTimer / m_timeUntilWingsRotate), m_wingsSpeed, deltaTime);
+
 	if (!m_isVTOLMovement)
 		return;
 	
 	IPhysicalEntity* pPhysics = GetPhysics();
 	assert(pPhysics);
 
+	float gravity;
 	pe_simulation_params paramsSim;
-	pPhysics->GetParams(&paramsSim);
-	float gravity = abs(paramsSim.gravity.z);
+	if (pPhysics->GetParams(&paramsSim))
+		gravity = abs(paramsSim.gravity.z);
+	else
+		gravity = 9.2f;
 
 	float vertical = 1.0f - m_horizontal;
 
@@ -149,8 +215,8 @@ void CVehicleMovementVTOL::PreProcessMovement(const float deltaTime)
 	m_engineForce = 0.0f;
 	m_engineForce += gravity * vertical * m_enginePower;
 	m_engineForce += m_horizontal * m_enginePower;
- 
-	Matrix33 tm(m_pVehicle->GetEntity()->GetWorldTM());
+
+	Matrix33 tm( m_PhysPos.q);
 	Ang3 angles = Ang3::GetAnglesXYZ(tm);
 
  	m_workingUpDir = m_engineUpDir; //Vec3(0.0f, 0.0f, 1.0f);
@@ -162,34 +228,42 @@ void CVehicleMovementVTOL::PreProcessMovement(const float deltaTime)
 	m_workingUpDir.z += 0.25f;
 	m_workingUpDir.NormalizeSafe();
 
-	float strafe = angles.y / DEG2RAD(45.0f);
-	strafe = min(1.0f, max(-1.0f, strafe));
+	float strafe = m_strafeAction * m_strafeForce;
 
 	if (m_noHoveringTimer <= 0.0f)
 	{
 		Vec3 forwardImpulse;
 
+		float turbulenceMult = 1.0f - min(m_turbulenceMultMax, m_turbulence);
+
 		forwardImpulse = m_currentFwdDir * m_enginePower * m_horizFwdForce * m_horizontal
-			* (m_forwardAction + (Boosting() * m_boostForce));
+			* (m_forwardAction + (Boosting() * m_boostForce)) * GetDamageMult() * turbulenceMult;
 
 		if (m_forwardAction < 0.0f)
 			forwardImpulse *= m_forwardInverseMult;
 
 		forwardImpulse += m_currentUpDir * m_liftAction * m_enginePower * gravity;
-		forwardImpulse += m_currentLeftDir * -strafe * m_enginePower * m_horizLeftForce;
-		forwardImpulse += m_currentUpDir * gravity * m_horizontal * 0.5f;
+		Vec3 fakeLeftDir = tm * Vec3(-1.0f, 0.0f, 0.0f);
+		fakeLeftDir.z = 0.0f;
+		forwardImpulse += fakeLeftDir * -strafe * m_enginePower * m_horizLeftForce * turbulenceMult;
 
-		static float horizDamp = 0.25f;
-		static float vertDamp = 0.50f;
+ 		float horizDamp = 0.25f;
+		static float vertDamp = 0.0f;
 
-		m_control.impulse += forwardImpulse;
-		m_control.impulse.x -= m_statusDyn.v.x * horizDamp;
-		m_control.impulse.y -= m_statusDyn.v.y * horizDamp;
-		m_control.impulse.z -= m_statusDyn.v.z * vertDamp;
+		if ( m_movementAction.isAI )
+			horizDamp *= abs(m_turnAction * 4.0f) + 1.0f;
+		else
+			horizDamp = m_velDamp;
+
+ 		m_control.impulse += forwardImpulse;
+		m_control.impulse.x -= m_PhysDyn.v.x * horizDamp * turbulenceMult;
+		m_control.impulse.y -= m_PhysDyn.v.y * horizDamp * turbulenceMult;
+		m_control.impulse.z -= m_PhysDyn.v.z * vertDamp * turbulenceMult;
 	}
 
 	m_workingUpDir.z += 0.45f * m_liftAction;
 	m_workingUpDir.NormalizeSafe();
+
 
 	return;
 }
@@ -247,9 +321,12 @@ void CVehicleMovementVTOL::ProcessActions(const float deltaTime)
 {
 	FUNCTION_PROFILER( GetISystem(), PROFILE_GAME );
 
-	m_playerControls.ProcessActions(deltaTime);
+	UpdateDamages(deltaTime);
+	UpdateEngine(deltaTime);
 
-	const float rotationForce = 0.07f;
+	m_velDamp = 0.25f;
+
+	m_playerControls.ProcessActions(deltaTime);
 
 	Limit(m_forwardAction, -1.0f, 1.0f);
 	Limit(m_strafeAction, -1.0f, 1.0f);
@@ -259,8 +336,6 @@ void CVehicleMovementVTOL::ProcessActions(const float deltaTime)
 	Vec3 worldPos = m_pEntity->GetWorldPos();
 
 	IPhysicalEntity* pPhysics = GetPhysics();
-	pe_status_dynamics dyn;
-	pPhysics->GetStatus(&dyn);
 
 	// get the current state
 
@@ -285,13 +360,66 @@ void CVehicleMovementVTOL::ProcessActions(const float deltaTime)
 	// +ve direction mean rotation anti-clockwise about the z axis - 0 means along y
 	float currentDir = angles.z;
 
+	const float maxPitchAngle = 60.0f;
+	
+	float pitchDeg = RAD2DEG(currentPitch);
+	if (pitchDeg >= (maxPitchAngle * 0.75f))
+	{
+		float mult = pitchDeg / (maxPitchAngle);
+		
+		if (mult > 1.0f && m_desiredPitch < 0.0f)
+		{
+			m_desiredPitch *= 0.0f;
+			m_actionPitch *= 0.0f;
+			m_desiredPitch += 0.2f * mult;
+		}
+		else if (m_desiredPitch < 0.0f)
+		{
+			m_desiredPitch *= (1.0f - mult);
+			m_desiredPitch += 0.05f;
+		}
+	}
+	else if (pitchDeg <= (-maxPitchAngle * 0.75f))
+	{
+		float mult = abs(pitchDeg) / (maxPitchAngle);
+
+		if (mult > 1.0f && m_desiredPitch > 0.0f)
+		{
+			m_desiredPitch *= 0.0f;
+			m_actionPitch *= 0.0f;
+			m_desiredPitch += 0.2 * mult;
+		}
+		else if (m_desiredPitch > 0.0f)
+		{
+			m_desiredPitch *= (1.0f - mult);
+			m_desiredPitch -= 0.05f;
+		}
+	}
+
+	if (currentRoll >= DEG2RAD(m_maxRollAngle * 0.7f) && m_desiredRoll > 0.001f)
+	{
+		float r = currentRoll / DEG2RAD(m_maxRollAngle);
+		r = min(1.0f, r * 1.0f);
+		r = 1.0f - r;
+		m_desiredRoll *= r;
+		m_desiredRoll = min(1.0f, m_desiredRoll);
+	}
+	else if (currentRoll <= DEG2RAD(-m_maxRollAngle * 0.7f) && m_desiredRoll < 0.001f)
+	{
+		float r = abs(currentRoll) / DEG2RAD(m_maxRollAngle);
+		r = min(1.0f, r * 1.0f);
+		r = 1.0f - r;
+		m_desiredRoll *= r;
+		m_desiredRoll = max(-1.0f, m_desiredRoll);
+	}
+
 	Vec3 currentFwdDir2D = m_currentFwdDir;
 	currentFwdDir2D.z = 0.0f;
 	currentFwdDir2D.NormalizeSafe();
 
 	Vec3 currentLeftDir2D(-currentFwdDir2D.y, currentFwdDir2D.x, 0.0f);
 
-	Vec3 currentVel = dyn.v;
+	Vec3 currentVel = m_PhysDyn.v;
 	Vec3 currentVel2D = currentVel;
 	currentVel2D.z = 0.0f;
 
@@ -300,28 +428,10 @@ void CVehicleMovementVTOL::ProcessActions(const float deltaTime)
 
 	ProcessActions_AdjustActions(deltaTime);
 
-	float damping = m_playerDampingBase;
 	float inputMult = m_basicSpeedFraction;
 
 	// desired things
 	float turnDecreaseScale = m_yawDecreaseWithSpeed / (m_yawDecreaseWithSpeed + fabs(currentFwdSpeed));
-	float turnIncreaseScale = 1.0f - turnDecreaseScale;
-
-	m_desiredDir -= turnDecreaseScale * m_turnAction * m_maxYawRate * deltaTime;
-
-	while (m_desiredDir < -gf_PI)
-		m_desiredDir += 2.0f * gf_PI;
-	while (m_desiredDir > gf_PI)
-		m_desiredDir -= 2.0f * gf_PI;
-
-	while (currentDir < m_desiredDir - gf_PI)
-		currentDir += 2.0f * gf_PI;
-	while (currentDir > m_desiredDir + gf_PI)
-		currentDir -= 2.0f * gf_PI;
-
-	float delta = m_desiredDir - currentDir;
-
-	m_desiredDir = currentDir + delta;
 
 	Vec3 desired_vel2D = 
 		currentFwdDir2D * m_forwardAction * m_maxFwdSpeed * inputMult + 
@@ -334,31 +444,52 @@ void CVehicleMovementVTOL::ProcessActions(const float deltaTime)
 	float desiredTiltAngle = m_tiltPerVelDifference * desiredVelChange2D.GetLength();
 	Limit(desiredTiltAngle, -m_maxTiltAngle, m_maxTiltAngle);
 
-	float sensivity;
-	if (m_pAirControlSensivity)
-		sensivity = m_pAirControlSensivity->GetFVal();
-	else
-		sensivity = 1.0f;
-
 	float goal = abs(m_desiredPitch) + abs(m_desiredRoll);
 	goal *= 1.5f;
 	Interpolate(m_playerAcceleration, goal, 0.25f, deltaTime);
 	Limit(m_playerAcceleration, 0.0f, 5.0f);
 
-	if (m_pInvertPitchVar && m_pInvertPitchVar->GetIVal() == 1)
-		m_actionPitch += m_pitchActionPerTilt * m_desiredPitch * (m_playerAcceleration + 1.0f) * sensivity;
-	else
-		m_actionPitch -= m_pitchActionPerTilt * m_desiredPitch * (m_playerAcceleration + 1.0f) * sensivity;
+	//static float g_angleLift = 4.0f;
+
+	if (abs(m_liftAction) > 0.001f && abs(m_forwardAction) < 0.001)
+	{
+		float pitch = RAD2DEG(currentPitch);
+
+		if (m_liftPitchAngle < 0.0f && m_liftAction > 0.0f)
+			m_liftPitchAngle = 0.0f;
+		else if (m_liftPitchAngle > 0.0f && m_liftAction < 0.0f)
+			m_liftPitchAngle = 0.0f;
+
+		Interpolate(m_liftPitchAngle, 1.25f * m_liftAction, 0.75f, deltaTime);
+
+		if (m_liftPitchAngle < 1.0f && m_liftPitchAngle > -1.0f)
+			m_desiredPitch += 0.05f * m_liftAction;
+	}
+	else if (m_liftAction < 0.001f && abs(m_liftPitchAngle) > 0.001)
+	{
+		Interpolate(m_liftPitchAngle, 0.0f, 1.0f, deltaTime);
+		m_desiredPitch += 0.05f * -m_liftPitchAngle;
+	}
+
+	/* todo
+	else if (m_liftAction < -0.001f)
+	{
+		m_desiredPitch += min(0.0f, (DEG2RAD(-5.0f) - currentPitch)) * 0.5f * m_liftAction;
+	}*/
+
+	if (!iszero(m_desiredPitch))
+	{
+		m_actionPitch -= m_desiredPitch * m_pitchInputConst;
+		Limit(m_actionPitch, -m_maxYawRate, m_maxYawRate);
+	}
 
 	float rollAccel = 1.0f;
 	if (abs(currentRoll + m_desiredRoll) < abs(currentRoll))
 		rollAccel *= 1.25f;
 
-	m_actionRoll += m_pitchActionPerTilt * m_desiredRoll * rollAccel * (m_playerAcceleration + 1.0f) * sensivity;
+	m_actionRoll += m_pitchActionPerTilt * m_desiredRoll * rollAccel * (m_playerAcceleration + 1.0f);
 	Limit(m_actionRoll, -10.0f, 10.0f);
 	Limit(m_actionPitch, -10.0f, 10.0f);
-
-	float workingDesiredDir = m_desiredDir;
 
 	// roll as we turn
 	if (!m_strafeAction)
@@ -366,20 +497,39 @@ void CVehicleMovementVTOL::ProcessActions(const float deltaTime)
 		m_actionYaw += m_yawPerRoll * currentRoll;
 	}
 
-	if (!iszero(m_turnAction))
+	if (abs(m_strafeAction) > 0.001f)
 	{
-		m_actionYaw += (workingDesiredDir - currentDir) * m_yawInputConst;
-		m_actionYaw += m_yawInputDamping * (currentDir - m_lastDir) / deltaTime;
-		m_actionRoll += m_extraRollForTurn * m_turnAction;
+		float side = 0.0f;
+		side = min(1.0f, max(-1.0f, m_strafeAction));
 
-		Limit(m_actionYaw, -10.0f, 10.0f);
+		float roll = DEG2RAD(m_extraRollForTurn * 0.25f * side) - (currentRoll);
+		m_actionRoll += max(0.0f, abs(roll)) * side * 1.0f;
+	}
+
+	float relaxRollTolerance = 0.0f;
+
+	if (abs(m_turnAction) > 0.01f || abs(m_PhysDyn.w.z) > DEG2RAD(3.0f))
+	{
+		m_actionYaw += -m_turnAction * m_yawInputConst * GetDamageMult();
+
+		float side = 0.0f;
+		if (abs(m_turnAction) > 0.01f)
+			side = min(1.0f, max(-1.0f, m_turnAction));
+
+		float roll = DEG2RAD(m_extraRollForTurn * side) - (currentRoll);
+		m_actionRoll += max(0.0f, abs(roll)) * side * m_rollForTurnForce;
+
+		roll *= max(1.0f, abs(m_PhysDyn.w.z));
+
+		m_actionRoll += roll;
+
+		Limit(m_actionYaw, -m_maxYawRate, m_maxYawRate);
 	}
 
 	m_desiredDir = currentDir;
 	m_lastDir = currentDir;
 
 	float boost = Boosting() ? m_boostMult : 1.0f;
-
 	float liftActionMax = 1.0f;
 
 	if (m_pAltitudeLimitVar)
@@ -412,8 +562,17 @@ void CVehicleMovementVTOL::ProcessActions(const float deltaTime)
 
 			m_liftAction *= mult;
 
-			if (currentPitch > DEG2RAD(5.0f) && m_forwardAction > 0.0f)
-				m_forwardAction *= mult;
+			if (currentPitch > DEG2RAD(0.0f))
+			{
+				if (m_forwardAction > 0.0f)
+					m_forwardAction *= mult;
+
+				if (m_actionPitch > 0.0f)
+				{
+					m_actionPitch *= mult;
+					m_actionPitch += -currentPitch;
+				}
+			}
 
 			m_desiredHeight = min(altitudeLowerOffset, currentHeight);
 		}
@@ -434,18 +593,28 @@ void CVehicleMovementVTOL::ProcessActions(const float deltaTime)
 	{
 		if (m_noHoveringTimer <= 0.0f)
 		{
+			float gravity;
+
 			pe_simulation_params paramsSim;
-			pPhysics->GetParams(&paramsSim);
-			float gravity = abs(paramsSim.gravity.z);
+			if (pPhysics->GetParams(&paramsSim))
+				gravity = abs(paramsSim.gravity.z);
+			else
+				gravity = 9.2f;
 
 			float upDirZ = m_workingUpDir.z;
 
-			if (upDirZ > 0.9f)
+			if (abs(m_forwardAction) > 0.01)
+				upDirZ = 1.0f;
+			else if (upDirZ > 0.8f)
 				upDirZ = 1.0f;
 
+			float upPower = upDirZ;
+			upPower -= min(1.0f, abs(m_forwardAction) * abs(angles.x));
+
+			float turbulenceMult = 1.0f - min(m_turbulenceMultMax, m_turbulence);
 			Vec3& impulse = m_control.impulse;
-			impulse += Vec3(0.0f, 0.0f, upDirZ) * gravity;
-			impulse.z -= dyn.v.z;
+			impulse += Vec3(0.0f, 0.0f, upPower) * gravity * turbulenceMult * GetDamageMult();
+			impulse.z -= m_PhysDyn.v.z * turbulenceMult;
 		}
 		else
 		{
@@ -453,53 +622,51 @@ void CVehicleMovementVTOL::ProcessActions(const float deltaTime)
 		}
 	}
 
-	if (m_netActionSync.PublishActions( CNetworkMovementHelicopter(this) ))
-		m_pVehicle->GetGameObject()->ChangedNetworkState(eEA_GameClientDynamic);
-
 	if (m_pStabilizeVTOL)
 	{
 		float stabilizeTime = m_pStabilizeVTOL->GetFVal();
 
 		if (stabilizeTime > 0.0f)
 		{
-			float pitchTarget;
-
-			if (m_horizontal >= 1.0f)
-				pitchTarget = DEG2RAD(3.0f);
+			if (m_relaxTimer < 6.0f)
+				m_relaxTimer += deltaTime;
 			else
-				pitchTarget = 0.0f;
-
-			if (abs(m_actionPitch) < 0.001f && abs(m_actionRoll) < 0.001f)
 			{
-				if (m_relaxTime >= stabilizeTime)
-				{
-					float relaxRatio = m_relaxTime / stabilizeTime;
-					m_actionPitch += (pitchTarget - currentPitch) * deltaTime * m_relaxForce * relaxRatio;
-					m_actionRoll += -currentRoll * deltaTime * m_relaxForce * relaxRatio;
-				}
+				float pitchTarget;
+
+				if (m_horizontal >= 1.0f)
+					pitchTarget = DEG2RAD(0.0f);
 				else
-				{
-					m_relaxTime += deltaTime;
-				}
+					pitchTarget = 0.0f;
+
+				const float g_relaxPitchAnglesWithin = 0.0f;
+
+				float r = currentRoll - relaxRollTolerance;
+				r = min(1.0f, max(-1.0f, r));
+
+				m_actionRoll += -r * m_relaxForce * (m_relaxTimer / 6.0f);
 			}
-			else
-			{
-				m_relaxTime = 0.0f;
-			}
+
 		}
 	}
+
+	if (m_netActionSync.PublishActions( CNetworkMovementHelicopter(this) ))
+		m_pVehicle->GetGameObject()->ChangedNetworkState(eEA_GameClientDynamic);
 }
 
-//------------------------------------------------------------------------
+//////////////////////////////////////////////////////////////////////////
+// NOTE: This function must be thread-safe. Before adding stuff contact MarcoC.
 void CVehicleMovementVTOL::ProcessAI(const float deltaTime)
 {
 	FUNCTION_PROFILER( GetISystem(), PROFILE_GAME );
-
+	
 	if (!m_isVTOLMovement)
 	{
 		CVehicleMovementHelicopter::ProcessAI(deltaTime);
 		return;
 	}
+
+	m_velDamp = 0.15f;
 
 	const float maxDirChange = 15.0f;
 
@@ -512,14 +679,11 @@ void CVehicleMovementVTOL::ProcessAI(const float deltaTime)
 	ResetActions();
 
 	// Our current state
-	const Vec3 worldPos = m_pEntity->GetWorldPos();
-	const Ang3 worldAngles = m_pEntity->GetWorldAngles();
-	const Matrix33 worldMat(m_pEntity->GetRotation());
+	const Vec3 worldPos =  m_PhysPos.pos;
+	const Matrix33 worldMat( m_PhysPos.q);
+	Ang3 worldAngles = Ang3::GetAnglesXYZ(worldMat);
 
-	pe_status_dynamics	status;
-	IPhysicalEntity*	pPhysics = m_pEntity->GetPhysics();
-	pPhysics->GetStatus(&status);
-	const Vec3 currentVel = status.v;
+	const Vec3 currentVel = m_PhysDyn.v;
 	const Vec3 currentVel2D(currentVel.x, currentVel.y, 0.0f);
 	// +ve direction mean rotation anti-clocwise about the z axis - 0 means along y
 	float currentDir = worldAngles.z;
@@ -609,7 +773,7 @@ void CVehicleMovementVTOL::ProcessAI(const float deltaTime)
 		}
 	}
 
-	float currentHeight = m_pEntity->GetWorldPos().z;
+	float currentHeight = m_PhysPos.pos.z;
 	if ( m_aiRequest.HasMoveTarget() )
 	{
 		m_hoveringPower = m_powerPID.Update(currentVel.z, desiredVel.z, -1.0f, 4.0f);
@@ -638,7 +802,7 @@ void CVehicleMovementVTOL::ProcessAI(const float deltaTime)
 		m_hoveringPower = m_powerPID.Update(currentVel.z, m_desiredHeight - currentHeight, -1.0f, 1.0f);
 		m_liftAction = 0.0f;
 
-		if (m_pVehicle->GetAltitude() > 10.0f)
+		if (m_pVehicle->GetAltitude() > 10.0f)	//TODO: this line is not MTSafe
 			m_liftAction = m_forwardAction;
 	}
 
@@ -650,20 +814,8 @@ void CVehicleMovementVTOL::ProcessAI(const float deltaTime)
 	Limit(m_actionYaw, -1.0f, 1.0f);
 
 	if (m_horizontal > 0.0001f)
-		m_desiredHeight = m_pVehicle->GetEntity()->GetWorldPos().z;
-
-	if (g_pGameCVars->v_profileMovement == 2)
-	{
-		IRenderer* pRenderer = gEnv->pRenderer;
-		Vec3 localAngles = m_pEntity->GetWorldAngles();
-		float color[4] = {1,1,1,1};
-
-		pRenderer->Draw2dLabel(5.0f, 325.0f, 1.5f, color, false, "forwardAction: %f", m_forwardAction);
-		pRenderer->Draw2dLabel(5.0f, 340.0f, 1.5f, color, false, "desired speed: %f vel: %f, %f %f", desiredSpeed, desiredVel.x, desiredVel.y, desiredVel.z);
-		pRenderer->Draw2dLabel(5.0f, 355.0f, 1.5f, color, false, "desiredMoveDir: %f, %f %f", desiredMoveDir.x, desiredMoveDir.y, desiredMoveDir.z);
-		pRenderer->Draw2dLabel(5.0f, 370.0f, 1.5f, color, false, "wingsTimer: %f", m_wingsTimer);
-	}
-
+		m_desiredHeight = m_PhysPos.pos.z;
+	
 	Limit(m_forwardAction, -1.0f, 1.0f);
 }
 
@@ -684,7 +836,6 @@ void CVehicleMovementVTOL::OnEvent(EVehicleMovementEvent event, const SVehicleMo
 			else
 				m_pWingsAnimation->ChangeState(m_wingVerticalStateId);
 		}
-
 	}
 }
 
@@ -694,39 +845,76 @@ void CVehicleMovementVTOL::Update(const float deltaTime)
 	FUNCTION_PROFILER( GetISystem(), PROFILE_GAME );
 
 	CVehicleMovementHelicopter::Update(deltaTime);
-
-	if (!iszero(m_forwardAction))
-	{
-		m_wingsTimer += deltaTime;
-		m_wingsTimer = min(m_wingsTimer, m_timeUntilWingsRotate);
-
-		m_horizontal = 1.0f;
-
-		m_maxFwdSpeed = m_maxFwdSpeedHorizMode * 0.25f;
-		m_maxFwdSpeed += m_maxFwdSpeedHorizMode * 0.75f * m_horizontal;
-
-		m_maxUpSpeed = m_maxUpSpeedHorizMode * 0.50f;
-		m_maxUpSpeed += m_maxUpSpeedHorizMode * 0.5f * (1.0f - m_horizontal);
-
-		m_engineUpDir.Set(0.0f, 1.0f, 0.0f);
-	}
-	else
-	{
-		m_wingsTimer -= deltaTime * 0.65f;
-		m_wingsTimer = max(m_wingsTimer, 0.0f);
-
-		m_horizontal = 0.0f;
-
-		m_maxFwdSpeed = m_maxFwdSpeedHorizMode * 0.25f;
-		m_maxUpSpeed = m_maxUpSpeedHorizMode;
-		
-		m_engineUpDir.Set(0.0f, 0.0f, 1.0f);
-	}
+	CryAutoLock<CryFastLock> lk(m_lock);
 
 	if (m_pWingsAnimation)
 	{
-		Interpolate(m_wingsAnimTime, 1.0f - (m_wingsTimer / m_timeUntilWingsRotate), m_wingsSpeed, deltaTime);
 		m_pWingsAnimation->SetTime(m_wingsAnimTime);
+	}
+
+	IActorSystem* pActorSystem = g_pGame->GetIGameFramework()->GetIActorSystem();
+	assert(pActorSystem);
+
+	IActor* pActor = pActorSystem->GetActor(m_actorId);
+	if (pActor && pActor->IsClient())
+	{
+		float turbulence = m_turbulence;
+
+		if (m_pAltitudeLimitVar)
+		{
+			float altitudeLimit = m_pAltitudeLimitVar->GetFVal();
+			float currentHeight = m_pEntity->GetWorldPos().z;
+
+			if (!iszero(altitudeLimit))
+			{
+				float altitudeLowerOffset;
+
+				if (m_pAltitudeLimitLowerOffsetVar)
+				{
+					float r = 1.0f - min(1.0f, max(0.0f, m_pAltitudeLimitLowerOffsetVar->GetFVal()));
+					altitudeLowerOffset = r * altitudeLimit;
+
+					if (currentHeight >= altitudeLowerOffset)
+					{
+						if (currentHeight > altitudeLowerOffset)
+						{
+							float zone = altitudeLimit - altitudeLowerOffset;
+							turbulence += (currentHeight - altitudeLowerOffset) / (zone);
+						}
+					}
+				}
+			}
+		}
+
+		if (turbulence > 0.0f)
+		{
+			static_cast<CActor*>(pActor)->CameraShake(0.50f * turbulence, 0.0f, 0.05f, 0.04f, Vec3(0.0f, 0.0f, 0.0f), 10, "VTOL_Update_Turbulence");
+		}
+
+		float enginePowerRatio = m_enginePower / m_enginePowerMax;
+
+		if (enginePowerRatio > 0.0f)
+		{
+			float rpmScaleDesired = 0.2f;
+			rpmScaleDesired += abs(m_forwardAction) * 0.8f;
+			rpmScaleDesired += abs(m_strafeAction) * 0.4f;
+			rpmScaleDesired += abs(m_turnAction) * 0.25f;
+			rpmScaleDesired = min(1.0f, rpmScaleDesired);
+			Interpolate(m_rpmScale, rpmScaleDesired, 1.0f, deltaTime);
+		}
+
+		float turnParamGoal = min(1.0f, abs(m_turnAction)) * 0.6f;
+		turnParamGoal *= (min(1.0f, max(0.0f, m_speedRatio)) + 1.0f) * 0.50f;
+		turnParamGoal += turnParamGoal * m_boost * 0.25f;
+		Interpolate(m_soundParamTurn, turnParamGoal, 0.5f, deltaTime);
+		SetSoundParam(eSID_Run, "turn", m_soundParamTurn);
+
+		float damage = GetSoundDamage();
+		if (damage > 0.1f)
+		{ 
+			//if (ISound* pSound = GetOrPlaySound(eSID_Damage, 5.f, m_enginePos))
+				//SetSoundParam(pSound, "damage", damage);        
+		}
 	}
 }
 
@@ -735,9 +923,8 @@ void CVehicleMovementVTOL::UpdateEngine(float deltaTime)
 {
 	// will update the engine power up to the maximum according to the ignition time
 
-	float damageMult = 0.2f;
-	damageMult += (1.0f - min(1.0f, pWingComponentLeft->GetDamageRatio())) * 0.4f;
-	damageMult += (1.0f - min(1.0f, pWingComponentRight->GetDamageRatio())) * 0.4f;
+	float damageMult = GetDamageMult();
+
 	float enginePowerMax = m_enginePowerMax * damageMult; 
 
 	if (m_isEnginePowered && !m_isEngineGoingOff)
@@ -766,8 +953,39 @@ void CVehicleMovementVTOL::UpdateEngine(float deltaTime)
 	}
 }
 
+//------------------------------------------------------------------------
+float CVehicleMovementVTOL::GetDamageMult()
+{
+	float damageMult = (1.0f - min(1.0f, m_damage)) * 0.75f;
+	damageMult += 0.25f;
+
+	return damageMult;
+}
+
+//------------------------------------------------------------------------
 void CVehicleMovementVTOL::GetMemoryStatistics(ICrySizer * s)
 {
 	s->Add(*this);
 	CVehicleMovementHelicopter::GetMemoryStatistics(s);
+}
+
+//------------------------------------------------------------------------
+void CVehicleMovementVTOL::Serialize(TSerialize ser, unsigned aspects)
+{
+	CVehicleMovementHelicopter::Serialize(ser, aspects);
+
+	if ((ser.GetSerializationTarget() == eST_Network) &&(aspects & eEA_GameClientDynamic))
+	{
+		ser.Value("wings", m_wingsAnimTime, 'unit');
+	}
+	else
+	{
+		ser.Value("horizontal", m_horizontal);
+		ser.Value("wingsTime", m_wingsAnimTime);
+		ser.Value("forwardAction", m_forwardAction);
+		ser.Value("isVTOLMovement", m_isVTOLMovement); // for ai
+
+		if (ser.IsReading())
+			SetHorizontalMode(m_horizontal);
+	}
 }

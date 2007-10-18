@@ -412,20 +412,6 @@ inline bool QQinvertMatrixf(float *out, const float *m)
 #undef SWAP_ROWS
 }
 
-inline float cryISqrtf(float fVal)
-{
-  unsigned int *n1 = (unsigned int *)&fVal;
-  unsigned int n = 0x5f3759df - (*n1 >> 1);
-  float *n2 = (float *)&n;
-  fVal = (1.5f - (fVal * 0.5f) * *n2 * *n2) * *n2;
-  return fVal;
-}
-
-inline float crySqrtf(float fVal)
-{
-  return 1.0f / cryISqrtf(fVal);
-}
-
 #if defined _CPU_X86 && !defined(LINUX)
 // ***************************************************************************
 inline void cryPrecacheSSE(const void *src, int nbytes)
@@ -515,9 +501,9 @@ ILINE void cryPrefetchT0SSE(const void *src)
     mov esi, src
     prefetchT0 [ESI] // Prefetch
   }
-#endif
-
+#else
 	_MM_PREFETCH( (char*)src, _MM_HINT_T0 );
+#endif
 }
 
 //=================================================================================
@@ -2973,6 +2959,7 @@ inline void mathMatrixPerspectiveOffCenter(Matrix44* pMatr, f32 l, f32 r, f32 b,
 }
 
 
+//RH
 inline void mathMatrixLookAt(Matrix44* pMatr, const Vec3& Eye, const Vec3& At, const Vec3& Up)
 {
 	Vec3 vLightDir = (Eye - At);
@@ -3248,6 +3235,119 @@ inline Vec3* mathVec3TransformCoordArray(	Vec3 *pOut,
 
 
 #pragma warning(pop)
+
+#if defined(PS3)
+	#if defined(__SPU__)
+		#include <spu_intrinsics.h>	
+		#include <vmx2spu.h>
+	#else
+		#include <ppu_intrinsics.h>	
+		#include <si2vmx.h>
+	#endif
+	__attribute__((always_inline))
+	ILINE void CryPrefetch(const void* const cpSrc)
+	{
+		#if defined(__SPU__)
+			__spu_dma_pref((unsigned int)cpSrc);
+		#else
+			__dcbt((unsigned int)cpSrc & ~127);
+		#endif//__SPU__
+	}
+
+	#undef _MM_PREFETCH
+	#undef _MM_PREFETCH_LOOP
+	#define _MM_PREFETCH( MemPtr,Hint ) CryPrefetch(MemPtr)
+	#define _MM_PREFETCH_LOOP( nCount,MemPtr,Hint ) CryPrefetch(MemPtr)
+
+	#define _MM_HINT_T0     (1)
+	#define _MM_HINT_T1     (2)
+	#define _MM_HINT_T2     (3)
+	#define _MM_HINT_NTA    (0)
+
+	#define _mm_prefetch( MemPtr,Hint ) CryPrefetch(MemPtr)
+	#define cryPrecacheSSE(src, nbytes) CryPrefetch(src)
+	#define cryPrecacheMMX(src, nbytes) CryPrefetch(src)
+	#define cryPrefetchNTSSE(src) CryPrefetch(src)
+	#define cryPrefetchT0SSE(src) CryPrefetch(src)
+	#define cryPrefetch(src, count) CryPrefetch(src)
+
+	#if defined(PS3OPT)
+		//map sse intrinsics to ppu(altivec)/spu intrinsics
+		#define _CPU_SSE
+		#define __m128 qword
+
+		ILINE __m128 _mm_load_ps(float * p){return (__m128)*(vec_float4*)p;}
+		ILINE void _mm_store_ps(float *p, __m128 a){*(vec_float4*)p = (vec_float4)a;}
+		ILINE __m128 _mm_set_ps(float z, float y, float x, float w){return (__m128)(vec_float4){w, x, y, z};}
+		ILINE __m128 _mm_div_ps(__m128 a, __m128 b){return (__m128)divf4((vec_float4)a, (vec_float4)b);}
+		ILINE __m128 _mm_add_ps(__m128 a, __m128 b){return (__m128)vec_add((vec_float4)a, (vec_float4)b);}
+		ILINE __m128 _mm_sub_ps(__m128 a, __m128 b){return (__m128)vec_sub((vec_float4)a, (vec_float4)b);}
+		ILINE __m128 _mm_mul_ps(__m128 a, __m128 b){return (__m128)vec_madd((vec_float4)a, (vec_float4)b, (vec_float4){0.0f});}
+		ILINE __m128 _mm_cmpgt_ps(__m128 a, __m128 b){return (__m128)vec_cmpgt((vec_float4)a, (vec_float4)b);}
+		ILINE __m128 _mm_cmplt_ps(__m128 a, __m128 b){return (__m128)vec_cmplt((vec_float4)a, (vec_float4)b);}
+		ILINE __m128 _mm_cmpneq_ps(__m128 a, __m128 b)
+		{
+			vec_uint4 eqRes = (vec_uint4)vec_cmpeq((vec_float4)a, (vec_float4)b);
+			return (__m128)vec_nor(eqRes, eqRes);
+		}
+		ILINE void _mm_empty(){}
+		ILINE __m128 _mm_loadu_ps(const float * const p)
+		{
+			union 
+			{
+				vec_float4 q;
+				float f[4];
+			} x;
+			x.f[0] = p[0];
+			x.f[1] = p[1];
+			x.f[2] = p[2];
+			x.f[3] = p[3];
+			return (__m128)x.q;
+		}
+		ILINE void _mm_storeu_ps(float *const p, __m128 a)
+		{
+			union 
+			{
+				vec_float4 q;
+				float f[4];
+			} x;
+			x.q = (vec_float4)a;
+			p[0] = x.f[0];
+			p[1] = x.f[1];
+			p[2] = x.f[2];
+			p[3] = x.f[3];
+		}
+
+		#if defined(__SPU__)
+			ILINE int _mm_movemask_ps(__m128 a){return (int)spu_extract(spu_gather((vec_uint4)a), 0);}
+			ILINE __m128 _mm_load1_ps(const float * const p){return (__m128)spu_splats(*p);}		
+			//additional function shuffling w component
+			ILINE __m128 _mm_shuffle_ps_w(__m128 a)
+			{
+				return (__m128)spu_splats(spu_extract((vec_float4)a, 3));
+			}
+		#else
+			ILINE int _mm_movemask_ps(__m128 a){return si_to_int(si_gb(a));}
+			ILINE __m128 _mm_load1_ps(const float * const p)
+			{
+				const float cP = *p;
+				return (__m128)(vec_float4){cP, cP, cP, cP};
+			}
+			//additional function shuffling w component
+			ILINE __m128 _mm_shuffle_ps_w(__m128 a)
+			{
+				return (__m128)vec_splat((vec_float4)a, 3);
+			}
+		#endif//__SPU__
+	#endif//PS3OPT
+
+#else//PS3
+	//implement something usual to bring one memory location into L1 data cache
+	ILINE void CryPrefetch(const void* const cpSrc)
+	{
+		cryPrefetchT0SSE(cpSrc);
+	}
+#endif
 
 
 #endif //math

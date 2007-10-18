@@ -30,6 +30,7 @@ class CTeamManager : public ITeamManager
 
 	// Team map
 	TeamMap m_TeamMap;
+	ChannelMap m_ChannelMap;
 
 public:
 	////////////////////////////////////////////////////
@@ -344,6 +345,27 @@ public:
 	// Returns STeamHarvesterDef object or NULL on error
 	////////////////////////////////////////////////////
 	virtual STeamHarvesterDef *GetTeamHarvester(TeamID nID, HarvesterID nHarvesterID);
+
+	////////////////////////////////////////////////////
+	// GetChannelTeam
+	//
+	// Purpose: Get the team that owns the given channel
+	//
+	// In:	nChannelID - Channel ID
+	//
+	// Returns id of Team
+	////////////////////////////////////////////////////
+	virtual TeamID GetChannelTeam(int nChannelID) const;
+
+	////////////////////////////////////////////////////
+	// GetTeamChannelCount
+	//
+	// Purpose: Returns how many channels a team has
+	//
+	// In:	nTeamID - team ID
+	//		bInGame - TRUE to only count those in the game
+	////////////////////////////////////////////////////
+	virtual int GetTeamChannelCount(TeamID nTeamID, bool bInGame = false) const;
 
 protected:
 	////////////////////////////////////////////////////

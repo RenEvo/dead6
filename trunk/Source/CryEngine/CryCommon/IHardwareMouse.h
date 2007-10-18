@@ -34,7 +34,7 @@ enum EHARDWAREMOUSEEVENT
 	HARDWAREMOUSEEVENT_MOVE,
 	HARDWAREMOUSEEVENT_LBUTTONDOWN,
 	HARDWAREMOUSEEVENT_LBUTTONUP,
-	HARDWAREMOUSEEVENT_LBUTTONDOUBLECLICK
+	HARDWAREMOUSEEVENT_LBUTTONDOUBLECLICK,
 };
 
 //-----------------------------------------------------------------------------------------------------
@@ -80,6 +80,7 @@ struct IHardwareMouse
 
 	// I consider a call to that function as a hack...
 	virtual void Reset(bool bVisibleByDefault) = 0;
+	virtual void ConfineCursor(bool confine) = 0;
 };
 
 //-----------------------------------------------------------------------------------------------------

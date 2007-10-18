@@ -47,8 +47,8 @@ private:
   void    StopServerListUpdate();
   void    SelectServer(int id);
   void    JoinServer();
-  void    SaveServerLists();
-  void    ServerListUpdated();
+	void    ServerListUpdated();
+	void		JoinSelectedServer();
   
   IServerBrowser*             m_browser;
   CGameNetworkProfile*        m_profile;

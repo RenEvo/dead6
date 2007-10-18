@@ -41,12 +41,12 @@ void CDebugGun::OnAction(EntityId actorId, const ActionId& actionId, int activat
   if (actionId == "attack1")
   {     
     if (activationMode == eAAM_OnPress)
-      Shoot(actorId, true);    
+      Shoot(true);    
   }
   else if (actionId == "zoom")
   {
     if (activationMode == eAAM_OnPress)
-      Shoot(actorId, false);
+      Shoot(false);
   }  
   else if (actionId == "firemode")
   {
@@ -194,9 +194,9 @@ void CDebugGun::Update( SEntityUpdateContext& ctx, int update)
 }
 
 //------------------------------------------------------------------------
-void CDebugGun::Shoot(EntityId shooterId, bool bPrimary)
+void CDebugGun::Shoot(bool bPrimary)
 {   
-  CWeapon::StartFire(shooterId);
+  CWeapon::StartFire();
 
   ResetAnimation();
   
@@ -253,8 +253,7 @@ void CDebugGun::Shoot(EntityId shooterId, bool bPrimary)
     gEnv->pConsole->ExecuteString(vehicleCmd.c_str());
   }
 
-  OnShoot(shooterId, 0, 0, pos, dir, Vec3(ZERO));
-    
+  OnShoot(GetOwnerId(), 0, 0, pos, dir, Vec3(ZERO));
 }
 
 //------------------------------------------------------------------------

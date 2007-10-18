@@ -74,6 +74,7 @@ struct SRayHitInfo
 	Ray     inRay;
 	bool    bInFirstHit;
 	bool    bUseCache;
+  bool    bOnlyZWrite;
 	float   fMaxHitDistance; // When not 0, only hits with closer distance will be registered.
 
 	//////////////////////////////////////////////////////////////////////////
@@ -370,14 +371,6 @@ struct IStatObj
 	// Pushes the underlying tree of objects into the given Sizer object for statistics gathering
 	virtual void GetMemoryUsage(class ICrySizer* pSizer) {} // TODO: implement
 
-	// Description:
-	//     Will looks if the object has all the needed shaders to be used as vegetation.
-	// Return Value:
-	//     true will be returned if the object can be used as vegetation, else false will be returned.
-	// Summary:
-	//     Determines if the object can be used as vegetation
-	virtual bool CheckValidVegetation() = 0;
-
 //DOC-IGNORE-BEGIN
 	//! used for sprites
 	virtual float & GetRadiusVert() = 0;
@@ -513,6 +506,9 @@ struct IStatObj
 	// Intersect ray with static object.
 	// Ray must be in object local space.
 	virtual bool RayIntersection( SRayHitInfo &hitInfo,IMaterial *pCustomMtl=0 ) = 0;
+
+protected:
+  virtual ~IStatObj() {}; // should be never called, use Release() instead
 };
 
 

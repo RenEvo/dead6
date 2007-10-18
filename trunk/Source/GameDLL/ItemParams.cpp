@@ -81,6 +81,12 @@ bool CItem::ReadParams(const IItemParamsNode *params)
 		ReadValue(m_params, update_hud);
 		ReadValue(m_params, auto_droppable);
 		ReadValue(m_params, has_first_select);
+		ReadValue(m_params, attach_to_back);
+		ReadValue(m_params, scopeAttachment);
+		ReadValue(m_params, attachment_gives_ammo);
+		ReadValue(m_params, display_name);
+		ReadValueEx(m_params, bone_attachment_01, bone_attachment_01);
+		ReadValueEx(m_params, bone_attachment_02, bone_attachment_02);
 	}
 
 	const IItemParamsNode *dw = params->GetChild("dualWield");
@@ -266,10 +272,12 @@ bool CItem::ReadAction(const IItemParamsNode *actionparams, SAction *pAction)
 			float radius = 1.0f; child->GetAttribute("radius", radius);
 			float sphere = 0.0f; child->GetAttribute("sphere", sphere);
 			int isstatic = 0; child->GetAttribute("static", isstatic);
+			int issynched =0; child->GetAttribute("synched", issynched);
 			pAction->sound[islot].name = name;
 			pAction->sound[islot].airadius = radius;
 			pAction->sound[islot].sphere = sphere;
 			pAction->sound[islot].isstatic = isstatic!=0;
+			pAction->sound[islot].issynched = issynched!=0;
 		}
 		else if (!stricmp(childName, "animation"))
 		{
@@ -627,7 +635,7 @@ bool CItem::SetGeometryFromParams(int slot, const IItemParamsNode *geometry)
 	}
 
 	Vec3 position(0,0,0); geometry->GetAttribute("position", position);
-	Vec3 angles(0,0,0);		geometry->GetAttribute("angles", angles);
+	Ang3 angles(0,0,0);		geometry->GetAttribute("angles", angles);
 	float scale=1.0f;			geometry->GetAttribute("scale", scale);
 
 	if (slot == eIGS_FirstPerson)
@@ -685,6 +693,10 @@ int CItem::TargetToSlot(const char *slot)
 			islot = eIGS_OffHand;
     else if (!stricmp(slot, "destroyed"))
       islot = eIGS_Destroyed;
+		else if (!stricmp(slot, "thirdpersonAux"))
+			islot = eIGS_ThirdPersonAux;
+		else if (!stricmp(slot, "aux1"))
+			islot = eIGS_Aux1;
 	}
 
 	return islot;

@@ -18,6 +18,7 @@
 #pragma once
 
 #include <SerializeFwd.h>
+#include "ISound.h" // needed for enum ESoundSemantic
 
 struct SEntitySpawnParams;
 struct SEntityEvent;
@@ -165,7 +166,7 @@ struct SEntityPhysicalizeParams
 	//////////////////////////////////////////////////////////////////////////
 	SEntityPhysicalizeParams() : type(0),density(-1),mass(-1),nSlot(-1),nFlagsOR(0),nFlagsAND(UINT_MAX),
 		pAttachToEntity(NULL),nAttachToPart(-1),fStiffnessScale(0),
-		pParticle(NULL),pBuoyancy(NULL),pPlayerDimensions(NULL),pPlayerDynamics(NULL),pCar(NULL),pAreaDef(NULL) {};
+		pParticle(NULL),pBuoyancy(NULL),pPlayerDimensions(NULL),pPlayerDynamics(NULL),pCar(NULL),pAreaDef(NULL),nLod(0) {};
 	//////////////////////////////////////////////////////////////////////////
 	// Physicalization type must be one of pe_type ennums.
 	// See Also: pe_type
@@ -179,6 +180,9 @@ struct SEntityPhysicalizeParams
 	// Optional physical flags.
 	int nFlagsAND;
 	int nFlagsOR;
+	// When physicalizing geometry can specify to use physics from different LOD.
+	// Used for characters that have ragdoll physics in Lod1
+	int nLod;
 
 	// Physical entity to attach this physics object (Only for Soft physical entity).
 	IPhysicalEntity *pAttachToEntity;
@@ -219,7 +223,8 @@ struct SEntityPhysicalizeParams
 		// pGravityParams must be a valid pointer to the area gravity params structure.
 		struct pe_params_area *pGravityParams;
 
-		AreaDefinition() : areaType(AREA_SPHERE),fRadius(0),boxmin(0,0,0),boxmax(0,0,0),pPoints(NULL),nNumPoints(0),pGravityParams(NULL),zmin(0),zmax(0),center(0,0,0),axis(0,0,0) {}
+		AreaDefinition() : areaType(AREA_SPHERE),fRadius(0),boxmin(0,0,0),boxmax(0,0,0),
+			pPoints(NULL),nNumPoints(0),pGravityParams(NULL),zmin(0),zmax(0),center(0,0,0),axis(0,0,0) {}
 	};
 	// When physicalizing with type == PE_AREA this must be a valid pointer to the AreaDefinition structure.
 	AreaDefinition *pAreaDef;
@@ -322,15 +327,16 @@ struct IEntityTriggerProxy : public IEntityProxy
 struct IEntitySoundProxy : public IEntityProxy
 {
 	virtual ISound* GetSound( tSoundID nSoundId ) = 0;
+	virtual ISound* GetSoundByIndex(uint32 nIndex) = 0; // will return NULL on invalid index
 	virtual bool PlaySound( ISound *pSound, const Vec3 &vPos=Vec3(0,0,0),const Vec3 &vDirection=FORWARD_DIRECTION,float fSoundScale=1.0f, bool bLipSync=true ) = 0;
 	// new calls
-	virtual tSoundID PlaySound( const char *sSoundOrEventName, const Vec3 &vOffset,const Vec3 &vDirection, uint32 nSoundFlags, EntityId *pSkipEnts,int nSkipEnts) = 0;
-	virtual tSoundID PlaySound( const char *sSoundOrEventName, const Vec3 &vOffset,const Vec3 &vDirection, uint32 nSoundFlags) = 0;
-	virtual tSoundID PlaySoundEx( const char *sSoundOrEventName, const Vec3 &vOffset,const Vec3 &vDirection, uint32 nSoundFlags, float fVolume, float fMinRadius,float fMaxRadius) = 0;
-	virtual tSoundID PlaySoundEx( const char *sSoundOrEventName, const Vec3 &vOffset,const Vec3 &vDirection, uint32 nSoundFlags, float fVolume, float fMinRadius,float fMaxRadius, EntityId *pSkipEnts,int nSkipEnts) = 0;
+	virtual tSoundID PlaySound( const char *sSoundOrEventName, const Vec3 &vOffset,const Vec3 &vDirection, uint32 nSoundFlags, ESoundSemantic eSemantic, EntityId *pSkipEnts,int nSkipEnts) = 0;
+	virtual tSoundID PlaySound( const char *sSoundOrEventName, const Vec3 &vOffset,const Vec3 &vDirection, uint32 nSoundFlags, ESoundSemantic eSemantic) = 0;
+	virtual tSoundID PlaySoundEx( const char *sSoundOrEventName, const Vec3 &vOffset,const Vec3 &vDirection, uint32 nSoundFlags, float fVolume, float fMinRadius,float fMaxRadius, ESoundSemantic eSemantic) = 0;
+	virtual tSoundID PlaySoundEx( const char *sSoundOrEventName, const Vec3 &vOffset,const Vec3 &vDirection, uint32 nSoundFlags, float fVolume, float fMinRadius,float fMaxRadius, ESoundSemantic eSemantic, EntityId *pSkipEnts,int nSkipEnts) = 0;
 	virtual bool SetStaticSound(tSoundID nSoundId, bool bStatic) = 0;
 	virtual bool GetStaticSound(const tSoundID nSoundId) = 0;
-	virtual void StopSound( tSoundID nSoundId ) = 0;
+	virtual void StopSound( tSoundID nSoundId, ESoundStopMode eStopMode=ESoundStopMode_EventFade ) = 0;
 	virtual void PauseSound( tSoundID nSoundId,bool bPause ) = 0;
 	virtual void StopAllSounds() = 0;
 	virtual void SetSoundPos( tSoundID nSoundId,const Vec3 &vPos ) = 0;
@@ -341,6 +347,8 @@ struct IEntitySoundProxy : public IEntityProxy
 	virtual float GetEffectRadius() = 0;
 	virtual const char* GetTailName() = 0;
 	virtual void CheckVisibilityForTailName(const float fLength, const float fDistanceToRecalculate) = 0;
+
+	virtual void UpdateSounds() = 0;
 
 	virtual IEntity* GetEntity() const = 0;
 };
@@ -452,14 +460,27 @@ struct IEntityRenderProxy : public IEntityProxy
 	// Description:
 	//    toggles updating of characters before or after physics
 	virtual void UpdateCharactersBeforePhysics( bool update ) = 0;
+	virtual bool IsCharactersUpdatedBeforePhysics() = 0;
 
-  virtual uint8 GetMaterialLayersMask( ) const = 0;
+  // Description:
+  //    sets material layers masks
   virtual void SetMaterialLayersMask( uint8 nMtlLayersMask ) = 0;
+  virtual uint8 GetMaterialLayersMask( ) const = 0;
+
+  // Description:
+  //    overrides material layers blend amount
+  virtual void SetMaterialLayersBlend( uint32 nMtlLayersBlend ) = 0;
+  virtual uint32 GetMaterialLayersBlend( ) const = 0;
 
   // Description:
   //    set/get motion blur multiplier
   virtual void SetMotionBlurAmount(float fAmount) = 0;
   virtual float GetMotionBlurAmount() const = 0;
+
+  // Description:
+  //    set/get vision params (actually used for silhouette rendering)
+  virtual void SetVisionParams( float r, float g, float b, float a ) = 0;
+  virtual uint32 GetVisionParams() const = 0;
 
   // Description:
   //    set/get opacity
@@ -494,6 +515,12 @@ enum EEntityAreaType
 //////////////////////////////////////////////////////////////////////////
 struct IEntityAreaProxy : public IEntityProxy
 {
+	enum EAreaProxyFlags
+	{
+		FLAG_NOT_UPDATE_AREA = BIT(1), // When set points in the area will not be updated.
+		FLAG_NOT_SERIALIZE   = BIT(2)  // Areas with this flag will not be serialized
+	};
+
 	// Area flags.
 	virtual void SetFlags( int nAreaProxyFlags ) = 0;
 	// Area flags.

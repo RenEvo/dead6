@@ -79,6 +79,21 @@ extern struct SCVars *g_pGameCVars;
 
 #define PLAYER_REFACTORING 1
 
+//---------------------------------------------------------------------
+inline float LinePointDistanceSqr(const Line& line, const Vec3& point, float zScale = 1.0f)
+{
+	Vec3 x0=point;
+	Vec3 x1=line.pointonline;
+	Vec3 x2=line.pointonline+line.direction;
+
+	x0.z*=zScale;
+	x1.z*=zScale;
+	x2.z*=zScale;
+
+	return ((x2-x1).Cross(x1-x0)).GetLengthSquared()/(x2-x1).GetLengthSquared();
+}
+
+
 //{{AFX_INSERT_LOCATION}}
 // Microsoft Visual C++ will insert additional declarations immediately before the previous line.
 

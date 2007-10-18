@@ -48,18 +48,20 @@ enum EChatMessageType
 struct SimpleHitInfo
 {
 	bool			remote;
-	EntityId  shooterId; // EntityId of the shooter
+	EntityId  shooterId;// EntityId of the shooter
 	EntityId  weaponId; // EntityId of the weapon
 	EntityId	targetId; // EntityId of the target which got shot
-	int				type; // type id of the hit, see IGameRules::GetHitTypeId for more information
+	int				type;			// type for this hit
+	float			value;		// value for this hit.
 
-	SimpleHitInfo(): remote(false), shooterId(0), targetId(0), weaponId(0), type(0) {};
-	SimpleHitInfo(EntityId shtId, EntityId trgId, EntityId wpnId, int typ)
+	SimpleHitInfo(): remote(false), shooterId(0), targetId(0), weaponId(0), type(0), value(0.0f) {};
+	SimpleHitInfo(EntityId shtId, EntityId trgId, EntityId wpnId, int typ, float val=0.0f)
 		: remote(false),
 		shooterId(shtId),
 		targetId(trgId),
 		weaponId(wpnId),
-		type(typ) {};
+		type(typ),
+		value(val) {};
 
 	void SerializeWith(TSerialize ser)
 	{
@@ -67,6 +69,7 @@ struct SimpleHitInfo
 		ser.Value("targetId", targetId, 'eid');
 		ser.Value("weaponId", weaponId, 'eid');
 		ser.Value("type", type, 'hTyp');
+		ser.Value("value", value, 'hVal');
 	}
 };
 
@@ -84,7 +87,6 @@ struct HitInfo
   EntityId projectileId;  // 0 if not hit was not caused by a projectile
 
   float		damage; // damage count of the hit
-  float   frost; // frost amount of the hit. 1: full freeze
   float		radius; // radius of the hit
 	float		angle;
   int			material; // material id of the surface which got hit
@@ -105,7 +107,6 @@ struct HitInfo
     weaponId(0),
     projectileId(0),
     damage(0),
-    frost(0),
     radius(0),
     material(-1),
     partId(-1),
@@ -123,7 +124,6 @@ struct HitInfo
     weaponId(wpnId),
     projectileId(0),
     damage(dmg),
-    frost(0),
     radius(rd),
     material(mat),
     partId(part),
@@ -141,7 +141,6 @@ struct HitInfo
     weaponId(wpnId),
     projectileId(0),
     damage(dmg),
-    frost(0),
     radius(rd),
     material(mat),
     partId(part),
@@ -160,7 +159,6 @@ struct HitInfo
     ser.Value("weaponId", weaponId, 'eid');
     ser.Value("projectileId", projectileId, 'eid');
 		ser.Value("damage", damage, 'dmg');
-    ser.Value("frost", frost, 'frzn');
 		ser.Value("radius", radius, 'hRad');
     ser.Value("material", material, 'mat');
     ser.Value("partId", partId, 'part');
@@ -186,7 +184,10 @@ struct ExplosionInfo
 
   Vec3		pos; // position of the explosion
   Vec3		dir; // direction of the explosion
-  float		radius; // radius of the explosion
+	float		minRadius;	// min radius of the explosion
+	float		radius;	// max radius of the explosion
+	float		minPhysRadius;
+	float		physRadius;
 	float		angle;
   float		pressure; // pressure created by the explosion
   float		hole_size;
@@ -201,13 +202,20 @@ struct ExplosionInfo
   EntityId impact_targetId; 
 	float		maxblurdistance;
 
+	//Flashbang params
+	float   blindAmount;
+	float   flashbangScale;
+
   ExplosionInfo()
     : shooterId(0),
     weaponId(0),    
     damage(0),
     pos(0,0,0),
     dir(FORWARD_DIRECTION),
-    radius(5.0f),
+		minRadius(2.5f),
+		radius(5.0f),
+		minPhysRadius(2.5f),
+		physRadius(5.0f),
 		angle(0.0f),
     pressure(200.0f),
     hole_size(5.0f),
@@ -218,16 +226,21 @@ struct ExplosionInfo
 		impact(false),
 		impact_normal(FORWARD_DIRECTION),
 		impact_velocity(ZERO),
-    impact_targetId(0)
+    impact_targetId(0),
+		blindAmount(0.0f),
+		flashbangScale(1.0f)
   {}
 
-  ExplosionInfo(EntityId shtId, EntityId wpnId, float dmg, const Vec3 &p, const Vec3 &d, float r, float a, float press, float holesize, int typ)
+  ExplosionInfo(EntityId shtId, EntityId wpnId, float dmg, const Vec3 &p, const Vec3 &d, float minR, float r, float minPhysR, float physR, float a, float press, float holesize, int typ)
    : shooterId(shtId),
     weaponId(wpnId),    
     damage(dmg),
     pos(p),
     dir(d),
-    radius(r),
+		minRadius(minR),
+		radius(r),
+		minPhysRadius(minPhysR),
+		physRadius(physR),
 		angle(a),
     pressure(press),
     hole_size(holesize),
@@ -248,11 +261,13 @@ struct ExplosionInfo
     impact_targetId=targetId;
 	}
 
-	void SetEffect(IParticleEffect* pParticleEffect, float scale, float maxblurdistance)
+	void SetEffect(IParticleEffect* pParticleEffect, float scale, float maxblurdistance, float blindAmount = 0.0f, float flashbangScale = 1.0f)
 	{
 		this->pParticleEffect=pParticleEffect;
 		this->maxblurdistance=maxblurdistance;
 		effect_scale=scale;
+		this->blindAmount = blindAmount;
+		this->flashbangScale = flashbangScale;
 	}
 
 	void SetEffectClass(const char *cls)
@@ -267,7 +282,10 @@ struct ExplosionInfo
 		ser.Value("damage", damage, 'dmg');
     ser.Value("pos", pos, 'wrld');
     ser.Value("dir", dir, 'dir1');
-    ser.Value("radius", radius, 'hRad');
+		ser.Value("minRadius", minRadius, 'hRad');
+		ser.Value("radius", radius, 'hRad');
+		ser.Value("minPhysRadius", minPhysRadius, 'hRad');
+		ser.Value("physRadius", physRadius, 'hRad');
 		ser.Value("angle", angle, 'hAng');
 		ser.Value("pressure", pressure, 'hPrs');
 		ser.Value("hole_size", hole_size, 'hHSz');
@@ -291,6 +309,13 @@ struct ExplosionInfo
 			ser.Value("maxblurdistance", maxblurdistance, 'iii');
 			ser.EndGroup();
 		}
+
+		if (ser.BeginOptionalGroup("flashbang", blindAmount!=0.0f))
+		{
+			ser.Value("blindAmount", blindAmount, 'hESc');
+			ser.Value("flashbangScale", flashbangScale, 'hESc');
+			ser.EndGroup();
+		} 
 
 		if (ser.BeginOptionalGroup("impact", impact))
 		{
@@ -333,6 +358,14 @@ struct IHitListener
 //   Interface used to implement the game rules
 struct IGameRules : public IGameObjectExtension
 {
+	struct SGameCollision
+	{
+		const EventPhysCollision*	pCollision;
+		IGameObject*							pSrc;
+		IGameObject*							pTrg;
+		IEntity*									pSrcEntity;
+		IEntity*									pTrgEntity;
+	};
 	// Summary
 	//   Returns wether the disconnecting client should be kept for a few more moments or not.
 	virtual bool ShouldKeepClient(int channelId, EDisconnectionCause cause, const char *desc) const = 0;
@@ -347,7 +380,7 @@ struct IGameRules : public IGameObjectExtension
 
 	// Summary
 	//   Notifies the server when a client is connecting
-	virtual bool OnClientConnect(int channelId) = 0;
+	virtual bool OnClientConnect(int channelId, bool isReset) = 0;
 
 	// Summary
 	//   Notifies the server when a client is disconnecting
@@ -355,7 +388,15 @@ struct IGameRules : public IGameObjectExtension
 
 	// Summary
 	//   Notifies the server when a client has entered the current game
-	virtual bool OnClientEnteredGame(int channelId) = 0;
+	virtual bool OnClientEnteredGame(int channelId, bool isReset) = 0;
+
+	// Summary
+	//   Notifies when an entity has spawn
+	virtual void OnEntitySpawn(IEntity *pEntity) = 0;
+
+	// Summary
+	//   Notifies when an entity has been removed
+	virtual void OnEntityRemoved(IEntity *pEntity) = 0;
 
 	// Summary
 	//   Broadcasts a message to the clients in the game
@@ -429,6 +470,10 @@ struct IGameRules : public IGameObjectExtension
 	// Summary
 	//   Notifies that a vehicle got destroyed
 	virtual void OnVehicleDestroyed(EntityId id) = 0;
+
+	// Summary
+	//   Notifies that a vehicle got submerged
+	virtual void OnVehicleSubmerged(EntityId id, float ratio) = 0;
 
 	// Summary
 	//   Prepares an entity to be allowed to respawn
@@ -510,6 +555,24 @@ struct IGameRules : public IGameObjectExtension
   // Parameters
   //  entityId - EntityId of the entity to be checked
   virtual bool IsFrozen(EntityId entityId) const = 0;
+
+	// Summary
+	//		Gets called when two entities collide, gamerules should dispatch this
+	//		call also to Script functions
+	// Parameters
+	//  pEvent - physics event containing the necessary info
+	virtual bool OnCollision(const SGameCollision& event) = 0;
+
+	// allows gamerules to extend the 'status' command
+	virtual void ShowStatus() = 0;
+
+	// Summary
+	//    Checks if game time is limited
+	virtual bool IsTimeLimited() const = 0;
+
+	// Summary
+  //    Gets remaining game time
+	virtual float GetRemainingGameTime() const = 0;
 };
 
 // Summary:
@@ -545,6 +608,22 @@ struct IGameRulesSystem
 	// Returns
 	//   The value true will be returned upon completion.
 	virtual bool DestroyGameRules() = 0;
+
+	// Summary
+	//   Adds an alias name for the specified game rules
+	virtual void AddGameRulesAlias(const char *gamerules, const char *alias) = 0;
+
+	// Summary
+	//   Adds a default level location for the specified game rules. Level system will look up levels here.
+	virtual void AddGameRulesLevelLocation(const char *gamerules, const char *mapLocation) = 0;
+
+	// Summary
+	//	 Returns the ith map location for the specified game rules
+	virtual const char *GetGameRulesLevelLocation(const char *gamerules, int i) = 0;
+
+	// Sumarry
+	//	 Returns the correct gamerules name from an alias
+	virtual const char *GetGameRulesName(const char *alias) const = 0;
 
 	// Summary
 	//   Determines if the specified GameRules has been registered

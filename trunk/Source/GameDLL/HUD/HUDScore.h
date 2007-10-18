@@ -28,10 +28,13 @@ class CHUDScore : public CHUDObject
 		int					m_deaths;
 		int					m_ping;
 		int					m_team;
+		int					m_currentRank;
 		EntityId		m_entityId;
+		bool				m_alive, m_spectating; //updating during sorting
 
 		ScoreEntry(EntityId id, int kills, int deaths, int ping);
 		bool operator<(const ScoreEntry& entry) const;
+		void UpdateLiveStats();
 	};
 
 private:
@@ -40,6 +43,8 @@ private:
 	int				m_currentClientTeam;
 	bool			m_bShow;
 	float			m_lastShowSwitch;
+	string		m_currentServer;
+	string    m_currentServerIp;	
 	CGameFlashAnimation *m_pFlashBoard;
 	
 	void Render();
@@ -52,7 +57,7 @@ public:
 	{
 	}
 
-	virtual void OnUpdate(float fDeltaTime,float fFadeValue);
+	virtual void Update(float fDeltaTime);
 
 	virtual bool OnInputEvent(const SInputEvent &event )
 	{

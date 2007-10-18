@@ -52,7 +52,6 @@ struct SGrabStats
 	Vec3 lHoldPos;//holding position relative to the entity matrix
 
 	Vec3 throwVector;
-	Vec3 grabOffset; // offset relative to the bone position in animated grab
 
 	Quat additionalRotation;
 
@@ -101,10 +100,11 @@ struct SGrabStats
 	// drop anim is played and the character returns to a suitable normal
 	// animation state.  As with the second case, the grabbing anim emits
 	// the "grabbed" event and the dropping anim emits the "thrown" event.
-	char carryAnimGraphInput[64];
+	static const int s_maxAGInputNameLen = 64;
+	char carryAnimGraphInput[s_maxAGInputNameLen];
 
-	char grabAnimGraphSignal[64];
-	char dropAnimGraphSignal[64];
+	char grabAnimGraphSignal[s_maxAGInputNameLen];
+	char dropAnimGraphSignal[s_maxAGInputNameLen];
 
 	bool IKActive;	
 	float releaseIKTime;
@@ -112,9 +112,40 @@ struct SGrabStats
 	int followBoneID;
 	Vec3 followBoneWPos;
 
-	Vec3 animationLimbOffset;
-	Vec3 animDummyOfs;
-  
+	/// Where grabbing anim expects the object to be grabbed to be. Given in grabber's local coord frame.
+	Vec3 grabbedObjOfs;
+
+	// NOTE Aug 2, 2007: <pvl> this is a bad hack but what can I do if neither
+	// Ivo nor Anton can help.
+	// While reaching out for something to grab, the grabbing limb is retargetter
+	// using IK so that its tip should end up where the grabbed entity is.  For
+	// some reason it ends up near but not quite there.  When the entity is then
+	// linked to the tentacle tip, it snaps.  To get rid of the snap, in principle
+	// either IK could be made to move *exactly* where the entity is, or physics
+	// could be used to set the entity's velocity towards the tentacle, avoiding
+	// the sudden snap.  Neither seems to be doable, though.  So what we do is
+	// just record the IK inaccuracy at the moment when the entity is linked to
+	// the tentacle and use it to correct its further movement along with the
+	// tentacle.
+	bool readIkInaccuracyCorrection;
+	Vec3 ikInaccuracyCorrection;
+
+	/// World rotation of the grabbed object at the instant when it was grabbed.
+	Quat origRotation;
+	/// World rotation of the grabbing limb end bone at the instant when the object was grabbed.
+	QuatT origEndBoneWorldRot;
+	/// 'true' if the above members have valid values already loaded.
+	bool origRotationsValid;
+
+	// FIXME Sep 14, 2007: <pvl> this should be a property of the grabbed
+	// entity and not the grabbing one but there's no time now to try and track down
+	// scripts of everything that the hunter or the scout might possibly grab.
+	/// Place where the entity should be grabbed, given as offset from the grabbed entity position.
+	Vec3 entityGrabSpot;
+	/// How the entityGrabSpot should be offset from the grabbing bone position when the object is held.
+	/// Given in the grabbing bone coordinate system.
+	Vec3 boneGrabOffset;
+
 	SGrabStats()
 	{
 		memset(this,0,sizeof(SGrabStats));
@@ -123,6 +154,8 @@ struct SGrabStats
 		lHoldPos.Set(0,0.5f,0.25f);
 		additionalRotation.SetIdentity();
 		IKActive = false;
+		ikInaccuracyCorrection.Set (0.0f, 0.0f, 0.0f);
+		readIkInaccuracyCorrection = true;
 	}
 
 	void Reset()
@@ -131,9 +164,12 @@ struct SGrabStats
 		grabId = 0;
 		followBoneWPos.Set(0,0,0);
 		IKActive = false;
+		ikInaccuracyCorrection.Set (0.0f, 0.0f, 0.0f);
+		readIkInaccuracyCorrection = true;
+		origRotationsValid = false;
 	}
 
-	void Serialize(TSerialize ser, unsigned aspects);
+	void Serialize(TSerialize ser);
 };
 
 struct SGrabParams
@@ -184,11 +220,6 @@ struct SAnimGrabParams : public SGrabParams
 	char animGraphSignal[64];
 	char followBone[64];
 
-	// FIXME Dez 15, 2006: <pvl> should be replaced by a dummy object
-	// placed in animation to indicate where exactly the animation
-	// expects the grabbed object.
-	Vec3 animDummyOfs;
-
 	float releaseIKTime;
 
 	//
@@ -215,7 +246,6 @@ struct SAnimGrabParams : public SGrabParams
 			}
 
 			animationTable->GetValue("forceThrow",throwDelay);					
-			animationTable->GetValue("dummyOfs",animDummyOfs);
 			animationTable->GetValue("releaseIKTime",releaseIKTime);
 		}
 
@@ -265,7 +295,7 @@ struct IGrabHandler
 	// TODO Mrz 21, 2007: <pvl> deprecate GetStats() if possible
 	virtual void ProcessIKLimbs (ICharacterInstance * ) = 0;
 
-	virtual void Serialize(TSerialize ser, unsigned aspects) = 0;
+	virtual void Serialize(TSerialize ser) = 0;
 };
 
 class CBaseGrabHandler : public IGrabHandler
@@ -283,7 +313,7 @@ public:
 	virtual bool Drop(SmartScriptTable &rParams);
 
 	virtual bool SetGrab(SmartScriptTable &rParams);
-	virtual bool StartGrab(/*EntityId objectId*/);
+	virtual bool StartGrab();
 	virtual bool SetDrop(SmartScriptTable &rParams);
 	virtual bool StartDrop();
 
@@ -303,7 +333,7 @@ public:
 	//
 	virtual void ProcessIKLimbs (ICharacterInstance * ) { }
 
-	virtual void Serialize(TSerialize ser, unsigned aspects);
+	virtual void Serialize(TSerialize ser);
 
 protected:
 
@@ -311,10 +341,8 @@ protected:
 
 	virtual Vec3 GetGrabWPos();
 	void IgnoreCollision(EntityId eID,unsigned int flags,bool ignore);
+	void DisableGrabbedAnimatedCharacter (bool enable) const;
 	
-protected:
-	
-	//
 	CActor *m_pActor;
 
 	SGrabStats m_grabStats;
@@ -344,6 +372,7 @@ public:
 protected:
 
 	virtual void UpdatePosVelRot(float frameTime);
+	QuatT GetGrabBoneWorldTM() const;
 
 	virtual Vec3 GetGrabWPos();
 	Vec3 GetGrabIKPos(IEntity *pGrab,int limbIdx);
@@ -387,7 +416,7 @@ public:
 
 	virtual void ProcessIKLimbs (ICharacterInstance * );
 
-	virtual void Serialize(TSerialize ser, unsigned aspects);
+	virtual void Serialize(TSerialize ser);
 private:
 	std::vector <CAnimatedGrabHandler*> m_handlers;
 };

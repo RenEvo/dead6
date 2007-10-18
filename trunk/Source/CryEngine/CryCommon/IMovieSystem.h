@@ -103,7 +103,8 @@ enum EAnimTrackType
 	ATRACK_EXPRESSION,
 	ATRACK_CONSOLE,
 	ATRACK_MUSIC,
-	ATRACK_FACESEQ
+	ATRACK_FACESEQ,
+	ATRACK_LOOKAT
 };
 
 //! Values that animation track can hold.
@@ -120,7 +121,8 @@ enum EAnimValue
 	AVALUE_EXPRESSION,
 	AVALUE_CONSOLE,
 	AVALUE_MUSIC,
-	AVALUE_FACESEQ
+	AVALUE_FACESEQ,
+	AVALUE_LOOKAT
 };
 
 //! Flags that can be set on animation track.
@@ -591,6 +593,7 @@ struct IAnimSequence : public _i_reference_target_t
 		IS_16TO9			= 0x100,	//!< 16:9 bars in sequence
 		NO_GAMESOUNDS	= 0x200,	//!< Suppress all game sounds.
 		NO_SEEK       = 0x400,  //!< Cannot seek in sequence. 
+		NO_ABORT      = 0x800,  //!< Cutscene can not be aborted
 	};
 
 	//! Set animation name.
@@ -638,7 +641,7 @@ struct IAnimSequence : public _i_reference_target_t
 	virtual Range GetTimeRange() = 0;
 
 	//! Resets the sequence
-	virtual void Reset() = 0;
+	virtual void Reset( bool bSeekToStart ) = 0;
 
 	/** Called to pause sequence.
 	*/
@@ -665,7 +668,8 @@ struct IMovieListener
 	enum EMovieEvent
 	{
 		MOVIE_EVENT_START = 0,   // fired when sequence is started
-		MOVIE_EVENT_STOP         // fired when sequence is stopped
+		MOVIE_EVENT_STOP,        // fired when sequence ended normally
+		MOVIE_EVENT_ABORTED,     // fired when sequence was aborted before normal end (STOP and ABORTED event are mutually exclusive!)
 	};
 
 	//! callback on movie events
@@ -712,7 +716,7 @@ struct IMovieSystem
 	virtual IAnimSequence* LoadSequence( XmlNodeRef &xmlNode, bool bLoadEmpty=true ) = 0;
 	virtual void RemoveSequence( IAnimSequence *seq ) = 0;
 	virtual IAnimSequence* FindSequence( const char *sequence ) = 0;
-	virtual ISequenceIt* GetSequences() = 0;
+	virtual ISequenceIt* GetSequences(bool bPlayingOnly=false, bool bCutscenesOnly=false) = 0;
 	
 	/** Adds a listener to a sequence
 			@param pSequence Pointer to sequence
@@ -753,17 +757,28 @@ struct IMovieSystem
 	*/
 	virtual void PlaySequence( IAnimSequence *seq,bool bResetFX  ) = 0;
 
-	/** Stop's currently playing sequence.
+	/** Stops currently playing sequence.
 			Ignored if sequence is not playing.
+			Returns true if sequence has been stopped. false otherwise
 			@param sequence Name of playing sequence to stop.
 	*/
-	virtual void StopSequence( const char *sequence ) = 0;
+	virtual bool StopSequence( const char *sequence ) = 0;
 
 	/** Stop's currently playing sequence.
 			Ignored if sequence is not playing.
+			Returns true if sequence has been stopped. false otherwise
 			@param sequence Pointer to Valid sequence to stop.
 	*/
-	virtual void StopSequence( IAnimSequence *seq ) = 0;
+	virtual bool StopSequence( IAnimSequence *seq ) = 0;
+
+	/** Aborts a currently playing sequence.
+			Ignored if sequence is not playing.
+			Calls IMovieListener with MOVIE_EVENT_ABORTED event (MOVIE_EVENT_DONE is NOT called)
+			Returns true if sequence has been aborted. false otherwise
+			@param sequence Pointer to Valid sequence to stop.
+			@param bLeaveTime If false, uses default stop behaviour, otherwise leaves the sequence at time
+	*/
+	virtual bool AbortSequence( IAnimSequence *seq, bool bLeaveTime=false ) = 0;
 
 	/** Stops all currently playing sequences.
 	*/
@@ -782,7 +797,7 @@ struct IMovieSystem
 			usually called after loading of level,
 			sequences with PLAY_ONRESET flag will start playing after this call if bPlayOnReset is true.
 	*/
-	virtual void Reset( bool bPlayOnReset=true ) = 0;
+	virtual void Reset( bool bPlayOnReset,bool bSeekAllToStart ) = 0;
 
 	/** Sequences with PLAY_ONRESET flag will start playing after this call.
 	*/

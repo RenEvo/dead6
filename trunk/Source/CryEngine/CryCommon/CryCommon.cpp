@@ -50,11 +50,18 @@
 
 #if defined(PS3)
 	#include <CryModuleDefs.h>
-	#define eCryModule eCryM_Launcher
+	#if !defined eCryModule
+		#define eCryModule eCryM_Launcher
+	#endif
 #endif
 
+
+
 #include "MTPseudoRandom.cpp"
-#if defined(PS3) || defined(LINUX)
-	#include "WinBase.cpp"
+
+#if !defined __CRYCG__
+	#if defined(PS3) || defined(LINUX)
+		#include "WinBase.cpp"
+	#endif
 #endif
 

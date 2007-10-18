@@ -28,6 +28,22 @@ History:
 //------------------------------------------------------------------------
 void CAmmoPickup::PostInit( IGameObject * pGameObject )
 {
+	// fix for hud displaying the wrong ammo name
+	if (!m_ammoName.empty())
+	{
+		SetEntityProperty("AmmoName", m_ammoName.c_str());
+		SetEntityProperty("Count", m_ammoCount);
+	}
+	else
+	{
+		const char *ammoName=0;
+		if (GetEntityProperty("AmmoName", ammoName) && ammoName && ammoName[0])
+		{
+			m_ammoName=ammoName;
+			GetEntityProperty("Count", m_ammoCount);
+		}
+	}
+
 	if (m_modelName.empty())
 	{
 		const char *model=0;
@@ -56,9 +72,19 @@ bool CAmmoPickup::CanPickUp(EntityId pickerId) const
 //------------------------------------------------------------------------
 void CAmmoPickup::SerializeSpawnInfo( TSerialize ser )
 {
+	uint16 ammoClassId;
 	string modelName;
+	int count;
 	ser.Value("modelName", modelName);
+	ser.Value("classId", ammoClassId, 'ui16');
+	ser.Value("count", count, 'ammo');
 	m_modelName=modelName;
+
+	static char ammoClassName[129]={0};
+	g_pGame->GetIGameFramework()->GetNetworkSafeClassName(ammoClassName, 128, ammoClassId);
+
+	m_ammoName=ammoClassName;
+	m_ammoCount=count;
 }
 
 //------------------------------------------------------------------------
@@ -67,14 +93,22 @@ ISerializableInfoPtr CAmmoPickup::GetSpawnInfo()
 	struct SInfo : public ISerializableInfo
 	{
 		string modelName;
+		uint16 ammoClassId;
+		uint count;
 		void SerializeWith( TSerialize ser )
 		{
 			ser.Value("modelName", modelName);
+			ser.Value("classId", ammoClassId, 'ui16');
+			ser.Value("count", count, 'ammo');
 		}
 	};
 
 	SInfo *p=new SInfo();
-	p->modelName=m_modelName;
+	p->modelName=m_modelName.c_str();
+	p->ammoClassId=0;
+	p->count=m_ammoCount;
+
+	g_pGame->GetIGameFramework()->GetNetworkSafeClassId(p->ammoClassId, m_ammoName.c_str());
 
 	return p;
 }
@@ -99,6 +133,9 @@ bool CAmmoPickup::ReadItemParams(const IItemParamsNode *root)
 //------------------------------------------------------------------------
 void CAmmoPickup::PickUp(EntityId pickerId, bool sound, bool select, bool keepHistory)
 {
+	if(!CheckAmmoRestrictions(pickerId))
+		return;
+
 	SetOwnerId(pickerId);
 
 	CActor *pActor=GetActor(pickerId);
@@ -122,7 +159,10 @@ void CAmmoPickup::PickUp(EntityId pickerId, bool sound, bool select, bool keepHi
 				SetInventoryAmmoCount(it->first, GetInventoryAmmoCount(it->first)+count);
 
 				if(pActor->IsPlayer())
+				{
 					ShouldSwitchGrenade(it->first);
+					OnIncendiaryAmmoPickedUp(it->first,count);
+				}
 			}
 
 			m_bonusammo.clear();
@@ -135,21 +175,21 @@ void CAmmoPickup::PickUp(EntityId pickerId, bool sound, bool select, bool keepHi
 			SetInventoryAmmoCount(it->first, GetInventoryAmmoCount(it->first)+count);
 
 			if(pActor->IsPlayer())
+			{
 				ShouldSwitchGrenade(it->first);
+				OnIncendiaryAmmoPickedUp(it->first,count);
+			}
 		}
 
-		const char *ammoName=0;
-		if (GetEntityProperty("AmmoName", ammoName) && ammoName && ammoName[0])
+		if (!m_ammoName.empty() && m_ammoCount)
 		{
-			int count=0;
-			GetEntityProperty("Count", count);
-			if (count)
-			{
-				IEntityClass* pClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(ammoName);
-				SetInventoryAmmoCount(pClass, GetInventoryAmmoCount(pClass)+count);
+			IEntityClass* pClass = gEnv->pEntitySystem->GetClassRegistry()->FindClass(m_ammoName.c_str());
+			SetInventoryAmmoCount(pClass, GetInventoryAmmoCount(pClass)+m_ammoCount);
 
-				if(pActor->IsPlayer())
-					ShouldSwitchGrenade(pClass);
+			if(pActor->IsPlayer())
+			{
+				ShouldSwitchGrenade(pClass);
+				OnIncendiaryAmmoPickedUp(pClass,m_ammoCount);
 			}
 		}
 
@@ -167,7 +207,7 @@ void CAmmoPickup::PickUp(EntityId pickerId, bool sound, bool select, bool keepHi
 			if(pSoundProxy)
 			{
 				//Execute sound at picker position
-				pSoundProxy->PlaySound(m_pickup_sound, pPicker->GetWorldPos(),FORWARD_DIRECTION, FLAG_SOUND_DEFAULT_3D);
+				pSoundProxy->PlaySound(m_pickup_sound, pPicker->GetWorldPos(),FORWARD_DIRECTION, FLAG_SOUND_DEFAULT_3D, eSoundSemantic_Weapon);
 			}
 		}
 	}
@@ -179,6 +219,9 @@ void CAmmoPickup::PickUp(EntityId pickerId, bool sound, bool select, bool keepHi
 bool CAmmoPickup::CheckAmmoRestrictions(EntityId pickerId)
 {
 	if(g_pGameCVars->i_unlimitedammo != 0)
+		return true;
+
+	if(gEnv->pSystem->IsEditor())
 		return true;
 
 	IActor* pPicker = g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(pickerId);
@@ -208,7 +251,7 @@ bool CAmmoPickup::CheckAmmoRestrictions(EntityId pickerId)
 					{
 						int invAmmo  = pInventory->GetAmmoCount(pClass);
 						int invLimit = pInventory->GetAmmoCapacity(pClass);
-						if(invAmmo>=invLimit && (!gEnv->pSystem->IsEditor()))
+						if(invAmmo>=invLimit)
 							return false;
 					}
 				}
@@ -251,6 +294,32 @@ void CAmmoPickup::ShouldSwitchGrenade(IEntityClass* pClass)
 					pOffHand->RequestFireMode(FLASHBANG_GRENADE);
 				else if(emp)
 					pOffHand->RequestFireMode(EMP_GRENADE);
+			}
+		}
+	}
+}
+
+//----------------------------------------------------
+void CAmmoPickup::OnIncendiaryAmmoPickedUp(IEntityClass *pClass,int count)
+{
+	bool incendiary = (pClass == CItem::sIncendiaryAmmo);
+
+	if(incendiary && !gEnv->bMultiplayer)
+	{
+		CActor* pPlayer = GetOwnerActor();
+
+		if(!pPlayer)
+			return;
+
+		if(IInventory *pInventory = pPlayer->GetInventory())
+		{
+			if(pInventory->GetCountOfClass("FY71IncendiaryAmmo")==0)
+			{
+				const int clipSize = 30;
+				m_pItemSystem->GiveItem(pPlayer,"FY71IncendiaryAmmo",false,false,false);
+				int amount = count-clipSize;
+				amount = MAX(0,amount);
+				pInventory->SetAmmoCount(pClass,amount);
 			}
 		}
 	}

@@ -4,7 +4,9 @@
 #include "GameActions.h"
 
 #include "HUD/HUD.h"
+#include "HUD/HUDRadar.h"
 #include "HUD/HUDScopes.h"
+#include "HUD/HUDSilhouettes.h"
 #include "Nodes/G2FlowBaseNode.h"
 #include "Weapon.h"
 
@@ -15,11 +17,7 @@ namespace
 	// to be replaced. hud is no longer a game object 
 	void SendHUDEvent( SGameObjectEvent& evt )
 	{
-		CHUD* pHUD = g_pGame->GetHUD();
-		if (pHUD)
-		{
-			pHUD->HandleEvent(evt);
-		}
+		SAFE_HUD_FUNC(HandleEvent(evt));
 	}
 }
 
@@ -127,10 +125,7 @@ public:
 
 	~CFlowNode_PDAControl()
 	{
-		if (g_pGame->GetHUD())
-		{
-			g_pGame->GetHUD()->UnRegisterListener(this);
-		}
+		SAFE_HUD_FUNC(UnRegisterListener(this));
 	}
 
 	IFlowNodePtr Clone(SActivationInfo* pActInfo)
@@ -194,32 +189,26 @@ public:
 		case eFE_Initialize:
 			{
 				m_actInfo = *pActInfo;
-				CHUD* pHUD = g_pGame->GetHUD();
-				if (pHUD != 0)
-					pHUD->RegisterListener(this);
+				SAFE_HUD_FUNC(RegisterListener(this));
 			}
 			break;
 		case eFE_Activate:
 			{
-				CHUD* pHUD = g_pGame->GetHUD();
-				if (pHUD == 0)
-					return;
-
 				if (IsPortActive(pActInfo, EIP_Open))
 				{
-					pHUD->ShowPDA(true, (GetPortInt(pActInfo, 2)==1)?false:true);
+					SAFE_HUD_FUNC(ShowPDA(true, (GetPortInt(pActInfo, 2)==1)?false:true));
 				}
 				if (IsPortActive(pActInfo, EIP_Close))
 				{
-					pHUD->ShowPDA(false);
+					SAFE_HUD_FUNC(ShowPDA(false));
 				}
 				if (IsPortActive(pActInfo, EIP_ShowObj))
 				{
-					pHUD->ShowObjectives(true); // calls us back
+					SAFE_HUD_FUNC(ShowObjectives(true)); // calls us back
 				}
 				if (IsPortActive(pActInfo, EIP_HideObj))
 				{
-					pHUD->ShowObjectives(false); // calls us back
+					SAFE_HUD_FUNC(ShowObjectives(false)); // calls us back
 				}
 			}
 			break;
@@ -286,9 +275,6 @@ public:
 	{
 		if(eFE_Activate == event && IsPortActive(pActInfo,EIP_Trigger))
 		{
-			CHUD* pHUD = g_pGame->GetHUD();
-			if (pHUD == 0)
-				return;
 			const string& msg = GetPortString(pActInfo, EIP_Message);
 			const Vec3& colorVec = GetPortVec3(pActInfo, EIP_Color);
 			int pos = GetPortInt(pActInfo, EIP_Pos);
@@ -297,10 +283,10 @@ public:
 			if (pos == 2)
 			{
 				const float time = GetPortFloat(pActInfo, EIP_Time);
-				pHUD->DisplayTempFlashText(msg, time <= 0.0f ? -1.0f : time, ColorF(colorVec, 1.0f));
+				SAFE_HUD_FUNC(DisplayTempFlashText(msg, time <= 0.0f ? -1.0f : time, ColorF(colorVec, 1.0f)));
 			}
 			else
-				pHUD->DisplayFlashMessage(msg, pos, ColorF(colorVec, 1.0f));
+				SAFE_HUD_FUNC(DisplayFlashMessage(msg, pos, ColorF(colorVec, 1.0f)));
 		}
 	}
 
@@ -351,25 +337,22 @@ public:
 	{
 		if(eFE_Activate == event)
 		{
-			CHUD* pHUD = g_pGame->GetHUD();
-			if (pHUD == 0)
-				return;
 			if (IsPortActive(pActInfo, EIP_Show))
-				pHUD->Show(true);
+				SAFE_HUD_FUNC(Show(true));
 			if (IsPortActive(pActInfo, EIP_Hide))
-				pHUD->Show(false);
+				SAFE_HUD_FUNC(Show(false));
 			if (IsPortActive(pActInfo, EIP_Boot))
-				pHUD->ShowBootSequence();
+				SAFE_HUD_FUNC(ShowBootSequence());
 			if (IsPortActive(pActInfo, EIP_Break))
-				pHUD->BreakHUD();
+				SAFE_HUD_FUNC(BreakHUD());
 			if (IsPortActive(pActInfo, EIP_Reboot))
-				pHUD->RebootHUD();
+				SAFE_HUD_FUNC(RebootHUD());
 			if (IsPortActive(pActInfo, EIP_AlienInterference))
 				g_pGameCVars->hud_enableAlienInterference = GetPortBool(pActInfo, EIP_AlienInterference);
 			if (IsPortActive(pActInfo, EIP_AlienInterferenceStrength))
 				g_pGameCVars->hud_alienInterferenceStrength = GetPortFloat(pActInfo, EIP_AlienInterferenceStrength);
 			if (IsPortActive(pActInfo, EIP_MapNotAvailable))
-				pHUD->SetMinimapNotAvailable(GetPortBool(pActInfo, EIP_AlienInterference));
+				SAFE_HUD_FUNC(SetMinimapNotAvailable(GetPortBool(pActInfo, EIP_MapNotAvailable)));
 		}
 	}
 
@@ -419,10 +402,7 @@ public:
 	{
 		if(eFE_Activate == event)
 		{
-			CHUD* pHUD = g_pGame->GetHUD();
-			if (pHUD == 0)
-				return;
-			CHUDRadar* pRadar = pHUD->GetRadar();
+			CHUDRadar* pRadar = SAFE_HUD_FUNC_RET(GetRadar());
 			if (pRadar == 0)
 				return;
 			if (IsPortActive(pActInfo, EIP_StopScan))
@@ -464,10 +444,7 @@ public:
 
 	~CFlowNode_HUDAirstrike()
 	{
-		if (g_pGame->GetHUD())
-		{
-			g_pGame->GetHUD()->UnRegisterListener(this);
-		}
+		SAFE_HUD_FUNC(UnRegisterListener(this));
 	}
 
 	IFlowNodePtr Clone(SActivationInfo* pActInfo)
@@ -517,36 +494,31 @@ public:
 		case eFE_Initialize:
 			{
 				m_actInfo = *pActInfo;
-				CHUD* pHUD = g_pGame->GetHUD();
-				if (pHUD != 0)
-					pHUD->RegisterListener(this);
+				SAFE_HUD_FUNC(RegisterListener(this));
 			}
 			break;
 		case eFE_Activate:
 			{
-				CHUD* pHUD = g_pGame->GetHUD();
-				if (pHUD == 0)
-					return;
 				if (IsPortActive(pActInfo, EIP_Enable))
 				{
-					pHUD->ClearAirstrikeEntities();
+					SAFE_HUD_FUNC(ClearAirstrikeEntities());
 					for (int i=EIP_Entity0; i<EIP_EntityMax; ++i)
 					{
-						pHUD->AddAirstrikeEntity(GetPortEntityId(pActInfo, i));
+						SAFE_HUD_FUNC(AddAirstrikeEntity(GetPortEntityId(pActInfo, i)));
 					}
-					pHUD->SetAirStrikeEnabled(true);
+					SAFE_HUD_FUNC(SetAirStrikeEnabled(true));
 				}
 				if (IsPortActive(pActInfo, EIP_Disable))
 				{
-					pHUD->SetAirStrikeEnabled(false);
+					SAFE_HUD_FUNC(SetAirStrikeEnabled(false));
 				}
 				if (IsPortActive(pActInfo, EIP_Succeeded))
 				{
-					pHUD->NotifyAirstrikeSucceeded(true);
+					SAFE_HUD_FUNC(NotifyAirstrikeSucceeded(true));
 				}
 				if (IsPortActive(pActInfo, EIP_Failed))
 				{
-					pHUD->NotifyAirstrikeSucceeded(false);
+					SAFE_HUD_FUNC(NotifyAirstrikeSucceeded(false));
 				}
 
 			}
@@ -615,23 +587,19 @@ public:
 	{
 		if(eFE_Activate == event && pActInfo->pEntity)
 		{
-			CHUD* pHUD = g_pGame->GetHUD();
-			if (pHUD)
+			CHUDRadar* pRadar = SAFE_HUD_FUNC_RET(GetRadar());
+			if (pRadar)
 			{
-				CHUDRadar* pRadar = pHUD->GetRadar();
-				if (pRadar)
-				{
-					const EntityId entityId = pActInfo->pEntity->GetId();
-					if (IsPortActive(pActInfo, EIP_Remove))
-						pRadar->RemoveFromRadar(entityId);
-					if (IsPortActive(pActInfo, EIP_Add))
-						pRadar->AddEntityToRadar(entityId);
-					if (IsPortActive(pActInfo, EIP_RemoveTeamMate))
-						pRadar->SetTeamMate(entityId, false);
-					if (IsPortActive(pActInfo, EIP_AddTeamMate))
-						pRadar->SetTeamMate(entityId, true);
-					ActivateOutput(pActInfo, EOP_Done, true);
-				}
+				const EntityId entityId = pActInfo->pEntity->GetId();
+				if (IsPortActive(pActInfo, EIP_Remove))
+					pRadar->RemoveFromRadar(entityId);
+				if (IsPortActive(pActInfo, EIP_Add))
+					pRadar->AddEntityToRadar(entityId);
+				if (IsPortActive(pActInfo, EIP_RemoveTeamMate))
+					pRadar->SetTeamMate(entityId, false);
+				if (IsPortActive(pActInfo, EIP_AddTeamMate))
+					pRadar->SetTeamMate(entityId, true);
+				ActivateOutput(pActInfo, EOP_Done, true);
 			}
 		}
 	}
@@ -696,25 +664,21 @@ public:
 	{
 		if(eFE_Activate == event && pActInfo->pEntity)
 		{
-			CHUD* pHUD = g_pGame->GetHUD();
-			if (pHUD)
+			CHUDRadar* pRadar = SAFE_HUD_FUNC_RET(GetRadar());
+			if (pRadar)
 			{
-				CHUDRadar* pRadar = pHUD->GetRadar();
-				if (pRadar)
+				const EntityId entityId = pActInfo->pEntity->GetId();
+				if (IsPortActive(pActInfo, EIP_Remove))
 				{
-					const EntityId entityId = pActInfo->pEntity->GetId();
-					if (IsPortActive(pActInfo, EIP_Remove))
-					{
-						pRadar->RemoveStoryEntity(entityId);
-						ActivateOutput(pActInfo, EOP_Removed, true);
-					}
-					if (IsPortActive(pActInfo, EIP_Add))
-					{
-						const string& label = GetPortString(pActInfo, EIP_Label);
-						FlashRadarType radarType = static_cast<FlashRadarType> (GetPortInt(pActInfo, EIP_Type));
-						pRadar->AddStoryEntity(entityId, radarType, label);
-						ActivateOutput(pActInfo, EOP_Added, true);
-					}
+					pRadar->RemoveStoryEntity(entityId);
+					ActivateOutput(pActInfo, EOP_Removed, true);
+				}
+				if (IsPortActive(pActInfo, EIP_Add))
+				{
+					const string& label = GetPortString(pActInfo, EIP_Label);
+					FlashRadarType radarType = static_cast<FlashRadarType> (GetPortInt(pActInfo, EIP_Type));
+					pRadar->AddStoryEntity(entityId, radarType, label);
+					ActivateOutput(pActInfo, EOP_Added, true);
 				}
 			}
 		}
@@ -762,15 +726,11 @@ public:
 	{
 		if(eFE_Activate == event && IsPortActive(pActInfo, EIP_Trigger))
 		{
-			CHUD* pHUD = g_pGame->GetHUD();
-			if (pHUD)
-			{
-				const float distortion = GetPortFloat(pActInfo, EIP_Distortion);
-				const float displacement = GetPortFloat(pActInfo, EIP_Displacement);
-				const float alpha = GetPortFloat(pActInfo, EIP_Alpha) * 100.0f;
-				const float decay = GetPortFloat(pActInfo, EIP_Decay);
-				pHUD->StartInterference(distortion, displacement, alpha, decay);
-			}
+			const float distortion = GetPortFloat(pActInfo, EIP_Distortion);
+			const float displacement = GetPortFloat(pActInfo, EIP_Displacement);
+			const float alpha = GetPortFloat(pActInfo, EIP_Alpha) * 100.0f;
+			const float decay = GetPortFloat(pActInfo, EIP_Decay);
+			SAFE_HUD_FUNC(StartInterference(distortion, displacement, alpha, decay));
 		}
 	}
 };
@@ -782,6 +742,7 @@ class CFlowNode_HUDRadarJammer : public CFlowBaseNode
 		EIP_Activate = 0,
 		EIP_Deactivate,
 		EIP_Radius,
+
 	};
 
 	enum OUTPUTS
@@ -829,23 +790,140 @@ public:
 			const bool bDeactivate = IsPortActive(pActInfo, EIP_Deactivate);
 			if (bActivate || bDeactivate)
 			{
+				if (CHUDRadar* pRadar = SAFE_HUD_FUNC_RET(GetRadar()))
+				{
+					if (bDeactivate)
+					{
+						pRadar->SetJammer(0);
+					}
+					if (bActivate)
+					{
+						IEntity* pEntity = pActInfo->pEntity;
+						if (pEntity) // only set new Jammer, in case we have an entity
+						{
+							const float radius = GetPortFloat(pActInfo, EIP_Radius);
+							pRadar->SetJammer(pEntity->GetId(), radius);
+						}
+					}
+				}
+			}
+		}
+	}
+};
+
+class CFlowNode_HUDSilhouettes : public CFlowBaseNode 
+{
+	enum INPUTS
+	{
+		EIP_Activate = 0,
+		EIP_Deactivate,
+		EIP_Color,
+	};
+
+public:
+	CFlowNode_HUDSilhouettes( SActivationInfo * pActInfo ) { }
+
+	void GetConfiguration( SFlowNodeConfig& config )
+	{
+		static const SInputPortConfig in_ports[] = 
+		{
+			InputPortConfig_Void  ( "Activate", _HELP("Trigger to activate. This sets a permanent silhouette (until removed), overwriting automated ones." )),
+			InputPortConfig_Void  ( "Deactivate", _HELP("Trigger to deactivate" )),
+			InputPortConfig<Vec3>  ( "Color", Vec3(1.0f,0.0f,0.0f), _HELP("Color"), 0, _UICONFIG("dt=clr")),
+			{0}
+		};
+
+		config.nFlags |= EFLN_TARGET_ENTITY;
+		config.pInputPorts = in_ports;
+		config.sDescription = _HELP("HUD Silhouette Shader");
+		config.SetCategory(EFLN_WIP);
+	}
+
+	virtual void GetMemoryStatistics(ICrySizer * s)
+	{
+		s->Add(*this);
+	}
+
+	void ProcessEvent( EFlowEvent event, SActivationInfo *pActInfo )
+	{
+		if(eFE_Activate == event)
+		{
+			const bool bActivate = IsPortActive(pActInfo, EIP_Activate);
+			const bool bDeactivate = IsPortActive(pActInfo, EIP_Deactivate);
+			if (bActivate || bDeactivate)
+			{
+				if (CHUDSilhouettes* pSil = SAFE_HUD_FUNC_RET(GetSilhouettes()))
+				{
+					IEntity* pEntity = pActInfo->pEntity;
+					if(pEntity)
+					{
+						if (bDeactivate)
+							pSil->ResetFlowGraphSilhouette(pEntity->GetId());
+						if (bActivate)
+						{
+							const Vec3& color = GetPortVec3(pActInfo, EIP_Color);
+							pSil->SetFlowGraphSilhouette(pEntity, color.x, color.y, color.z, 1.0f, -1.0f);
+						}
+					}
+				}
+			}
+		}
+	}
+};
+
+class CFlowNode_HUDRadarTexture : public CFlowBaseNode 
+{
+	enum INPUTS
+	{
+		EIP_Activate = 0,
+		EIP_MapID,
+	};
+
+	enum OUTPUTS
+	{
+		EOP_Activated = 0,
+	};
+
+public:
+	CFlowNode_HUDRadarTexture( SActivationInfo * pActInfo ) { }
+
+	void GetConfiguration( SFlowNodeConfig& config )
+	{
+		static const SInputPortConfig in_ports[] = 
+		{
+			InputPortConfig_Void  ( "Activate", _HELP("Trigger to activate" )),
+			InputPortConfig<int>( "MapID", 1, _HELP("Texture ID 1-3" )),
+			{0}
+		};
+		static const SOutputPortConfig out_ports[] = 
+		{
+			OutputPortConfig_Void  ( "Activated", _HELP("Triggered when activated" )),
+			{0}
+		};
+
+		config.pInputPorts = in_ports;
+		config.pOutputPorts = out_ports;
+		config.sDescription = _HELP("HUD Radar Texture Background");
+		config.SetCategory(EFLN_WIP);
+	}
+
+	virtual void GetMemoryStatistics(ICrySizer * s)
+	{
+		s->Add(*this);
+	}
+
+	void ProcessEvent( EFlowEvent event, SActivationInfo *pActInfo )
+	{
+		if(eFE_Activate == event)
+		{
+			const bool bActivate = IsPortActive(pActInfo, EIP_Activate);
+			if (bActivate)
+			{
 				if (CHUD* pHUD = g_pGame->GetHUD())
 				{
 					if (CHUDRadar* pRadar = pHUD->GetRadar())
 					{
-						if (bDeactivate)
-						{
-							pRadar->SetJammer(0);
-						}
-						if (bActivate)
-						{
-							IEntity* pEntity = pActInfo->pEntity;
-							if (pEntity) // only set new Jammer, in case we have an entity
-							{
-								const float radius = GetPortFloat(pActInfo, EIP_Radius);
-								pRadar->SetJammer(pEntity->GetId(), radius);
-							}
-						}
+						pRadar->SetMiniMapTexture(GetPortInt(pActInfo, EIP_MapID));
 					}
 				}
 			}
@@ -874,10 +952,7 @@ public:
 
 	~CFlowNode_HUDNightVision()
 	{
-		if (g_pGame->GetHUD())
-		{
-			g_pGame->GetHUD()->UnRegisterListener(this);
-		}
+		SAFE_HUD_FUNC(UnRegisterListener(this));
 	}
 
 	IFlowNodePtr Clone(SActivationInfo* pActInfo)
@@ -917,25 +992,19 @@ public:
 		case eFE_Initialize:
 			{
 				m_actInfo = *pActInfo;
-				CHUD* pHUD = g_pGame->GetHUD();
-				if (pHUD != 0)
-					pHUD->RegisterListener(this);
+				SAFE_HUD_FUNC(RegisterListener(this));
 			}
 			break;
 		case eFE_Activate:
 			{
-				CHUD* pHUD = g_pGame->GetHUD();
-				if (pHUD == 0)
-					return;
+				const CGameActions &rGameActions = g_pGame->Actions();
 				if (IsPortActive(pActInfo, EIP_Activate))
 				{
-					const SGameActions &rGameActions = g_pGame->Actions();
-					pHUD->OnAction(rGameActions.hud_night_vision, eIS_Pressed, 0.0f);
+					SAFE_HUD_FUNC(OnAction(rGameActions.hud_night_vision, eIS_Pressed, 0.0f));
 				}
 				if (IsPortActive(pActInfo, EIP_Deactivate))
 				{
-					const SGameActions &rGameActions = g_pGame->Actions();
-					pHUD->OnAction(rGameActions.hud_night_vision, eIS_Released, 0.0f);
+					SAFE_HUD_FUNC(OnAction(rGameActions.hud_night_vision, eIS_Released, 0.0f));
 				}
 			}
 			break;
@@ -957,6 +1026,7 @@ class CFlowNode_HUDBinoculars : public CFlowBaseNode, public CHUD::IHUDListener
 	{
 		EIP_Show = 0,
 		EIP_Hide,
+		EIP_HideNoFade,
 		EIP_TaggedEntity,
 		EIP_PlayZoomIn,
 		EIP_PlayZoomOut,
@@ -976,10 +1046,7 @@ public:
 
 	~CFlowNode_HUDBinoculars()
 	{
-		if (g_pGame->GetHUD())
-		{
-			g_pGame->GetHUD()->UnRegisterListener(this);
-		}
+		SAFE_HUD_FUNC(UnRegisterListener(this));
 	}
 
 	IFlowNodePtr Clone(SActivationInfo* pActInfo)
@@ -998,6 +1065,7 @@ public:
 		{
 			InputPortConfig_Void ("Show", _HELP("Show the HUD binoculars interface.")),
 			InputPortConfig_Void ("Hide", _HELP("Hide the HUD binoculars interface.")),
+			InputPortConfig_Void ("HideNoFade", _HELP("Hide the HUD binoculars interface without fade-out.")),
 			InputPortConfig<EntityId> ( "TaggedEntity", _HELP("Inform when this entity is tagged. If not set, any entity is reported." )),
 			InputPortConfig_Void ("PlayZoomIn", _HELP("Play the HUD Binoculars Zoom-In sound.")),
 			InputPortConfig_Void ("PlayZoomOut", _HELP("Play the HUD Binoculars Zoom-In sound.")),
@@ -1023,32 +1091,30 @@ public:
 		case eFE_Initialize:
 			{
 				m_actInfo = *pActInfo;
-				CHUD* pHUD = g_pGame->GetHUD();
-				if (pHUD != 0)
-					pHUD->RegisterListener(this);
+				SAFE_HUD_FUNC(RegisterListener(this));
 			}
 			break;
 		case eFE_Activate:
 			{
-				CHUD* pHUD = g_pGame->GetHUD();
-				if (pHUD == 0)
-					break;
-
-				if (IsPortActive(pActInfo, EIP_Hide) && pHUD->GetScopes()->IsBinocularsShown())
+				if (IsPortActive(pActInfo, EIP_Hide) && SAFE_HUD_FUNC_RET(GetScopes()->IsBinocularsShown()))
 				{
-					pHUD->GetScopes()->ShowBinoculars(false);
+					SAFE_HUD_FUNC(GetScopes()->ShowBinoculars(false));
 				}
-				if (IsPortActive(pActInfo, EIP_Show) && !pHUD->GetScopes()->IsBinocularsShown())
+				if (IsPortActive(pActInfo, EIP_HideNoFade) && SAFE_HUD_FUNC_RET(GetScopes()->IsBinocularsShown()))
 				{
-					pHUD->GetScopes()->ShowBinoculars(true, true);
+					SAFE_HUD_FUNC(GetScopes()->ShowBinoculars(false, false, true));
+				}
+				if (IsPortActive(pActInfo, EIP_Show) && !SAFE_HUD_FUNC_RET(GetScopes()->IsBinocularsShown()))
+				{
+					SAFE_HUD_FUNC(GetScopes()->ShowBinoculars(true, true));
 				}
 				if (IsPortActive(pActInfo, EIP_PlayZoomIn))
 				{
-					pHUD->PlaySound(ESound_BinocularsZoomIn);
+					SAFE_HUD_FUNC(PlaySound(ESound_BinocularsZoomIn));
 				}
 				if (IsPortActive(pActInfo, EIP_PlayZoomOut))
 				{
-					pHUD->PlaySound(ESound_BinocularsZoomOut);
+					SAFE_HUD_FUNC(PlaySound(ESound_BinocularsZoomOut));
 				}
 			}
 			break;
@@ -1080,6 +1146,7 @@ class CFlowNode_HUDProgressBar : public CFlowBaseNode
 		EIP_PosX,
 		EIP_PosY,
 		EIP_Align,
+		EIP_LockingAsset,
 	};
 
 	enum OUTPUTS
@@ -1114,6 +1181,7 @@ public:
 			InputPortConfig<float> ( "PosX", 400, _HELP("PosX" )),
 			InputPortConfig<float> ( "PosY", 300, _HELP("PosY" )),
 			InputPortConfig<int>   ( "Align", 0, _HELP("Alignment (Top or Bottom)"), 0, _UICONFIG("enum_int:Bottom=0,Top=1")),
+			InputPortConfig<int>   ( "LockingAsset", 0, _HELP("Use TAC Launcher locking asset instead." )),
 			{0}
 		};
 		static const SOutputPortConfig out_ports[] = 
@@ -1133,13 +1201,10 @@ public:
 	{
 		if (event != eFE_Activate)
 			return;
-		CHUD* pHUD = g_pGame->GetHUD();
-		if (pHUD == 0)
-			return;
 
 		if (IsPortActive(pActInfo, EIP_Hide))
 		{
-			pHUD->ShowProgress(-1); // hide
+			SAFE_HUD_FUNC(ShowProgress(-1)); // hide
 			ActivateOutput(pActInfo, EOP_Hidden, true);
 		}
 		if (IsPortActive(pActInfo, EIP_Show))
@@ -1148,14 +1213,15 @@ public:
 			const float posY = GetPortFloat(pActInfo, EIP_PosY);
 			const string& text = GetPortString(pActInfo, EIP_Text);
 			const int align = GetPortInt(pActInfo, EIP_Align);
-			pHUD->ShowProgress(0, true, (int)posX, (int)posY, text.c_str(), (align == 0)? false : true);
+			const int lockAsset = GetPortInt(pActInfo, EIP_LockingAsset);
+			SAFE_HUD_FUNC(ShowProgress(0, true, (int)posX, (int)posY, text.c_str(), (align == 0)? false : true, (lockAsset==0)? false:true));
 			ActivateOutput(pActInfo, EOP_Shown, true);
 			ActivateOutput(pActInfo, EOP_Progress, 0);
 		}
 		if (IsPortActive(pActInfo, EIP_Progress))
 		{
 			const int progress = GetPortInt(pActInfo, EIP_Progress);
-			pHUD->ShowProgress(progress);
+			SAFE_HUD_FUNC(ShowProgress(progress));
 			if (progress < 0)
 				ActivateOutput(pActInfo, EOP_Hidden, true);
 			else
@@ -1216,18 +1282,15 @@ public:
 	{
 		if (event != eFE_Activate)
 			return;
-		CHUD* pHUD = g_pGame->GetHUD();
-		if (pHUD == 0)
-			return;
 
 		if (IsPortActive(pActInfo, EIP_Activate))
 		{
-			pHUD->ShowDataUpload(true);
+			SAFE_HUD_FUNC(ShowDataUpload(true));
 			ActivateOutput(pActInfo, EOP_Activated, true);
 		}
 		if (IsPortActive(pActInfo, EIP_Deactivate))
 		{
-			pHUD->ShowDataUpload(false);
+			SAFE_HUD_FUNC(ShowDataUpload(false));
 			ActivateOutput(pActInfo, EOP_Deactivated, true);
 		}
 	}
@@ -1237,10 +1300,10 @@ class CFlowNode_HUDObjectives : public CFlowBaseNode
 {
 	enum INPUTS
 	{
-		EIP_SetMain = 0,
-		EIP_Main,
-		EIP_SetGoal,
+		EIP_SetGoal = 0,
 		EIP_Goal,
+		EIP_SetMain,
+		EIP_Main,
 	};
 
 public:
@@ -1261,15 +1324,87 @@ public:
 	{
 		static const SInputPortConfig in_ports[] = 
 		{
-			InputPortConfig_Void   ( "SetMain", _HELP("Set Main Objective" )),
-			InputPortConfig<string> ("mission_Main", _HELP("Main Objective")),
 			InputPortConfig_Void   ( "SetGoal", _HELP("Set Goal Objective" )),
 			InputPortConfig<string> ("mission_Goal", _HELP("Goal Objective")),
+			InputPortConfig_Void   ( "SetMain", _HELP("Set Main Objective"), _HELP("SetMainObjective") ),
+			InputPortConfig<string> ("mission_Main", _HELP("Main Objective"), _HELP("MainObjective") ),
 			{0}
 		};
 		config.pInputPorts = in_ports;
 		config.pOutputPorts = 0;
-		config.sDescription = _HELP("HUD Objective support for Main/Goal Objectives");
+		config.sDescription = _HELP("HUD Objective support for Goal and MainObjective");
+		config.SetCategory(EFLN_WIP);
+	}
+
+	void ProcessEvent( EFlowEvent event, SActivationInfo *pActInfo )
+	{
+		if (event != eFE_Activate)
+			return;
+
+		if (IsPortActive(pActInfo, EIP_SetMain))
+		{
+			const string& v = GetPortString(pActInfo, EIP_Main);
+			SAFE_HUD_FUNC(SetMainObjective(v.c_str(), false));
+		}
+		if (IsPortActive(pActInfo, EIP_SetGoal))
+		{
+			const string& v = GetPortString(pActInfo, EIP_Goal);
+			SAFE_HUD_FUNC(SetMainObjective(v.c_str(), true));
+		}
+	}
+};
+
+class CFlowNode_HUDTutorial : public CFlowBaseNode
+{
+	enum INPUTS
+	{
+		EIP_Show = 0,
+		EIP_Hide,
+		EIP_Message,
+		EIP_Position,
+		EIP_Mode,
+		EIP_Timeout,
+	};
+
+	enum OUTPUTS
+	{
+		EOP_Done = 0
+	};
+
+public:
+	CFlowNode_HUDTutorial( SActivationInfo * pActInfo )
+	{
+	}
+
+	~CFlowNode_HUDTutorial()
+	{
+	}
+
+	virtual void GetMemoryStatistics(ICrySizer * s)
+	{
+		s->Add(*this);
+	}
+
+	void GetConfiguration( SFlowNodeConfig& config )
+	{
+		static const SInputPortConfig in_ports[] = 
+		{
+			InputPortConfig_Void   ( "Show", _HELP("Show the message in the specified MessageBox" )),
+			InputPortConfig_Void   ( "Hide", _HELP("Hide the MessageBox" )),
+			InputPortConfig<string>( "Message", _HELP("Message to show"), 0, _UICONFIG("dt=text")),
+			InputPortConfig<int>   ( "Position", 0, _HELP("Which message box"), 0, _UICONFIG("enum_int:Left=0,Right=1")),
+			InputPortConfig<int>   ( "Mode", 0, _HELP("Mode: Add or Replace Message"), 0, _UICONFIG("enum_int:Add=0,Replace=1")),
+			InputPortConfig<float> ( "Timeout", 0.0f, _HELP("How long to show message. 0.0 = Until hidden")),
+			{0}
+		};
+		static const SOutputPortConfig out_ports[] =
+		{
+			OutputPortConfig_Void( "Done", _HELP("Triggered when Done")),
+			{0}
+		};
+		config.pInputPorts = in_ports;
+		config.pOutputPorts = out_ports;
+		config.sDescription = _HELP("Show Tutorial Messages on the HUD");
 		config.SetCategory(EFLN_WIP);
 	}
 
@@ -1280,16 +1415,83 @@ public:
 		CHUD* pHUD = g_pGame->GetHUD();
 		if (pHUD == 0)
 			return;
+	}
+};
 
-		if (IsPortActive(pActInfo, EIP_SetMain))
+class CFlowNode_HUDOverlayMessage : public CFlowBaseNode
+{
+	enum INPUTS
+	{
+		EIP_Show = 0,
+		EIP_Hide,
+		EIP_Message,
+		EIP_PosX,
+		EIP_PosY,
+		EIP_Color,
+		EIP_Timeout,
+	};
+
+	enum OUTPUTS
+	{
+		EOP_Done = 0
+	};
+
+public:
+	CFlowNode_HUDOverlayMessage( SActivationInfo * pActInfo )
+	{
+	}
+
+	~CFlowNode_HUDOverlayMessage()
+	{
+	}
+
+	virtual void GetMemoryStatistics(ICrySizer * s)
+	{
+		s->Add(*this);
+	}
+
+	void GetConfiguration( SFlowNodeConfig& config )
+	{
+		static const SInputPortConfig in_ports[] = 
 		{
-			const string& v = GetPortString(pActInfo, EIP_Main);
-			pHUD->SetMainObjective(v.c_str(), false);
+			InputPortConfig_Void   ( "Show", _HELP("Show the message" )),
+			InputPortConfig_Void   ( "Hide", _HELP("Hide the message" )),
+			InputPortConfig<string>( "Message", _HELP("Message to show"), 0, _UICONFIG("dt=text")),
+			InputPortConfig<int> ( "PosX", 400, _HELP("PosX")),
+			InputPortConfig<int> ( "PosY", 300, _HELP("PosY")),
+			InputPortConfig<Vec3>  ( "Color", Vec3(1.0f,1.0f,1.0f), _HELP("Color"), 0, _UICONFIG("dt=clr")),
+			InputPortConfig<float> ( "Timeout", 3.0f, _HELP("How long to show message")),
+			{0}
+		};
+		static const SOutputPortConfig out_ports[] =
+		{
+			{0}
+		};
+		config.pInputPorts = in_ports;
+		config.pOutputPorts = out_ports;
+		config.sDescription = _HELP("Show Overlay Messages on the HUD");
+		config.SetCategory(EFLN_WIP);
+	}
+
+	void ProcessEvent( EFlowEvent event, SActivationInfo *pActInfo )
+	{
+		if (event != eFE_Activate)
+			return;
+		CHUD* pHUD = g_pGame->GetHUD();
+		if (pHUD == 0)
+			return;
+		if (IsPortActive(pActInfo, EIP_Show))
+		{
+			const int posX = GetPortInt(pActInfo, EIP_PosX);
+			const int posY = GetPortInt(pActInfo, EIP_PosY);
+			const string& msg = GetPortString(pActInfo, EIP_Message);
+			const float duration = GetPortFloat(pActInfo, EIP_Timeout);
+			const Vec3& color = GetPortVec3(pActInfo, EIP_Color);
+			pHUD->DisplayBigOverlayFlashMessage(msg.c_str(), duration, posX, posY, color);
 		}
-		if (IsPortActive(pActInfo, EIP_SetGoal))
+		else if (IsPortActive(pActInfo, EIP_Hide))
 		{
-			const string& v = GetPortString(pActInfo, EIP_Goal);
-			pHUD->SetMainObjective(v.c_str(), true);
+			pHUD->FadeOutBigOverlayFlashMessage();
 		}
 	}
 };
@@ -1301,12 +1503,16 @@ REGISTER_FLOW_NODE_SINGLETON("HUD:ShowHUDMessage",		 CFlowNode_ShowHUDMessage);
 REGISTER_FLOW_NODE_SINGLETON("HUD:HUDControl",			   CFlowNode_HUDControl);
 REGISTER_FLOW_NODE_SINGLETON("HUD:HUDDataUpload",			 CFlowNode_HUDDataUpload);
 REGISTER_FLOW_NODE_SINGLETON("HUD:PDAScanner",	       CFlowNode_PDAScanner);
-REGISTER_FLOW_NODE_SINGLETON("HUD:RadarControl",								 CFlowNode_HUDRadar);
+REGISTER_FLOW_NODE_SINGLETON("HUD:RadarControl",			 CFlowNode_HUDRadar);
 REGISTER_FLOW_NODE_SINGLETON("HUD:MapInfo",					   CFlowNode_HUDMapInfo);
+REGISTER_FLOW_NODE("HUD:SilhouetteOutline",						 CFlowNode_HUDSilhouettes);
 REGISTER_FLOW_NODE("HUD:AirstrikeControl",					   CFlowNode_HUDAirstrike);
 REGISTER_FLOW_NODE("HUD:InterferenceEffect",					 CFlowNode_HUDInterferenceFX);
 REGISTER_FLOW_NODE_SINGLETON("HUD:RadarJammer",				 CFlowNode_HUDRadarJammer);
+REGISTER_FLOW_NODE_SINGLETON("HUD:RadarTexture",			 CFlowNode_HUDRadarTexture);
 REGISTER_FLOW_NODE("HUD:NightVision",									 CFlowNode_HUDNightVision);
 REGISTER_FLOW_NODE("HUD:Binoculars",									 CFlowNode_HUDBinoculars);
 REGISTER_FLOW_NODE_SINGLETON("HUD:ProgressBar",				 CFlowNode_HUDProgressBar);
 REGISTER_FLOW_NODE_SINGLETON("HUD:Objectives",				 CFlowNode_HUDObjectives);
+// REGISTER_FLOW_NODE_SINGLETON("HUD:TutorialMsg",        CFlowNode_HUDTutorial);
+REGISTER_FLOW_NODE_SINGLETON("HUD:OverlayMsg",         CFlowNode_HUDOverlayMessage);

@@ -199,4 +199,37 @@ protected:
 #define SIZER_COMPONENT_NAME(pSizerPointer, szComponentName) CrySizerComponentNameHelper __sizerHelper(pSizerPointer, szComponentName, false)
 #define SIZER_SUBCOMPONENT_NAME(pSizerPointer, szComponentName) CrySizerComponentNameHelper __sizerHelper(pSizerPointer, szComponentName, true)
 
+
+//////////////////////////////////////////////////////////////////////////
+// Helper functions to calculate size of the std containers.
+//////////////////////////////////////////////////////////////////////////
+namespace stl
+{
+	struct MapLikeStruct
+	{
+		bool color;
+		void *parent;
+		void *left;
+		void *right;
+	};
+	template <class Map>
+	inline size_t size_of_map( const Map &m )
+	{
+		if (!m.empty())
+		{
+			return m.size()*sizeof(typename Map::value_type) + m.size()*sizeof(MapLikeStruct);
+		}
+		return 0;
+	}
+	template <class Map>
+	inline size_t size_of_set( const Map &m )
+	{
+		if (!m.empty())
+		{
+			return m.size()*sizeof(typename Map::value_type) + m.size()*sizeof(MapLikeStruct);
+		}
+		return 0;
+	}
+};
+
 #endif //_CRY_COMMON_CRY_SIZER_INTERFACE_HDR_

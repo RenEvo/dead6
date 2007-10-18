@@ -121,6 +121,7 @@ public:
   virtual bool IsPowered() { return m_isEnginePowered || m_bEngineAlwaysOn; }
 	virtual void ProcessMovement(const float deltaTime);
   virtual bool RequestMovement(CMovementRequest& movementRequest);
+  virtual void OnAction(const TVehicleActionId actionId, int activationMode, float value);
 
 	virtual void Serialize(TSerialize ser, unsigned aspects);
   virtual void SetAuthority( bool auth ) { m_netActionSync.CancelReceived(); }
@@ -161,6 +162,7 @@ protected:
       
   // driving
   float m_velMax;
+  float m_velMaxReverse;
   float m_accel;
   float m_accelCoeff;
   Vec3  m_pushOffset;
@@ -169,15 +171,13 @@ protected:
 
   // steering
   float m_turnRateMax;
+  float m_turnRateReverse;
   float m_turnAccel;
   float m_turnAccelCoeff;  
   float m_cornerForceCoeff;
   Vec3  m_cornerOffset;
   float m_cornerTilt;
   float m_turnDamping;
-
-  // stabilization
-  Vec3 m_stabRate;
 
   Vec3 m_Inertia;
   Vec3 m_gravity;

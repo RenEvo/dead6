@@ -68,6 +68,13 @@ void CItem::RemoveAccessory(const ItemString& name)
 }
 
 //------------------------------------------------------------------------
+void CItem::RemoveAllAccessories()
+{
+	while(m_accessories.size() > 0)
+		RemoveAccessory((m_accessories.begin())->first);
+}
+
+//------------------------------------------------------------------------
 struct CItem::AttachAction
 {
 	AttachAction(CItem *pAccessory, SAccessoryParams *pParams)
@@ -85,11 +92,9 @@ struct CItem::AttachAction
 		item->PlayLayer(params->attach_layer, eIPAF_Default|eIPAF_NoBlend);
 		item->SetBusy(false);
 		item->AccessoriesChanged();
-		if (item->IsCloaked())
-		{
-			IMaterial *oldMat = item->Cloak(false);
-			item->Cloak(true, oldMat);
-		}
+
+		accessory->CloakSync(true);
+
 		if(item->GetOwnerId() && !item->IsSelected())
 		{
 			accessory->Hide(true);
@@ -121,7 +126,7 @@ struct CItem::DetachAction
 	SAccessoryParams *params;
 };
 
-void CItem::AttachAccessory(const ItemString& name, bool attach, bool noanim, bool force)
+void CItem::AttachAccessory(const ItemString& name, bool attach, bool noanim, bool force, bool initialSetup)
 {
 	if (!force && IsBusy())
 		return;
@@ -136,48 +141,53 @@ void CItem::AttachAccessory(const ItemString& name, bool attach, bool noanim, bo
 		if (!IsAccessoryHelperFree(params->attach_helper))
 			return;
 
-		CItem *pAccessory = AddAccessory(name);
-		if (!pAccessory)
-			return;
-
-		pAccessory->Physicalize(false, false);
-		pAccessory->SetViewMode(m_stats.viewmode);
-		
-		SetCharacterAttachment(eIGS_FirstPerson, params->attach_helper, pAccessory->GetEntity(), eIGS_FirstPerson, 0);
-		SetBusy(true);
-
-		AttachAction action(pAccessory, params);
-		
-		if (anim)
+		if (CItem *pAccessory = AddAccessory(name))
 		{
-			PlayAction(params->attach_action, 0, false, eIPAF_Default|eIPAF_NoBlend);
-			m_scheduler.TimerAction(GetCurrentAnimationTime(eIGS_FirstPerson), CSchedulerAction<AttachAction>::Create(action), false);
+			pAccessory->Physicalize(false, false);
+			pAccessory->SetViewMode(m_stats.viewmode);
+
+			if (!initialSetup)
+				pAccessory->m_bonusAccessoryAmmo.clear();
+			
+			SetCharacterAttachment(eIGS_FirstPerson, params->attach_helper, pAccessory->GetEntity(), eIGS_FirstPerson, 0);
+			SetBusy(true);
+
+			AttachAction action(pAccessory, params);
+			
+			if (anim)
+			{
+				PlayAction(params->attach_action, 0, false, eIPAF_Default|eIPAF_NoBlend);
+				m_scheduler.TimerAction(GetCurrentAnimationTime(eIGS_FirstPerson), CSchedulerAction<AttachAction>::Create(action), false);
+			}
+			else
+				action.execute(this);
+
 		}
-		else
-			action.execute(this);
 	}
 	else
 	{
-		CItem *pAccessory = GetAccessory(name);
-		if (!pAccessory)
-			return;
-
-		DetachAction action(pAccessory, params);
-
-		if (anim)
+		if (CItem *pAccessory = GetAccessory(name))
 		{
-			StopLayer(params->attach_layer, eIPAF_Default|eIPAF_NoBlend);
-			PlayAction(params->detach_action, 0, false, eIPAF_Default|eIPAF_NoBlend);
-			m_scheduler.TimerAction(GetCurrentAnimationTime(eIGS_FirstPerson), CSchedulerAction<DetachAction>::Create(action), false);
-			SetBusy(true);
-		}
-		else
-		{
-			SetBusy(true);
-			action.execute(this);
+			DetachAction action(pAccessory, params);
+
+			if (anim)
+			{
+				StopLayer(params->attach_layer, eIPAF_Default|eIPAF_NoBlend);
+				PlayAction(params->detach_action, 0, false, eIPAF_Default|eIPAF_NoBlend);
+				m_scheduler.TimerAction(GetCurrentAnimationTime(eIGS_FirstPerson), CSchedulerAction<DetachAction>::Create(action), false);
+				SetBusy(true);
+			}
+			else
+			{
+				SetBusy(true);
+				action.execute(this);
+			}
 		}
 	}
-	FixAccessories(params, attach);
+
+	//Skip all this for the offhand
+	if(GetEntity()->GetClass()!=CItem::sOffHandClass)
+		FixAccessories(params, attach);
 
 	//Attach silencer to 2nd SOCOM
 	/////////////////////////////////////////////////////////////
@@ -265,7 +275,7 @@ bool CItem::IsAccessoryHelperFree(const ItemString& helper)
 	{
 		SAccessoryParams *params = GetAccessoryParams(it->first);
 		
-		if (params->attach_helper == helper)
+		if (!params || params->attach_helper == helper)
 			return false;
 	}
 
@@ -281,10 +291,10 @@ void CItem::InitialSetup()
 		{
 			for (TInitialSetup::iterator it = m_initialSetup.begin(); it != m_initialSetup.end(); ++it)
 			{
-				if (!IsClient())
-					AddAccessory(*it);
-				else
-					AttachAccessory(*it, true, true, true);
+				//if (!IsClient())
+				//	AddAccessory(*it);
+				//else
+				AttachAccessory(*it, true, true, true, true);
 			}
 		}
 	}
@@ -356,7 +366,7 @@ void CItem::DoSwitchAccessory(const ItemString& inAccessory)
 		{
 			SAccessoryParams *p = GetAccessoryParams(it->first);
 
-			if (p->attach_helper == params->attach_helper)
+			if (p && p->attach_helper == params->attach_helper)
 			{
 				replacing = it->first;
 				attached = true;
@@ -365,21 +375,21 @@ void CItem::DoSwitchAccessory(const ItemString& inAccessory)
 		}
 		if (attached)
 		{
-			ScheduleAttachAccessory(replacing, false);
+			AttachAccessory(replacing, false, true, true);
 			if (accessory != replacing)
-				ScheduleAttachAccessory(accessory, true);
+				AttachAccessory(accessory, true, true, true);
 		}
 	}
 
 	if (!attached)
-		ScheduleAttachAccessory(accessory, true);
+		AttachAccessory(accessory, true, true, true);
 }
 
 //------------------------------------------------------------------------
-class ScheduleAttachClass
+class ScheduleAttachClassItem
 {
 public:
-	ScheduleAttachClass(const char *_name, bool _attach)
+	ScheduleAttachClassItem(const char *_name, bool _attach)
 	{
 		name = _name;
 		attach = _attach;
@@ -396,7 +406,7 @@ private:
 
 void CItem::ScheduleAttachAccessory(const ItemString& accessoryName, bool attach)
 {
-	GetScheduler()->ScheduleAction(CSchedulerAction<ScheduleAttachClass>::Create(ScheduleAttachClass(accessoryName, attach)));
+	GetScheduler()->ScheduleAction(CSchedulerAction<ScheduleAttachClassItem>::Create(ScheduleAttachClassItem(accessoryName, attach)));
 }
 
 //------------------------------------------------------------------------
@@ -406,25 +416,25 @@ const char *CItem::CurrentAttachment(const ItemString& attachmentPoint)
 	{
 		SAccessoryParams *params= GetAccessoryParams(it->first);
 
-		if (params->attach_helper == attachmentPoint)
+		if (params && params->attach_helper == attachmentPoint)
 			return it->first.c_str();
 	}
 	return 0;
 }
 
 //------------------------------------------------------------------------
-void CItem::ResetAccessoriesScreen()
+void CItem::ResetAccessoriesScreen(CActor* pOwner)
 {
 	m_modifying = false;
 	m_transitioning = false;
 
 	StopLayer(g_pItemStrings->modify_layer, eIPAF_Default, false);
 
-	if (GetOwnerActor() && GetOwnerActor()->IsClient())
+	if(pOwner && pOwner->IsClient())
 	{
-		if(g_pGame->GetHUD() && m_params.update_hud)
+		if(m_params.update_hud)
 		{
-			g_pGame->GetHUD()->WeaponAccessoriesInterface(false, true);
+			SAFE_HUD_FUNC(WeaponAccessoriesInterface(false, true));
 		}
 	}
 }
@@ -435,7 +445,7 @@ void CItem::PatchInitialSetup()
 	const char* temp = NULL;
 	// check if the initial setup accessories has been overridden in the level
 	SmartScriptTable props;
-	if (GetEntity()->GetScriptTable()->GetValue("Properties", props))
+	if (GetEntity()->GetScriptTable() && GetEntity()->GetScriptTable()->GetValue("Properties", props))
 	{
 		if(props->GetValue("initialSetup",temp) && temp !=NULL && temp[0]!=0)
 		{
@@ -462,5 +472,22 @@ void CItem::PatchInitialSetup()
 			lastPos = m_properties.initialSetup.find_first_not_of(",", pos);
 			pos = m_properties.initialSetup.find_first_of(",", lastPos);
 		}		
+	}
+}
+
+//------------------------------------------------------------------------
+void CItem::OnAttach(bool attach)
+{
+	if (attach && m_parentId)
+	{
+		if (CItem *pParent=static_cast<CItem *>(m_pItemSystem->GetItem(m_parentId)))
+		{
+			const SStats &stats=pParent->GetStats();
+			if (stats.mounted)
+			{
+				PlayAction(m_idleAnimation[eIGS_FirstPerson], 0, true);
+				ForceSkinning(true);
+			}
+		}
 	}
 }

@@ -14,6 +14,7 @@ History:
 #include "FreezingBeam.h"
 #include "Game.h"
 #include "GameRules.h"
+#include "WeaponSystem.h"
 
 
 
@@ -49,12 +50,24 @@ void CFreezingBeam::PatchParams(const struct IItemParamsNode *patch)
 //------------------------------------------------------------------------
 void CFreezingBeam::Hit(ray_hit &hit, const Vec3 &dir)
 {
+  if (gEnv->bMultiplayer)  
+	  if (CActor *pActor=m_pWeapon->GetOwnerActor())
+		  if (pActor && !pActor->IsClient())
+			  return;
+  
 	IEntity *pEntity = gEnv->pEntitySystem->GetEntityFromPhysics(hit.pCollider);
 
-	if (pEntity && (hit.pCollider->GetType()==PE_RIGID || hit.pCollider->GetType()==PE_ARTICULATED || hit.pCollider->GetType()==PE_LIVING || hit.pCollider->GetType()==PE_WHEELEDVEHICLE))
-  {
-		g_pGame->GetGameRules()->ClientSimpleHit(SimpleHitInfo(m_shooterId, pEntity->GetId(), m_pWeapon->GetEntityId(), 0xe));
-  }
+	float frost = m_freezeparams.freeze_speed>0.0f?m_freezeparams.freeze_speed*m_beamparams.tick:1.0f;
+
+	int type=hit.pCollider->GetType();
+	if (pEntity && (type==PE_RIGID || type==PE_ARTICULATED || type==PE_LIVING || type==PE_WHEELEDVEHICLE || 
+		(type==PE_STATIC && g_pGame->GetWeaponSystem()->GetProjectile(pEntity->GetId())))) // static projectiles are allowed to be frozen
+	{
+		SimpleHitInfo info(m_pWeapon->GetOwnerId(), pEntity->GetId(), m_pWeapon->GetEntityId(), 0xe);
+		info.value=frost;
+
+		g_pGame->GetGameRules()->ClientSimpleHit(info);
+	}
 }
 
 //------------------------------------------------------------------------
@@ -63,30 +76,6 @@ void CFreezingBeam::Tick(ray_hit &hit, const Vec3 &dir)
 }
 
 //------------------------------------------------------------------------
-void CFreezingBeam::TickDamage(ray_hit &hit, const Vec3 &dir)
-{ 
-  IEntity *pEntity = gEnv->pEntitySystem->GetEntityFromPhysics(hit.pCollider);
-  
-  if (pEntity)
-  {
-    CGameRules *pGameRules = g_pGame->GetGameRules();
-
-    HitInfo info(m_pWeapon->GetOwnerId(), pEntity->GetId(), m_pWeapon->GetEntityId(), m_fireparams.damage, 0.25f,
-      pGameRules->GetHitMaterialIdFromSurfaceId(hit.surface_idx), hit.partid, pGameRules->GetHitTypeId(m_fireparams.hit_type.c_str()),
-      hit.pt, dir, hit.n);
-
-    info.frost = m_freezeparams.freeze_speed>0.f ? m_freezeparams.freeze_speed*m_beamparams.tick : 1.f;
-
-    //gEnv->pRenderer->DrawLabel(hit.pt, 1.8f, "Frost: %.2f", info.frost);
-
-    if (m_pWeapon->GetForcedHitMaterial() != -1)
-      info.material=pGameRules->GetHitMaterialIdFromSurfaceId(m_pWeapon->GetForcedHitMaterial());
-
-    pGameRules->ClientHit(info);
-  }
-}
-
-
 void CFreezingBeam::GetMemoryStatistics(ICrySizer * s)
 {
   s->Add(*this);

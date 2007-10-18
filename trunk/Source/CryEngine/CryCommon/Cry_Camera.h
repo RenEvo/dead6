@@ -167,6 +167,7 @@ public:
 	uint8 IsAABBVisible_EH( const AABB& aabb, bool *bAllIn ) const;
   bool IsAABBVisible_EHM( const AABB& aabb, bool *bAllInside ) const;
   bool IsAABBVisible_EM( const AABB& aabb ) const;
+  bool IsAABBVisible_FM( const AABB& aabb ) const;
 
 	//OBB-frustum test 
 	bool IsOBBVisible_F( const Vec3& wpos, const OBB& obb ) const;
@@ -366,7 +367,7 @@ inline void	CCamera::SetFrustum(int nWidth,int nHeight, f32 FOV, f32 nearplane,f
 	m_edge_plt.x    =-m_Width*0.5f; 
 	m_edge_plt.y    = (f32)(1.0/tan(m_fov*0.5) * (m_Height*0.5));
 	m_edge_plt.z    = m_Height*0.5f;
-	assert( fabs(acos(Vec3r(0,m_edge_plt.y,m_edge_plt.z).GetNormalized().y)*2-m_fov)<0.001 );
+	assert( fabs(acos_tpl(Vec3r(0,m_edge_plt.y,m_edge_plt.z).GetNormalized().y)*2-m_fov)<0.001 );
 
 	m_edge_nlt.x	= nearplane*m_edge_plt.x/m_edge_plt.y;	 
 	m_edge_nlt.y	=	nearplane; 
@@ -547,7 +548,7 @@ inline bool	CCamera::IsPointVisible(const Vec3 &p) const {
 // return values
 //   CULL_EXCLUSION = sphere outside of frustum (very fast rejection-test)      
 //   CULL_INTERSECT = sphere and frustum intersects or sphere in completely inside frustum
-ILINE bool CCamera::IsSphereVisible_F( const Sphere &s ) const {
+inline bool CCamera::IsSphereVisible_F( const Sphere &s ) const {
 	if ((m_fp[0]|s.center) > s.radius) return CULL_EXCLUSION;
 	if ((m_fp[1]|s.center) > s.radius) return CULL_EXCLUSION;
 	if ((m_fp[2]|s.center) > s.radius) return CULL_EXCLUSION;
@@ -569,7 +570,7 @@ ILINE bool CCamera::IsSphereVisible_F( const Sphere &s ) const {
 //   CULL_EXCLUSION   = sphere outside of frustum (very fast rejection-test)      
 //   CULL_INTERSECT   = sphere intersects the borders of the frustum, further checks necessary
 //   CULL_INCLUSION   = sphere is complete inside the frustum, no further checks necessary
-ILINE uint8 CCamera::IsSphereVisible_FH( const Sphere &s) const {
+inline uint8 CCamera::IsSphereVisible_FH( const Sphere &s) const {
 	f32 nc,rc,lc,tc,bc,cc;
 	if ((nc=m_fp[0]|s.center)>s.radius) return CULL_EXCLUSION;
 	if ((rc=m_fp[1]|s.center)>s.radius) return CULL_EXCLUSION;
@@ -605,7 +606,7 @@ ILINE uint8 CCamera::IsSphereVisible_FH( const Sphere &s) const {
 // return values
 //   CULL_EXCLUSION   = AABB outside of frustum (very fast rejection-test)      
 //   CULL_OVERLAP     = AABB either intersects the borders of the frustum or is totally inside
-ILINE bool CCamera::IsAABBVisible_F( const AABB& aabb ) const
+inline bool CCamera::IsAABBVisible_F( const AABB& aabb ) const
 { 
 	const f32* p=&aabb.min.x; uint32 x,y,z;
 	x=m_idx1[0]; y=m_idy1[0]; z=m_idz1[0]; if ( (m_fp[0]|Vec3(p[x],p[y],p[z])) > 0) return CULL_EXCLUSION;	
@@ -628,7 +629,7 @@ ILINE bool CCamera::IsAABBVisible_F( const AABB& aabb ) const
 //   CULL_EXCLUSION   = AABB outside of frustum (very fast rejection-test)      
 //   CULL_OVERLAP     = AABB intersects the borders of the frustum, further checks necessary
 //   CULL_INCLUSION   = AABB is complete inside the frustum, no further checks necessary
-ILINE uint8 CCamera::IsAABBVisible_FH(const AABB& aabb, bool *bAllIn=0 ) const
+inline uint8 CCamera::IsAABBVisible_FH(const AABB& aabb, bool *bAllIn=0 ) const
 {
 	if (bAllIn)	*bAllIn=false;
 	if (IsAABBVisible_F(aabb)==CULL_EXCLUSION) return CULL_EXCLUSION;
@@ -656,7 +657,7 @@ ILINE uint8 CCamera::IsAABBVisible_FH(const AABB& aabb, bool *bAllIn=0 ) const
 // return values:
 //  CULL_EXCLUSION   = AABB outside of frustum (very fast rejection-test)      
 //  CULL_OVERLAP     = AABB either intersects the borders of the frustum or is totally inside
-ILINE bool CCamera::IsAABBVisible_E(const AABB& aabb) const
+inline bool CCamera::IsAABBVisible_E(const AABB& aabb) const
 {
 	uint8 o=IsAABBVisible_FH(aabb);
 	if (o==CULL_EXCLUSION) return CULL_EXCLUSION;
@@ -679,7 +680,7 @@ ILINE bool CCamera::IsAABBVisible_E(const AABB& aabb) const
 //   CULL_EXCLUSION   = AABB outside of frustum (very fast rejection-test)      
 //   CULL_OVERLAP     = AABB intersects the borders of the frustum, further checks necessary
 //   CULL_INCLUSION   = AABB is complete inside the frustum, no further checks necessary
-ILINE uint8 CCamera::IsAABBVisible_EH(const AABB& aabb, bool* bAllIn=0 ) const
+inline uint8 CCamera::IsAABBVisible_EH(const AABB& aabb, bool* bAllIn=0 ) const
 {
 	uint8 o=IsAABBVisible_FH(aabb,bAllIn);
 	if (o==CULL_EXCLUSION) return CULL_EXCLUSION;
@@ -694,7 +695,7 @@ ILINE uint8 CCamera::IsAABBVisible_EH(const AABB& aabb, bool* bAllIn=0 ) const
 // return values:
 //  true - box visible
 //  true - not visible
-ILINE bool CCamera::IsAABBVisible_EHM( const AABB& aabb, bool *pAllInside ) const
+inline bool CCamera::IsAABBVisible_EHM( const AABB& aabb, bool *pAllInside ) const
 {
   if(!m_pMultiCamera) // use main camera
     return IsAABBVisible_EH(aabb, pAllInside) != CULL_EXCLUSION;
@@ -731,7 +732,7 @@ ILINE bool CCamera::IsAABBVisible_EHM( const AABB& aabb, bool *pAllInside ) cons
 // return values:
 //  true - box visible
 //  true - not visible
-ILINE bool CCamera::IsAABBVisible_EM( const AABB& aabb ) const
+inline bool CCamera::IsAABBVisible_EM( const AABB& aabb ) const
 {
   if(!m_pMultiCamera) // use main camera
     return IsAABBVisible_E(aabb) != CULL_EXCLUSION;
@@ -746,6 +747,26 @@ ILINE bool CCamera::IsAABBVisible_EM( const AABB& aabb ) const
 }
 
 
+// Description:
+//  Makes culling taking into account presence of m_pMultiCamera
+//  If m_pMultiCamera exists - object is visible if at least one of cameras see's it
+//
+// return values:
+//  true - box visible
+//  true - not visible
+inline bool CCamera::IsAABBVisible_FM( const AABB& aabb ) const
+{
+  if(!m_pMultiCamera) // use main camera
+    return IsAABBVisible_F(aabb) != CULL_EXCLUSION;
+
+  // check several parallel cameras - object is visible if at least one camera see's it
+
+  for(int i=0; i<m_pMultiCamera->Count(); i++)
+    if( m_pMultiCamera->GetAt(i).IsAABBVisible_F(aabb) )
+      return true;
+
+  return false;
+}
 
 
 
@@ -762,7 +783,7 @@ ILINE bool CCamera::IsAABBVisible_EM( const AABB& aabb ) const
 // return values:
 //   CULL_EXCLUSION = OBB outside of frustum (very fast rejection-test)      
 //   CULL_OVERLAP   = OBB and frustum intersects or OBB in totally inside frustum
-ILINE bool CCamera::IsOBBVisible_F( const Vec3& wpos, const OBB& obb ) const {
+inline bool CCamera::IsOBBVisible_F( const Vec3& wpos, const OBB& obb ) const {
 	assert( obb.m33.IsOrthonormalRH(0.001f) );	
 
 	//transform the obb-center into world-space
@@ -810,7 +831,7 @@ ILINE uint8 CCamera::IsOBBVisible_FH( const Vec3& wpos, const OBB& obb ) const
 // return values:
 //   CULL_EXCLUSION   = OBB outside of frustum (very fast rejection-test)      
 //   CULL_OVERLAP     = OBB intersects the borders of the frustum or is totally inside
-ILINE bool CCamera::IsOBBVisible_E( const Vec3& wpos, const OBB& obb, f32 uscale=1.0f ) const {
+inline bool CCamera::IsOBBVisible_E( const Vec3& wpos, const OBB& obb, f32 uscale=1.0f ) const {
 	assert( obb.m33.IsOrthonormalRH(0.001f) );	
 
 	//transform the obb-center into world-space
@@ -854,7 +875,7 @@ ILINE bool CCamera::IsOBBVisible_E( const Vec3& wpos, const OBB& obb, f32 uscale
 //   CULL_EXCLUSION   = OBB outside of frustum (very fast rejection-test)      
 //   CULL_OVERLAP     = OBB intersects the borders of the frustum, further checks necessary
 //   CULL_INCLUSION   = OBB is complete inside the frustum, no further checks necessary
-ILINE uint8 CCamera::IsOBBVisible_EH( const Vec3& wpos, const OBB& obb, f32 uscale=1.0f ) const {
+inline uint8 CCamera::IsOBBVisible_EH( const Vec3& wpos, const OBB& obb, f32 uscale=1.0f ) const {
 	assert( obb.m33.IsOrthonormalRH(0.001f) );	
 	//transform the obb-center into world-space
 	Vec3 p	=	obb.m33*obb.c*uscale + wpos;
@@ -908,7 +929,7 @@ extern uint8 BoxSides[];
 //   return CULL_OVERLAP.
 //
 // Note:  With this check, we make sure the AABB is really not visble
-ILINE bool CCamera::AdditionalCheck( const AABB& aabb ) const 
+inline bool CCamera::AdditionalCheck( const AABB& aabb ) const 
 {
 	Vec3r m = (aabb.min+aabb.max)*0.5;	
 	uint32 o=1; //will be reset to 0 if center is outside
@@ -999,7 +1020,7 @@ ILINE bool CCamera::AdditionalCheck( const AABB& aabb ) const
 //   return CULL_OVERLAP.
 // Note:
 //   With this check, we make sure the OBB is really not visible
-ILINE bool CCamera::AdditionalCheck( const Vec3& wpos, const OBB& obb, f32 uscale ) const 
+inline bool CCamera::AdditionalCheck( const Vec3& wpos, const OBB& obb, f32 uscale ) const 
 {
 	Vec3 CamInOBBSpace	= wpos-GetPosition();
 	Vec3 iCamPos = -CamInOBBSpace*obb.m33;

@@ -21,6 +21,9 @@ struct ILoadGame
 	// finish - indicate success (negative success *must* remove file)
 	// also calls delete this;
 	virtual void Complete() = 0;
+
+	// returns the filename of this savegame
+	virtual const char* GetFileName() const = 0;
 };
 
 #endif

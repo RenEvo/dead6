@@ -97,12 +97,12 @@ public:
 
 	virtual void StartReload(int zoomed);
 
-	virtual void StartFire(EntityId shooterId);
-	virtual void StopFire(EntityId shooterId);
+	virtual void StartFire();
+	virtual void StopFire();
   virtual bool IsFiring() const { return m_firing || m_accelerating; };
 
-	virtual void NetStartFire(EntityId shooterId);
-	virtual void NetStopFire(EntityId shooterId);
+	virtual void NetStartFire();
+	virtual void NetStopFire();
 
 	virtual float GetSpinUpTime() const;
 	virtual float GetSpinDownTime() const;

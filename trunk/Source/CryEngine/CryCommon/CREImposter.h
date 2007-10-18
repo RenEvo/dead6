@@ -43,7 +43,8 @@ class CREImposter : public CRendElement
   Vec3 m_vPos;
 	Vec3 m_vLastSunDir;
 	uint8 m_nLastBestEdge;								// 0..11 this edge is favored to not jitter between different edges
-  Vec4 m_vZRange;
+  float m_fNear;
+	float m_fFar;
 
   bool IsImposterValid(const CRenderCamera& cam, float fRadiusX, float fRadiusY, float fCamRadiusX, float fCamRadiusY, 
 		const int iRequiredLogResX, const int iRequiredLogResY, const uint32 dwBestEdge );
@@ -57,6 +58,7 @@ class CREImposter : public CRendElement
   Vec3 GetPosition();
 
 public:
+  int m_nFrameReset;
   int m_FrameUpdate;
   float m_fTimeUpdate;
   static int m_MemUpdated;
@@ -77,9 +79,12 @@ public:
     m_AlphaRef(-1),
     m_fCurTransparency(1.0f),
     m_FrameUpdate(0),
+    m_nFrameReset(0),
     m_fTimeUpdate(0),
 		m_pTerrainNode(0),
 		m_vLastSunDir(0, 0, 0),
+		m_nLogResolutionX(0),
+		m_nLogResolutionY(0),
 		m_nLastBestEdge(0)
   {
     mfSetType(eDATA_Imposter);
@@ -90,7 +95,7 @@ public:
   {
 		ReleaseResources();
 	}
-  virtual float mfDistanceToCameraSquared(const CRenderObject & thisObject);
+  virtual float mfDistanceToCameraSquared(Matrix34& matInst);
   virtual void mfPrepare();
   virtual bool mfDraw(CShader *ef, SShaderPass *sl);
 	
@@ -150,7 +155,7 @@ public:
 
 	virtual void mfPrepare();
 	virtual bool mfDraw(CShader *ef, SShaderPass *sl);
-	virtual float mfDistanceToCameraSquared(const CRenderObject & thisObject);
+	virtual float mfDistanceToCameraSquared(Matrix34& matInst);
 
 	virtual void SetCamera(const CCamera & cam) { m_Camera = cam; }
 	virtual void SetPrevCamPos(const Vec3 & vPrevCamPos) { m_vPrevCamPos = vPrevCamPos; }

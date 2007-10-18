@@ -34,7 +34,7 @@ public:
 	CHUDTextArea();
 	virtual ~CHUDTextArea();
 
-	virtual void OnUpdate(float deltaTime, float fadeValue);
+	virtual void Update(float deltaTime);
 	virtual void AddMessage(const char* msg);
 
 	void GetMemoryStatistics(ICrySizer * s);
