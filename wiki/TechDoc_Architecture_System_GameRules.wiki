@@ -42,4 +42,26 @@ void
 *Returns*:
 void
 
+
+=== *_ !GetServerStateScript _* ===
+*Purpose*:
+Returns server state script object
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetClientStateScript _* ===
+*Purpose*:
+Returns client state script object
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
 [TechDoc_Architecture Back]
