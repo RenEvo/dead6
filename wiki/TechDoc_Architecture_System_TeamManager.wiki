@@ -5,9 +5,51 @@ The Team Manager module is responsible for managing the defined teams. Teams are
 
 The current team management code present in the Crysis codebase is stripped out and migrated into the Team Manager module. As such, some functionality present in the module is there for backwards compatibility.
 
+The Team Manager is also responsible for managing the Harvesters created via the [TechDoc_Architecture_Game_HarvesterFlow Harvester Controllers]. Although the Team Manager does not handle any of the harvester logic, it does aggregate the Harvester Definitions for the controllers to use.
+
 A Script Bind also exists that allows the Script System to communicate with the Team Manager.
 
 = Functionality =
+
+== !STeamHarvesterDef ==
+Below are the methods defined in the !STeamHarvesterDef object.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !CheckFlag _* ===
+*Purpose*:
+Returns TRUE if the given flag is set
+
+*Arguments*:
+ * _nFlag_ - `[In]` Flag to check
+
+*Returns*:
+TRUE if flag is set, FALSE if not
+
+
+=== *_ !SetFlag _* ===
+*Purpose*:
+Set the flag specified
+
+*Arguments*:
+ * _bOn_ - `[In]` TRUE to turn it on, FALSE to clear it
+ * _nFlag_ - `[In]` Flag to set
+
+*Returns*:
+TRUE on success, FALSE on failure
+
+
+== !STeamDef ==
+Below are the methods defined in the !STeamDef object.
 
 == !TeamManager ==
 Below are the methods defined in the !TeamManager interface.
@@ -57,6 +99,29 @@ void
 
 *Note*:
 Should be called at the start of a level load
+
+=== *_ !ResetGame _* ===
+*Purpose*:
+Called when the game is reset, such as when the editor game starts up
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Update _* ===
+*Purpose*:
+Update the teams
+
+*Arguments*:
+ * _bHaveFocus_ - `[In]` TRUE if game has focus
+ * _nUpdateFlags_ - `[In]` Update flags
+
+*Returns*:
+void
+
 
 === *_ !GetMemoryStatistics _* ===
 *Purpose*:
@@ -280,38 +345,75 @@ void
 *Note*:
 Using the name is slower than the ID!
 
-
-== !ScriptBind_TeamManager ==
-Below are the methods defined in the !ScriptBind_TeamManager module.
-
-=== *_ Constructor _* ===
+=== *_ !CreateTeamHarvester _* ===
 *Purpose*:
-Undefined.
+Create a harvester for the team
 
 *Arguments*:
-void
+ * _bUseFactory_ - `[In]` TRUE to create the harvester through the vehicle factory (if present)
+ * _fDir_ - `[In]` Direction to face if not created through the vehicle factory
+ * _nID_ - `[In]` Team ID
+ * _ppDef_ - `[Out]` Harvester defintion (optional)
+ * _vPos_ - `[In]` Where to create the harvester at if not though the vehicle factory
 
 *Returns*:
-void
+ID of harvester or HARVESTERID_INVALID on error
 
 
-=== *_ Destructor _* ===
+=== *_ !GetTeamHarvesterInfo _* ===
 *Purpose*:
-Undefined.
+Return map of harvesters owned by the given team
 
 *Arguments*:
-void
+ * _list_ - `[Out]` List of harvesters
+ * _nID_ - `[In]` Team ID
 
 *Returns*:
-void
+TRUE on success
 
 
-=== *_ !AttachTo _* ===
+=== *_ !GetTeamHarvester _* ===
 *Purpose*:
-Attaches binding to a team manager
+Return the harvestere definition
 
 *Arguments*:
-void
+ * _nHarvesterID_ - `[In]` ID of the harvester
+ * _nID_ - `[In]` Owning team ID
+
+*Returns*:
+STeamHarvesterDef object or NULL on error
+
+
+=== *_ !RemakeTeamHarvester _* ===
+*Purpose*:
+Remakes the entity for the given harvester
+
+*Arguments*:
+ * _bLeaveEntity_ - `[In]` TRUE if old entity should be left in the world
+ * _pDef_ - `[In]` Harvester definition
+
+*Returns*:
+TRUE on success, FALSE on error
+
+
+=== *_ !GetChannelTeam _* ===
+*Purpose*:
+Get the team that owns the given channel
+
+*Arguments*:
+ * _nChannelID_ - `[In]` Channel ID
+
+*Returns*:
+id of Team
+
+
+=== *_ !GetTeamChannelCount _* ===
+*Purpose*:
+Returns how many channels a team has
+
+*Arguments*:
+ * _bInGame_ - `[In]` TRUE to only count those in the game
+ * _nTeamID_ - `[In]` team ID
 
 *Returns*:
 void
@@ -329,6 +431,28 @@ Member Variables:
  * szScript - Lua script used by the team
  * szXML - XML file that defines the team
  * !PlayerList - List of player IDs who are on the team
+ * !DefHarvester - Default Harvester definition inherited by all harvesters created on the team
+ * !HarvesterList - List of Harvesters owned by the team
+
+
+== !STeamHarvesterDef ==
+Description: This structure is used to represent a harvester owned by a team. It contains information including the harvester's unique ID, the owning team's ID, the vehicle entity's ID, attributes and helper properties. A reference to this definition is contained in each [TechDoc_Architecture_Game_HarvesterFlow Harvester Controller].
+
+Member Variables:
+ * fCapacity - How much tiberium the harvester can hold
+ * fBuildTime - How long it takes for the harvester to be rebuilt once destroyed
+ * fLoadRate - How long it takes the harvester to load one piece of tiberium
+ * fUnloadRate - How long it takes the harvester to unload one piece of tiberium
+ * fPayloadTimer - Used to record how long the harvester has been loading/unloading
+ * fPayload - How much tiberium is currently in the tank
+ * ucFlags - Harvester flags
+ * vCreateAt - Where harvester is created at if it doesn't go through the vehicle factory
+ * fCreateDir - Degree of facing when harvester is created
+ * nTeamID - Owning team's ID
+ * nID - Harvester's unique ID
+ * nEntityID - Vehicle entity ID used to represent the harvester
+ * szEntityName - Vehicle entity name to use to represent the harvester
+ * SignalQueue - Queue of signals that need processing
 
 
 = Creating a Team =
@@ -339,6 +463,10 @@ Based on the [TechDoc_Architecture_Game_CNCRules CNCRules] XML file, each team l
 }}}
 
 Then the system will look first for "<map>\Teams\XML\GDI.xml" and then "Game\Scripts\Teams\XML\GDI.xml". The attributes contained in this file are used to define the team, including the name, Lua script, and other properties. To view the contents of this file, see [TechDoc_Architecture_Game_CNCTeams here].
+
+
+= Team Harvesters =
+[TechDoc_Architecture_Game_HarvesterFlow Harvester Controllers] use the Team Manager to create and retain the Harvester Definitions created during the game. These definitions are used to define a Harvester in the world. The definitions are contained in a map inside each Team Definition.
 
 
 [TechDoc_Architecture Back]
