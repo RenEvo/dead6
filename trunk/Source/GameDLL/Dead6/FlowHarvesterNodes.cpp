@@ -71,7 +71,6 @@ public:
 	enum EInputPorts
 	{
 		EIP_Team,			// String: Owning team
-		EIP_UnloadTime,		// Float: How long it takes to unload
 		EIP_CreateAt,		// Vector: Where to create Harvester at if Vehicle Factory is not used or not present
 		EIP_CreateFace,		// Float: Direction to face when created 
 		EIP_UseFactory,		// Bool: TRUE to use the factory, FALSE to use the CreateAt point. If no factory present, always false.
@@ -425,7 +424,6 @@ void CFlowHarvesterControllerNode::GetConfiguration(SFlowNodeConfig& config)
 	static const SInputPortConfig inputs[] =
 	{
 		InputPortConfig<string>("Team", _HELP("Owning team")),
-		InputPortConfig<float>("UnloadTime", 10.0f, _HELP("How long it should take to unload")),
 		InputPortConfig<Vec3>("CreateAt", _HELP("Where to create the Harvester at if not going through factory"), _HELP("Create At")),
 		InputPortConfig<float>("CreateFace", 0.0f, _HELP("Direction (degrees) Harvester should face if not created through factory"), _HELP("Create Dir")),
 		InputPortConfig<bool>("UseFactory", true, _HELP("TRUE Create Harvester through the Vechicle Factory, FALSE to use CreateAt point")),
@@ -436,8 +434,8 @@ void CFlowHarvesterControllerNode::GetConfiguration(SFlowNodeConfig& config)
 	static const SOutputPortConfig outputs[] =
 	{
 		OutputPortConfig_Void("Purchased", _HELP("Triggered when the harvester is (re)purchased")),
-		OutputPortConfig_Void("ToField", _HELP("Triggered when the harvester is to begin its route to the Tiberium Field.")),
-		OutputPortConfig_Void("FromField", _HELP("Triggered when the harvester is to begin its route back from the Tiberium Field.")),
+		OutputPortConfig_Void("ToField", _HELP("Triggered when the harvester is to begin its route to the Tiberium Field")),
+		OutputPortConfig_Void("FromField", _HELP("Triggered when the harvester is to begin its route back from the Tiberium Field")),
 		OutputPortConfig_Void("Loading", _HELP("Triggered when the harvester is starting to load up")),
 		OutputPortConfig_Void("Loaded", _HELP("Triggered when the harvester has loaded")),
 		OutputPortConfig_Void("Unloading", _HELP("Triggered when the harvester is starting to unload")),
