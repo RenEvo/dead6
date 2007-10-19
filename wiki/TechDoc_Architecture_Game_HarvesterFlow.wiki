@@ -1,0 +1,294 @@
+#summary Game Feature - Harvester Flow Logic
+
+= Overview =
+
+The Harvester Flog logic is the series of Flow Nodes contained in a unique Flow Graph on the level that defines the behavior of a Harvester in the world. Each Harvester is created through the existence of a Harvester Controller node. This node has output ports that can be used to define the behavior for when the Harvester is purchased, moving to/from the Tiberium Field, and when the Harvester is loading/unloading its tank.
+
+A team can have an infinite amount of Harvesters. (Actually, it can have 65536 Harvesters at one time.) Each Controller node represents one Harvester for the specified team. *It is important to note that each Controller must exist in its OWN FLOW GRAPH!* The Controller utilizes the secondary default entity slot of the graph to transfer the necessary information needed by the other Harvester nodes to function. Putting more than one Controller on the same graph will cause conflict between the two separate flows.
+
+Further down, each Node will be explained. The Functionality present here is for the Node's C++ classes.
+
+
+= Functionality =
+
+== !FlowHarvesterControllerNode ==
+Below are the methods defined in the !FlowHarvesterControllerNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !RemakeHarvester _* ===
+*Purpose*:
+Removes the harvester from the world
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+== !FlowHarvesterSignalNode ==
+Below are the methods defined in the !FlowHarvesterSignalNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+== !FlowHarvesterGotoNode ==
+Below are the methods defined in the !FlowHarvesterGotoNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ Reset _* ===
+*Purpose*:
+Reset the node for the harvester to use
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+== !FlowHarvesterTurnNode ==
+Below are the methods defined in the !FlowHarvesterTurnNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ Reset _* ===
+*Purpose*:
+Reset the node for the harvester to use
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+= Flow Nodes =
+
+There are four separate Flow Nodes utilized by the Harvester Flow to achieve specific results for controlling the Harvester. Below, each of these Nodes are explained, as well as their port's purposes.
+
+== Harvester:Controller ==
+Purpose: This Node acts as the main controller for the Harvester. It creates the Harvester and handles the main logic behind it. Specific Output ports allow you to define the behavior of the Harvester when specific events occur throughout its life.
+
+Input Ports:
+ * a
+
+
+[TechDoc_Architecture Back]
