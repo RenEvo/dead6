@@ -308,7 +308,7 @@ Purpose: This Node acts as a signaler to the controller and is used to tell the 
 
 Input Ports:
  * Signal - Call to make the signal to the Harvester.
- * Value - Signal to send. See _Signals_ section below for available signals and what they mean/do.
+ * Value - (Enum) Signal to send. See _Signals_ section below for available signals and what they mean/do.
 
 Output Ports:
  * Done - Triggered when the signal has been made. This does not mean the signal has been processed by the controller, but that the signal has been queued up for the controller to process!
@@ -324,7 +324,41 @@ Signals:
 
 
 == Harvester:Goto ==
-Purpose: This Node is used to move the Harvester to a new location in the world. The Harvester moves using the vehicle physics engine in CryENGINE 2 with the movement properties laid out in the vehicle's definition. 
+Purpose: This Node is used to move the Harvester to a new location in the world. The Harvester moves using the vehicle physics engine in CryENGINE 2 with the movement properties laid out in the vehicle's definition.
 
+Input Ports:
+ * Move - Call to have the Harvester begin to move to the designated location.
+ * Goto Position - (Vector) Where the Harvester should move to. Note that the 'Z' component is not used.
+ * Top Speed - (Float) Maximum speed the Harvester can use when moving to the point.
+ * Low Speed - (Float) Minimum speed the Harvester can use when slowing down near the point.
+ * Slow Distance - (Float) How far from the Goto Position before the Harvester can begin to slow down. Its speed is based on an linear interpretation between its distance to the point and the ratio of Low Speed to Top Speed. Keep at '0' if Harvester should maintain Top Speed all the way to the point.
+ * Break Past - (Bool) TRUE if Harvester should apply breaks once it reaches the Goto Position. FALSE will cause the Harvester to keep its current speed.
+ * Reverse - (Bool) TRUE if Harvester should drive in reverse to reach the point. Note that steering is not as good in reverse, so it may be more difficult for the Harvester to complete the Goto in reverse.
+ * Lock Steering - (Bool) TRUE if Harvester cannot use steering while moving to the Goto Position. Note that this may prevent the Harvester from successfully moving to the Goto Position! Used to ensure Harvester maintains its direction when driving in reverse.
+ * Timeout - (Float) How long the Harvester has to make it to its point before timing out. Keep at 0 to ignore the Timeout logic. Can be used to ensure Harvester maintains its course in case it loses its way or something blocks it.
+
+Output Ports:
+ * Done - Triggered when harvester is at or passes the location
+ * Start - Triggered when harvester begins to move to the location
+ * TimedOut - Triggered when harvester times out and did not make it to the location
+
+
+== Harvester:Turn ==
+Purpose: Used to turn the Harvester to a new facing on the dime. Vehicle physics are disabled and not used while this is occurring to ensure a smooth, accurate facing is achieved.
+
+Input Ports:
+ * Turn - Call to begin turning the Harvester.
+ * Face Degree - (Float) Degree of facing Harvester should move towards. A degree of 0 is the forward facing of the entity in its local space.
+ * Speed - (Float) How fast the Harvester turns in degrees per second.
+ * Timeout - (Float) How long the Harvester has to make it to its point before timing out. Keep at 0 to ignore the Timeout logic.
+
+Output Ports:
+ * Done - Triggered when harvester is at or passes the degree of facing
+ * Start - Triggered when harvester begins to turn
+ * TimedOut - Triggered when harvester times out and did not complete the turn
+
+
+== Example Graph ==
+To see an example graph, please view the Harvester_Test map provided in the latest build.
 
 [TechDoc_Architecture Back]
