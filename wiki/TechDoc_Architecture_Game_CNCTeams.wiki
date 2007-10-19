@@ -24,9 +24,9 @@ The Team tag's attributes are as such:
 The contained Harvester tag is used to define the Team's Harvester properties, which are inherited by all Harvesters created on the team. It's attributes are defined as such:
  * Entity - The entity to use for the Harvester
  * Capacity - How much tiberium the Harvester can hold in its tank
- * BuildTime - How long it takes the Harvester to be rebuilt once destroyed, in seconds
- * LoadRate - How long it takes the Harvester to load its tank with tiberium, in one part of tiberium per second. (A capacity of 300 with a load rate of 1 would take 300 seconds to fully load)
- * UnloadRate - How long it takes the Harvester to unload its tank, in one part of tiberium per second.
+ * !BuildTime - How long it takes the Harvester to be rebuilt once destroyed, in seconds
+ * !LoadRate - How long it takes the Harvester to load its tank with tiberium, in one part of tiberium per second. (A capacity of 300 with a load rate of 1 would take 300 seconds to fully load)
+ * !UnloadRate - How long it takes the Harvester to unload its tank, in one part of tiberium per second.
 
 
 = Team LUA File =
