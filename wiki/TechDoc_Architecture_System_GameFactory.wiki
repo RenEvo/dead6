@@ -9,8 +9,8 @@ The Dead6 Game Factory module replaces the Crysis Game Factory and is used to fo
 
 The following items have been added/replaced in comparison to the Crysis Game Factory:
 
- [*] "Player" - Player class (_Changed from *CPlayer* to *CD6Player*_)
- [*] "Harvester" - Vehicle Movement class (_Added for *CVehicleMovementHarvester*_)
- [*] "Gamerules" - Main Gamerules class (_Changed from *CGameRules* to *CD6GameRules*_)
+ * "Player" - Player class (_Changed from *CPlayer* to *CD6Player*_)
+ * "Harvester" - Vehicle Movement class (_Added for *CVehicleMovementHarvester*_)
+ * "Gamerules" - Main Gamerules class (_Changed from *CGameRules* to *CD6GameRules*_)
 
 [TechDoc_Architecture Back]
