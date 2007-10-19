@@ -361,6 +361,6 @@ Output Ports:
 == Example Graph ==
 To see an example graph, please view the !Harvester_Test map provided in the latest build.
 
-[http://code.google.com/Media/Harvester_Flow_01.png http://code.google.com/Media/Harvester_Flow_01.png]
+[http://dead6.googlecode.com/svn/trunk/Media/Harvester_Flow_01.png http://dead6.googlecode.com/svn/trunk/Media/Harvester_Flow_01.thumb.png]
 
 [TechDoc_Architecture Back]
