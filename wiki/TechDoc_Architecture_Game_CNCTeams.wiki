@@ -11,13 +11,22 @@ The Team XML file is the blueprint for a team. It defines the team's attributes 
 This is an example of a typical team XML file:
 {{{
 <?xml version="1.0" encoding="utf-8"?>
-<Team Name="GDI" LongName="Global Defense Initiative" Script="CNCTeam.lua"></Team>
+<Team Name="GDI" LongName="Global Defense Initiative" Script="CNCTeam.lua">
+  <Harvester Entity="Harvester" Capacity="300.0" BuildTime="10.0" LoadRate="10.0" UnloadRate="20.0" />
+</Team>
 }}}
 
 The Team tag's attributes are as such:
  * Name - The short-hand name of the team.
  * !LongName - The long-hand name of the team.
  * Script - The Lua script inherited and used by this team for team behavior controlling.
+
+The contained Harvester tag is used to define the Team's Harvester properties, which are inherited by all Harvesters created on the team. It's attributes are defined as such:
+ * Entity - The entity to use for the Harvester
+ * Capacity - How much tiberium the Harvester can hold in its tank
+ * BuildTime - How long it takes the Harvester to be rebuilt once destroyed, in seconds
+ * LoadRate - How long it takes the Harvester to load its tank with tiberium, in one part of tiberium per second. (A capacity of 300 with a load rate of 1 would take 300 seconds to fully load)
+ * UnloadRate - How long it takes the Harvester to unload its tank, in one part of tiberium per second.
 
 
 = Team LUA File =
