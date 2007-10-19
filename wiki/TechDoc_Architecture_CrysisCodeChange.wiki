@@ -12,34 +12,56 @@ Below, seperated by files, are the explinations for all changes made. Developmen
 
 = Changes =
 
+== !IMovementController.h ==
+
+Lines 567 - 580:
+{{{
+	// [D6] Lock steering movement request
+	bool HasLockedSteering(void) const
+	{
+		return CheckFlag(eMRF_LockedSteering);
+	}
+
+	void SetLockedSteering(bool bLocked)
+	{
+		if (true == bLocked)
+			SetFlag(eMRF_LockedSteering);
+		else
+			ClearFlag(eMRF_LockedSteering);
+	}
+	// [/D6]
+}}}
+
 == !IEntity.h ==
 
-Lines 384 - 386:
+Lines 378 - 380:
 {{{
 	// [D6] Special flag - Used to mark if an entity is an interface to a building
-	ENTITY_FLAG_ISINTERFACE				= BIT(31),
-	// [/D6]
+    ENTITY_FLAG_ISINTERFACE				 = BIT(4),
+    // [/D6]
 }}}
 
 == Game.cpp ==
 
-Lines 45 - 47:
+Lines 45 - 48:
 {{{
 // [D6] Use our game factory
+//#include "GameFactory.h"
 #include "CD6GameFactory.h"
 // [/D6]
 }}}
 
-Lines 149 - 151:
+Lines 185 - 188:
 {{{
 	// [D6] Use our game factory!
+	//InitGameFactory(m_pFramework);
 	InitD6GameFactory(m_pFramework);
 	// [/D6]
 }}}
 
 == !GameDll.cpp ==
 
-Lines 21 - 24:
+Lines 20 - 23:
 {{{
 // [D6] Include our platform too
 #include <d6platform_impl.h>
@@ -47,7 +69,7 @@ Lines 21 - 24:
 // [/D6]
 }}}
 
-Lines 26 - 29:
+Lines 25 - 28:
 {{{
 // [D6] Set up extern
 CD6CoreGlobalEnvironment CD6CoreGlobalEnvironment::m_Instance;
@@ -55,14 +77,14 @@ CD6CoreGlobalEnvironment* g_D6Core = &CD6CoreGlobalEnvironment::GetInstance();
 // [/D6]
 }}}
 
-Lines 39 - 41:
+Lines 45 - 47:
 {{{
 		// [D6] Init our platform
 		g_D6Core->D6CoreModuleInitISystem(pGameFramework->GetISystem());
 		// [/D6]
 }}}
 
-Lines 45 - 49:
+Lines 51 - 55:
 {{{
 		// [D6] Run our game, not theirs!
 		CD6Game *pGame = new ((void*)pGameBuffer) CD6Game();
@@ -73,7 +95,7 @@ Lines 45 - 49:
 
 == !GameRules.cpp ==
 
-Lines 173 - 178:
+Lines 214 - 219:
 {{{
 	// [D6] This is handled by the team manager now
 	assert(g_D6Core->pTeamManager);
@@ -83,7 +105,7 @@ Lines 173 - 178:
 	// [/D6]
 }}}
 
-Lines 597 - 620:
+Lines 769 - 792:
 {{{
 		// [D6] Use team manager to get this info
 		/*EntityId teamId = GetTeam(shooter);
@@ -111,7 +133,7 @@ Lines 597 - 620:
 		// [/D6]
 }}}
 
-Lines 1086 - 1095:
+Lines 1380 - 1389:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TTeamIdMap::iterator it = m_teams.find(CONST_TEMP_STRING(name));
@@ -125,7 +147,7 @@ Lines 1086 - 1095:
 	// [/D6]
 }}}
 
-Lines 1103 - 1117:
+Lines 1397 - 1411:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	//TTeamIdMap::iterator it = m_teams.find(CONST_TEMP_STRING(GetTeamName(teamId)));
@@ -144,7 +166,7 @@ Lines 1103 - 1117:
 	// [/D6]
 }}}
 
-Lines 1123 - 1129:
+Lines 1417 - 1423:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*for (TTeamIdMap::const_iterator it = m_teams.begin(); it!=m_teams.end(); ++it)
@@ -155,7 +177,7 @@ Lines 1123 - 1129:
 	// [/D6]
 }}}
 
-Lines 1137 - 1141:
+Lines 1431 - 1435:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TTeamIdMap::const_iterator it=m_teams.find(CONST_TEMP_STRING(name));
@@ -164,14 +186,14 @@ Lines 1137 - 1141:
 	// [/D6]
 }}}
 
-Lines 1149 - 1151:
+Lines 1443 - 1445:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	//return (int)m_teams.size();
 	// [/D6]
 }}}
 
-Lines 1159 - 1183:
+Lines 1453 - 1477:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*if (!inGame)
@@ -200,7 +222,24 @@ Lines 1159 - 1183:
 	// [/D6]
 }}}
 
-Lines 1191 - 1198:
+Lines 1485 - 1497:
+{{{
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*int count=0;
+	for (TChannelTeamIdMap::const_iterator it=m_channelteams.begin(); it!=m_channelteams.end(); ++it)
+	{
+		if (teamId==it->second)
+		{
+			if (!inGame || IsChannelInGame(it->first))
+				++count;
+		}
+	}
+
+	return count;*/
+	// [/D6]
+}}}
+
+Lines 1505 - 1512:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TPlayerTeamIdMap::const_iterator it=m_playerteams.find(teamId);
@@ -212,7 +251,7 @@ Lines 1191 - 1198:
 	// [/D6]
 }}}
 
-Lines 1206 - 1211:
+Lines 1520 - 1525:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*players.resize(0);
@@ -222,71 +261,103 @@ Lines 1206 - 1211:
 	// [/D6]
 }}}
 
-Lines 1217 - 1276:
+Lines 1532 - 1623:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
-	//if (!gEnv->bServer )
-	//{
-	//	assert(0);
-	//	return;
-	//}
+	/*if (!gEnv->bServer )
+	{
+		assert(0);
+		return;
+	}
 
-	//int oldTeam = GetTeam(id);
-	//if (oldTeam==teamId)
-	//	return;
+	int oldTeam = GetTeam(id);
+	if (oldTeam==teamId)
+		return;
 
-	//TEntityTeamIdMap::iterator it=m_entityteams.find(id);
-	//if (it!=m_entityteams.end())
-	//	m_entityteams.erase(it);
+	TEntityTeamIdMap::iterator it=m_entityteams.find(id);
+	if (it!=m_entityteams.end())
+		m_entityteams.erase(it);
 
-	//bool isplayer=m_pActorSystem->GetActor(id)!=0;
-	//if (isplayer && oldTeam)
-	//{
-	//	TPlayerTeamIdMap::iterator pit=m_playerteams.find(oldTeam);
-	//	assert(pit!=m_playerteams.end());
-	//	stl::find_and_erase(pit->second, id);
-	//}
-	//if (teamId)
-	//{
-	//	m_entityteams.insert(TEntityTeamIdMap::value_type(id, teamId));
+	IActor *pActor=m_pActorSystem->GetActor(id);
+	bool isplayer=pActor!=0;
+	if (isplayer && oldTeam)
+	{	
+		TPlayerTeamIdMap::iterator pit=m_playerteams.find(oldTeam);
+		assert(pit!=m_playerteams.end());
+		stl::find_and_erase(pit->second, id);
+	}
 
-	//	if (isplayer)
-	//	{
-	//		TPlayerTeamIdMap::iterator pit=m_playerteams.find(teamId);
-	//		assert(pit!=m_playerteams.end());
-	//		pit->second.push_back(id);
+	if (teamId)
+	{
+		m_entityteams.insert(TEntityTeamIdMap::value_type(id, teamId));
 
-	//		UpdateObjectivesForPlayer(GetChannelId(id), teamId);
-	//	}
-	//}
+		if (isplayer)
+		{
+			TPlayerTeamIdMap::iterator pit=m_playerteams.find(teamId);
+			assert(pit!=m_playerteams.end());
+			pit->second.push_back(id);
 
-	//if(isplayer)
-	//	ReconfigureVoiceGroups(id,oldTeam,teamId);
+			UpdateObjectivesForPlayer(GetChannelId(id), teamId);
+		}
+	}
 
-	//if (gEnv->bClient)
-	//	m_pRadio->SetTeam(GetTeamName(teamId));
+	if(IActor *pClient = g_pGame->GetIGameFramework()->GetClientActor())
+	{
+		if(GetTeam(pClient->GetEntityId()) == teamId)
+		{
+			if(id == pClient->GetGameObject()->GetWorldQuery()->GetLookAtEntityId())
+			{
+				if(g_pGame->GetHUD())
+				{
+					g_pGame->GetHUD()->GetCrosshair()->SetUsability(0);
+					g_pGame->GetHUD()->GetCrosshair()->SetUsability(1);
+				}
+			}
+		}
+	}
 
-	//ScriptHandle handle(id);
-	//CallScript(m_serverStateScript, "OnSetTeam", handle, teamId);
+	if(isplayer)
+	{
+		ReconfigureVoiceGroups(id,oldTeam,teamId);
 
-	//if (gEnv->bClient)
-	//{
-	//	ScriptHandle handle(id);
-	//	CallScript(m_clientStateScript, "OnSetTeam", handle, teamId);
-	//}
-	//
-	//// if this is a spawn group, update it's validity
-	//if (m_spawnGroups.find(id)!=m_spawnGroups.end())
-	//	CheckSpawnGroupValidity(id);
+		int channelId=GetChannelId(id);
 
-	//GetGameObject()->InvokeRMIWithDependentObject(ClSetTeam(), SetTeamParams(id, teamId), eRMI_ToRemoteClients, id);
+		TChannelTeamIdMap::iterator it=m_channelteams.find(channelId);
+		if (it!=m_channelteams.end())
+		{
+			if (!teamId)
+				m_channelteams.erase(it);
+			else
+				it->second=teamId;
+		}
+		else if(teamId)
+			m_channelteams.insert(TChannelTeamIdMap::value_type(channelId, teamId));
 
-	//if (IEntity *pEntity=m_pEntitySystem->GetEntity(id))
-	//	m_pGameplayRecorder->Event(pEntity, GameplayEvent(eGE_ChangedTeam, 0, (float)teamId));
+		if (pActor->IsClient())
+			m_pRadio->SetTeam(GetTeamName(teamId));
+	}
+
+	ScriptHandle handle(id);
+	CallScript(m_serverStateScript, "OnSetTeam", handle, teamId);
+
+	if (gEnv->bClient)
+	{
+		ScriptHandle handle(id);
+		CallScript(m_clientStateScript, "OnSetTeam", handle, teamId);
+	}
+	
+	// if this is a spawn group, update it's validity
+	if (m_spawnGroups.find(id)!=m_spawnGroups.end())
+		CheckSpawnGroupValidity(id);
+
+	GetGameObject()->InvokeRMIWithDependentObject(ClSetTeam(), SetTeamParams(id, teamId), eRMI_ToRemoteClients, id);
+
+	if (IEntity *pEntity=m_pEntitySystem->GetEntity(id))
+		m_pGameplayRecorder->Event(pEntity, GameplayEvent(eGE_ChangedTeam, 0, (float)teamId));*/
 	// [/D6]
 }}}
 
-Lines 1282 - 1286:
+Lines 1629 - 1633:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TEntityTeamIdMap::const_iterator it = m_entityteams.find(entityId);
@@ -295,7 +366,16 @@ Lines 1282 - 1286:
 	// [/D6]
 }}}
 
-Lines 1951 - 1962:
+Lines 1641 - 1645:
+{{{
+	// [D6] Code is handled by CD6GameRules and Team Manager
+	/*TChannelTeamIdMap::const_iterator it = m_channelteams.find(channelId);
+	if (it != m_channelteams.end())
+		return it->second;*/
+	// [/D6]
+}}}
+
+Lines 2407 - 2418:
 {{{
 		// [D6] Let team manager handle this
 		/*TTeamIdEntityIdMap::iterator next;
@@ -311,7 +391,7 @@ Lines 1951 - 1962:
 		// [/D6]
 }}}
 
-Lines 2039 - 2046:
+Lines 2502 - 2509:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TTeamIdEntityIdMap::iterator it=m_teamdefaultspawns.find(teamId);
@@ -323,7 +403,7 @@ Lines 2039 - 2046:
 	// [/D6]
 }}}
 
-Lines 2052 - 2056:
+Lines 2515 - 2519:
 {{{
 	// [D6] Code is handled by CD6GameRules and Team Manager
 	/*TTeamIdEntityIdMap::iterator it=m_teamdefaultspawns.find(teamId);
@@ -332,7 +412,7 @@ Lines 2052 - 2056:
 	// [/D6]
 }}}
 
-Lines 2344 - 2357:
+Lines 2886 - 2900:
 {{{
 					// [D6] Use team manager
 					/*TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
@@ -345,12 +425,13 @@ Lines 2344 - 2357:
 					GetTeamPlayers(teamId, players);
 					for (TPlayers::const_iterator itPlayer = players.begin(); itPlayer != players.end(); itPlayer++)
 					{
-						GetGameObject()->InvokeRMIWithDependentObject(ClChatMessage(), params, eRMI_ToClientChannel, *itPlayer, GetChannelId(*itPlayer));
+						if (CanReceiveChatMessage(type, sourceId, *itPlayer))
+							GetGameObject()->InvokeRMIWithDependentObject(ClChatMessage(), params, eRMI_ToClientChannel, *itPlayer, GetChannelId(*itPlayer));
 					}
 					// [/D6]
 }}}
 
-Lines 2523 - 2541:
+Lines 3199 - 3217:
 {{{
 	// [D6] Use team manager
 	/*CGameRules *pGameRules=g_pGame->GetGameRules();
@@ -373,7 +454,7 @@ Lines 2523 - 2541:
 	// [/D6]
 }}}
 
-Lines 2559 - 2577:
+Lines 3235 - 3253:
 {{{
 	// [D6] Let team manager handle this
 	/*CGameRules *pGameRules=g_pGame->GetGameRules();
@@ -396,7 +477,18 @@ Lines 2559 - 2577:
 	// [/D6]
 }}}
 
-Lines 3035 - 3049:
+Lines 3570 - 3576:
+{{{
+	// [D6] No longer needed here
+	/*m_entityteams.clear();
+	m_teamdefaultspawns.clear()
+
+	for (TPlayerTeamIdMap::iterator tit=m_playerteams.begin(); tit!=m_playerteams.end(); tit++)
+		tit->second.resize(0);;*/
+	// [/D6]
+}}}
+
+Lines 3896 - 3910:
 {{{
 				// [D6] Use team's player map
 				/*TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
@@ -415,7 +507,7 @@ Lines 3035 - 3049:
 				// [/D6]
 }}}
 
-Lines 3125 - 3130:
+Lines 4020 - 4025:
 {{{
 	// [D6] Following containers are no longer part of the GameRules class, migrated to Team Manager
 	//s->AddContainer(m_teams);
@@ -425,7 +517,7 @@ Lines 3125 - 3130:
 	// [/D6]
 }}}
 
-Lines 3144 - 3149:
+Lines 4039 - 4044:
 {{{
 	// [D6] Migrated to Team Manager
 	/*for (TTeamIdMap::iterator iter = m_teams.begin(); iter != m_teams.end(); ++iter)
@@ -435,138 +527,23 @@ Lines 3144 - 3149:
 	// [/D6]
 }}}
 
-== !GameRules.h ==
-
-Lines 38 - 136:
-{{{
-// [D6] Altered to work with Team Manager
-//#define GAMERULES_INVOKE_ON_TEAM(team, rmi, params)	\
-//{ \
-//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-//	if (_team!=m_playerteams.end()) \
-//	{ \
-//	const TPlayers &_players=_team->second; \
-//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-//	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
-//	} \
-//} \
-//
-//#define GAMERULES_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
-//{ \
-//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-//	if (_team!=m_playerteams.end()) \
-//	{ \
-//	const TPlayers &_players=_team->second; \
-//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-//	GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
-//	} \
-//} \
-//
-//
-//#define ACTOR_INVOKE_ON_TEAM(team, rmi, params)	\
-//{ \
-//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-//	if (_team!=playerteams.end()) \
-//	{ \
-//	const TPlayers &_players=_team.second; \
-//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-//		{ \
-//		CActor *pActor=GetActorByEntityId(*_player); \
-//		if (pActor) \
-//		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
-//		} \
-//	} \
-//} \
-//
-//
-//#define ACTOR_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
-//{ \
-//	TPlayerTeamIdMap::const_iterator _team=m_playerteams.find(team); \
-//	if (_team!=playerteams.end()) \
-//	{ \
-//	const TPlayers &_players=_team.second; \
-//	for (TPlayers::const_iterator _player=_players.begin();_player!=_players.end(); ++_player) \
-//		{ \
-//		CActor *pActor=GetActorByEntityId(*_player); \
-//		if (pActor) \
-//		pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
-//		} \
-//	} \
-//} \
-
-#define GAMERULES_INVOKE_ON_TEAM(team, rmi, params)	\
-{ \
-	CGameRules::TPlayers _players; \
-	GetTeamPlayers(team, _players); \
-	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
-		GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
-}
-
-#define GAMERULES_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
-{ \
-	CGameRules::TPlayers _players; \
-	GetTeamPlayers(team, _players); \
-	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
-		GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
-} \
-
-
-#define ACTOR_INVOKE_ON_TEAM(team, rmi, params)	\
-{ \
-	CGameRules::TPlayers _players; \
-	GetTeamPlayers(team, _players); \
-	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
-	{ \
-		CActor *pActor=GetActorByEntityId(*_player); \
-		if (pActor) \
-			pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel, GetChannelId(*_player)); \
-		} \
-	} \
-} \
-
-
-#define ACTOR_INVOKE_ON_TEAM_NOLOCAL(team, rmi, params)	\
-{ \
-	CGameRules::TPlayers _players; \
-	GetTeamPlayers(team, _players); \
-	for (CGameRules::TPlayers::const_iterator _player = _players.begin(); _player != _players.end(); _player++) \
-	{ \
-		CActor *pActor=GetActorByEntityId(*_player); \
-		if (pActor) \
-			pActor->GetGameObject()->InvokeRMI(rmi, params, eRMI_ToClientChannel|eRMI_NoLocalCalls, GetChannelId(*_player)); \
-		} \
-	} \
-} \
-// [/D6]
-}}}
-
-Lines 1043 - 1049:
-{{{
-	// [D6] Following items are no longer part of the GameRules class, migrated to Team Manager
-	//TTeamIdMap			m_teams;
-	//TEntityTeamIdMap		m_entityteams;
-	//TTeamIdEntityIdMap	m_teamdefaultspawns;
-	//TPlayerTeamIdMap		m_playerteams;
-	//int					m_teamIdGen;
-	// [/D6]
-}}}
-
 == !GameRulesClientServer.cpp ==
 
-Lines 495 - 524:
+Lines 790 - 820:
 {{{
 	// [D6] Code is handled in team manager now
 	assert(g_D6Core->pTeamManager);
 	bool bResult = g_D6Core->pTeamManager->SetTeam(params.teamId, params.entityId);
-	/*int oldTeam = GetTeam(params.entityId);
+	int oldTeam = GetTeam(params.entityId);
 	if (oldTeam==params.teamId)
 		return true;
+	IActor *pActor=m_pActorSystem->GetActor(params.entityId);
+	bool isplayer=pActor!=0;
 
-	TEntityTeamIdMap::iterator it=m_entityteams.find(params.entityId);
+	/*TEntityTeamIdMap::iterator it=m_entityteams.find(params.entityId);
 	if (it!=m_entityteams.end())
 		m_entityteams.erase(it);
 
-	bool isplayer=m_pActorSystem->GetActor(params.entityId)!=0;
 	if (isplayer && oldTeam)
 	{
 		TPlayerTeamIdMap::iterator pit=m_playerteams.find(oldTeam);
