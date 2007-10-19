@@ -41,6 +41,17 @@ void
 void
 
 
+=== *_ !IsEditorGameStarted _* ===
+*Purpose*:
+Returns TRUE if the game in the editor has started
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
 === *_ !GetBaseManagerScriptBind _* ===
 *Purpose*:
 Returns the script bind for the base manager
@@ -66,17 +77,6 @@ void
 === *_ !GetBuildingControllerScriptBind _* ===
 *Purpose*:
 Returns the script bind for the building controller
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-
-=== *_ !CGame overloads _* ===
-*Purpose*:
-Undefined.
 
 *Arguments*:
 void
