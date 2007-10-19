@@ -84,9 +84,9 @@ void
 *Note*:
 Should be called at the start of a level load
 
-=== *_ !ResetControllers _* ===
+=== *_ !ResetGame _* ===
 *Purpose*:
-Reset all loaded building controllers
+Called when the game is reset, such as when the editor game starts up
 
 *Arguments*:
 void
@@ -94,8 +94,6 @@ void
 *Returns*:
 void
 
-*Note*:
-Should be used whenever the "game" is reset, like in the Editor
 
 === *_ Validate _* ===
 *Purpose*:
@@ -167,43 +165,6 @@ Generates a Building GUID given the team and class names
 
 *Returns*:
 building GUID or GUID_INVALID on error
-
-
-== !ScriptBind_BaseManager ==
-Below are the methods defined in the !ScriptBind_BaseManager module.
-
-=== *_ Constructor _* ===
-*Purpose*:
-Undefined.
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-
-=== *_ Destructor _* ===
-*Purpose*:
-Undefined.
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-
-=== *_ !AttachTo _* ===
-*Purpose*:
-Attaches binding to a base manager
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
 
 
 = Sub Modules =
