@@ -288,7 +288,43 @@ There are four separate Flow Nodes utilized by the Harvester Flow to achieve spe
 Purpose: This Node acts as the main controller for the Harvester. It creates the Harvester and handles the main logic behind it. Specific Output ports allow you to define the behavior of the Harvester when specific events occur throughout its life.
 
 Input Ports:
- * a
+ * Team - (String) The team that owns this Harvester.
+ * Create At - (Vector) Where to create the Harvester at if it doesn't go through the Vehicle Factory.
+ * Create Dir - (Float) Degree of facing of Harvester once created if it doesn't go through the Vehicle Factory. A degree of 0 is the forward facing of the entity in its local space.
+ * Use Factory - (Bool) TRUE to have the Harvester be created through the Vehicle Factory or FALSE to use the properties listed above. Defaults to FALSE if no Vehicle Factory for the team exists.
+
+Output Ports:
+ * Purchased - Triggered when the harvester is (re)purchased
+ * ToField - Triggered when the harvester is to begin its route to the Tiberium Field
+ * FromField - Triggered when the harvester is to begin its route back from the Tiberium Field
+ * Loading - Triggered when the harvester is starting to load up
+ * Loaded - Triggered when the harvester has loaded
+ * Unloading - Triggered when the harvester is starting to unload
+ * Unloaded - Triggered when the harvester has unloaded
+
+
+== Harvester:Signal ==
+Purpose: This Node acts as a signaler to the controller and is used to tell the Harvester when to perform certain actions.
+
+Input Ports:
+ * Signal - Call to make the signal to the Harvester.
+ * Value - Signal to send. See _Signals_ section below for available signals and what they mean/do.
+
+Output Ports:
+ * Done - Triggered when the signal has been made. This does not mean the signal has been processed by the controller, but that the signal has been queued up for the controller to process!
+
+Signals:
+ * !MoveToField - Calls "ToField" Output Port on controller
+ * !MoveFromField - Calls "FromField" Output Port on controller
+ * Load - Causes Harvester to begin loading up on tiberium
+ * Unload - Causes Harvester to begin unloading its tank
+ * Abort - Causes Harvester to stop loading/unloading and continue on with whatever it got. The Loaded and Unloaded signals on the Harvester are subsequently called.
+ * !StartEngine - Causes Harvester to start its engine so it can move
+ * !StopEngine - Causes Harvester to stop its engine so it can't move
+
+
+== Harvester:Goto ==
+Purpose: This Node is used to move the Harvester to a new location in the world. The Harvester moves using the vehicle physics engine in CryENGINE 2 with the movement properties laid out in the vehicle's definition. 
 
 
 [TechDoc_Architecture Back]
