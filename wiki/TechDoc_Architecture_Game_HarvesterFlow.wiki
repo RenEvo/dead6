@@ -340,7 +340,7 @@ Input Ports:
 Output Ports:
  * Done - Triggered when harvester is at or passes the location
  * Start - Triggered when harvester begins to move to the location
- * TimedOut - Triggered when harvester times out and did not make it to the location
+ * !TimedOut - Triggered when harvester times out and did not make it to the location
 
 
 == Harvester:Turn ==
@@ -355,7 +355,7 @@ Input Ports:
 Output Ports:
  * Done - Triggered when harvester is at or passes the degree of facing
  * Start - Triggered when harvester begins to turn
- * TimedOut - Triggered when harvester times out and did not complete the turn
+ * !TimedOut - Triggered when harvester times out and did not complete the turn
 
 
 == Example Graph ==
