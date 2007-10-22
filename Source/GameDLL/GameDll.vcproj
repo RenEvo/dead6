@@ -606,6 +606,10 @@
 					</FileConfiguration>
 				</File>
 				<File
+					RelativePath=".\Dead6\Interfaces\IPortalManager.h"
+					>
+				</File>
+				<File
 					RelativePath=".\Dead6\Interfaces\IPurchaseSystem.h"
 					>
 					<FileConfiguration
@@ -645,6 +649,22 @@
 							Name="VCCustomBuildTool"
 						/>
 					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\CPortalManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CPortalManager.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_PortalManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_PortalManager.h"
+					>
 				</File>
 			</Filter>
 			<Filter

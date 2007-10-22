@@ -18,6 +18,7 @@
 #include "ScriptBind_BaseManager.h"
 #include "ScriptBind_TeamManager.h"
 #include "ScriptBind_BuildingController.h"
+#include "ScriptBind_PortalManager.h"
 
 ////////////////////////////////////////////////////
 CD6Game::CD6Game(void)
@@ -26,6 +27,7 @@ CD6Game::CD6Game(void)
 	m_pScriptBindBaseManager = NULL;
 	m_pScriptBindTeamManager = NULL;
 	m_pScriptBindBuildingController = NULL;
+	m_pScriptBindPortalManager = NULL;
 	m_bEditorGameStarted = false;
 }
 
@@ -62,6 +64,10 @@ bool CD6Game::Init(IGameFramework *pFramework)
 		// Init team manager
 		g_D6Core->pTeamManager->Initialize();
 		m_pScriptBindTeamManager->AttachTo(g_D6Core->pTeamManager);
+
+		// Init portal manager
+		g_D6Core->pPortalManager->Initialize();
+		m_pScriptBindPortalManager->AttachTo(g_D6Core->pPortalManager);
 	}
 
 	return bBaseInit;
@@ -92,6 +98,10 @@ void CD6Game::Shutdown()
 	if (NULL != g_D6Core->pTeamManager)
 		g_D6Core->pTeamManager->Shutdown();
 
+	// Shutdown portal manager
+	if (NULL != g_D6Core->pPortalManager)
+		g_D6Core->pPortalManager->Shutdown();
+
 	// Base shutdown
 	CGame::Shutdown();
 }
@@ -103,8 +113,16 @@ int CD6Game::Update(bool haveFocus, unsigned int updateFlags)
 	int nUpdate = CGame::Update(haveFocus, updateFlags);
 
 	// Update team manager
-	if (NULL != g_D6Core->pTeamManager)
-		g_D6Core->pTeamManager->Update(haveFocus, updateFlags);
+	assert(g_D6Core->pTeamManager);
+	g_D6Core->pTeamManager->Update(haveFocus, updateFlags);
+
+	// Update base manager
+	assert(g_D6Core->pBaseManager);
+	g_D6Core->pBaseManager->Update(haveFocus, updateFlags);
+
+	// Update portal manaager
+	assert(g_D6Core->pPortalManager);
+	g_D6Core->pPortalManager->Update(haveFocus, updateFlags);
 
 	return nUpdate;
 }
@@ -116,8 +134,12 @@ void CD6Game::GetMemoryStatistics(ICrySizer *s)
 	CGame::GetMemoryStatistics(s);
 
 	// Core items
+	if (NULL != g_D6Core->pBaseManager)
+		g_D6Core->pBaseManager->GetMemoryStatistics(s);
 	if (NULL != g_D6Core->pTeamManager)
 		g_D6Core->pTeamManager->GetMemoryStatistics(s);
+	if (NULL != g_D6Core->pPortalManager)
+		g_D6Core->pPortalManager->GetMemoryStatistics(s);
 }
 
 ////////////////////////////////////////////////////
@@ -147,10 +169,14 @@ void CD6Game::EditorResetGame(bool bStart)
 	CGame::EditorResetGame(bStart);
 
 	// Perform soft resets
-	if (NULL != g_D6Core->pBaseManager)
-		g_D6Core->pBaseManager->ResetGame();
-	if (NULL != g_D6Core->pTeamManager)
-		g_D6Core->pTeamManager->ResetGame();
+	assert(g_D6Core->pBaseManager);
+	g_D6Core->pBaseManager->ResetGame();
+	assert(g_D6Core->pTeamManager);
+	g_D6Core->pTeamManager->ResetGame();
+
+	// Reset portal manager
+	assert(g_D6Core->pPortalManager);
+	g_D6Core->pPortalManager->Reset();
 }
 
 ////////////////////////////////////////////////////
@@ -159,6 +185,7 @@ void CD6Game::InitScriptBinds()
 	m_pScriptBindBaseManager = new CScriptBind_BaseManager(m_pFramework->GetISystem());
 	m_pScriptBindTeamManager = new CScriptBind_TeamManager(m_pFramework->GetISystem());
 	m_pScriptBindBuildingController = new CScriptBind_BuildingController(m_pFramework->GetISystem(), m_pFramework);
+	m_pScriptBindPortalManager = new CScriptBind_PortalManager(m_pFramework->GetISystem());
 
 	// Base script bind init
 	CGame::InitScriptBinds();
@@ -170,6 +197,7 @@ void CD6Game::ReleaseScriptBinds()
 	SAFE_DELETE(m_pScriptBindBaseManager);
 	SAFE_DELETE(m_pScriptBindTeamManager);
 	SAFE_DELETE(m_pScriptBindBuildingController);
+	SAFE_DELETE(m_pScriptBindPortalManager);
 
 	// Base script bind release
 	CGame::ReleaseScriptBinds();
@@ -185,6 +213,10 @@ void CD6Game::OnLoadingStart(ILevelInfo *pLevel)
 	// Reset base manager
 	assert(g_D6Core->pBaseManager);
 	g_D6Core->pBaseManager->Reset();
+
+	// Reset portal manager
+	assert(g_D6Core->pPortalManager);
+	g_D6Core->pPortalManager->Reset();
 
 	// TODO Hope and pray pLevel becomes valid!
 	// We want to parse the XML file from this location, so any entities that get created

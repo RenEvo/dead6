@@ -14,6 +14,10 @@
 #include "stdafx.h"
 #include "CBuildingController.h"
 #include "ScriptBind_BuildingController.h"
+#include "Player.h"
+
+// MAX_VIEW_DISTANCE - How far away the player can "see" a building's information
+#define MAX_VIEW_DISTANCE	(100.0f)
 
 ////////////////////////////////////////////////////
 CBuildingController::CBuildingController(void)
@@ -32,6 +36,7 @@ CBuildingController::~CBuildingController(void)
 ////////////////////////////////////////////////////
 void CBuildingController::GetMemoryStatistics(ICrySizer *s)
 {
+	s->Add(*this);
 	s->Add(m_szName);
 	s->Add(m_szScript);
 }
@@ -70,10 +75,61 @@ void CBuildingController::Shutdown(void)
 }
 
 ////////////////////////////////////////////////////
+void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, unsigned int nControllerUpdateFlags)
+{
+	// Update visibility
+	m_nFlags &= ~CSF_ISVISIBLE;
+	if (CUF_CHECKVISIBILITY == (nControllerUpdateFlags&CUF_CHECKVISIBILITY))
+	{
+		// Get player's orientation
+		CPlayer *pPlayer = (CPlayer*)g_pGame->GetIGameFramework()->GetClientActor();
+		CCamera PlayerCam = g_D6Core->pSystem->GetViewCamera();
+		Matrix34 PlayerMat = PlayerCam.GetMatrix();
+		Vec3 vPlayerPos(PlayerCam.GetPosition());
+		Vec3 vPlayerForward(PlayerMat.m01,PlayerMat.m11,PlayerMat.m21);
+		vPlayerForward *= MAX_VIEW_DISTANCE;
+
+		// Perform hit
+		ray_hit hit;
+		IPhysicalEntity *pSkip[1] = {pPlayer->GetEntity()->GetPhysics()};
+		if (gEnv->pPhysicalWorld->RayWorldIntersection(vPlayerPos, vPlayerForward, (ent_terrain|ent_static), 
+				(rwi_stop_at_pierceable|rwi_colltype_any), &hit, 1, (NULL==pPlayer?NULL:pSkip), (NULL==pPlayer?0:1)) &&
+			NULL != hit.pCollider)
+		{
+			// Check the interfaces to see if it is being looked at by the player
+			IEntity *pHitEntity = gEnv->pEntitySystem->GetEntityFromPhysics(hit.pCollider);
+			for (InterfaceMap::iterator itI = m_Interfaces.begin(); pHitEntity && itI != m_Interfaces.end(); itI++)
+			{
+				if ((*itI)->GetId() == pHitEntity->GetId())
+				{
+					// Got a hit!
+					m_nFlags |= CSF_ISVISIBLE;
+					break;
+				}
+			}
+		}
+	}
+	if (!IsVisible() && m_bDebug == true)
+	{
+		m_bDebug = false;
+		CryLogAlways("No longer looking at building [%s %s]", GetTeamName(), GetClassName());
+	}
+	if (IsVisible() && m_bDebug == false)
+	{
+		m_bDebug = true;
+		CryLogAlways("Looking at building [%s %s]", GetTeamName(), GetClassName());
+	}
+}
+
+////////////////////////////////////////////////////
 void CBuildingController::Reset(void)
 {
+	m_bDebug = false;
 	// Reset to initial state
 	m_fHealth = m_fInitHealth;
+
+	// Reset flags
+	m_nFlags = 0;
 
 	// Call OnReset
 	BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnReset")
@@ -249,7 +305,7 @@ bool CBuildingController::AddInterface(IEntity *pEntity)
 	// Set the flag and add it
 	pEntity->AddFlags(ENTITY_FLAG_ISINTERFACE);
 	m_Interfaces.push_back(pEntity);
-	//CryLog("[%s %s] Added interface %d", GetTeamName(), GetClassName(), pEntity->GetId());
+	CryLog("[%s %s] Added interface %d", GetTeamName(), GetClassName(), pEntity->GetId());
 	return true;
 }
 
@@ -268,4 +324,10 @@ void CBuildingController::RemoveInterface(IEntity *pEntity)
 			return;
 		}
 	}
+}
+
+////////////////////////////////////////////////////
+bool CBuildingController::IsVisible(void) const
+{
+	return (CSF_ISVISIBLE == (m_nFlags&CSF_ISVISIBLE));
 }

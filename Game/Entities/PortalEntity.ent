@@ -1,0 +1,4 @@
+<Entity
+ Name="PortalEntity" 
+ Script="Scripts/Entities/Others/PortalEntity.lua"
+/>
