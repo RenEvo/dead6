@@ -15,6 +15,18 @@
 #ifndef _D6C_IBUILDINGCONTROLLER_H_
 #define _D6C_IBUILDINGCONTROLLER_H_
 
+// Controller update flags - EControllerUpdateFlags
+enum EControllerUpdateFlags
+{
+	CUF_CHECKVISIBILITY		= 0x01,		// Check if player is looking at controller
+};
+
+// Building state flags - EControllerStateFlags
+enum EControllerStateFlags
+{
+	CSF_ISVISIBLE			= 0x01,		// Set if building is visible by the player
+};
+
 struct IBuildingController
 {
 	////////////////////////////////////////////////////
@@ -47,6 +59,18 @@ struct IBuildingController
 	// Purpose: Shut the controller down
 	////////////////////////////////////////////////////
 	virtual void Shutdown(void) = 0;
+	
+	////////////////////////////////////////////////////
+	// Update
+	//
+	// Purpose: Update the controller
+	//
+	// In:	bHaveFocus - TRUE if game has focus
+	//		nUpdateFlags - Update flags
+	//		nControllerUpdateFlags - Controller-specific
+	//			update flags (see EControllerUpdateFlags)
+	////////////////////////////////////////////////////
+	virtual void Update(bool bHaveFocus, unsigned int nUpdateFlags, unsigned int nControllerUpdateFlags) = 0;
 
 	////////////////////////////////////////////////////
 	// Reset
@@ -157,6 +181,15 @@ struct IBuildingController
 	// In:	pEntity - Entity to remove
 	////////////////////////////////////////////////////
 	virtual void RemoveInterface(struct IEntity *pEntity) = 0;
+
+	////////////////////////////////////////////////////
+	// IsVisible
+	//
+	// Purpose: Returns TRUE if the controller is visible
+	//	to the player (i.e. player is focused on an
+	//	interface to it)
+	////////////////////////////////////////////////////
+	virtual bool IsVisible(void) const = 0;
 };
 
 #endif //_D6C_IBUILDINGCONTROLLER_H_

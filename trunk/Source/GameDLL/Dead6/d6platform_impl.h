@@ -19,6 +19,7 @@
 #include "IBuildingController.h"
 #include "IBaseManager.h"
 #include "ITeamManager.h"
+#include "IPortalManager.h"
 #include "CD6Game.h"
 #include "CD6GameRules.h"
 
@@ -73,6 +74,7 @@ public:
 	// Created modules
 	IBaseManager *pBaseManager;
 	ITeamManager *pTeamManager;
+	IPortalManager *pPortalManager;
 
 	// Referenced modules
 	ISystem *pSystem;

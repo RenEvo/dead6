@@ -19,8 +19,14 @@
 
 class CBuildingController : public IBuildingController
 {
+	// TODO REMOVE
+	bool m_bDebug;
+
 	// Building's GUID
 	BuildingGUID m_nGUID;
+
+	// Building status flags
+	unsigned int m_nFlags;
 
 	// Building's health
 	float m_fHealth, m_fInitHealth, m_fMaxHealth;
@@ -79,6 +85,18 @@ public:
 	// Purpose: Shut the controller down
 	////////////////////////////////////////////////////
 	virtual void Shutdown(void);
+	
+	////////////////////////////////////////////////////
+	// Update
+	//
+	// Purpose: Update the controllers
+	//
+	// In:	bHaveFocus - TRUE if game has focus
+	//		nUpdateFlags - Update flags
+	//		nControllerUpdateFlags - Controller-specific
+	//			update flags (see EControllerUpdateFlags)
+	////////////////////////////////////////////////////
+	virtual void Update(bool bHaveFocus, unsigned int nUpdateFlags, unsigned int nControllerUpdateFlags);
 
 	////////////////////////////////////////////////////
 	// Reset
@@ -189,6 +207,15 @@ public:
 	// In:	pEntity - Entity to remove
 	////////////////////////////////////////////////////
 	virtual void RemoveInterface(struct IEntity *pEntity);
+
+	////////////////////////////////////////////////////
+	// IsVisible
+	//
+	// Purpose: Returns TRUE if the controller is visible
+	//	to the player (i.e. player is focused on an
+	//	interface to it)
+	////////////////////////////////////////////////////
+	virtual bool IsVisible(void) const;
 };
 
 #endif //_D6C_CBUILDINGCONTROLLER_H_

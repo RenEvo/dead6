@@ -44,15 +44,6 @@ struct IBaseManager
 	virtual ~IBaseManager(void) {}
 
 	////////////////////////////////////////////////////
-	// GetMemoryStatistics
-	//
-	// Purpose: Used by memory management
-	//
-	// In:	s - Cry Sizer object
-	////////////////////////////////////////////////////
-	virtual void GetMemoryStatistics(class ICrySizer *s) = 0;
-
-	////////////////////////////////////////////////////
 	// Initialize
 	//
 	// Purpose: One-time initialization at the start
@@ -65,6 +56,25 @@ struct IBaseManager
 	// Purpose: One-time clean up at the end
 	////////////////////////////////////////////////////
 	virtual void Shutdown(void) = 0;
+	
+	////////////////////////////////////////////////////
+	// Update
+	//
+	// Purpose: Update the controllers
+	//
+	// In:	bHaveFocus - TRUE if game has focus
+	//		nUpdateFlags - Update flags
+	////////////////////////////////////////////////////
+	virtual void Update(bool bHaveFocus, unsigned int nUpdateFlags) = 0;
+
+	////////////////////////////////////////////////////
+	// GetMemoryStatistics
+	//
+	// Purpose: Used by memory management
+	//
+	// In:	s - Cry Sizer object
+	////////////////////////////////////////////////////
+	virtual void GetMemoryStatistics(ICrySizer *s) = 0;
 
 	////////////////////////////////////////////////////
 	// CreateBuildingController

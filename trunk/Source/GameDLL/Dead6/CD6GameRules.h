@@ -59,6 +59,12 @@ public:
 	virtual int GetChannelTeam(int channelId) const;
 	virtual int GetTeamChannelCount(int teamId, bool inGame=false) const;
 
+	// Overloaded GameRules calls for hit detection
+	virtual void ClientHit(const HitInfo &hitInfo);
+	virtual void ServerHit(const HitInfo &hitInfo);
+	virtual void ServerExplosion(const ExplosionInfo &explosionInfo);
+	virtual void ClientExplosion(const ExplosionInfo &explosionInfo);
+
 	////////////////////////////////////////////////////
 	// GetServerStateScript
 	//

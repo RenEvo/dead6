@@ -119,6 +119,7 @@ void CTeamManager::Update(bool bHaveFocus, unsigned int nUpdateFlags)
 ////////////////////////////////////////////////////
 void CTeamManager::GetMemoryStatistics(ICrySizer *s)
 {
+	s->Add(*this);
 	s->AddContainer(m_TeamMap);
 	for (TeamMap::iterator itTeam = m_TeamMap.begin(); itTeam != m_TeamMap.end(); itTeam++)
 	{

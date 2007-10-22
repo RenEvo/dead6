@@ -23,6 +23,7 @@
 class CScriptBind_BaseManager;
 class CScriptBind_TeamManager;
 class CScriptBind_BuildingController;
+class CScriptBind_PortalManager;
 
 class CD6GameRules;
 
@@ -85,6 +86,12 @@ public:
 	////////////////////////////////////////////////////
 	virtual CScriptBind_BuildingController *GetBuildingControllerScriptBind() { return m_pScriptBindBuildingController; }
 
+	////////////////////////////////////////////////////
+	// GetPortalManagerScriptBind
+	//
+	// Purpose: Returns the script bind for the portal manager
+	////////////////////////////////////////////////////
+	virtual CScriptBind_PortalManager *GetPortalManagerScriptBind() { return m_pScriptBindPortalManager; }
 
 	////////////////////////////////////////////////////
 	// CGame overloads
@@ -144,6 +151,7 @@ protected:
 	CScriptBind_BaseManager *m_pScriptBindBaseManager;
 	CScriptBind_TeamManager *m_pScriptBindTeamManager;
 	CScriptBind_BuildingController *m_pScriptBindBuildingController;
+	CScriptBind_PortalManager *m_pScriptBindPortalManager;
 };
 
 #endif //_D6C_CD6GAME_H_

@@ -163,9 +163,38 @@ int CD6GameRules::GetChannelTeam(int channelId) const
 	return g_D6Core->pTeamManager->GetChannelTeam(channelId);
 }
 
+////////////////////////////////////////////////////
 int CD6GameRules::GetTeamChannelCount(int teamId, bool inGame) const
 {
 	// Delegate to team manager
 	assert(g_D6Core->pTeamManager);
 	return g_D6Core->pTeamManager->GetTeamChannelCount(teamId, inGame);
+}
+
+////////////////////////////////////////////////////
+void CD6GameRules::ClientHit(const HitInfo &hitInfo)
+{
+	// Base call
+	CGameRules::ClientHit(hitInfo);
+}
+
+////////////////////////////////////////////////////
+void CD6GameRules::ServerHit(const HitInfo &hitInfo)
+{
+	// Base call
+	CGameRules::ServerHit(hitInfo);
+}
+
+////////////////////////////////////////////////////
+void CD6GameRules::ServerExplosion(const ExplosionInfo &explosionInfo)
+{
+	// Base call
+	CGameRules::ServerExplosion(explosionInfo);
+}
+
+////////////////////////////////////////////////////
+void CD6GameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
+{
+	// Base call
+	CGameRules::ClientExplosion(explosionInfo);
 }

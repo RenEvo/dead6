@@ -30,6 +30,8 @@ CBaseManager::~CBaseManager(void)
 ////////////////////////////////////////////////////
 void CBaseManager::GetMemoryStatistics(ICrySizer *s)
 {
+	s->Add(*this);
+
 	// Class name list
 	s->AddContainer(m_ClassNameList);
 	for (ClassRepository::iterator itI = m_ClassNameList.begin(); itI != m_ClassNameList.end(); itI++)
@@ -54,7 +56,6 @@ void CBaseManager::Initialize(void)
 
 	// Create the sink
 	m_pSink = new CBaseManagerEntitySink(this);
-	gEnv->pEntitySystem->AddSink(m_pSink);
 
 	// Initial reset
 	Reset();
@@ -67,11 +68,20 @@ void CBaseManager::Shutdown(void)
 	Reset();
 
 	// Destroy the sink
-	if (NULL != m_pSink)
+	SAFE_DELETE(m_pSink);
+}
+
+////////////////////////////////////////////////////
+void CBaseManager::Update(bool bHaveFocus, unsigned int nUpdateFlags)
+{
+	// Update the controllers
+	unsigned int nControllerUpdateFlags = (CUF_CHECKVISIBILITY);
+	for (ControllerList::iterator itBuilding = m_ControllerList.begin();
+		itBuilding != m_ControllerList.end(); itBuilding++)
 	{
-		gEnv->pEntitySystem->RemoveSink(m_pSink);
-		delete m_pSink;
-		m_pSink = NULL;
+		itBuilding->second->Update(bHaveFocus, nUpdateFlags, nControllerUpdateFlags);
+		if (true == itBuilding->second->IsVisible())
+			nControllerUpdateFlags &= ~CUF_CHECKVISIBILITY; // Don't need to check the others
 	}
 }
 
@@ -307,16 +317,19 @@ BuildingGUID CBaseManager::GenerateGUID(char const* szTeam, char const* szClass)
 }
 
 ////////////////////////////////////////////////////
+////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////
 CBaseManagerEntitySink::CBaseManagerEntitySink(CBaseManager *pManager) :
 	m_pManager(pManager)
 {
-
+	gEnv->pEntitySystem->AddSink(this);
 }
 
 ////////////////////////////////////////////////////
 CBaseManagerEntitySink::~CBaseManagerEntitySink(void)
 {
-
+	gEnv->pEntitySystem->RemoveSink(this);
 }
 
 ////////////////////////////////////////////////////
@@ -369,8 +382,5 @@ bool CBaseManagerEntitySink::OnRemove(IEntity *pEntity)
 ////////////////////////////////////////////////////
 void CBaseManagerEntitySink::OnEvent(IEntity *pEntity, SEntityEvent &event)
 {
-	// TODO Report damage to controller if entity is an interface to it
-	//	Use "ENTITY_EVENT_ONHIT"
 
-	//CryLogAlways("Entity %d event: %d", pEntity->GetId(), event.event);
 }

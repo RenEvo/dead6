@@ -70,6 +70,16 @@ public:
 	// Purpose: One-time clean up at the end
 	////////////////////////////////////////////////////
 	virtual void Shutdown(void);
+	
+	////////////////////////////////////////////////////
+	// Update
+	//
+	// Purpose: Update the controllers
+	//
+	// In:	bHaveFocus - TRUE if game has focus
+	//		nUpdateFlags - Update flags
+	////////////////////////////////////////////////////
+	virtual void Update(bool bHaveFocus, unsigned int nUpdateFlags);
 
 	////////////////////////////////////////////////////
 	// CreateBuildingController
