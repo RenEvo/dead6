@@ -167,8 +167,11 @@ struct ITeamManager
 	//
 	// Purpose: Called when the game is reset, such as
 	//	when the editor game starts up
+	//
+	// In:	bGameStart - TRUE if game is starting,
+	//	FALSE if game is stopping
 	////////////////////////////////////////////////////
-	virtual void ResetGame(void) = 0;
+	virtual void ResetGame(bool bGameStart) = 0;
 	
 	////////////////////////////////////////////////////
 	// Update

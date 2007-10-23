@@ -15,16 +15,26 @@
 #ifndef _D6C_IBUILDINGCONTROLLER_H_
 #define _D6C_IBUILDINGCONTROLLER_H_
 
+struct HitInfo;
+struct ExplosionInfo;
+
 // Controller update flags - EControllerUpdateFlags
 enum EControllerUpdateFlags
 {
 	CUF_CHECKVISIBILITY		= 0x01,		// Check if player is looking at controller
+	CUF_PARSEEXPLOSIONQUEUE	= 0x02,		// Parse the explosion queues
+
+	// Update all
+	CUF_ALL = (CUF_CHECKVISIBILITY|CUF_PARSEEXPLOSIONQUEUE),
 };
 
 // Building state flags - EControllerStateFlags
 enum EControllerStateFlags
 {
-	CSF_ISVISIBLE			= 0x01,		// Set if building is visible by the player
+	CSF_MUSTBEDESTROYED		= 0x01,		// Set if building must be destroyed for team to lose
+	CSF_WANTSTOBEDESTROYED	= 0x02,		// Set if building wants to be destroyed
+	CSF_ISVISIBLE			= 0x04,		// Set if building is visible by the player
+	CSF_ISVALIDATED			= 0x08,		// Set if building has been validated
 };
 
 struct IBuildingController
@@ -97,6 +107,14 @@ struct IBuildingController
 	//	interfaces to it
 	////////////////////////////////////////////////////
 	virtual void Validate(void) = 0;
+
+	////////////////////////////////////////////////////
+	// IsValidated
+	//
+	// Purpose: Returns TRUE if building has been
+	//	validated
+	////////////////////////////////////////////////////
+	virtual bool IsValidated(void) const = 0;
 
 	////////////////////////////////////////////////////
 	// LoadFromXml
@@ -183,6 +201,18 @@ struct IBuildingController
 	virtual void RemoveInterface(struct IEntity *pEntity) = 0;
 
 	////////////////////////////////////////////////////
+	// HasInterface
+	//
+	// Purpose: Returns TRUE if the given entity is an
+	//	interface for the controller
+	//
+	// In:	pEntity - Entity to check
+	//		nEntityId - Entity to check
+	////////////////////////////////////////////////////
+	virtual bool HasInterface(struct IEntity *pEntity) const = 0;
+	virtual bool HasInterface(unsigned int nEntityId) const = 0;
+
+	////////////////////////////////////////////////////
 	// IsVisible
 	//
 	// Purpose: Returns TRUE if the controller is visible
@@ -190,6 +220,70 @@ struct IBuildingController
 	//	interface to it)
 	////////////////////////////////////////////////////
 	virtual bool IsVisible(void) const = 0;
+
+	////////////////////////////////////////////////////
+	// SetMustBeDestroyed
+	//
+	// Purpose: Set if building wants to be destroyed
+	//	for the team to lose
+	//
+	// In:	b - TRUE if it must be destroyed
+	//
+	// Note: Will be ignored if building is not interfaced
+	////////////////////////////////////////////////////
+	virtual void SetMustBeDestroyed(bool b = true) = 0;
+
+	////////////////////////////////////////////////////
+	// MustBeDestroyed
+	//
+	// Purpose: Returns TRUE if building must be destroyed
+	//	for the team to lose
+	////////////////////////////////////////////////////
+	virtual bool MustBeDestroyed(void) const = 0;
+
+	////////////////////////////////////////////////////
+	// OnClientHit
+	//
+	// Purpose: Call when a hit occurs on the client
+	//
+	// In:	hitinfo - Hit information
+	////////////////////////////////////////////////////
+	virtual void OnClientHit(HitInfo const& hitInfo) = 0;
+
+	////////////////////////////////////////////////////
+	// OnServerHit
+	//
+	// Purpose: Call when a hit occurs on the server
+	//
+	// In:	hitinfo - Hit information
+	////////////////////////////////////////////////////
+	virtual void OnServerHit(HitInfo const& hitInfo) = 0;
+
+	////////////////////////////////////////////////////
+	// OnClientExplosion
+	//
+	// Purpose: Call when an explosion occurs on the client
+	//
+	// In:	explosionInfo - Explosion information
+	//		nInterfaceId - ID of interface entity that
+	//			was hit by this explosion
+	//		fObstruction - Obstruction ratio (0 = fully
+	//			obstructed, 1 = fully visible)
+	////////////////////////////////////////////////////
+	virtual void OnClientExplosion(ExplosionInfo const& explosionInfo, unsigned int nInterfaceId, float fObstruction) = 0;
+
+	////////////////////////////////////////////////////
+	// OnServerExplosion
+	//
+	// Purpose: Call when an explosion occurs on the server
+	//
+	// In:	explosionInfo - Explosion information
+	//		nInterfaceId - ID of interface entity that
+	//			was hit by this explosion
+	//		fObstruction - Obstruction ratio (0 = fully
+	//			obstructed, 1 = fully visible)
+	////////////////////////////////////////////////////
+	virtual void OnServerExplosion(ExplosionInfo const& explosionInfo, unsigned int nInterfaceId, float fObstruction) = 0;
 };
 
 #endif //_D6C_IBUILDINGCONTROLLER_H_

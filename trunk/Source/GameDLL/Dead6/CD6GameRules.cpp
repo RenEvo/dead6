@@ -176,6 +176,10 @@ void CD6GameRules::ClientHit(const HitInfo &hitInfo)
 {
 	// Base call
 	CGameRules::ClientHit(hitInfo);
+
+	// Let base manager handle it for controllers
+	assert(g_D6Core->pBaseManager);
+	g_D6Core->pBaseManager->ClientHit(hitInfo);
 }
 
 ////////////////////////////////////////////////////
@@ -183,6 +187,10 @@ void CD6GameRules::ServerHit(const HitInfo &hitInfo)
 {
 	// Base call
 	CGameRules::ServerHit(hitInfo);
+
+	// Let base manager handle it for controllers
+	assert(g_D6Core->pBaseManager);
+	g_D6Core->pBaseManager->ServerHit(hitInfo);
 }
 
 ////////////////////////////////////////////////////
@@ -190,6 +198,27 @@ void CD6GameRules::ServerExplosion(const ExplosionInfo &explosionInfo)
 {
 	// Base call
 	CGameRules::ServerExplosion(explosionInfo);
+
+	// Get affected entities
+	TExplosionAffectedEntities affectedEntities;
+	pe_explosion explosion;
+	explosion.epicenter = explosionInfo.pos;
+	explosion.rmin = explosionInfo.minRadius;
+	explosion.rmax = (0 == explosionInfo.radius ? 0.0001f : explosionInfo.radius);
+	explosion.r = explosion.rmin;
+	explosion.impulsivePressureAtR = explosionInfo.pressure;
+	explosion.epicenterImp = explosionInfo.pos;
+	explosion.explDir = explosionInfo.dir;
+	explosion.nGrow = 2;
+	explosion.rminOcc = 0.07f;
+	explosion.holeSize = 0.0f;
+	explosion.nOccRes = (explosion.rmax > 50.0f ? 0 : 32);
+	gEnv->pPhysicalWorld->SimulateExplosion(&explosion, 0, 0, ent_static);
+	UpdateAffectedEntitiesSet(affectedEntities, &explosion);
+
+	// Let base manager handle it for controllers
+	assert(g_D6Core->pBaseManager);
+	g_D6Core->pBaseManager->ServerExplosion(explosionInfo, affectedEntities);
 }
 
 ////////////////////////////////////////////////////
@@ -197,4 +226,25 @@ void CD6GameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 {
 	// Base call
 	CGameRules::ClientExplosion(explosionInfo);
+
+	// Get affected entities
+	TExplosionAffectedEntities affectedEntities;
+	pe_explosion explosion;
+	explosion.epicenter = explosionInfo.pos;
+	explosion.rmin = explosionInfo.minRadius;
+	explosion.rmax = (0 == explosionInfo.radius ? 0.0001f : explosionInfo.radius);
+	explosion.r = explosion.rmin;
+	explosion.impulsivePressureAtR = explosionInfo.pressure;
+	explosion.epicenterImp = explosionInfo.pos;
+	explosion.explDir = explosionInfo.dir;
+	explosion.nGrow = 2;
+	explosion.rminOcc = 0.07f;
+	explosion.holeSize = 0.0f;
+	explosion.nOccRes = (explosion.rmax > 50.0f ? 0 : 32);
+	gEnv->pPhysicalWorld->SimulateExplosion(&explosion, 0, 0, ent_static);
+	UpdateAffectedEntitiesSet(affectedEntities, &explosion);
+
+	// Let base manager handle it for controllers
+	assert(g_D6Core->pBaseManager);
+	g_D6Core->pBaseManager->ClientExplosion(explosionInfo, affectedEntities);
 }

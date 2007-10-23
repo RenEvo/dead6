@@ -16,6 +16,11 @@
 #define _D6C_IBASEMANAGER_H_
 
 struct ITeamManager;
+struct HitInfo;
+struct ExplosionInfo;
+
+// Explosion affected entities map - Keep same signature as CGamerules::TExplosionAffectedEntities
+typedef std::map<IEntity*, float> GRTExplosionAffectedEntities;
 
 // Building Class ID
 //	Placement in GUID: (0x0000FFFF)
@@ -108,8 +113,11 @@ struct IBaseManager
 	//
 	// Purpose: Called when the game is reset, such as
 	//	when the editor game starts up
+	//
+	// In:	bGameStart - TRUE if game is starting,
+	//	FALSE if game is stopping
 	////////////////////////////////////////////////////
-	virtual void ResetGame(void) = 0;
+	virtual void ResetGame(bool bGameStart) = 0;
 
 	////////////////////////////////////////////////////
 	// Validate
@@ -183,6 +191,58 @@ struct IBaseManager
 	// Returns building GUID or GUID_INVALID on error
 	////////////////////////////////////////////////////
 	virtual BuildingGUID GenerateGUID(char const* szTeam, char const* szClass) const = 0;
+
+	////////////////////////////////////////////////////
+	// GetBuildingFromInterface
+	//
+	// Purpose: Returns the Building GUID that is interfaced
+	//	by the given entity
+	//
+	// In:	nEntityId - ID of entity that is the interface
+	//
+	// Out:	ppController - Pointer to controller object
+	//
+	// Returns Building GUID or GUID_INVALID on error
+	////////////////////////////////////////////////////
+	virtual BuildingGUID GetBuildingFromInterface(EntityId nEntityId, IBuildingController **ppController = NULL) const = 0;
+
+	////////////////////////////////////////////////////
+	// ClientHit
+	//
+	// Purpose: Call when a hit occurs on the client
+	//
+	// In:	hitinfo - Hit information
+	////////////////////////////////////////////////////
+	virtual void ClientHit(HitInfo const& hitInfo) = 0;
+
+	////////////////////////////////////////////////////
+	// ServerHit
+	//
+	// Purpose: Call when a hit occurs on the server
+	//
+	// In:	hitinfo - Hit information
+	////////////////////////////////////////////////////
+	virtual void ServerHit(HitInfo const& hitInfo) = 0;
+
+	////////////////////////////////////////////////////
+	// ServerExplosion
+	//
+	// Purpose: Call when an explosion occurs on the server
+	//
+	// In:	explosionInfo - Explosion information
+	//		affectedEntities - Map of affected entities
+	////////////////////////////////////////////////////
+	virtual void ServerExplosion(ExplosionInfo const& explosionInfo, GRTExplosionAffectedEntities const& affectedEntities) = 0;
+
+	////////////////////////////////////////////////////
+	// ClientExplosion
+	//
+	// Purpose: Call when an explosion occurs on the client
+	//
+	// In:	explosionInfo - Explosion information
+	//		affectedEntities - Map of affected entities
+	////////////////////////////////////////////////////
+	virtual void ClientExplosion(ExplosionInfo const& explosionInfo, GRTExplosionAffectedEntities const& affectedEntities) = 0;
 };
 
 #endif //_D6C_IBASEMANAGER_H_
