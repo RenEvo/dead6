@@ -80,7 +80,8 @@ void CBuildingController::Shutdown(void)
 void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, unsigned int nControllerUpdateFlags)
 {
 	// Update visibility
-	m_nFlags &= ~CSF_ISVISIBLE;
+	EntityId nViewID = 0;
+	bool bPrevInView = (CSF_ISVISIBLE == (m_nFlags&CSF_ISVISIBLE));
 	if (CUF_CHECKVISIBILITY == (nControllerUpdateFlags&CUF_CHECKVISIBILITY))
 	{
 		// Get player's orientation
@@ -105,21 +106,28 @@ void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, uns
 				if ((*itI)->GetId() == pHitEntity->GetId())
 				{
 					// Got a hit!
-					m_nFlags |= CSF_ISVISIBLE;
+					nViewID = (*itI)->GetId();
 					break;
 				}
 			}
 		}
 	}
-	if (!IsVisible() && m_bDebug == true)
+	if (true == bPrevInView && 0 == nViewID)
 	{
-		m_bDebug = false;
+		m_nFlags &= ~CSF_ISVISIBLE;
 		CryLogAlways("No longer looking at building [%s %s]", GetTeamName(), GetClassName());
+
+		SControllerEvent event(CONTROLLER_EVENT_OUTOFVIEW);
+		_SendListenerEvent(event);
 	}
-	if (IsVisible() && m_bDebug == false)
+	if (false == bPrevInView && 0 != nViewID)
 	{
-		m_bDebug = true;
+		m_nFlags |= CSF_ISVISIBLE;
 		CryLogAlways("Looking at building [%s %s]", GetTeamName(), GetClassName());
+
+		SControllerEvent event(CONTROLLER_EVENT_INVIEW);
+		event.nParam[0] = nViewID;
+		_SendListenerEvent(event);
 	}
 
 	// Handle damage queue
@@ -130,6 +138,10 @@ void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, uns
 		{
 			// TODO Adjust health
 			CryLogAlways("[%s %s] Damaged by explosion: %.4f", GetTeamName(), GetClassName(), itDamage->second.damage);
+
+			SControllerEvent event(CONTROLLER_EVENT_ONEXPLOSION);
+			event.nParam[0] = (INT_PTR)&(itDamage->second);
+			_SendListenerEvent(event);
 		}
 		m_ExplosionQueue.clear();
 	}
@@ -138,7 +150,6 @@ void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, uns
 ////////////////////////////////////////////////////
 void CBuildingController::Reset(void)
 {
-	m_bDebug = false;
 	// Reset to initial state
 	m_fHealth = m_fInitHealth;
 
@@ -150,6 +161,9 @@ void CBuildingController::Reset(void)
 	END_CALL(m_pSS)
 	BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnReset")
 	END_CALL(m_pSS)
+
+	SControllerEvent event(CONTROLLER_EVENT_RESET);
+	_SendListenerEvent(event);
 }
 
 ////////////////////////////////////////////////////
@@ -191,6 +205,8 @@ void CBuildingController::Validate(void)
 
 	// Validated
 	m_nFlags |= CSF_ISVALIDATED;
+	SControllerEvent event(CONTROLLER_EVENT_VALIDATED);
+	_SendListenerEvent(event);
 }
 
 ////////////////////////////////////////////////////
@@ -404,9 +420,51 @@ bool CBuildingController::MustBeDestroyed(void) const
 }
 
 ////////////////////////////////////////////////////
+void CBuildingController::AddEventListener(IBuildingControllerEventListener *pListener)
+{
+	// If already added, drop it
+	for (EventListeners::iterator itListener = m_EventListeners.begin(); itListener != m_EventListeners.end(); itListener++)
+	{
+		if (*itListener == pListener) return;
+	}
+	m_EventListeners.push_back(pListener);
+}
+
+////////////////////////////////////////////////////
+void CBuildingController::RemoveEventListener(IBuildingControllerEventListener *pListener)
+{
+	// Find and remove
+	for (EventListeners::iterator itListener = m_EventListeners.begin(); itListener != m_EventListeners.end(); itListener++)
+	{
+		if (*itListener == pListener)
+		{
+			m_EventListeners.erase(itListener);
+			return;
+		}
+	}
+}
+
+////////////////////////////////////////////////////
+void CBuildingController::_SendListenerEvent(SControllerEvent &event)
+{
+	// Send it out
+	for (EventListeners::iterator itListener = m_EventListeners.begin(); itListener != m_EventListeners.end(); itListener++)
+	{
+		(*itListener)->OnBuildingControllerEvent(this, m_nGUID, event);
+	}
+}
+
+////////////////////////////////////////////////////
 void CBuildingController::OnClientHit(HitInfo const& hitInfo)
 {
 	// TODO Anything local on the client
+
+	if (!gEnv->bServer)
+	{
+		SControllerEvent event(CONTROLLER_EVENT_ONHIT);
+		event.nParam[0] = (INT_PTR)&hitInfo;
+		_SendListenerEvent(event);
+	}
 }
 
 ////////////////////////////////////////////////////
@@ -414,6 +472,10 @@ void CBuildingController::OnServerHit(HitInfo const& hitInfo)
 {
 	// TODO Update building health
 	CryLogAlways("[%s %s] Damaged by weapon: %.4f", GetTeamName(), GetClassName(), hitInfo.damage);
+
+	SControllerEvent event(CONTROLLER_EVENT_ONHIT);
+	event.nParam[0] = (INT_PTR)&hitInfo;
+	_SendListenerEvent(event);
 }
 
 ////////////////////////////////////////////////////

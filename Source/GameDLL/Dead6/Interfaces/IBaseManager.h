@@ -16,6 +16,8 @@
 #define _D6C_IBASEMANAGER_H_
 
 struct ITeamManager;
+struct IBuildingController;
+struct IBuildingControllerEventListener;
 struct HitInfo;
 struct ExplosionInfo;
 
@@ -95,7 +97,7 @@ struct IBaseManager
 	// Returns the building's GUID or GUID_INVALID on error
 	////////////////////////////////////////////////////
 	virtual BuildingGUID CreateBuildingController(char const* szTeam, char const* szName,
-		XmlNodeRef pAttr, struct IBuildingController **ppController = NULL) = 0;
+		XmlNodeRef pAttr, IBuildingController **ppController = NULL) = 0;
 
 	////////////////////////////////////////////////////
 	// Reset
@@ -205,6 +207,29 @@ struct IBaseManager
 	// Returns Building GUID or GUID_INVALID on error
 	////////////////////////////////////////////////////
 	virtual BuildingGUID GetBuildingFromInterface(EntityId nEntityId, IBuildingController **ppController = NULL) const = 0;
+
+	////////////////////////////////////////////////////
+	// AddBuildingControllerEventListener
+	//
+	// Purpose:	Add a listener to receive callbacks on
+	//	a building controller during certain events
+	//
+	// In:	nGUID - Building GUID
+	//		pListener - Listening object
+	//
+	// Note: See EControllerEvent
+	////////////////////////////////////////////////////
+	virtual void AddBuildingControllerEventListener(BuildingGUID nGUID, IBuildingControllerEventListener *pListener) = 0;
+
+	////////////////////////////////////////////////////
+	// RemoveBuildingControllerEventListener
+	//
+	// Purpose:	Remove a listener
+	//
+	// In:	nGUID - Building GUID
+	//		pListener - Listening object
+	////////////////////////////////////////////////////
+	virtual void RemoveBuildingControllerEventListener(BuildingGUID nGUID, IBuildingControllerEventListener *pListener) = 0;
 
 	////////////////////////////////////////////////////
 	// ClientHit

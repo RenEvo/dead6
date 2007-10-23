@@ -207,6 +207,29 @@ public:
 	virtual BuildingGUID GetBuildingFromInterface(EntityId nEntityId, IBuildingController **ppController = NULL) const;
 
 	////////////////////////////////////////////////////
+	// AddBuildingControllerEventListener
+	//
+	// Purpose:	Add a listener to receive callbacks on
+	//	a building controller during certain events
+	//
+	// In:	nGUID - Building GUID
+	//		pListener - Listening object
+	//
+	// Note: See EControllerEvent
+	////////////////////////////////////////////////////
+	virtual void AddBuildingControllerEventListener(BuildingGUID nGUID, IBuildingControllerEventListener *pListener);
+
+	////////////////////////////////////////////////////
+	// RemoveBuildingControllerEventListener
+	//
+	// Purpose:	Remove a listener
+	//
+	// In:	nGUID - Building GUID
+	//		pListener - Listening object
+	////////////////////////////////////////////////////
+	virtual void RemoveBuildingControllerEventListener(BuildingGUID nGUID, IBuildingControllerEventListener *pListener);
+
+	////////////////////////////////////////////////////
 	// ClientHit
 	//
 	// Purpose: Call when a hit occurs on the client

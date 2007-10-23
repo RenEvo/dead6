@@ -8,18 +8,75 @@
 //
 // File History:
 //	- 7/22/07 : File created - Dan
+//	- 8/23/07 : File edited - KAK
 ////////////////////////////////////////////////////
 
 #include "StdAfx.h"
 #include "CD6Player.h"
 
+////////////////////////////////////////////////////
 CD6Player::CD6Player()
-	:CPlayer()
 {
-	m_Credits = 0;
+	m_nCredits = 0;
 }
 
+////////////////////////////////////////////////////
 CD6Player::~CD6Player()
 {
-	// Nothing to do
+
+}
+
+////////////////////////////////////////////////////
+bool CD6Player::NetSerialize(TSerialize ser, EEntityAspects aspect, uint8 profile, int flags)
+{
+	// Base update
+	if (false == CPlayer::NetSerialize(ser, aspect, profile, flags))
+		return false;
+
+	// Credits aspect update
+	if (ASPECT_CREDITS == aspect)
+	{
+		ser.Value("credits", m_nCredits, 'cred');
+	}
+
+	return true;
+}
+
+////////////////////////////////////////////////////
+void CD6Player::FullSerialize(TSerialize ser)
+{
+	// Base serialize
+	CPlayer::FullSerialize(ser);
+
+	// D6 serialization
+	ser.BeginGroup("D6Player");
+	ser.Value("credits", m_nCredits);
+	ser.EndGroup();
+}
+
+////////////////////////////////////////////////////
+void CD6Player::SetCredits(unsigned int nCredits)
+{
+	m_nCredits = nCredits;
+	GetGameObject()->ChangedNetworkState(ASPECT_CREDITS);
+}
+
+////////////////////////////////////////////////////
+unsigned int CD6Player::GetCredits() const
+{
+	return m_nCredits;
+}
+
+////////////////////////////////////////////////////
+void CD6Player::GiveCredits(unsigned int nCredits)
+{
+	m_nCredits += nCredits;
+	GetGameObject()->ChangedNetworkState(ASPECT_CREDITS);
+}
+
+////////////////////////////////////////////////////
+void CD6Player::TakeCredits(unsigned int nCredits)
+{
+	m_nCredits -= nCredits;
+	GetGameObject()->ChangedNetworkState(ASPECT_CREDITS);
 }

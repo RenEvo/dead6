@@ -15,6 +15,8 @@
 #ifndef _D6C_IBUILDINGCONTROLLER_H_
 #define _D6C_IBUILDINGCONTROLLER_H_
 
+#include "IBaseManager.h"
+
 struct HitInfo;
 struct ExplosionInfo;
 
@@ -36,6 +38,69 @@ enum EControllerStateFlags
 	CSF_ISVISIBLE			= 0x04,		// Set if building is visible by the player
 	CSF_ISVALIDATED			= 0x08,		// Set if building has been validated
 };
+
+// Controller events
+enum EControllerEvent
+{
+	// Sent when the controller has been validated
+	CONTROLLER_EVENT_VALIDATED,
+
+	// Sent when the controller has been reset
+	CONTROLLER_EVENT_RESET,
+
+	// Sent when the controller has been damaged
+	// nParam[0] = HitInfo
+	CONTROLLER_EVENT_ONHIT,
+
+	// Sent when the controller has been damaged via explosion
+	// nParam[0] = ExplosionInfo
+	CONTROLLER_EVENT_ONEXPLOSION,
+
+	// Sent when the controller is being looked at by the local client
+	// nParam[0] = ID of interface entity focused on
+	CONTROLLER_EVENT_INVIEW,
+
+	// Sent when the controller is no longer being looked at by the local client
+	CONTROLLER_EVENT_OUTOFVIEW,
+
+	// Last event in list.
+	CONTROLLER_EVENT_LAST,
+};
+
+struct SControllerEvent
+{
+	SControllerEvent() {event=CONTROLLER_EVENT_LAST; nParam[0]=0;nParam[1]=0;nParam[2]=0;nParam[3]=0;};
+	SControllerEvent(EControllerEvent _event) : event(_event) {nParam[0]=0;nParam[1]=0;nParam[2]=0;nParam[3]=0;};
+
+	// Any event from EControllerEvent enum
+	EControllerEvent event;
+
+	// Event parameters
+	INT_PTR nParam[4];
+};
+
+////////////////////////////////////////////////////
+////////////////////////////////////////////////////
+
+struct IBuildingController;
+struct IBuildingControllerEventListener
+{
+	////////////////////////////////////////////////////
+	// OnBuildingControllerEvent
+	//
+	// Purpose: Called when event occurs on controller
+	//
+	// In:	pController - Building controller object
+	//		nGUID - Controller's BuildingGUID
+	//		event - Event that occured
+	//
+	// Note: See SControllerEvent
+	////////////////////////////////////////////////////
+	virtual void OnBuildingControllerEvent(IBuildingController *pController, BuildingGUID nGUID, SControllerEvent &event) = 0;
+};
+
+////////////////////////////////////////////////////
+////////////////////////////////////////////////////
 
 struct IBuildingController
 {
@@ -61,7 +126,7 @@ struct IBuildingController
 	// In:	nGUID - Building controller's GUID
 	//		fHealth - Initial health
 	////////////////////////////////////////////////////
-	virtual void Initialize(unsigned int nGUID, float fHealth) = 0;
+	virtual void Initialize(BuildingGUID nGUID, float fHealth) = 0;
 
 	////////////////////////////////////////////////////
 	// Shutdown
@@ -133,7 +198,7 @@ struct IBuildingController
 	//
 	// Purpose: Return the controller's GUID
 	////////////////////////////////////////////////////
-	virtual unsigned int GetGUID(void) const = 0;
+	virtual BuildingGUID GetGUID(void) const = 0;
 
 	////////////////////////////////////////////////////
 	// GetScriptTable
@@ -240,6 +305,24 @@ struct IBuildingController
 	//	for the team to lose
 	////////////////////////////////////////////////////
 	virtual bool MustBeDestroyed(void) const = 0;
+
+	////////////////////////////////////////////////////
+	// AddEventListener
+	//
+	// Purpose: Add an event listener to controller
+	//
+	// In:	pListener - Listening object
+	////////////////////////////////////////////////////
+	virtual void AddEventListener(IBuildingControllerEventListener *pListener) = 0;
+
+	////////////////////////////////////////////////////
+	// RemoveEventListener
+	//
+	// Purpose: Remove an event listener from controller
+	//
+	// In:	pListener - Listening object
+	////////////////////////////////////////////////////
+	virtual void RemoveEventListener(IBuildingControllerEventListener *pListener) = 0;
 
 	////////////////////////////////////////////////////
 	// OnClientHit
