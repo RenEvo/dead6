@@ -836,6 +836,14 @@
 						/>
 					</FileConfiguration>
 				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_D6Player.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_D6Player.h"
+					>
+				</File>
 			</Filter>
 			<Filter
 				Name="Vehicle Files"
@@ -864,11 +872,89 @@
 				Name="Nodes"
 				>
 				<File
-					RelativePath=".\Dead6\FlowHarvesterNodes.cpp"
+					RelativePath=".\Dead6\Nodes\FlowBuildingControllerNodes.cpp"
 					>
 				</File>
 				<File
-					RelativePath=".\Dead6\FlowMiscNodes.cpp"
+					RelativePath=".\Dead6\Nodes\FlowBuildingControllerNodes.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\Nodes\FlowD6PlayerNodes.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\Nodes\FlowD6PlayerNodes.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\Nodes\FlowHarvesterNodes.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\Nodes\FlowHarvesterNodes.h"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\Nodes\FlowMiscNodes.cpp"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							ObjectFile="$(IntDir)\$(InputName)1.obj"
+							XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Debug|x64"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							ObjectFile="$(IntDir)\$(InputName)1.obj"
+							XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							ObjectFile="$(IntDir)\$(InputName)1.obj"
+							XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release|x64"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							ObjectFile="$(IntDir)\$(InputName)1.obj"
+							XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Profile|Win32"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							ObjectFile="$(IntDir)\$(InputName)1.obj"
+							XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Profile|x64"
+						>
+						<Tool
+							Name="VCCLCompilerTool"
+							ObjectFile="$(IntDir)\$(InputName)1.obj"
+							XMLDocumentationFileName="$(IntDir)\$(InputName)1.xdc"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath=".\Dead6\Nodes\FlowMiscNodes.h"
 					>
 				</File>
 			</Filter>

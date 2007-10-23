@@ -19,9 +19,6 @@
 
 class CBuildingController : public IBuildingController
 {
-	// TODO REMOVE
-	bool m_bDebug;
-
 	// Building's GUID
 	BuildingGUID m_nGUID;
 
@@ -48,6 +45,10 @@ class CBuildingController : public IBuildingController
 	// Explosion queue (weaponId, explosion info with updated damage)
 	typedef std::map<EntityId, ExplosionInfo> ExplosionQueue;
 	ExplosionQueue m_ExplosionQueue;
+
+	// Event listeners
+	typedef std::list<IBuildingControllerEventListener*> EventListeners;
+	EventListeners m_EventListeners;
 
 public:
 	////////////////////////////////////////////////////
@@ -262,6 +263,24 @@ public:
 	virtual bool MustBeDestroyed(void) const;
 
 	////////////////////////////////////////////////////
+	// AddEventListener
+	//
+	// Purpose: Add an event listener to controller
+	//
+	// In:	pListener - Listening object
+	////////////////////////////////////////////////////
+	virtual void AddEventListener(IBuildingControllerEventListener *pListener);
+
+	////////////////////////////////////////////////////
+	// RemoveEventListener
+	//
+	// Purpose: Remove an event listener from controller
+	//
+	// In:	pListener - Listening object
+	////////////////////////////////////////////////////
+	virtual void RemoveEventListener(IBuildingControllerEventListener *pListener);
+
+	////////////////////////////////////////////////////
 	// OnClientHit
 	//
 	// Purpose: Call when a hit occurs on the client
@@ -304,6 +323,16 @@ public:
 	//			obstructed, 1 = fully visible)
 	////////////////////////////////////////////////////
 	virtual void OnServerExplosion(ExplosionInfo const& explosionInfo, EntityId nInterfaceId, float fObstruction);
+
+protected:
+	////////////////////////////////////////////////////
+	// _SendListenerEvent
+	//
+	// Purpose: Send an event out to all listeners
+	//
+	// In:	event - Event to send out
+	////////////////////////////////////////////////////
+	virtual void _SendListenerEvent(SControllerEvent &event);
 };
 
 #endif //_D6C_CBUILDINGCONTROLLER_H_

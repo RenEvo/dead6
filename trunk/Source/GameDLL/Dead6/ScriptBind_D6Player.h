@@ -2,40 +2,33 @@
 // C&C: The Dead 6 - Core File
 // Copyright (C), RenEvo Software & Designs, 2007
 //
-// CD6Game.h
+// ScriptBind_D6Player.h
 //
-// Purpose: Dead6 Core Player declarations
+// Purpose: Dead6 Core Player script binding, replaces
+//	ScriptBind_Actor for D6Player controls
 //
 // File History:
-//	- 7/22/07 : File created - Dan
-//	- 8/23/07 : File edited - KAK
+//	- 8/23/07 : File created - KAK
 ////////////////////////////////////////////////////
 
-#ifndef _D6C_CD6PLAYER_H_
-#define _D6C_CD6PLAYER_H_
+#ifndef _D6C_SCRIPTBIND_D6PLAYER_H_
+#define _D6C_SCRIPTBIND_D6PLAYER_H_
 
-#include "Player.h"
+#include "ScriptBind_Actor.h"
+#include "CD6Player.h"
 
-class CD6Player : public CPlayer
+class CScriptBind_D6Player : public CScriptBind_Actor
 {
 public:
 	////////////////////////////////////////////////////
 	// Constructor
 	////////////////////////////////////////////////////
-	CD6Player(void);
-private:
-	CD6Player& operator=(CD6Player const&) { return *this; }
-	CD6Player(CD6Player const&){}
+	CScriptBind_D6Player(ISystem *pSystem);
 
-public:
 	////////////////////////////////////////////////////
 	// Destructor
 	////////////////////////////////////////////////////
-	virtual ~CD6Player(void);
-	
-	// Serialization overloads
-	virtual bool NetSerialize(TSerialize ser, EEntityAspects aspect, uint8 profile, int flags);
-	virtual void FullSerialize(TSerialize ser);
+	virtual ~CScriptBind_D6Player();
 
 	////////////////////////////////////////////////////
 	// SetCredits
@@ -43,15 +36,17 @@ public:
 	// Purpose: Set player's credits to amount
 	//
 	// In:	nCredits - Amount to set
+	//
+	// Returns player's credits amount
 	////////////////////////////////////////////////////
-	virtual void SetCredits(unsigned int nCredits);
+	virtual int SetCredits(IFunctionHandler *pH, int nCredits);
 
 	////////////////////////////////////////////////////
 	// GetCredits
 	//
-	// Purpose: Returns player's credits to amount
+	// Purpose: Returns player's credits amount
 	////////////////////////////////////////////////////
-	virtual unsigned int GetCredits() const;
+	virtual int GetCredits(IFunctionHandler *pH);
 
 	////////////////////////////////////////////////////
 	// GiveCredits
@@ -59,8 +54,10 @@ public:
 	// Purpose: Give player credits (+)
 	//
 	// In:	nCredits - Amount to add
+	//
+	// Returns player's credits amount
 	////////////////////////////////////////////////////
-	virtual void GiveCredits(unsigned int nCredits);
+	virtual int GiveCredits(IFunctionHandler *pH, int nCredits);
 
 	////////////////////////////////////////////////////
 	// TakeCredits
@@ -68,16 +65,18 @@ public:
 	// Purpose: Take player credits (-)
 	//
 	// In:	nCredits - Amount to take
+	//
+	// Returns player's credits amount
 	////////////////////////////////////////////////////
-	virtual void TakeCredits(unsigned int nCredits);
-
-public:
-	// Net aspect used for updating credits
-	static const int ASPECT_CREDITS	= eEA_GameServerStatic;
+	virtual int TakeCredits(IFunctionHandler *pH, int nCredits);
 
 protected:
-	// Player's credits
-	unsigned int m_nCredits;
+	////////////////////////////////////////////////////
+	// GetD6Player
+	//
+	// Purpose: Get the D6 player using attached actor
+	////////////////////////////////////////////////////
+	CD6Player *GetD6Player(IFunctionHandler *pH);
 };
 
-#endif //_D6C_D6PLAYER_H_
+#endif //_D6C_SCRIPTBIND_D6PLAYER_H_

@@ -1,4 +1,7 @@
 ////////////////////////////////////////////////////
+// C&C: The Dead 6 - Core File
+// Copyright (C), RenEvo Software & Designs, 2007
+//
 // FlowMiscNodes.cpp
 //
 // Purpose: Miscellaneous flow nodes
@@ -8,75 +11,25 @@
 ////////////////////////////////////////////////////
 
 #include "StdAfx.h"
-#include "Nodes/G2FlowBaseNode.h"
+#include "Nodes/FlowMiscNodes.h"
 
-// CFlowStopwatchNode
-//	A handly little stop watch for our flow graphs!
-class CFlowStopwatchNode : public CFlowBaseNode
+////////////////////////////////////////////////////
+CFlowStopwatchNode::CFlowStopwatchNode(SActivationInfo * pActInfo)
 {
-	// Time when stopwatch was started
-	float m_fStartTime;
+	m_fStartTime = 0.0f;
+}
 
-public:
-	////////////////////////////////////////////////////
-	// Constructor
-	////////////////////////////////////////////////////
-	CFlowStopwatchNode(SActivationInfo * pActInfo)
-	{
-		m_fStartTime = 0.0f;
-	}
+////////////////////////////////////////////////////
+CFlowStopwatchNode::~CFlowStopwatchNode()
+{
 
-	////////////////////////////////////////////////////
-	// Destructor
-	////////////////////////////////////////////////////
-	virtual ~CFlowStopwatchNode() { }
+}
 
-	// Input Ports
-	enum EInputPorts
-	{
-		EIP_Start = 0,
-		EIP_Stop,
-		EIP_Timeout,
-	};
-
-	// Output Ports
-	enum EOutputPorts
-	{
-		EOP_Done = 0,
-	};
-
-	////////////////////////////////////////////////////
-	// GetConfiguration
-	//
-	// Purpose: Set up and return the configuration for
-	//	this node for the Flow Graph
-	//
-	// Out:	config - The node's config
-	////////////////////////////////////////////////////
-	virtual void GetConfiguration(SFlowNodeConfig& config);
-
-	////////////////////////////////////////////////////
-	// ProcessEvent
-	//
-	// Purpose: Called when an event is to be processed
-	//
-	// In:	event - Flow event to process
-	//		pActInfo - Activation info for the event
-	////////////////////////////////////////////////////
-	virtual void ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo);
-
-	////////////////////////////////////////////////////
-	// GetMemoryStatistics
-	//
-	// Purpose: Used by memory management
-	//
-	// In:	s - Cry Sizer object
-	////////////////////////////////////////////////////
-	virtual void GetMemoryStatistics(ICrySizer *s)
-	{
-		s->Add(*this);
-	}
-};
+////////////////////////////////////////////////////
+void CFlowStopwatchNode::Serialize(SActivationInfo* pActInfo, TSerialize ser)
+{
+	ser.Value("m_fStartTime", m_fStartTime);
+}
 
 ////////////////////////////////////////////////////
 void CFlowStopwatchNode::GetConfiguration(SFlowNodeConfig& config)
@@ -91,7 +44,8 @@ void CFlowStopwatchNode::GetConfiguration(SFlowNodeConfig& config)
 	};
 
 	// Output ports
-	static const SOutputPortConfig outputs[] = {
+	static const SOutputPortConfig outputs[] =
+	{
 		OutputPortConfig<float>("Done", _HELP("Triggered when the stopwatch stops")),
 		{0},
 	};
@@ -167,6 +121,77 @@ void CFlowStopwatchNode::ProcessEvent(EFlowEvent event, SActivationInfo *pActInf
 	}
 }
 
+
+////////////////////////////////////////////////////
+CFlowEditorGameStartNode::CFlowEditorGameStartNode(SActivationInfo * pActInfo)
+{
+
+}
+
+////////////////////////////////////////////////////
+CFlowEditorGameStartNode::~CFlowEditorGameStartNode()
+{
+
+}
+
+////////////////////////////////////////////////////
+void CFlowEditorGameStartNode::Seralize(SActivationInfo* pActInfo, TSerialize ser)
+{
+
+}
+
+////////////////////////////////////////////////////
+void CFlowEditorGameStartNode::GetConfiguration(SFlowNodeConfig& config)
+{
+	// Input ports
+	static const SInputPortConfig inputs[] =
+	{
+		{0},
+	};
+
+	// Output ports
+	static const SOutputPortConfig outputs[] =
+	{
+		OutputPortConfig_Void("Start", _HELP("Triggered when editor game starts")),
+		{0},
+	};
+
+	// Set up config
+	config.pInputPorts = inputs;
+	config.pOutputPorts = outputs;
+	config.sDescription = _HELP("Used to detect when the game in the editor has started");
+	config.SetCategory(EFLN_APPROVED);
+}
+
+////////////////////////////////////////////////////
+void CFlowEditorGameStartNode::ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo)
+{
+	switch (event)
+	{
+		case eFE_Initialize:
+		{
+			pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, true);
+		}
+		break;
+
+		case eFE_Update:
+		{
+			// Game started?
+			if (true == g_D6Core->pD6Game->IsEditorGameStarted())
+			{
+				// Trigger
+				ActivateOutput(pActInfo, EOP_Start, true);
+				pActInfo->pGraph->SetRegularlyUpdated(pActInfo->myID, false);
+			}
+		}
+		break;
+	}
+}
+
+////////////////////////////////////////////////////
+////////////////////////////////////////////////////
+
 // Register the flow node with the name "Stopwatch" in the "MyFlowNodes" section
 // Use the Node class for the stopwatch
-REGISTER_FLOW_NODE("Timer:Stopwatch", CFlowStopwatchNode);
+REGISTER_FLOW_NODE("Time:Stopwatch", CFlowStopwatchNode);
+REGISTER_FLOW_NODE("Game:EditorGameStart", CFlowEditorGameStartNode);

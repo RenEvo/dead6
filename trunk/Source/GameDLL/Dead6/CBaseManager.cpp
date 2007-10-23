@@ -344,6 +344,24 @@ BuildingGUID CBaseManager::GetBuildingFromInterface(EntityId nEntityId, IBuildin
 }
 
 ////////////////////////////////////////////////////
+void CBaseManager::AddBuildingControllerEventListener(BuildingGUID nGUID, IBuildingControllerEventListener *pListener)
+{
+	// Get controller from GUID
+	IBuildingController *pController = FindBuildingController(nGUID);
+	if (NULL == pController) return;
+	pController->AddEventListener(pListener);
+}
+
+////////////////////////////////////////////////////
+void CBaseManager::RemoveBuildingControllerEventListener(BuildingGUID nGUID, IBuildingControllerEventListener *pListener)
+{
+	// Get controller from GUID
+	IBuildingController *pController = FindBuildingController(nGUID);
+	if (NULL == pController) return;
+	pController->RemoveEventListener(pListener);
+}
+
+////////////////////////////////////////////////////
 void CBaseManager::ClientHit(HitInfo const& hitInfo)
 {
 	// Get controller that has targeted interface

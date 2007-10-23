@@ -24,6 +24,7 @@ class CScriptBind_BaseManager;
 class CScriptBind_TeamManager;
 class CScriptBind_BuildingController;
 class CScriptBind_PortalManager;
+class CScriptBind_D6Player;
 
 class CD6GameRules;
 
@@ -94,6 +95,13 @@ public:
 	virtual CScriptBind_PortalManager *GetPortalManagerScriptBind() { return m_pScriptBindPortalManager; }
 
 	////////////////////////////////////////////////////
+	// GetActorScriptBind
+	//
+	// Purpose: Returns the D6 Player script bind overload
+	////////////////////////////////////////////////////
+	virtual CScriptBind_Actor *GetActorScriptBind();
+
+	////////////////////////////////////////////////////
 	// CGame overloads
 	virtual void GetMemoryStatistics(ICrySizer *s);
 	virtual bool Init(IGameFramework *pFramework);
@@ -152,6 +160,7 @@ protected:
 	CScriptBind_TeamManager *m_pScriptBindTeamManager;
 	CScriptBind_BuildingController *m_pScriptBindBuildingController;
 	CScriptBind_PortalManager *m_pScriptBindPortalManager;
+	CScriptBind_D6Player *m_pScriptBindD6Player;
 };
 
 #endif //_D6C_CD6GAME_H_

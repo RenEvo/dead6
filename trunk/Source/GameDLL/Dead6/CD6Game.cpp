@@ -19,6 +19,7 @@
 #include "ScriptBind_TeamManager.h"
 #include "ScriptBind_BuildingController.h"
 #include "ScriptBind_PortalManager.h"
+#include "ScriptBind_D6Player.h"
 
 ////////////////////////////////////////////////////
 CD6Game::CD6Game(void)
@@ -28,6 +29,7 @@ CD6Game::CD6Game(void)
 	m_pScriptBindTeamManager = NULL;
 	m_pScriptBindBuildingController = NULL;
 	m_pScriptBindPortalManager = NULL;
+	m_pScriptBindD6Player = NULL;
 	m_bEditorGameStarted = false;
 }
 
@@ -186,6 +188,7 @@ void CD6Game::InitScriptBinds()
 	m_pScriptBindTeamManager = new CScriptBind_TeamManager(m_pFramework->GetISystem());
 	m_pScriptBindBuildingController = new CScriptBind_BuildingController(m_pFramework->GetISystem(), m_pFramework);
 	m_pScriptBindPortalManager = new CScriptBind_PortalManager(m_pFramework->GetISystem());
+	m_pScriptBindD6Player = new CScriptBind_D6Player(m_pFramework->GetISystem());
 
 	// Base script bind init
 	CGame::InitScriptBinds();
@@ -198,6 +201,7 @@ void CD6Game::ReleaseScriptBinds()
 	SAFE_DELETE(m_pScriptBindTeamManager);
 	SAFE_DELETE(m_pScriptBindBuildingController);
 	SAFE_DELETE(m_pScriptBindPortalManager);
+	SAFE_DELETE(m_pScriptBindD6Player);
 
 	// Base script bind release
 	CGame::ReleaseScriptBinds();
@@ -346,4 +350,10 @@ void CD6Game::ParseCNCRules_Buildings(XmlNodeRef &pNode)
 			g_D6Core->pBaseManager->CreateBuildingController(szTeam, szName, pBuildingNode);
 		}
 	}
+}
+
+////////////////////////////////////////////////////
+CScriptBind_Actor *CD6Game::GetActorScriptBind()
+{
+	return m_pScriptBindD6Player;
 }
