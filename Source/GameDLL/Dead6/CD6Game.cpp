@@ -170,9 +170,9 @@ void CD6Game::EditorResetGame(bool bStart)
 
 	// Perform soft resets
 	assert(g_D6Core->pBaseManager);
-	g_D6Core->pBaseManager->ResetGame();
+	g_D6Core->pBaseManager->ResetGame(bStart);
 	assert(g_D6Core->pTeamManager);
-	g_D6Core->pTeamManager->ResetGame();
+	g_D6Core->pTeamManager->ResetGame(bStart);
 
 	// Reset portal manager
 	assert(g_D6Core->pPortalManager);
@@ -268,8 +268,11 @@ void CD6Game::OnLoadingComplete(ILevel *pLevel)
 {
 	assert(g_D6Core->pBaseManager);
 
-	// Validate controllers
-	g_D6Core->pBaseManager->Validate();
+	// Prepare team manager
+	g_D6Core->pTeamManager->ResetGame(true);
+
+	// Validate and prepare controllers
+	g_D6Core->pBaseManager->ResetGame(true);
 }
 
 ////////////////////////////////////////////////////

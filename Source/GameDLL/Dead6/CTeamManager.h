@@ -78,8 +78,11 @@ public:
 	//
 	// Purpose: Called when the game is reset, such as
 	//	when the editor game starts up
+	//
+	// In:	bGameStart - TRUE if game is starting,
+	//	FALSE if game is stopping
 	////////////////////////////////////////////////////
-	virtual void ResetGame(void);
+	virtual void ResetGame(bool bGameStart);
 	
 	////////////////////////////////////////////////////
 	// Update

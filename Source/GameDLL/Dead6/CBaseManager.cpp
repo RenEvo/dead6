@@ -75,7 +75,7 @@ void CBaseManager::Shutdown(void)
 void CBaseManager::Update(bool bHaveFocus, unsigned int nUpdateFlags)
 {
 	// Update the controllers
-	unsigned int nControllerUpdateFlags = (CUF_CHECKVISIBILITY);
+	unsigned int nControllerUpdateFlags = CUF_ALL;
 	for (ControllerList::iterator itBuilding = m_ControllerList.begin();
 		itBuilding != m_ControllerList.end(); itBuilding++)
 	{
@@ -105,12 +105,13 @@ void CBaseManager::Reset(void)
 }
 
 ////////////////////////////////////////////////////
-void CBaseManager::ResetGame(void)
+void CBaseManager::ResetGame(bool bGameStart)
 {
 	CryLog("[BaseManager] Resetting building controllers...");
 
-	// Validate the controllers
-	Validate();
+	// Validate the controllers if the game is starting
+	if (true == bGameStart)
+		Validate();
 
 	// Call reset on all controllers
 	for (ControllerList::iterator itBuilding = m_ControllerList.begin();
@@ -163,15 +164,18 @@ BuildingGUID CBaseManager::CreateBuildingController(char const* szTeam, char con
 
 	// Get rest of its attributes
 	float fInitHealth = 99999.0f; // Note: Clamp will put it down to max health based on building's definition
+	bool bMustBeDestroyed = false;
 	if (NULL != pAttr)
 	{
 		pAttr->getAttr("InitHealth", fInitHealth);
+		pAttr->getAttr("MustBeDestroyed", bMustBeDestroyed);
 	}
 
 	// Create a new building
 	IBuildingController *pController = new CBuildingController;
 	m_ControllerList[GUID] = pController;
 	pController->Initialize(GUID, fInitHealth);
+	pController->SetMustBeDestroyed(bMustBeDestroyed);
 	if (false == pController->LoadFromXml(szName) && NULL != g_D6Core->pSystem)
 	{
 		// Error it
@@ -214,7 +218,7 @@ void CBaseManager::Validate(BuildingGUID nGUID)
 		for (itBuilding; itBuilding != m_ControllerList.end(); itBuilding++)
 		{
 			if (true == itBuilding->second->BeforeValidate())
-				ValidateList[itBuilding->first] = itBuilding->second;
+				ValidateList.insert(ControllerList::value_type(itBuilding->first,itBuilding->second));
 		}
 	}
 	if (true == ValidateList.empty()) return; // Must have something to continue with
@@ -314,6 +318,87 @@ BuildingGUID CBaseManager::GenerateGUID(char const* szTeam, char const* szClass)
 	if (TEAMID_INVALID == nTeamID || BC_INVALID == nClassID)
 		return GUID_INVALID;
 	return MAKE_BUILDING_GUID(nTeamID, nClassID);
+}
+
+////////////////////////////////////////////////////
+BuildingGUID CBaseManager::GetBuildingFromInterface(EntityId nEntityId, IBuildingController **ppController) const
+{
+	if (NULL != ppController) *ppController = NULL;
+
+	// Get the entity
+	IEntity *pEntity = gEnv->pEntitySystem->GetEntity(nEntityId);
+	if (NULL == pEntity) return GUID_INVALID;
+	if (false == pEntity->CheckFlags(ENTITY_FLAG_ISINTERFACE)) return GUID_INVALID;
+
+	// Check all controllers
+	for (ControllerList::const_iterator itBuilding = m_ControllerList.begin(); itBuilding != m_ControllerList.end(); itBuilding++)
+	{
+		if (true == itBuilding->second->HasInterface(pEntity))
+		{
+			// Got it
+			if (NULL != ppController) *ppController = itBuilding->second;
+			return itBuilding->first;
+		}
+	}
+	return GUID_INVALID;
+}
+
+////////////////////////////////////////////////////
+void CBaseManager::ClientHit(HitInfo const& hitInfo)
+{
+	// Get controller that has targeted interface
+	IBuildingController *pController;
+	if (GUID_INVALID != GetBuildingFromInterface(hitInfo.targetId, &pController))
+	{
+		// Let it handle it
+		pController->OnClientHit(hitInfo);
+	}
+}
+
+////////////////////////////////////////////////////
+void CBaseManager::ServerHit(HitInfo const& hitInfo)
+{
+	// Get controller that has targeted interface
+	IBuildingController *pController;
+	if (GUID_INVALID != GetBuildingFromInterface(hitInfo.targetId, &pController))
+	{
+		// Let it handle it
+		pController->OnServerHit(hitInfo);
+	}
+}
+
+////////////////////////////////////////////////////
+void CBaseManager::ClientExplosion(ExplosionInfo const& explosionInfo, GRTExplosionAffectedEntities const& affectedEntities)
+{
+	// Cycle through all effected entities
+	IBuildingController *pController;
+	for (GRTExplosionAffectedEntities::const_iterator itEnt = affectedEntities.begin();
+		itEnt != affectedEntities.end(); itEnt++)
+	{
+		// Get controller that owns this interface
+		if (NULL == itEnt->first) continue;
+		if (GUID_INVALID == GetBuildingFromInterface(itEnt->first->GetId(), &pController))
+			continue;
+		pController->OnClientExplosion(explosionInfo, itEnt->first->GetId(), itEnt->second);
+	}
+}
+
+////////////////////////////////////////////////////
+void CBaseManager::ServerExplosion(ExplosionInfo const& explosionInfo, GRTExplosionAffectedEntities const& affectedEntities)
+{
+	// Cycle through all effected entities
+	IBuildingController *pController;
+	for (GRTExplosionAffectedEntities::const_iterator itEnt = affectedEntities.begin();
+		itEnt != affectedEntities.end(); itEnt++)
+	{
+		// Get controller that owns this interface
+		if (NULL == itEnt->first) continue;
+		if (GUID_INVALID == GetBuildingFromInterface(itEnt->first->GetId(), &pController))
+			continue;
+
+		// Calculate distance ratio from where it was hit
+		pController->OnServerExplosion(explosionInfo, itEnt->first->GetId(), itEnt->second);
+	}
 }
 
 ////////////////////////////////////////////////////

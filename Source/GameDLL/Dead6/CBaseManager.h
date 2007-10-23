@@ -113,8 +113,11 @@ public:
 	//
 	// Purpose: Called when the game is reset, such as
 	//	when the editor game starts up
+	//
+	// In:	bGameStart - TRUE if game is starting,
+	//	FALSE if game is stopping
 	////////////////////////////////////////////////////
-	virtual void ResetGame(void);
+	virtual void ResetGame(bool bGameStart);
 
 	////////////////////////////////////////////////////
 	// Validate
@@ -188,6 +191,58 @@ public:
 	// Returns building GUID or GUID_INVALID on error
 	////////////////////////////////////////////////////
 	virtual BuildingGUID GenerateGUID(char const* szTeam, char const* szClass) const;
+
+	////////////////////////////////////////////////////
+	// GetBuildingFromInterface
+	//
+	// Purpose: Returns the Building GUID that is interfaced
+	//	by the given entity
+	//
+	// In:	nEntityId - ID of entity that is the interface
+	//
+	// Out:	ppController - Pointer to controller object
+	//
+	// Returns Building GUID or GUID_INVALID on error
+	////////////////////////////////////////////////////
+	virtual BuildingGUID GetBuildingFromInterface(EntityId nEntityId, IBuildingController **ppController = NULL) const;
+
+	////////////////////////////////////////////////////
+	// ClientHit
+	//
+	// Purpose: Call when a hit occurs on the client
+	//
+	// In:	hitinfo - Hit information
+	////////////////////////////////////////////////////
+	virtual void ClientHit(HitInfo const& hitInfo);
+
+	////////////////////////////////////////////////////
+	// ServerHit
+	//
+	// Purpose: Call when a hit occurs on the server
+	//
+	// In:	hitinfo - Hit information
+	////////////////////////////////////////////////////
+	virtual void ServerHit(HitInfo const& hitInfo);
+
+	////////////////////////////////////////////////////
+	// ServerExplosion
+	//
+	// Purpose: Call when an explosion occurs on the server
+	//
+	// In:	explosionInfo - Explosion information
+	//		affectedEntities - Map of affected entities
+	////////////////////////////////////////////////////
+	virtual void ServerExplosion(ExplosionInfo const& explosionInfo, GRTExplosionAffectedEntities const& affectedEntities);
+
+	////////////////////////////////////////////////////
+	// ClientExplosion
+	//
+	// Purpose: Call when an explosion occurs on the client
+	//
+	// In:	explosionInfo - Explosion information
+	//		affectedEntities - Map of affected entities
+	////////////////////////////////////////////////////
+	virtual void ClientExplosion(ExplosionInfo const& explosionInfo, GRTExplosionAffectedEntities const& affectedEntities);
 };
 
 ////////////////////////////////////////////////////

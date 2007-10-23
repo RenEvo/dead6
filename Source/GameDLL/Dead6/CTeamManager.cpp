@@ -56,7 +56,7 @@ void CTeamManager::Reset(void)
 	CryLog("[TeamManager] Reset");
 
 	// Do a game reset
-	ResetGame();
+	ResetGame(false);
 
 	// Remove all teams
 	while (false == m_TeamMap.empty())
@@ -70,7 +70,7 @@ void CTeamManager::Reset(void)
 }
 
 ////////////////////////////////////////////////////
-void CTeamManager::ResetGame(void)
+void CTeamManager::ResetGame(bool bGameStart)
 {
 	CryLog("[TeamManager] Removing team's harvesters...");
 
@@ -109,10 +109,6 @@ void CTeamManager::_RemoveTeamsHarvesters(TeamID nID)
 ////////////////////////////////////////////////////
 void CTeamManager::Update(bool bHaveFocus, unsigned int nUpdateFlags)
 {
-	// TODO Update harvester logic here
-
-
-	// TODO Check for harvester respawn
 
 }
 
@@ -264,8 +260,6 @@ TeamID CTeamManager::CreateTeam(char const* szTeam)
 	TeamDef.DefHarvester.fLoadRate = fLoadRate;
 	TeamDef.DefHarvester.fUnloadRate = fUnloadRate;
 	TeamDef.DefHarvester.szEntityName = szHarvName;
-
-	// TODO Load script
 
 	// Create entry and return ID
 	CryLog("[TeamManager] Created team \'%s\' (%u)", TeamDef.szName.c_str(), TeamDef.nID);
