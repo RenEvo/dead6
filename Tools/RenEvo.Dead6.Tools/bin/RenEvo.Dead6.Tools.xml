@@ -1,0 +1,39 @@
+﻿<?xml version="1.0"?>
+<doc>
+<assembly>
+<name>
+RenEvo.Dead6.Tools
+</name>
+</assembly>
+<members>
+<member name="F:RenEvo.Dead6.Tools.Logging.LogTraceListener.m_LogFileMutex">
+	<summary>
+ Used for thread safe operations
+ </summary>
+	<remarks></remarks>
+</member><member name="F:RenEvo.Dead6.Tools.Logging.LogTraceListener.m_LogFileName">
+	<summary>
+ LogFileName = &lt;User Directory&gt;\RenEvo Software &amp; Designs\The Dead Six Tools\&lt;Assembly File Version&gt;\&lt;AssemblyName&gt;.log
+ </summary>
+	<remarks></remarks>
+</member><member name="T:RenEvo.Dead6.Tools.Logging.LogTraceListener">
+	<summary>
+ Private implementation of a log file
+ </summary>
+	<remarks></remarks>
+</member><member name="P:RenEvo.Dead6.Tools.My.Resources.Resources.ResourceManager">
+	<summary>
+  Returns the cached ResourceManager instance used by this class.
+</summary>
+</member><member name="P:RenEvo.Dead6.Tools.My.Resources.Resources.Culture">
+	<summary>
+  Overrides the current thread's CurrentUICulture property for all
+  resource lookups using this strongly typed resource class.
+</summary>
+</member><member name="T:RenEvo.Dead6.Tools.My.Resources.Resources">
+	<summary>
+  A strongly-typed resource class, for looking up localized strings, etc.
+</summary>
+</member>
+</members>
+</doc>
