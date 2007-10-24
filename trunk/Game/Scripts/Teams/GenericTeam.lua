@@ -2,27 +2,27 @@
 -- C&C: The Dead 6 - Core File
 -- Copyright (C), RenEvo Software & Designs, 2007
 --
--- DefaultTeam.lua
+-- GenericTeam.lua
 --
--- Purpose: Team functionality for default
+-- Purpose: Team functionality for generic teams
 --
 -- History:
---      - 9/28/07 : File created - KAK
+--      - 10/24/07 : File created - KAK
 ------------------------------------------------
 
-DefaultTeam =
+GenericTeam =
 {
 
 };
 
 -- Server
-DefaultTeam.Server =
+GenericTeam.Server =
 {
 
 };
 
 -- Client
-DefaultTeam.Client = 
+GenericTeam.Client = 
 {
 
 };
@@ -33,7 +33,7 @@ DefaultTeam.Client =
 -- Purpose: Called when the team is first created
 --	on the server
 ------------------------------------------------
-function DefaultTeam.Server:OnInit()
+function GenericTeam.Server:OnInit()
 
 end
 
@@ -43,7 +43,7 @@ end
 -- Purpose: Called when the team is first created
 --	on the client
 ------------------------------------------------
-function DefaultTeam.Server:OnInit()
+function GenericTeam.Server:OnInit()
 
 end
 
@@ -53,7 +53,7 @@ end
 -- Purpose: Called when the team is destroyed
 --	on the server
 ------------------------------------------------
-function DefaultTeam.Server:OnShutdown()
+function GenericTeam.Server:OnShutdown()
 
 end
 
@@ -63,6 +63,6 @@ end
 -- Purpose: Called when the team is destroyed
 --	on the client
 ------------------------------------------------
-function DefaultTeam.Server:OnShutdown()
+function GenericTeam.Server:OnShutdown()
 
 end

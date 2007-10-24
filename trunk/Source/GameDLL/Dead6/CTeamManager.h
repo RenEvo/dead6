@@ -143,11 +143,13 @@ public:
 	// Purpose: Create a team definition
 	//
 	// In:	szTeam - Team to load (looks for its .XML file)
+	//		pTeamNode - XML Node containing team data
 	//
 	// Returns ID of the team created or TEAMID_INVALID
 	//	on error
 	////////////////////////////////////////////////////
 	virtual TeamID CreateTeam(char const* szTeam);
+	virtual TeamID CreateTeam(XmlNodeRef pTeamNode);
 
 	////////////////////////////////////////////////////
 	// RemoveTeam
@@ -301,6 +303,20 @@ public:
 	////////////////////////////////////////////////////
 	virtual bool IsValidTeam(TeamID nID) const;
 	virtual bool IsValidTeam(char const* szName) const;
+
+	////////////////////////////////////////////////////
+	// IsPlayerTeam
+	//
+	// Purpose: Returns TRUE if the specified team can
+	//	be used by a player (for joining rights)
+	//
+	// In:	nID - Team ID
+	//		szName - Name of the team
+	//
+	// Note: Using the name is slower than the ID!
+	////////////////////////////////////////////////////
+	virtual bool IsPlayerTeam(TeamID nID) const;
+	virtual bool IsPlayerTeam(char const* szName) const;
 
 	////////////////////////////////////////////////////
 	// CreateTeamHarvester
