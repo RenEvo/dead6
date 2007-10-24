@@ -5,13 +5,11 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.50727</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{BAA0069A-0622-4C6E-B725-4CF329CB72B6}</ProjectGuid>
-    <OutputType>WinExe</OutputType>
-    <StartupObject>RenEvo.Dead6.Tools.My.MyApplication</StartupObject>
-    <RootNamespace>RenEvo.Dead6.Tools</RootNamespace>
-    <AssemblyName>RenEvo.Dead6.Tools</AssemblyName>
-    <MyType>WindowsForms</MyType>
-    <ApplicationIcon>Resources\Icon.ico</ApplicationIcon>
+    <ProjectGuid>{CDB0FEB2-BBA8-4220-9CE0-C3CE2FDCA250}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>RenEvo.Dead6.Tools.Interfaces</RootNamespace>
+    <AssemblyName>RenEvo.Dead6.Tools.Interfaces</AssemblyName>
+    <MyType>Windows</MyType>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -19,25 +17,21 @@
     <DefineDebug>true</DefineDebug>
     <DefineTrace>true</DefineTrace>
     <OutputPath>..\bin\</OutputPath>
-    <DocumentationFile>RenEvo.Dead6.Tools.xml</DocumentationFile>
+    <DocumentationFile>RenEvo.Dead6.Tools.Interfaces.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
-    <UseVSHostingProcess>false</UseVSHostingProcess>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>none</DebugType>
+    <DebugType>None</DebugType>
     <DefineDebug>false</DefineDebug>
     <DefineTrace>true</DefineTrace>
     <Optimize>true</Optimize>
     <OutputPath>..\bin\</OutputPath>
-    <DocumentationFile>RenEvo.Dead6.Tools.xml</DocumentationFile>
+    <DocumentationFile>RenEvo.Dead6.Tools.Interfaces.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
     <Reference Include="System.Data" />
-    <Reference Include="System.Deployment" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
@@ -46,18 +40,10 @@
     <Import Include="System.Collections" />
     <Import Include="System.Collections.Generic" />
     <Import Include="System.Data" />
-    <Import Include="System.Drawing" />
     <Import Include="System.Diagnostics" />
-    <Import Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Forms\MainGUI.vb">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Forms\MainGUI.Designer.vb">
-      <DependentUpon>MainGUI.vb</DependentUpon>
-      <SubType>Form</SubType>
-    </Compile>
+    <Compile Include="Plugins\IPlugin.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
       <AutoGen>True</AutoGen>
@@ -73,13 +59,8 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
-    <Compile Include="Objects\Logging\LogTraceListener.vb" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Forms\MainGUI.resx">
-      <SubType>Designer</SubType>
-      <DependentUpon>MainGUI.vb</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="My Project\Resources.resx">
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.vb</LastGenOutput>
@@ -88,7 +69,6 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Configuration\app.config" />
     <None Include="My Project\Application.myapp">
       <Generator>MyApplicationCodeGenerator</Generator>
       <LastGenOutput>Application.Designer.vb</LastGenOutput>
@@ -98,16 +78,6 @@
       <CustomToolNamespace>My</CustomToolNamespace>
       <LastGenOutput>Settings.Designer.vb</LastGenOutput>
     </None>
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="Resources\Icon.ico" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\RenEvo.Dead6.Tools.Interfaces\RenEvo.Dead6.Tools.Interfaces.vbproj">
-      <Project>{CDB0FEB2-BBA8-4220-9CE0-C3CE2FDCA250}</Project>
-      <Name>RenEvo.Dead6.Tools.Interfaces</Name>
-      <Private>False</Private>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.VisualBasic.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
