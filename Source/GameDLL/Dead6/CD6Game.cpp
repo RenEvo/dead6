@@ -323,8 +323,18 @@ void CD6Game::ParseCNCRules_Teams(XmlNodeRef &pNode)
 		pTeamNode = pNode->getChild(i);
 		if (NULL != pTeamNode && stricmp(pTeamNode->getTag(), "Team") == 0)
 		{
-			// Create it
-			g_D6Core->pTeamManager->CreateTeam(pTeamNode->getContent());
+			// If element, have team manager open up team's XML file
+			char const* szContent = pTeamNode->getContent();
+			if (NULL != szContent && NULL != szContent[0])
+			{
+				// Have manager open it up and extract the node info
+				g_D6Core->pTeamManager->CreateTeam(szContent);
+			}
+			else
+			{
+				// Create the team
+				g_D6Core->pTeamManager->CreateTeam(pTeamNode);
+			}
 		}
 	}
 }
@@ -345,7 +355,7 @@ void CD6Game::ParseCNCRules_Buildings(XmlNodeRef &pNode)
 		if (NULL != pBuildingNode && stricmp(pBuildingNode->getTag(), "Building") == 0)
 		{
 			// Get team and name attributes
-			if (false == pBuildingNode->getAttr("Team", szTeam) || false == pBuildingNode->getAttr("Class", szName))
+			if (false == pBuildingNode->getAttr("Team", szTeam) || false == pBuildingNode->getAttr("Name", szName))
 				continue;
 			g_D6Core->pBaseManager->CreateBuildingController(szTeam, szName, pBuildingNode);
 		}

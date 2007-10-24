@@ -123,7 +123,6 @@ void CTeamManager::GetMemoryStatistics(ICrySizer *s)
 		s->Add(itTeam->second.szName);
 		s->Add(itTeam->second.szLongName);
 		s->Add(itTeam->second.szScript);
-		s->Add(itTeam->second.szXML);
 
 		// Player map
 		s->AddContainer(itTeam->second.PlayerList);
@@ -194,13 +193,6 @@ TeamID CTeamManager::CreateTeam(char const* szTeam)
 	szMapTeamXML += szTeam;
 	szMapTeamXML += ".xml";
 
-	// Check if team already exists
-	for (TeamMap::iterator itI = m_TeamMap.begin(); itI != m_TeamMap.end(); itI++)
-	{
-		if (0 == stricmp(szTeamXML.c_str(), itI->second.szXML.c_str()))
-			return itI->first;
-	}
-
 	// Find and open team's XML file
 	XmlNodeRef pRootNode = NULL;
 	if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szMapTeamXML.c_str())))
@@ -214,34 +206,56 @@ TeamID CTeamManager::CreateTeam(char const* szTeam)
 		}
 	}
 
+	// Create the team
+	return CreateTeam(pRootNode);
+}
+
+////////////////////////////////////////////////////
+TeamID CTeamManager::CreateTeam(XmlNodeRef pTeamNode)
+{
+	if (NULL == pTeamNode) return TEAMID_INVALID;
+
+	// Get its name
+	XmlString szAttrName = "";
+	pTeamNode->getAttr("Name", szAttrName);
+
+	// Check if team already exists
+	for (TeamMap::iterator itI = m_TeamMap.begin(); itI != m_TeamMap.end(); itI++)
+	{
+		if (0 == stricmp(szAttrName, itI->second.szName.c_str()))
+			return itI->first;
+	}
+
 	// Create entry for team
 	STeamDef TeamDef;
 	TeamDef.nID = ++m_nTeamIDGen;
 	TeamDef.nSpawnGroupID = 0;
-	TeamDef.szXML = szTeamXML;
+	TeamDef.szName = szAttrName;
+	TeamDef.nFlags = 0;
 
 	// Extract attributes
 	{
-		// Name
-		XmlString szAttrName = "";
-		pRootNode->getAttr("Name", szAttrName);
-		TeamDef.szName = szAttrName;
-	}
-	{
 		// Long Name
 		XmlString szAttrLongName = "";
-		pRootNode->getAttr("LongName", szAttrLongName);
+		pTeamNode->getAttr("LongName", szAttrLongName);
 		TeamDef.szLongName = szAttrLongName;
 	}
 	{
 		// Script
 		XmlString szScript = "";
-		pRootNode->getAttr("Script", szScript);
+		pTeamNode->getAttr("Script", szScript);
 		TeamDef.szScript = szScript;
+	}
+	{
+		// IsPlayerTeam
+		bool bIsPlayerTeam = false;
+		pTeamNode->getAttr("IsPlayerTeam", bIsPlayerTeam);
+		if (true == bIsPlayerTeam)
+			TeamDef.nFlags |= TEAM_FLAG_ISPLAYERTEAM;
 	}
 
 	// Get harvester info
-	XmlNodeRef pHarvesterNode = pRootNode->findChild("Harvester");
+	XmlNodeRef pHarvesterNode = pTeamNode->findChild("Harvester");
 	XmlString szHarvName = "";
 	float fCapacity = 0.0f;
 	float fBuildTime = 0.0f;
@@ -260,6 +274,8 @@ TeamID CTeamManager::CreateTeam(char const* szTeam)
 	TeamDef.DefHarvester.fLoadRate = fLoadRate;
 	TeamDef.DefHarvester.fUnloadRate = fUnloadRate;
 	TeamDef.DefHarvester.szEntityName = szHarvName;
+
+	// TODO Load script
 
 	// Create entry and return ID
 	CryLog("[TeamManager] Created team \'%s\' (%u)", TeamDef.szName.c_str(), TeamDef.nID);
@@ -514,6 +530,8 @@ bool CTeamManager::IsValidTeam(TeamID nID) const
 	TeamMap::const_iterator itTeam = m_TeamMap.find(nID);
 	return (itTeam != m_TeamMap.end());
 }
+
+////////////////////////////////////////////////////
 bool CTeamManager::IsValidTeam(char const* szName) const
 {
 	for (TeamMap::const_iterator itTeam = m_TeamMap.begin(); itTeam != m_TeamMap.end();
@@ -521,6 +539,29 @@ bool CTeamManager::IsValidTeam(char const* szName) const
 	{
 		if (itTeam->second.szName == szName)
 			return true;
+	}
+	return false;
+}
+
+////////////////////////////////////////////////////
+bool CTeamManager::IsPlayerTeam(TeamID nID) const
+{
+	TeamMap::const_iterator itTeam = m_TeamMap.find(nID);
+	if (itTeam != m_TeamMap.end())
+	{
+		return (TEAM_FLAG_ISPLAYERTEAM == (itTeam->second.nFlags&TEAM_FLAG_ISPLAYERTEAM));
+	}
+	return false;
+}
+
+////////////////////////////////////////////////////
+bool CTeamManager::IsPlayerTeam(char const* szName) const
+{
+	for (TeamMap::const_iterator itTeam = m_TeamMap.begin(); itTeam != m_TeamMap.end();
+		itTeam++)
+	{
+		if (itTeam->second.szName == szName)
+			return (TEAM_FLAG_ISPLAYERTEAM == (itTeam->second.nFlags&TEAM_FLAG_ISPLAYERTEAM));
 	}
 	return false;
 }

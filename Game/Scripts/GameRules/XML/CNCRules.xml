@@ -3,13 +3,16 @@
   <Teams>
     <Team>GDI</Team>
     <Team>Nod</Team>
+    <Team Name="Civilian" LongName="Civilian Population" Script="GenericTeam.lua" IsPlayerTeam="0">
+      <Harvester Entity="Harvester" Capacity="300.0" BuildTime="10.0" LoadRate="10.0" UnloadRate="20.0" />
+    </Team>
   </Teams>
   <Buildings>
-    <Building Team="GDI" Class="Refinery" InitHealth="500" MustBeDestroyed="1"/>
-    <Building Team="GDI" Class="Generic" InitHealth="200" MustBeDestroyed="0"/>
+    <Building Team="GDI" Name="Refinery" InitHealth="500" MustBeDestroyed="1"/>
+    <Building Team="GDI" Name="Generic" InitHealth="200" MustBeDestroyed="0"/>
 
-    <Building Team="Nod" Class="Refinery" InitHealth="500" MustBeDestroyed="1"/>
-    <Building Team="Nod" Class="Generic" InitHealth="200" MustBeDestroyed="0"/>
+    <Building Team="Nod" Name="Refinery" InitHealth="500" MustBeDestroyed="1"/>
+    <Building Team="Nod" Name="Generic" InitHealth="200" MustBeDestroyed="0"/>
   </Buildings>
   <General>
     <TimeOfDay Hour="9" Minute="45" EnableLoop="0" />

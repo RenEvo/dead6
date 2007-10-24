@@ -99,6 +99,12 @@ struct STeamHarvesterDef
 };
 typedef std::map<HarvesterID, STeamHarvesterDef*> HarvesterList;
 
+// Team flags
+enum ETeamFlags
+{
+	TEAM_FLAG_ISPLAYERTEAM		= 0x01,		// Set if player can be on this team, or strictly AI
+};
+
 // Team definition structure
 struct STeamDef
 {
@@ -108,15 +114,15 @@ struct STeamDef
 	// Spawn group ID
 	EntityId nSpawnGroupID;
 
+	// Team flags (see ETeamFlags)
+	unsigned int nFlags;
+
 	// Team name
 	string szName;
 	string szLongName;
 
 	// Script file
 	string szScript;
-
-	// XML file
-	string szXML;
 
 	// Player list
 	TeamPlayerList PlayerList;
@@ -232,11 +238,13 @@ struct ITeamManager
 	// Purpose: Create a team definition
 	//
 	// In:	szTeam - Team to load (looks for its .XML file)
+	//		pTeamNode - XML Node containing team data
 	//
 	// Returns ID of the team created or TEAMID_INVALID
 	//	on error
 	////////////////////////////////////////////////////
 	virtual TeamID CreateTeam(char const* szTeam) = 0;
+	virtual TeamID CreateTeam(XmlNodeRef pTeamNode) = 0;
 
 	////////////////////////////////////////////////////
 	// RemoveTeam
@@ -390,6 +398,20 @@ struct ITeamManager
 	////////////////////////////////////////////////////
 	virtual bool IsValidTeam(TeamID nID) const = 0;
 	virtual bool IsValidTeam(char const* szName) const = 0;
+
+	////////////////////////////////////////////////////
+	// IsPlayerTeam
+	//
+	// Purpose: Returns TRUE if the specified team can
+	//	be used by a player (for joining rights)
+	//
+	// In:	nID - Team ID
+	//		szName - Name of the team
+	//
+	// Note: Using the name is slower than the ID!
+	////////////////////////////////////////////////////
+	virtual bool IsPlayerTeam(TeamID nID) const = 0;
+	virtual bool IsPlayerTeam(char const* szName) const = 0;
 
 	////////////////////////////////////////////////////
 	// CreateTeamHarvester
