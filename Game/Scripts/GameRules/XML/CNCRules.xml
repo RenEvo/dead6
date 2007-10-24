@@ -6,7 +6,10 @@
   </Teams>
   <Buildings>
     <Building Team="GDI" Class="Refinery" InitHealth="500" MustBeDestroyed="1"/>
+    <Building Team="GDI" Class="Generic" InitHealth="200" MustBeDestroyed="0"/>
+
     <Building Team="Nod" Class="Refinery" InitHealth="500" MustBeDestroyed="1"/>
+    <Building Team="Nod" Class="Generic" InitHealth="200" MustBeDestroyed="0"/>
   </Buildings>
   <General>
     <TimeOfDay Hour="9" Minute="45" EnableLoop="0" />
