@@ -43,11 +43,51 @@ void CBuildingController::GetMemoryStatistics(ICrySizer *s)
 }
 
 ////////////////////////////////////////////////////
-void CBuildingController::Initialize(BuildingGUID nGUID, float fHealth)
+void CBuildingController::Initialize(BuildingGUID nGUID)
 {
 	m_nGUID = nGUID;
-	m_nFlags = 0;
-	m_fHealth = m_fInitHealth = MAX(0.0f,fHealth);
+
+	// Clamp init health to max health
+	if (m_fMaxHealth <= 0.0f)
+	{
+		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING, VALIDATOR_FLAG_SCRIPT,
+			m_szName, "Missing/Bad MaxHealth property for building definition [%s %s], health is set to 0!",
+			GetTeamName(), m_szName.c_str());
+		m_fMaxHealth = 0.0f;
+	}
+	m_fInitHealth = CLAMP(m_fInitHealth, 0.0f, m_fMaxHealth);
+	m_fHealth = m_fInitHealth;
+
+	// Load script and get table
+	m_pSS = g_D6Core->pSystem->GetIScriptSystem();
+	ScriptAnyValue temp;
+	if (true == m_szScript.empty() || false == m_pSS->ExecuteFile(m_szScript.c_str(), true, false))
+	{
+		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
+			VALIDATOR_FLAG_FILE, m_szScript.c_str(), "Failed to execute building script for [%s %s]",
+			GetTeamName(), m_szName.c_str());
+	}
+	else if (false == m_pSS->GetGlobalAny(m_szName, temp) ||
+		false == temp.CopyTo(m_pScriptTable))
+	{
+		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
+			VALIDATOR_FLAG_FILE, m_szScript.c_str(), "Failed to get script table for building [%s %s]",
+			GetTeamName(), m_szName.c_str());
+	}
+	else
+	{
+		// Attach it to the building controller script bind
+		if (NULL != g_D6Core->pD6Game)
+		{
+			g_D6Core->pD6Game->GetBuildingControllerScriptBind()->AttachTo(this);
+		}
+
+		// Call OnInit
+		BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnInit")
+		END_CALL(m_pSS)
+		BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnInit")
+		END_CALL(m_pSS)
+	}
 }
 
 ////////////////////////////////////////////////////
@@ -216,77 +256,34 @@ bool CBuildingController::IsValidated(void) const
 }
 
 ////////////////////////////////////////////////////
-bool CBuildingController::LoadFromXml(char const* szName)
+void CBuildingController::LoadFromXml(XmlNodeRef pNode)
 {
 	assert(g_D6Core->pSystem);
+	if (NULL == pNode) return;
 
-	// Create path to XML file for this controller
-	string szControllerXML = D6C_PATH_BUILDINGSXML, szMapControllerXML, szActualXML;
-	szControllerXML += szName;
-	szControllerXML += ".xml";
-	szMapControllerXML = g_D6Core->pSystem->GetI3DEngine()->GetLevelFilePath("Buildings\\");
-	szMapControllerXML += szName;
-	szMapControllerXML += ".xml";
-	szActualXML = szMapControllerXML;
+	// Will always be the same
+	m_szName = pNode->getAttr("Name");
 
-	// Find and open controller's XML file
-	XmlNodeRef pRootNode = NULL;
-	if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szMapControllerXML.c_str())))
+	// Basic info
+	if (true == pNode->haveAttr("Script"))
 	{
-		// Try default dir
-		if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szControllerXML.c_str())))
-		{
-			g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
-				VALIDATOR_FLAG_FILE, szControllerXML.c_str(), "Failed to load Building Definition for \'%s\'", szName);
-			return false;
-		}
-		szActualXML = szControllerXML;
+		m_szScript = D6C_PATH_BUILDINGS;
+		m_szScript += pNode->getAttr("Script");
 	}
 
-	// Parse XML file
-	m_szName = pRootNode->getAttr("Name");
-	m_szScript = D6C_PATH_BUILDINGS;
-	m_szScript += pRootNode->getAttr("Script");
-	if (false == pRootNode->getAttr("MaxHealth", m_fMaxHealth))
-	{
-		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
-			VALIDATOR_FLAG_FILE, szActualXML.c_str(), "Missing MaxHealth property for building definition \'%s\', health is set to 0!", szName);
-	}
+	// Health info
+	if (true == pNode->haveAttr("InitHealth"))
+		pNode->getAttr("InitHealth", m_fInitHealth);
+	if (true == pNode->haveAttr("MaxHealth"))
+		pNode->getAttr("MaxHealth", m_fMaxHealth);
 
-	// Clamp init health to max health
-	m_fHealth = m_fInitHealth = CLAMP(m_fInitHealth, 0.0f, m_fMaxHealth);
-
-	// Load script and get table
-	m_pSS = g_D6Core->pSystem->GetIScriptSystem();
-	ScriptAnyValue temp;
-	if (false == m_pSS->ExecuteFile(m_szScript.c_str(), true, false))
+	// Flags
+	if (true == pNode->haveAttr("MustBeDestroyed"))
 	{
-		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
-			VALIDATOR_FLAG_FILE, m_szScript.c_str(), "Failed to execute building script for: %s", szName);
+		bool bMustBeDestroyed = false;
+		pNode->getAttr("MustBeDestroyed", bMustBeDestroyed);
+		SetMustBeDestroyed(bMustBeDestroyed);
 	}
-	else if (false == m_pSS->GetGlobalAny(m_szName, temp) ||
-		false == temp.CopyTo(m_pScriptTable))
-	{
-		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
-			VALIDATOR_FLAG_FILE, m_szScript.c_str(), "Failed to get script table for building: %s (Looking for \'%s\')",
-			szName, m_szName);
-	}
-	else
-	{
-		// Attach it to the building controller script bind
-		if (NULL != g_D6Core->pD6Game)
-		{
-			g_D6Core->pD6Game->GetBuildingControllerScriptBind()->AttachTo(this);
-		}
-
-		// Call OnInit
-		BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnInit")
-		END_CALL(m_pSS)
-		BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnInit")
-		END_CALL(m_pSS)
-	}
-
-	return true;
 }
 
 ////////////////////////////////////////////////////

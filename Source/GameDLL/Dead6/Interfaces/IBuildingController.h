@@ -124,9 +124,8 @@ struct IBuildingController
 	// Purpose: Initialize the controller
 	//
 	// In:	nGUID - Building controller's GUID
-	//		fHealth - Initial health
 	////////////////////////////////////////////////////
-	virtual void Initialize(BuildingGUID nGUID, float fHealth) = 0;
+	virtual void Initialize(BuildingGUID nGUID) = 0;
 
 	////////////////////////////////////////////////////
 	// Shutdown
@@ -185,13 +184,11 @@ struct IBuildingController
 	// LoadFromXml
 	//
 	// Purpose: Define the building controller's attributes
-	//	from the given XML file
+	//	from the given XML node
 	//
-	// In:	szName - Class name of the building
-	//
-	// Returns TRUE if building controller is ready
+	// In:	pNode - XML Node containing its attributes
 	////////////////////////////////////////////////////
-	virtual bool LoadFromXml(char const* szName) = 0;
+	virtual void LoadFromXml(XmlNodeRef pNode) = 0;
 
 	////////////////////////////////////////////////////
 	// GetGUID

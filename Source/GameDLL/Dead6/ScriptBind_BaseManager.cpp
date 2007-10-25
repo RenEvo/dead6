@@ -53,5 +53,20 @@ void CScriptBind_BaseManager::RegisterMethods(void)
 #undef SCRIPT_REG_CLASSNAME
 #define SCRIPT_REG_CLASSNAME &CScriptBind_BaseManager::
 
-	//SCRIPT_REG_TEMPLFUNC(Function, "arg1, arg2, arg3");
+	SCRIPT_REG_TEMPLFUNC(FindBuilding, "szTeam, szClass");
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_BaseManager::FindBuilding(IFunctionHandler *pH, char const* szTeam, char const* szClass)
+{
+	assert(m_pBaseManager);
+
+	// Calculate the GUID
+	BuildingGUID GUID = m_pBaseManager->GenerateGUID(szTeam, szClass);
+	if (GUID_INVALID == GUID) return pH->EndFunctionNull();
+
+	// Get the controller and return its script table
+	IBuildingController *pController = m_pBaseManager->FindBuildingController(GUID);
+	if (NULL == pController) return pH->EndFunctionNull();
+	return pH->EndFunction(pController->GetScriptTable());
 }

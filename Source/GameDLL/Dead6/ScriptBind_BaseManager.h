@@ -45,6 +45,17 @@ public:
 
 public:
 	////////////////////////////////////////////////////
+	// FindBuilding
+	//
+	// Purpose: Return a controller's script table
+	//	by using the team and class names
+	//
+	// In:	szTeam - Owning team name
+	//		szClass - Building class name
+	//
+	// Returns controller's script table or nil on error
+	////////////////////////////////////////////////////
+	int FindBuilding(IFunctionHandler *pH, char const* szTeam, char const* szClass);
 
 private:
 	////////////////////////////////////////////////////

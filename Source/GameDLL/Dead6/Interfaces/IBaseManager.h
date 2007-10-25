@@ -84,20 +84,36 @@ struct IBaseManager
 	virtual void GetMemoryStatistics(ICrySizer *s) = 0;
 
 	////////////////////////////////////////////////////
+	// LoadBuildingControllers
+	//
+	// Purpose: Load building definitions contained in an
+	//	XML node
+	//
+	// In:	pNode - XML node to extract from
+	//
+	// Returns TRUE on success or FALSE on error
+	//
+	// Note: Used in conjunction with CNCRules parsing
+	////////////////////////////////////////////////////
+	virtual bool LoadBuildingControllers(XmlNodeRef pNode) = 0;
+
+	////////////////////////////////////////////////////
 	// CreateBuildingController
 	//
 	// Purpose: Create a building controller
 	//
 	// In:	szTeam - Team that owns the controller
 	//		szName - Class name to use for controller
+	//		pBaseAttr - XML node containing base attributes for it
 	//		pAttr - XML node containing attributes for it
+	//			which overwrite the base attributes
 	//
 	// Out:	ppController - Optional controller catcher
 	//
 	// Returns the building's GUID or GUID_INVALID on error
 	////////////////////////////////////////////////////
-	virtual BuildingGUID CreateBuildingController(char const* szTeam, char const* szName,
-		XmlNodeRef pAttr, IBuildingController **ppController = NULL) = 0;
+	virtual BuildingGUID CreateBuildingController(char const* szTeam, char const* szName, XmlNodeRef pBaseAttr,
+		XmlNodeRef pAttr, struct IBuildingController **ppController = NULL) = 0;
 
 	////////////////////////////////////////////////////
 	// Reset

@@ -1,2 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Generic Name="Generic" Script="Generic.lua" MaxHealth="200" />
+<Buildings>
+  <Building Name="Generic" Script="Generic.lua" MaxHealth="200" />
+</Buildings>

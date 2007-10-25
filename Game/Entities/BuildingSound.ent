@@ -1,0 +1,4 @@
+<Entity
+ Name="BuildingSound"
+ Script="Scripts/Entities/Sound/BuildingSound.lua"
+/>

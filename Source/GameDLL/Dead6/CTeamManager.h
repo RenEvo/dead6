@@ -19,9 +19,6 @@
 class CD6Game;
 class CTeamManager : public ITeamManager
 {
-	// Game class
-	CD6Game *m_pGame;
-
 	// Team ID generator
 	TeamID m_nTeamIDGen;
 
@@ -138,17 +135,29 @@ public:
 	virtual void CmdDebugObjectives(struct IConsoleCmdArgs *pArgs, const char **status);
 
 	////////////////////////////////////////////////////
+	// LoadTeams
+	//
+	// Purpose: Load team definitions contained in an
+	//	XML node
+	//
+	// In:	pNode - XML node to extract from
+	//
+	// Returns TRUE on success or FALSE on error
+	//
+	// Note: Used in conjunction with CNCRules parsing
+	////////////////////////////////////////////////////
+	virtual bool LoadTeams(XmlNodeRef pNode);
+
+	////////////////////////////////////////////////////
 	// CreateTeam
 	//
 	// Purpose: Create a team definition
 	//
-	// In:	szTeam - Team to load (looks for its .XML file)
-	//		pTeamNode - XML Node containing team data
+	// In:	pTeamNode - XML Node containing team data
 	//
 	// Returns ID of the team created or TEAMID_INVALID
 	//	on error
 	////////////////////////////////////////////////////
-	virtual TeamID CreateTeam(char const* szTeam);
 	virtual TeamID CreateTeam(XmlNodeRef pTeamNode);
 
 	////////////////////////////////////////////////////
