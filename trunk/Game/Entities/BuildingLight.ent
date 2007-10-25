@@ -1,0 +1,4 @@
+<Entity
+ Name="BuildingLight" 
+ Script="Scripts/Entities/Lights/BuildingLight.lua"
+/>

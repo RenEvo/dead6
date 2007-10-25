@@ -817,6 +817,14 @@
 						/>
 					</FileConfiguration>
 				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_D6GameRules.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\ScriptBind_D6GameRules.h"
+					>
+				</File>
 			</Filter>
 			<Filter
 				Name="Player"

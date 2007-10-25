@@ -1,2 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Refinery Name="ClassName" Script="Refinery.lua (As seen in Scripts/Buildings/Refinery.lua)" MaxHealth="500" />
+<Buildings>
+	<Building Name="ClassName" Script="Refinery.lua (As seen in Scripts/Buildings/Refinery.lua)" InitHealth="500" MaxHealth="500" MustBeDestroyed="1"/>
+</Buildings>

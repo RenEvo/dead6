@@ -89,7 +89,7 @@ extern CD6CoreGlobalEnvironment* g_D6Core;
 
 // Call to begin a call for server
 #define BEGIN_CALL_SERVER(pSS, pSO, szFunc) \
-	if (true == gEnv->bServer) \
+	if (true == gEnv->bServer && NULL != *(pSO)) \
 	{ \
 		SmartScriptTable pServerSO; ScriptAnyValue temp; \
 		(pSO)->GetValueAny("Server", temp); \
@@ -99,7 +99,7 @@ extern CD6CoreGlobalEnvironment* g_D6Core;
 
 // Call to begin a call for cleint
 #define BEGIN_CALL_CLIENT(pSS, pSO, szFunc) \
-	if (true == gEnv->bClient) \
+	if (true == gEnv->bClient && NULL != *(pSO)) \
 	{ \
 		SmartScriptTable pClientSO; ScriptAnyValue temp; \
 		(pSO)->GetValueAny("Client", temp); \

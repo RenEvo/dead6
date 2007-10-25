@@ -1,2 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Refinery Name="Refinery" Script="Refinery.lua" MaxHealth="500" />
+<Buildings>
+  <Building Name="Refinery" Script="Refinery.lua" MaxHealth="500" />
+</Buildings>

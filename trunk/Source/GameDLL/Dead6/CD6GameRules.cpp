@@ -44,9 +44,34 @@ void CD6GameRules::ClearAllTeams(void)
 ////////////////////////////////////////////////////
 int CD6GameRules::CreateTeam(const char *name)
 {
-	// Delegate to team manager
 	assert(g_D6Core->pTeamManager);
-	return g_D6Core->pTeamManager->CreateTeam(name);
+
+	// Create path to XML file for this team
+	string szTeamXML = D6C_PATH_TEAMSXML, szMapTeamXML;
+	szTeamXML += name;
+	szTeamXML += ".xml";
+	szMapTeamXML = g_D6Core->pSystem->GetI3DEngine()->GetLevelFilePath("Teams\\");
+	szMapTeamXML += name;
+	szMapTeamXML += ".xml";
+
+	// Find and open team's XML file
+	XmlNodeRef pRootNode = NULL;
+	if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szMapTeamXML.c_str())))
+	{
+		// Try default dir
+		if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szTeamXML.c_str())))
+		{
+			g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
+				VALIDATOR_FLAG_FILE, szTeamXML.c_str(), "Failed to load Team Definition for \'%s\'", name);
+			return 0;
+		}
+	}
+
+	// Recursive load from it
+	g_D6Core->pTeamManager->LoadTeams(pRootNode);
+
+	// Find team (for success check)
+	return g_D6Core->pTeamManager->GetTeamId(name);
 }
 
 ////////////////////////////////////////////////////

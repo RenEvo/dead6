@@ -181,33 +181,61 @@ void CTeamManager::CmdDebugObjectives(IConsoleCmdArgs *pArgs, const char **statu
 }
 
 ////////////////////////////////////////////////////
-TeamID CTeamManager::CreateTeam(char const* szTeam)
+bool CTeamManager::LoadTeams(XmlNodeRef pNode)
 {
-	assert(g_D6Core->pSystem);
+	if (NULL == pNode) return false;
 
-	// Create path to XML file for this team
-	string szTeamXML = D6C_PATH_TEAMSXML, szMapTeamXML;
-	szTeamXML += szTeam;
-	szTeamXML += ".xml";
-	szMapTeamXML = g_D6Core->pSystem->GetI3DEngine()->GetLevelFilePath("Teams\\");
-	szMapTeamXML += szTeam;
-	szMapTeamXML += ".xml";
+	// Check action
+	XmlString action;
+	pNode->getAttr("action", action);
+	if (0 == stricmp(action, "clear")) Reset();
 
-	// Find and open team's XML file
-	XmlNodeRef pRootNode = NULL;
-	if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szMapTeamXML.c_str())))
+	// Parse each team entry
+	XmlNodeRef pTeamNode;
+	int nCount = pNode->getChildCount();
+	for (int i = 0; i < nCount; i++)
 	{
-		// Try default dir
-		if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szTeamXML.c_str())))
+		// Get attribute and create team with it
+		pTeamNode = pNode->getChild(i);
+		if (NULL != pTeamNode && stricmp(pTeamNode->getTag(), "Team") == 0)
 		{
-			g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
-				VALIDATOR_FLAG_FILE, szTeamXML.c_str(), "Failed to load Team Definition for \'%s\'", szTeam);
-			return TEAMID_INVALID;
+			// If element, have team manager open up team's XML file
+			char const* szContent = pTeamNode->getContent();
+			if (NULL == szContent || NULL == szContent[0])
+			{
+				// Create the team
+				g_D6Core->pTeamManager->CreateTeam(pTeamNode);
+				continue;
+			}
+
+			// Create path to XML file for this team
+			string szTeamXML = D6C_PATH_TEAMSXML, szMapTeamXML;
+			szTeamXML += szContent;
+			szTeamXML += ".xml";
+			szMapTeamXML = g_D6Core->pSystem->GetI3DEngine()->GetLevelFilePath("Teams\\");
+			szMapTeamXML += szContent;
+			szMapTeamXML += ".xml";
+
+			// Find and open team's XML file
+			XmlNodeRef pRootNode = NULL;
+			if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szMapTeamXML.c_str())))
+			{
+				// Try default dir
+				if (NULL == (pRootNode = g_D6Core->pSystem->LoadXmlFile(szTeamXML.c_str())))
+				{
+					g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
+						VALIDATOR_FLAG_FILE, szTeamXML.c_str(), "Failed to load Team Definition for \'%s\'", szContent);
+					continue;
+				}
+			}
+
+			// Recursive load from it
+			if (false == g_D6Core->pTeamManager->LoadTeams(pRootNode))
+				return false;
 		}
 	}
 
-	// Create the team
-	return CreateTeam(pRootNode);
+	return true;
 }
 
 ////////////////////////////////////////////////////

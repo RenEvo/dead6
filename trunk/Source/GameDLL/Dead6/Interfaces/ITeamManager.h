@@ -233,17 +233,29 @@ struct ITeamManager
 	virtual void CmdDebugObjectives(struct IConsoleCmdArgs *pArgs, const char **status) = 0;
 
 	////////////////////////////////////////////////////
+	// LoadTeams
+	//
+	// Purpose: Load team definitions contained in an
+	//	XML node
+	//
+	// In:	pNode - XML node to extract from
+	//
+	// Returns TRUE on success or FALSE on error
+	//
+	// Note: Used in conjunction with CNCRules parsing
+	////////////////////////////////////////////////////
+	virtual bool LoadTeams(XmlNodeRef pNode) = 0;
+
+	////////////////////////////////////////////////////
 	// CreateTeam
 	//
 	// Purpose: Create a team definition
 	//
-	// In:	szTeam - Team to load (looks for its .XML file)
-	//		pTeamNode - XML Node containing team data
+	// In:	pTeamNode - XML Node containing team data
 	//
 	// Returns ID of the team created or TEAMID_INVALID
 	//	on error
 	////////////////////////////////////////////////////
-	virtual TeamID CreateTeam(char const* szTeam) = 0;
 	virtual TeamID CreateTeam(XmlNodeRef pTeamNode) = 0;
 
 	////////////////////////////////////////////////////

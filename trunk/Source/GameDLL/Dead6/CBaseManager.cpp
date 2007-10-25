@@ -122,7 +122,75 @@ void CBaseManager::ResetGame(bool bGameStart)
 }
 
 ////////////////////////////////////////////////////
-BuildingGUID CBaseManager::CreateBuildingController(char const* szTeam, char const* szName,
+bool CBaseManager::LoadBuildingControllers(XmlNodeRef pNode)
+{
+	if (NULL == pNode) return false;
+
+	// Check action
+	XmlString action;
+	pNode->getAttr("action", action);
+	if (0 == stricmp(action, "clear")) Reset();
+
+	// Parse each building entry and create the controllers for them
+	XmlNodeRef pBuildingNode;
+	XmlString szTeam, szName;
+	int nCount = pNode->getChildCount();
+	for (int i = 0; i < nCount; i++)
+	{
+		// Check if it is a real building
+		pBuildingNode = pNode->getChild(i);
+		if (NULL != pBuildingNode && stricmp(pBuildingNode->getTag(), "Building") == 0)
+		{
+			// Get team and name attributes
+			if (false == pBuildingNode->getAttr("Team", szTeam) || false == pBuildingNode->getAttr("Name", szName))
+				continue;
+
+			// Create path to XML file for this controller
+			string szControllerXML = D6C_PATH_BUILDINGSXML, szMapControllerXML, szActualXML;
+			szControllerXML += szName;
+			szControllerXML += ".xml";
+			szMapControllerXML = g_D6Core->pSystem->GetI3DEngine()->GetLevelFilePath("Buildings\\");
+			szMapControllerXML += szName;
+			szMapControllerXML += ".xml";
+
+			// Find and open controller's XML file
+			XmlNodeRef pClassXMLNode = NULL;
+			XmlNodeRef pBaseBuildingNode = NULL;
+			if (NULL == (pClassXMLNode = g_D6Core->pSystem->LoadXmlFile(szMapControllerXML.c_str())))
+			{
+				// Try default dir
+				pClassXMLNode = g_D6Core->pSystem->LoadXmlFile(szControllerXML.c_str());
+			}
+			if (NULL != pClassXMLNode)
+			{
+				// Find the entry
+				int nCount = pClassXMLNode->getChildCount();
+				for (int i = 0; i < nCount; i++)
+				{
+					XmlNodeRef pTempNode = pClassXMLNode->getChild(i);
+					if (NULL != pTempNode && stricmp(pTempNode->getTag(), "Building") == 0)
+					{
+						XmlString szTempName;
+						pTempNode->getAttr("Name", szTempName);
+						if (0 == strcmp(szTempName, szName))
+						{
+							pBaseBuildingNode = pTempNode;
+							break;
+						}
+					}
+				}
+			}
+
+			// Create controller for it
+			g_D6Core->pBaseManager->CreateBuildingController(szTeam, szName, pBaseBuildingNode, pBuildingNode);
+		}
+	}
+
+	return true;
+}
+
+////////////////////////////////////////////////////
+BuildingGUID CBaseManager::CreateBuildingController(char const* szTeam, char const* szName, XmlNodeRef pBaseAttr,
 													XmlNodeRef pAttr, IBuildingController **ppController)
 {
 	if (NULL != ppController) *ppController = NULL;
@@ -162,30 +230,17 @@ BuildingGUID CBaseManager::CreateBuildingController(char const* szTeam, char con
 		return itBuilding->first;
 	}
 
-	// Get rest of its attributes
-	float fInitHealth = 99999.0f; // Note: Clamp will put it down to max health based on building's definition
-	bool bMustBeDestroyed = false;
-	if (NULL != pAttr)
-	{
-		pAttr->getAttr("InitHealth", fInitHealth);
-		pAttr->getAttr("MustBeDestroyed", bMustBeDestroyed);
-	}
-
 	// Create a new building
 	IBuildingController *pController = new CBuildingController;
 	m_ControllerList[GUID] = pController;
-	pController->Initialize(GUID, fInitHealth);
-	pController->SetMustBeDestroyed(bMustBeDestroyed);
-	if (false == pController->LoadFromXml(szName) && NULL != g_D6Core->pSystem)
-	{
-		// Error it
-		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_ERROR,
-			VALIDATOR_FLAG_FILE, "", "Missing/Corrupted Building Definition file for class : %s", szName);
-	}
-	if (NULL != ppController) *ppController = pController;
-
+	pController->LoadFromXml(pBaseAttr);
+	pController->LoadFromXml(pAttr);
+	pController->Initialize(GUID);
+	
+	// Return it
 	CryLog("[BaseManager] Created building controller \'%s\' for team \'%s\' (GUID = %u)",
 		szName, szTeam, GUID);
+	if (NULL != ppController) *ppController = pController;
 	return GUID;
 }
 

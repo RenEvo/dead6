@@ -25,6 +25,7 @@ class CScriptBind_TeamManager;
 class CScriptBind_BuildingController;
 class CScriptBind_PortalManager;
 class CScriptBind_D6Player;
+class CScriptBind_D6GameRules;
 
 class CD6GameRules;
 
@@ -102,6 +103,13 @@ public:
 	virtual CScriptBind_Actor *GetActorScriptBind();
 
 	////////////////////////////////////////////////////
+	// GetGameRulesScriptBind
+	//
+	// Purpose: Returns the D6 GameRules script bind overload
+	////////////////////////////////////////////////////
+	virtual CScriptBind_GameRules *GetGameRulesScriptBind();
+
+	////////////////////////////////////////////////////
 	// CGame overloads
 	virtual void GetMemoryStatistics(ICrySizer *s);
 	virtual bool Init(IGameFramework *pFramework);
@@ -122,34 +130,15 @@ public:
 
 protected:
 	////////////////////////////////////////////////////
-	// ParseCNCRules_General
+	// ParseCNCRules
 	//
-	// Purpose: Parses the general settings of the CNC
-	//	rules file
+	// Purpose: Parses the specified CNCRules file
 	//
-	// In:	pNode - XML node containing general settings
+	// In:	szXMLFile - XML File to load
+	//
+	// Returns TRUE on success or FALSE if an error occured
 	////////////////////////////////////////////////////
-	virtual void ParseCNCRules_General(XmlNodeRef &pNode);
-
-	////////////////////////////////////////////////////
-	// ParseCNCRules_Teams
-	//
-	// Purpose: Parses the team settings of the CNC
-	//	rules file
-	//
-	// In:	pNode - XML node containing team settings
-	////////////////////////////////////////////////////
-	virtual void ParseCNCRules_Teams(XmlNodeRef &pNode);
-
-	////////////////////////////////////////////////////
-	// ParseCNCRules_Buildings
-	//
-	// Purpose: Parses the buildings settings of the CNC
-	//	rules file
-	//
-	// In:	pNode - XML node containing building settings
-	////////////////////////////////////////////////////
-	virtual void ParseCNCRules_Buildings(XmlNodeRef &pNode);
+	bool ParseCNCRules(char const* szXMLFile);
 
 	////////////////////////////////////////////////////
 	// CGame overloads
@@ -161,6 +150,7 @@ protected:
 	CScriptBind_BuildingController *m_pScriptBindBuildingController;
 	CScriptBind_PortalManager *m_pScriptBindPortalManager;
 	CScriptBind_D6Player *m_pScriptBindD6Player;
+	CScriptBind_D6GameRules *m_pScriptBindD6GameRules;
 };
 
 #endif //_D6C_CD6GAME_H_

@@ -20,6 +20,7 @@
 #include "ScriptBind_BuildingController.h"
 #include "ScriptBind_PortalManager.h"
 #include "ScriptBind_D6Player.h"
+#include "ScriptBind_D6GameRules.h"
 
 ////////////////////////////////////////////////////
 CD6Game::CD6Game(void)
@@ -30,6 +31,7 @@ CD6Game::CD6Game(void)
 	m_pScriptBindBuildingController = NULL;
 	m_pScriptBindPortalManager = NULL;
 	m_pScriptBindD6Player = NULL;
+	m_pScriptBindD6GameRules = NULL;
 	m_bEditorGameStarted = false;
 }
 
@@ -189,6 +191,7 @@ void CD6Game::InitScriptBinds()
 	m_pScriptBindBuildingController = new CScriptBind_BuildingController(m_pFramework->GetISystem(), m_pFramework);
 	m_pScriptBindPortalManager = new CScriptBind_PortalManager(m_pFramework->GetISystem());
 	m_pScriptBindD6Player = new CScriptBind_D6Player(m_pFramework->GetISystem());
+	m_pScriptBindD6GameRules = new CScriptBind_D6GameRules(m_pFramework->GetISystem(), m_pFramework);
 
 	// Base script bind init
 	CGame::InitScriptBinds();
@@ -202,6 +205,7 @@ void CD6Game::ReleaseScriptBinds()
 	SAFE_DELETE(m_pScriptBindBuildingController);
 	SAFE_DELETE(m_pScriptBindPortalManager);
 	SAFE_DELETE(m_pScriptBindD6Player);
+	SAFE_DELETE(m_pScriptBindD6GameRules);
 
 	// Base script bind release
 	CGame::ReleaseScriptBinds();
@@ -230,41 +234,16 @@ void CD6Game::OnLoadingStart(ILevelInfo *pLevel)
 
 	// TODO Don't do the CNC rules load if no level is loaded. The editor gives a false alarm here
 	//	when it is first loaded.
-
-	// Get CNC rules file path and open to root
-	char const* szCNCRules = m_pFramework->GetISystem()->GetI3DEngine()->GetLevelFilePath("CNCRules.xml");
-	XmlNodeRef pRootNode = m_pFramework->GetISystem()->LoadXmlFile(szCNCRules);
-	if (NULL == pRootNode)
+	
+	// Load default rules in
+	if (false == ParseCNCRules(D6C_DEFAULT_GAMERULES))
 	{
-		// Try default
-		pRootNode = m_pFramework->GetISystem()->LoadXmlFile(D6C_DEFAULT_GAMERULES);
-		if (NULL == pRootNode)
-		{
-			// No good..
-			g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_ERROR,
-				VALIDATOR_FLAG_FILE, "", "Missing/Corrupted CNCRules file for level : %s",
-				"TODO"/*TODO: pLevel->GetLevelInfo()->GetName()*/);
-			return;
-		}
-		else
-		{
-			m_pFramework->GetISystem()->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
-				VALIDATOR_FLAG_FILE, szCNCRules, "Using default CNC Rules for level \'%s\'",
-				"TODO"/*TODO: pLevel->GetLevelInfo()->GetName()*/);
-		}
+		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_ERROR,
+			VALIDATOR_FLAG_FILE, "", "Missing/Corrupted Default CNCRules file : %s", D6C_DEFAULT_GAMERULES);
 	}
 
-	// Parse general settings
-	XmlNodeRef pGeneralSettingsNode = pRootNode->findChild("General");
-	ParseCNCRules_General(pGeneralSettingsNode);
-
-	// Parse team settings
-	XmlNodeRef pTeamSettingsNode = pRootNode->findChild("Teams");
-	ParseCNCRules_Teams(pTeamSettingsNode);
-
-	// Parse building controller settings
-	XmlNodeRef pBuildingSettingsNode = pRootNode->findChild("Buildings");
-	ParseCNCRules_Buildings(pBuildingSettingsNode);
+	// Load map-specific rules in
+	ParseCNCRules(m_pFramework->GetISystem()->GetI3DEngine()->GetLevelFilePath("CNCRules.xml"));
 }
 
 ////////////////////////////////////////////////////
@@ -280,90 +259,57 @@ void CD6Game::OnLoadingComplete(ILevel *pLevel)
 }
 
 ////////////////////////////////////////////////////
-void CD6Game::ParseCNCRules_General(XmlNodeRef &pNode)
+bool CD6Game::ParseCNCRules(char const* szXMLFile)
 {
-	if (NULL == pNode) return;
+	// Attempt to load it
+	XmlNodeRef pRootNode = m_pFramework->GetISystem()->LoadXmlFile(szXMLFile);
+	if (NULL == pRootNode) return false;
 
-	// Parse time of day
-	XmlNodeRef pTODNode = pNode->findChild("TimeOfDay");
-	if (NULL != pTODNode)
+	// Extract general settings
+	XmlNodeRef pGeneralSettingsNode = pRootNode->findChild("General");
+	if (NULL != pGeneralSettingsNode)
 	{
-		// Get info
-		float fHour, fMin;
-		bool bLoop = false;
-		if (false == pTODNode->getAttr("Hour", fHour)) fHour = 0.0f;
-		if (true == pTODNode->getAttr("Minute", fMin))
+		// Parse time of day
+		XmlNodeRef pTODNode = pGeneralSettingsNode->findChild("TimeOfDay");
+		if (NULL != pTODNode)
 		{
-			fMin = CLAMP(fMin, 0.0f, 60.0f);
-			fHour += (fMin * (1.0f/60.0f));
-		}
-		fHour = CLAMP(fHour, 0.0f, 23.99f);
-		pTODNode->getAttr("EnableLoop", bLoop);
-
-		// Set it
-		CryLog("[CNCRules] Setting time of day to \'%.2f\' %s looping", fHour, bLoop?"with":"without");
-		ITimeOfDay *pTOD = m_pFramework->GetISystem()->GetI3DEngine()->GetTimeOfDay();
-		assert(pTOD);
-		pTOD->SetTime(fHour, true);
-		pTOD->SetPaused(!bLoop);
-	}
-}
-
-////////////////////////////////////////////////////
-void CD6Game::ParseCNCRules_Teams(XmlNodeRef &pNode)
-{
-	if (NULL == pNode || NULL == g_D6Core->pTeamManager) return;
-
-	// Parse each team entry
-	XmlNodeRef pTeamNode;
-	int nCount = pNode->getChildCount();
-	for (int i = 0; i < nCount; i++)
-	{
-		// Get attribute and create team with it
-		pTeamNode = pNode->getChild(i);
-		if (NULL != pTeamNode && stricmp(pTeamNode->getTag(), "Team") == 0)
-		{
-			// If element, have team manager open up team's XML file
-			char const* szContent = pTeamNode->getContent();
-			if (NULL != szContent && NULL != szContent[0])
+			// Get info
+			float fHour, fMin;
+			bool bLoop = false;
+			if (false == pTODNode->getAttr("Hour", fHour)) fHour = 0.0f;
+			if (true == pTODNode->getAttr("Minute", fMin))
 			{
-				// Have manager open it up and extract the node info
-				g_D6Core->pTeamManager->CreateTeam(szContent);
+				fMin = CLAMP(fMin, 0.0f, 60.0f);
+				fHour += (fMin * (1.0f/60.0f));
 			}
-			else
-			{
-				// Create the team
-				g_D6Core->pTeamManager->CreateTeam(pTeamNode);
-			}
+			fHour = CLAMP(fHour, 0.0f, 23.99f);
+			pTODNode->getAttr("EnableLoop", bLoop);
+
+			// Set it
+			ITimeOfDay *pTOD = m_pFramework->GetISystem()->GetI3DEngine()->GetTimeOfDay();
+			assert(pTOD);
+			CryLog("[CNCRules] Setting time of day to \'%.2f\' %s looping", fHour, bLoop?"with":"without");
+			pTOD->SetTime(fHour, true);
+			pTOD->SetPaused(!bLoop);
 		}
 	}
-}
 
-////////////////////////////////////////////////////
-void CD6Game::ParseCNCRules_Buildings(XmlNodeRef &pNode)
-{
-	if (NULL == pNode || NULL == g_D6Core->pBaseManager) return;
+	// Extract team settings
+	g_D6Core->pTeamManager->LoadTeams(pRootNode->findChild("Teams"));
 
-	// Parse each building entry and create the controllers for them
-	XmlNodeRef pBuildingNode;
-	XmlString szTeam, szName;
-	int nCount = pNode->getChildCount();
-	for (int i = 0; i < nCount; i++)
-	{
-		// Check if it is a real building
-		pBuildingNode = pNode->getChild(i);
-		if (NULL != pBuildingNode && stricmp(pBuildingNode->getTag(), "Building") == 0)
-		{
-			// Get team and name attributes
-			if (false == pBuildingNode->getAttr("Team", szTeam) || false == pBuildingNode->getAttr("Name", szName))
-				continue;
-			g_D6Core->pBaseManager->CreateBuildingController(szTeam, szName, pBuildingNode);
-		}
-	}
+	// Extract building settings
+	g_D6Core->pBaseManager->LoadBuildingControllers(pRootNode->findChild("Buildings"));
+
+	return true;
 }
 
 ////////////////////////////////////////////////////
 CScriptBind_Actor *CD6Game::GetActorScriptBind()
 {
 	return m_pScriptBindD6Player;
+}
+
+CScriptBind_GameRules *CD6Game::GetGameRulesScriptBind()
+{
+	return m_pScriptBindD6GameRules;
 }

@@ -11,7 +11,7 @@
 --      - 10/13/07 : File created - KAK
 ------------------------------------------------
 
-Script.ReloadScript( "Scripts/Default/Entities/Others/BreakableObject.lua" );
+Script.ReloadScript( "Scripts/Entities/Others/BreakableObject.lua" );
 
 PortalEntity =
 {
