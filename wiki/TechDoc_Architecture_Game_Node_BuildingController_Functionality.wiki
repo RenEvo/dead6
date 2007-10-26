@@ -1,0 +1,489 @@
+#summary Game Feature - Building Controller Flow Nodes - Functionality
+
+[TechDoc_Architecture_Game_Node_BuildingController Back]
+
+= Functionality =
+
+== !BuildingControllerGeneralListenerNode ==
+Below are the methods defined in the !BuildingControllerGeneralListenerNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Clone _* ===
+*Purpose*:
+Used to clone the controller
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ Seralize _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+=== *_ !AddListener _* ===
+*Purpose*:
+Add to controller's listener list
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ !OnBuildingControllerEvent _* ===
+*Purpose*:
+Called when event occurs on controller
+
+*Arguments*:
+ * _event_ - `[In]` Event that occured
+ * _nGUID_ - `[In]` Controller's BuildingGUID
+ * _pController_ - `[In]` Building controller object
+
+*Returns*:
+void
+
+*Note*:
+See SControllerEvent
+
+== !BuildingControllerDamageListenerNode ==
+Below are the methods defined in the !BuildingControllerDamageListenerNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Clone _* ===
+*Purpose*:
+Used to clone the controller
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ Seralize _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+=== *_ !AddListener _* ===
+*Purpose*:
+Add to controller's listener list
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ !OnBuildingControllerEvent _* ===
+*Purpose*:
+Called when event occurs on controller
+
+*Arguments*:
+ * _event_ - `[In]` Event that occured
+ * _nGUID_ - `[In]` Controller's BuildingGUID
+ * _pController_ - `[In]` Building controller object
+
+*Returns*:
+void
+
+*Note*:
+See SControllerEvent
+
+== !BuildingControllerViewListenerNode ==
+Below are the methods defined in the !BuildingControllerViewListenerNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Clone _* ===
+*Purpose*:
+Used to clone the controller
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ Seralize _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+=== *_ !AddListener _* ===
+*Purpose*:
+Add to controller's listener list
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ !OnBuildingControllerEvent _* ===
+*Purpose*:
+Called when event occurs on controller
+
+*Arguments*:
+ * _event_ - `[In]` Event that occured
+ * _nGUID_ - `[In]` Controller's BuildingGUID
+ * _pController_ - `[In]` Building controller object
+
+*Returns*:
+void
+
+*Note*:
+See SControllerEvent
+
+== !BuildingControllerHasPowerNode ==
+Below are the methods defined in the !BuildingControllerHasPowerNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Clone _* ===
+*Purpose*:
+Used to clone the controller
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ Seralize _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+== !BuildingControllerSetPowerNode ==
+Below are the methods defined in the !BuildingControllerSetPowerNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Clone _* ===
+*Purpose*:
+Used to clone the controller
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ Seralize _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+[TechDoc_Architecture_Game_Node_BuildingController Back]
