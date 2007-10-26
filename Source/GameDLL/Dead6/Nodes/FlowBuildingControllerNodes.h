@@ -74,6 +74,8 @@ public:
 	{
 		EOP_Validated = 0,	// Triggered when controller has been validated
 		EOP_Reset,			// Triggered when controller has been reset
+		EOP_PowerChanged,	// Triggered when controller's power status changed
+		EOP_Destroyed,		// Triggered when controller is destroyed
 	};
 
 	////////////////////////////////////////////////////
@@ -376,6 +378,178 @@ public:
 	// Note: See SControllerEvent
 	////////////////////////////////////////////////////
 	virtual void OnBuildingControllerEvent(IBuildingController *pController, BuildingGUID nGUID, SControllerEvent &event);
+};
+
+// CBuildingControllerHasPowerNode
+//	Simple node that lets you check the power status of a building
+class CBuildingControllerHasPowerNode : public CFlowBaseNode
+{
+public:
+	////////////////////////////////////////////////////
+	// Constructor
+	////////////////////////////////////////////////////
+	CBuildingControllerHasPowerNode(SActivationInfo * pActInfo);
+
+	////////////////////////////////////////////////////
+	// Destructor
+	////////////////////////////////////////////////////
+	virtual ~CBuildingControllerHasPowerNode();
+
+	////////////////////////////////////////////////////
+	// Clone
+	//
+	// Purpose: Used to clone the controller
+	//
+	// In:	pActInfo - Activation info
+	////////////////////////////////////////////////////
+	IFlowNodePtr Clone(SActivationInfo *pActInfo)
+	{
+		return new CBuildingControllerHasPowerNode(pActInfo);
+	}
+
+	////////////////////////////////////////////////////
+	// Seralize
+	//
+	// Purpose: Used for saving/loading node's instance
+	//
+	// In:	pActInfo - Activation info
+	//		ser - Serialization object
+	////////////////////////////////////////////////////
+	void Serialize(SActivationInfo* pActInfo, TSerialize ser);
+
+	// Input Ports
+	enum EInputPorts
+	{
+		EIP_Check = 0,		// Check the power status
+		EIP_Team,			// String: Team name
+		EIP_Class,			// String: Class name
+	};
+
+	// Output Ports
+	enum EOutputPorts
+	{
+		EOP_Status = 0,		// Triggered when check occurs. Returns TRUE if controller has power, FALSE if it doesn't.
+		EOP_Power,			// Triggered if controller has power
+		EOP_NoPower,		// Triggered if controller does not have power
+	};
+
+	////////////////////////////////////////////////////
+	// GetConfiguration
+	//
+	// Purpose: Set up and return the configuration for
+	//	this node for the Flow Graph
+	//
+	// Out:	config - The node's config
+	////////////////////////////////////////////////////
+	virtual void GetConfiguration(SFlowNodeConfig& config);
+
+	////////////////////////////////////////////////////
+	// ProcessEvent
+	//
+	// Purpose: Called when an event is to be processed
+	//
+	// In:	event - Flow event to process
+	//		pActInfo - Activation info for the event
+	////////////////////////////////////////////////////
+	virtual void ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo);
+
+	////////////////////////////////////////////////////
+	// GetMemoryStatistics
+	//
+	// Purpose: Used by memory management
+	//
+	// In:	s - Cry Sizer object
+	////////////////////////////////////////////////////
+	virtual void GetMemoryStatistics(ICrySizer *s)
+	{
+		s->Add(*this);
+	}
+};
+
+// CBuildingControllerSetPowerNode
+//	Simple node that lets you set the power status of a building
+class CBuildingControllerSetPowerNode : public CFlowBaseNode
+{
+public:
+	////////////////////////////////////////////////////
+	// Constructor
+	////////////////////////////////////////////////////
+	CBuildingControllerSetPowerNode(SActivationInfo * pActInfo);
+
+	////////////////////////////////////////////////////
+	// Destructor
+	////////////////////////////////////////////////////
+	virtual ~CBuildingControllerSetPowerNode();
+
+	////////////////////////////////////////////////////
+	// Clone
+	//
+	// Purpose: Used to clone the controller
+	//
+	// In:	pActInfo - Activation info
+	////////////////////////////////////////////////////
+	IFlowNodePtr Clone(SActivationInfo *pActInfo)
+	{
+		return new CBuildingControllerSetPowerNode(pActInfo);
+	}
+
+	////////////////////////////////////////////////////
+	// Seralize
+	//
+	// Purpose: Used for saving/loading node's instance
+	//
+	// In:	pActInfo - Activation info
+	//		ser - Serialization object
+	////////////////////////////////////////////////////
+	void Serialize(SActivationInfo* pActInfo, TSerialize ser);
+
+	// Input Ports
+	enum EInputPorts
+	{
+		EIP_Set = 0,		// Set the power status
+		EIP_SetWithValue,	// Set the power status using input value
+		EIP_Team,			// String: Team name
+		EIP_Class,			// String: Class name
+		EIP_Value,			// Bool: Power status
+	};
+
+	// Output Ports
+	enum EOutputPorts
+	{
+		EOP_Done = 0,		// Triggered when status is set
+	};
+
+	////////////////////////////////////////////////////
+	// GetConfiguration
+	//
+	// Purpose: Set up and return the configuration for
+	//	this node for the Flow Graph
+	//
+	// Out:	config - The node's config
+	////////////////////////////////////////////////////
+	virtual void GetConfiguration(SFlowNodeConfig& config);
+
+	////////////////////////////////////////////////////
+	// ProcessEvent
+	//
+	// Purpose: Called when an event is to be processed
+	//
+	// In:	event - Flow event to process
+	//		pActInfo - Activation info for the event
+	////////////////////////////////////////////////////
+	virtual void ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo);
+
+	////////////////////////////////////////////////////
+	// GetMemoryStatistics
+	//
+	// Purpose: Used by memory management
+	//
+	// In:	s - Cry Sizer object
+	////////////////////////////////////////////////////
+	virtual void GetMemoryStatistics(ICrySizer *s)
+	{
+		s->Add(*this);
+	}
 };
 
 #endif //_D6C_FLOWBUILDINGCONTROLLERNODES_H_

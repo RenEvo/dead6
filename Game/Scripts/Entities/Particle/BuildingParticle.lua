@@ -276,10 +276,10 @@ function BuildingParticle:OnBuildingEvent(building, event, params)
 	local changed = nil;
 
 	if (event == CONTROLLER_EVENT_POWER) then
-		local bHasPower = params[0];
+		local bHasPower = params[1];
 
 		-- Switch to correct power profile
-		if (true == bHasPower) then
+		if (bHasPower) then
 			if (self.ActiveProfileStr == "AlivePower" or self.ActiveProfileStr == "AliveNoPower") then
 				changed = self:SetBuildingStatus("AlivePower");
 			elseif (self.ActiveProfileStr == "DeadPower" or self.ActiveProfileStr == "DeadNoPower") then
