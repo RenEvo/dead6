@@ -1,5 +1,7 @@
 #summary System Feature - Dead6 Main Game Module - Functionality
 
+[TechDoc_Architecture_System_Game Back]
+
 = Functionality =
 
 == !D6Game ==
