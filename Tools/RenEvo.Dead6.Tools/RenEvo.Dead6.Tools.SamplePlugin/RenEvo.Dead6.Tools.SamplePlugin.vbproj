@@ -5,10 +5,10 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.50727</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{CDB0FEB2-BBA8-4220-9CE0-C3CE2FDCA250}</ProjectGuid>
+    <ProjectGuid>{405464C1-A516-4D10-8ED2-EC5CA8230A35}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>RenEvo.Dead6.Tools.Interfaces</RootNamespace>
-    <AssemblyName>RenEvo.Dead6.Tools.Interfaces</AssemblyName>
+    <RootNamespace>RenEvo.Dead6.Tools.SamplePlugin</RootNamespace>
+    <AssemblyName>RenEvo.Dead6.Tools.SamplePlugin</AssemblyName>
     <MyType>Windows</MyType>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -16,17 +16,18 @@
     <DebugType>full</DebugType>
     <DefineDebug>true</DefineDebug>
     <DefineTrace>true</DefineTrace>
-    <OutputPath>..\bin\</OutputPath>
-    <DocumentationFile>RenEvo.Dead6.Tools.Interfaces.xml</DocumentationFile>
+    <OutputPath>..\bin\Plugins\</OutputPath>
+    <DocumentationFile>RenEvo.Dead6.Tools.SamplePlugin.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
+    <UseVSHostingProcess>false</UseVSHostingProcess>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>None</DebugType>
     <DefineDebug>false</DefineDebug>
     <DefineTrace>true</DefineTrace>
     <Optimize>true</Optimize>
-    <OutputPath>..\bin\</OutputPath>
-    <DocumentationFile>RenEvo.Dead6.Tools.Interfaces.xml</DocumentationFile>
+    <OutputPath>..\bin\Plugins\</OutputPath>
+    <DocumentationFile>RenEvo.Dead6.Tools.SamplePlugin.xml</DocumentationFile>
     <NoWarn>42016,41999,42017,42018,42019,42032,42036,42020,42021,42022</NoWarn>
   </PropertyGroup>
   <ItemGroup>
@@ -44,7 +45,7 @@
     <Import Include="System.Diagnostics" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Plugins\IPlugin.vb" />
+    <Compile Include="GenericPlugin.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
       <AutoGen>True</AutoGen>
@@ -79,6 +80,13 @@
       <CustomToolNamespace>My</CustomToolNamespace>
       <LastGenOutput>Settings.Designer.vb</LastGenOutput>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RenEvo.Dead6.Tools.Interfaces\RenEvo.Dead6.Tools.Interfaces.vbproj">
+      <Project>{CDB0FEB2-BBA8-4220-9CE0-C3CE2FDCA250}</Project>
+      <Name>RenEvo.Dead6.Tools.Interfaces</Name>
+      <Private>False</Private>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.VisualBasic.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

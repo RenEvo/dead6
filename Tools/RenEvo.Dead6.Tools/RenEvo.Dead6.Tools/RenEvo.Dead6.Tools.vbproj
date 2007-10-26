@@ -51,6 +51,13 @@
     <Import Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="ApplicationEvents.vb" />
+    <Compile Include="Forms\Dialogs\AboutDialog.Designer.vb">
+      <DependentUpon>AboutDialog.vb</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\Dialogs\AboutDialog.vb">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Forms\MainGUI.vb">
       <SubType>Form</SubType>
     </Compile>
@@ -74,8 +81,14 @@
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
     <Compile Include="Objects\Logging\LogTraceListener.vb" />
+    <Compile Include="Objects\Plugins\ApplicationPlugins.vb" />
+    <Compile Include="Objects\Plugins\PluginFactory.vb" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Forms\Dialogs\AboutDialog.resx">
+      <SubType>Designer</SubType>
+      <DependentUpon>AboutDialog.vb</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Forms\MainGUI.resx">
       <SubType>Designer</SubType>
       <DependentUpon>MainGUI.vb</DependentUpon>
@@ -100,6 +113,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Resources\AboutSidebar.png" />
     <Content Include="Resources\Icon.ico" />
   </ItemGroup>
   <ItemGroup>

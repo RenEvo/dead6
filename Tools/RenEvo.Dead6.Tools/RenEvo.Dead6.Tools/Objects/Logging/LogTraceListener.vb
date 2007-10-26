@@ -35,7 +35,7 @@ Namespace Logging
         ''' LogFileName = &lt;User Directory&gt;\RenEvo Software &amp; Designs\The Dead Six Tools\&lt;Assembly File Version&gt;\&lt;AssemblyName&gt;.log
         ''' </summary>
         ''' <remarks></remarks>
-        Private m_LogFileName As String = String.Format("{0}\RenEvo Software & Designs\The Dead Six Tools\{1}\{2}.log", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), DirectCast(Reflection.Assembly.GetExecutingAssembly().GetCustomAttributes(GetType(System.Reflection.AssemblyFileVersionAttribute), True)(0), System.Reflection.AssemblyFileVersionAttribute).Version, My.Application.Log.DefaultFileLogWriter.BaseFileName)
+        Private m_LogFileName As String = String.Format("{0}\RenEvo Software & Designs\The Dead Six Tools\{1}\{2}{3:00000}.log", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "1.0.0.0", "RenEvo.Dead6.Tools", System.IO.Directory.GetFiles(String.Format("{0}\RenEvo Software & Designs\The Dead Six Tools\{1}\", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "1.0.0.0"), "*.log").Length)
 
         Public Sub New(ByVal Data As String)
             Me.New()

@@ -17,5 +17,22 @@
 '************************************************************************************
 
 Public Interface IPlugin
-    'TODO: implementation of plugin interface
+    Inherits IDisposable
+
+#Region " Generic Plugin Information "
+
+    ReadOnly Property Name() As String
+    ReadOnly Property Description() As String
+    ReadOnly Property Author() As String
+    ReadOnly Property Version() As Version
+
+#End Region
+
+#Region " UI Support "
+
+    ReadOnly Property IsUICapable() As Boolean
+    ReadOnly Property Control() As System.Windows.Forms.Control
+
+#End Region
+
 End Interface
