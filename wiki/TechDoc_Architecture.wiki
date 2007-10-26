@@ -24,7 +24,7 @@ The following sections will outline the system and game features present in the 
  * [TechDoc_Architecture_System_GameFactory Dead6 Game Factory]
  * [TechDoc_Architecture_System_D6Player Dead6 Player Entity]
  * [TechDoc_Architecture_System_VMHarvester Vehicle Movement - Harvester]
- * *[TechDoc_Architecture_System_PortalManager Portal Manager] *
+ * [TechDoc_Architecture_System_PortalManager Portal Manager]
 
 === CNC Logic ===
  * [TechDoc_Architecture_System_TeamManager Team Manager]
@@ -41,15 +41,15 @@ The following sections will outline the system and game features present in the 
  * [TechDoc_Architecture_Game_HarvesterFlow Harvester Flow]
 
 === Entities ===
- * *[TechDoc_Architecture_Game_Entity_BuildingLight Building Light] *
- * *[TechDoc_Architecture_Game_Entity_BuildingSound Building Sound] *
- * *[TechDoc_Architecture_Game_Entity_BuildingParticle Building Particle] *
+ * [TechDoc_Architecture_Game_Entity_BuildingLight Building Light]
+ * [TechDoc_Architecture_Game_Entity_BuildingSound Building Sound]
+ * [TechDoc_Architecture_Game_Entity_BuildingParticle Building Particle]
 
 === Nodes ===
- * *[TechDoc_Architecture_Game_Node_General General Nodes] *
+ * [TechDoc_Architecture_Game_Node_General General Nodes]
  * [TechDoc_Architecture_Game_HarvesterFlow Harvester Nodes (See Harvester Flow)] 
- * *[TechDoc_Architecture_Game_Node_BuildingController Building Controller Nodes] *
- * *[TechDoc_Architecture_Game_Node_D6Player Dead6 Player Nodes] *
+ * [TechDoc_Architecture_Game_Node_BuildingController Building Controller Nodes]
+ * [TechDoc_Architecture_Game_Node_D6Player Dead6 Player Nodes]
 
 = Appendix =
 
