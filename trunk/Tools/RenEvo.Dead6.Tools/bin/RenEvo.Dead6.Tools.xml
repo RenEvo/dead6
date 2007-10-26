@@ -6,7 +6,30 @@ RenEvo.Dead6.Tools
 </name>
 </assembly>
 <members>
-<member name="F:RenEvo.Dead6.Tools.Logging.LogTraceListener.m_LogFileMutex">
+<member name="P:RenEvo.Dead6.Tools.My.MyApplication.Plugins">
+	<summary>
+ A reference to the application plugins that are currently loaded
+ </summary>
+</member><member name="M:RenEvo.Dead6.Tools.Plugins.ApplicationPlugins.#ctor">
+	<summary>
+ Default constructor, this will load all of the plugins in the "&lt;CurDir&gt;\Plugins\" directory
+ </summary>
+	<remarks></remarks>
+</member><member name="P:RenEvo.Dead6.Tools.Plugins.ApplicationPlugins.Plugins">
+	<summary>
+ Returns a list of loaded plugins
+ </summary>
+</member><member name="M:RenEvo.Dead6.Tools.Plugins.ApplicationPlugins.InvokeMethod(System.String,System.Object[])">
+	<summary>
+ Method to "Call By Name" Methods in the plugins.
+ </summary>
+	<param name="MethodName">The name of the Method to call</param>
+	<param name="args">Any arguments to pass to the Method call</param>
+</member><member name="T:RenEvo.Dead6.Tools.Plugins.ApplicationPlugins">
+	<summary>
+ Class to interact with the application plugins
+ </summary>
+</member><member name="F:RenEvo.Dead6.Tools.Logging.LogTraceListener.m_LogFileMutex">
 	<summary>
  Used for thread safe operations
  </summary>
@@ -21,6 +44,11 @@ RenEvo.Dead6.Tools
  Private implementation of a log file
  </summary>
 	<remarks></remarks>
+</member><member name="M:RenEvo.Dead6.Tools.MainGUI.ToggleActiveUIElement(System.Windows.Forms.Control)">
+	<summary>
+ Method to display a new control in the main workspace
+ </summary>
+	<param name="newElement">The control to display</param>
 </member><member name="P:RenEvo.Dead6.Tools.My.Resources.Resources.ResourceManager">
 	<summary>
   Returns the cached ResourceManager instance used by this class.

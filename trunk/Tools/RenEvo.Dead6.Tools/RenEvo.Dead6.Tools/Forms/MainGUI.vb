@@ -20,17 +20,33 @@
 
 Public Class MainGUI
 
+#Region " Events "
+
     Private Sub MainGUI_Load(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles MyBase.Load
-        Trace.WriteLine("Application Startup")
+        'load the plugins
+        For Each plugin As Interfaces.IPlugin In My.Application.Plugins.Plugins
+            If plugin.IsUICapable AndAlso plugin.Control IsNot Nothing Then
+                With Me.ViewToolStripMenuItem.DropDownItems.Add(plugin.Name)
+                    .Tag = plugin
+                    AddHandler .Click, AddressOf PluginToolStripMenuItem_Click
+                End With
+            End If
+        Next
+
+        'see if we want to show the View menu
+        Me.ViewToolStripMenuItem.Enabled = (Me.ViewToolStripMenuItem.DropDownItems.Count > 0)
+    End Sub
+
+    Private Sub PluginToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs)
+        If sender IsNot Nothing AndAlso TryCast(sender, ToolStripMenuItem) IsNot Nothing Then
+            ToggleActiveUIElement(DirectCast(DirectCast(sender, ToolStripMenuItem).Tag, Interfaces.IPlugin).Control)
+        End If
     End Sub
 
     Private Sub AboutToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles AboutToolStripMenuItem.Click
-        'TODO: Replace this with a real dialog form
-        Dim aboutString As New System.Text.StringBuilder()
-        aboutString.AppendFormat("{0} version {1}, Copyright (C) {2} RenEvo Software & Designs. ", Application.ProductName, Application.ProductVersion, Now.Year)
-        aboutString.AppendLine() : aboutString.AppendLine()
-        aboutString.AppendFormat("{0} comes with ABSOLUTELY NO WARRANTY.", Application.ProductName)
-        MessageBox.Show(aboutString.ToString, "About", MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1)
+        Using aDiag As New AboutDialog()
+            aDiag.ShowDialog(Me)
+        End Using
     End Sub
 
     Private Sub ExitToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles ExitToolStripMenuItem.Click
@@ -38,7 +54,40 @@ Public Class MainGUI
     End Sub
 
     Private Sub LogFileToolStripMenuItem_Click(ByVal sender As System.Object, ByVal e As System.EventArgs) Handles LogFileToolStripMenuItem.Click
-        Process.Start(String.Format("{0}\notepad.exe", Environment.GetFolderPath(Environment.SpecialFolder.System)), My.Application.Log.DefaultFileLogWriter.FullLogFileName)
+        Process.Start(String.Format("{0}\notepad.exe", Environment.GetFolderPath(Environment.SpecialFolder.System)), String.Format("{0}\RenEvo Software & Designs\The Dead Six Tools\{1}\{2}{3:00000}.log", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "1.0.0.0", "RenEvo.Dead6.Tools", System.IO.Directory.GetFiles(String.Format("{0}\RenEvo Software & Designs\The Dead Six Tools\{1}\", Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "1.0.0.0"), "*.log").Length - 1))
     End Sub
+
+#End Region
+
+#Region " Methods "
+
+    ''' <summary>
+    ''' Method to display a new control in the main workspace
+    ''' </summary>
+    ''' <param name="newElement">The control to display</param>
+    Private Sub ToggleActiveUIElement(ByVal newElement As Control)
+        'check to make sure that the workspace does not already have the control displayed
+        If newElement IsNot Nothing AndAlso Me.pnlWorkspace.Controls.Contains(newElement) = False Then
+            'hide the new one, so it doesn't "pop" into view
+            newElement.Visible = False
+            'add it to the workspace
+            Me.pnlWorkspace.Controls.Add(newElement)
+            'dock fill it
+            newElement.Dock = DockStyle.Fill
+            'show the new one
+            newElement.Show()
+            'bring it to front
+            newElement.BringToFront()
+            'check to see if we had a previous control
+            If Me.pnlWorkspace.Controls.Count = 2 Then
+                'hide the control
+                Me.pnlWorkspace.Controls(0).Hide()
+                'remove it
+                Me.pnlWorkspace.Controls.RemoveAt(0)
+            End If
+        End If
+    End Sub
+
+#End Region
 
 End Class
