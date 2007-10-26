@@ -1,0 +1,155 @@
+#summary System Feature - Dead6 Player Entity - Functionality
+
+[TechDoc_Architecture_System_D6Player Back]
+
+= Functionality =
+
+== !D6Player ==
+Below are the methods defined in the !D6Player module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !SetCredits _* ===
+*Purpose*:
+Set player's credits to amount
+
+*Arguments*:
+ * _nCredits_ - `[In]` Amount to set
+
+*Returns*:
+void
+
+
+=== *_ !GetCredits _* ===
+*Purpose*:
+Returns player's credits to amount
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GiveCredits _* ===
+*Purpose*:
+Give player credits (+)
+
+*Arguments*:
+ * _nCredits_ - `[In]` Amount to add
+
+*Returns*:
+void
+
+
+=== *_ !TakeCredits _* ===
+*Purpose*:
+Take player credits (-)
+
+*Arguments*:
+ * _nCredits_ - `[In]` Amount to take
+
+*Returns*:
+void
+
+
+== !ScriptBind_D6Player ==
+Below are the methods defined in the !ScriptBind_D6Player module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !SetCredits _* ===
+*Purpose*:
+Set player's credits to amount
+
+*Arguments*:
+ * _nCredits_ - `[In]` Amount to set
+
+*Returns*:
+player's credits amount
+
+
+=== *_ !GetCredits _* ===
+*Purpose*:
+Returns player's credits amount
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GiveCredits _* ===
+*Purpose*:
+Give player credits (+)
+
+*Arguments*:
+ * _nCredits_ - `[In]` Amount to add
+
+*Returns*:
+player's credits amount
+
+
+=== *_ !TakeCredits _* ===
+*Purpose*:
+Take player credits (-)
+
+*Arguments*:
+ * _nCredits_ - `[In]` Amount to take
+
+*Returns*:
+player's credits amount
+
+
+=== *_ !GetD6Player _* ===
+*Purpose*:
+Get the D6 player using attached actor
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+[TechDoc_Architecture_System_D6Player Back]
