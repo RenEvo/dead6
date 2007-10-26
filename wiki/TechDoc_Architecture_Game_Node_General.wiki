@@ -21,7 +21,7 @@ Input Ports:
 Output Ports:
  * Done - Triggered when stopwatch is stopped. Returns amount of time that past since it was started.
 
-== Game:EditorGameStart ==
+== Game:!EditorGameStart ==
 Purpose: This Node can be used to start a chain of execution when the game in the Editor starts. It serves no purpose when ran through the game outside the Editor.
 
 Input Ports:
