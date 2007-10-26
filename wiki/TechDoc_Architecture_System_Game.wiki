@@ -1,8 +1,3 @@
-#summary System Feature - Dead6 Main Game Module
-
-= Overview =
-The Main Game Module is a derived version of the Crysis' Main Game Module (CGame). It handles routine control of game initialization including script bind creation, level loading, and core initialization.
-
 = Functionality =
 
 == !D6Game ==
@@ -85,36 +80,48 @@ void
 void
 
 
-=== *_ !ParseCNCRules_General _* ===
+=== *_ !GetPortalManagerScriptBind _* ===
 *Purpose*:
-Parses the general settings of the CNC rules file
+Returns the script bind for the portal manager
 
 *Arguments*:
- * _pNode_ - `[In]` XML node containing general settings
+void
 
 *Returns*:
 void
 
 
-=== *_ !ParseCNCRules_Teams _* ===
+=== *_ !GetActorScriptBind _* ===
 *Purpose*:
-Parses the team settings of the CNC rules file
+Returns the D6 Player script bind overload
 
 *Arguments*:
- * _pNode_ - `[In]` XML node containing team settings
+void
 
 *Returns*:
 void
 
 
-=== *_ !ParseCNCRules_Buildings _* ===
+=== *_ !GetGameRulesScriptBind _* ===
 *Purpose*:
-Parses the buildings settings of the CNC rules file
+Returns the D6 GameRules script bind overload
 
 *Arguments*:
- * _pNode_ - `[In]` XML node containing building settings
+void
 
 *Returns*:
 void
+
+
+=== *_ !ParseCNCRules _* ===
+*Purpose*:
+Parses the specified CNCRules file
+
+*Arguments*:
+ * _szXMLFile_ - `[In]` XML File to load
+
+*Returns*:
+TRUE on success or FALSE if an error occured
+
 
 [TechDoc_Architecture Back]
