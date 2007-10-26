@@ -1,0 +1,7 @@
+#summary Game Feature - Entities - Building Particle - Functionality
+
+[TechDoc_Architecture_Game_Entity_BuildingParticle Back]
+
+TODO
+
+[TechDoc_Architecture_Game_Entity_BuildingParticle Back]
