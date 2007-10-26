@@ -1,7 +1,11 @@
 #summary Game Feature - CNC Game Rules
 
+[TechDoc_Architecture Back]
+
 = Overview =
 The Command & Conquer Mode Game Rules are divided up into two separate entities: the !GameRules script which defines the behaviors and game logic of CNC Mode, and the CNC Rules XML feed which defines the contents of the game including the teams and building classes.
+
+= [TechDoc_Architecture_Game_CNCRules_Functionality Script Functionality] =
 
 = CNC Rules XML =
 The CNC Rules XML file (CNCRules.xml) is a *per-map defined* file. It defines the content to be created for the current CNC match. This content includes:
@@ -56,19 +60,5 @@ The General section defines general items for the map, such as environment setti
 
 = CNC Rules Script =
 The CNC !GameRules script handles CNC-Mode game logic. It adheres to the standards laid out for a !GameRules script by Crysis's implementation for its many game types.
-
-== Script Functionality ==
-All callbacks have a separate server and client path that are called on the server and local client's ends, respectively.
-
-=== *_ !OnInit _* ===
-*Purpose*:
-Called when the gamerules are first initialized at the start of the game.
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
 
 [TechDoc_Architecture Back]
