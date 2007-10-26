@@ -11,6 +11,9 @@
 ////////////////////////////////////////////////////
 
 #include "stdafx.h"
+#include <windows.h>
+#include <psapi.h>
+#pragma comment (lib, "psapi.lib")
 #include "CD6Game.h"
 #include "CD6GameRules.h"
 

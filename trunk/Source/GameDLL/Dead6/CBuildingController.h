@@ -48,7 +48,10 @@ class CBuildingController : public IBuildingController
 
 	// Event listeners
 	typedef std::list<IBuildingControllerEventListener*> EventListeners;
+	typedef std::pair<HSCRIPTFUNCTION, SmartScriptTable> EventScriptListenerPair;
+	typedef std::map<EntityId, EventScriptListenerPair> EventScriptListeners;
 	EventListeners m_EventListeners;
+	EventScriptListeners m_EventScriptListeners;
 
 public:
 	////////////////////////////////////////////////////
@@ -278,6 +281,29 @@ public:
 	virtual void RemoveEventListener(IBuildingControllerEventListener *pListener);
 
 	////////////////////////////////////////////////////
+	// AddScriptEventListener
+	//
+	// Purpose: Add an event listener to an entity's script
+	//
+	// In:	nID - Entity Id
+	//
+	// Returns TRUE if added
+	//
+	// Note: Will call the entity's script's "OnBuildingEvent"
+	//	when an event occurs
+	////////////////////////////////////////////////////
+	virtual bool AddScriptEventListener(EntityId nID);
+
+	////////////////////////////////////////////////////
+	// RemoveScriptEventListener
+	//
+	// Purpose: Remove an event listener from an entity's script
+	//
+	// In:	nID - Entity Id
+	////////////////////////////////////////////////////
+	virtual void RemoveScriptEventListener(EntityId nID);
+
+	////////////////////////////////////////////////////
 	// OnClientHit
 	//
 	// Purpose: Call when a hit occurs on the client
@@ -321,6 +347,38 @@ public:
 	////////////////////////////////////////////////////
 	virtual void OnServerExplosion(ExplosionInfo const& explosionInfo, EntityId nInterfaceId, float fObstruction);
 
+	////////////////////////////////////////////////////
+	// HasPower
+	//
+	// Purpose: Returns TRUE if the building has power
+	////////////////////////////////////////////////////
+	virtual bool HasPower(void) const;
+
+	////////////////////////////////////////////////////
+	// SetPower
+	//
+	// Purpose: Set the power status of the building
+	//
+	// In:	bPowered - TRUE to give it power, FALSE to
+	//			take it away
+	////////////////////////////////////////////////////
+	virtual void SetPower(bool bPowered);
+
+	////////////////////////////////////////////////////
+	// GetHealth
+	//
+	// Purpose: Get the building's current health amount
+	////////////////////////////////////////////////////
+	virtual float GetHealth(void) const;
+
+	////////////////////////////////////////////////////
+	// IsAlive
+	//
+	// Purpose: Returns TRUE if the building is alive
+	//	or FALSE if it is dead
+	////////////////////////////////////////////////////
+	virtual bool IsAlive(void) const;
+
 protected:
 	////////////////////////////////////////////////////
 	// _SendListenerEvent
@@ -330,6 +388,17 @@ protected:
 	// In:	event - Event to send out
 	////////////////////////////////////////////////////
 	virtual void _SendListenerEvent(SControllerEvent &event);
+
+	////////////////////////////////////////////////////
+	// _HandleDamage
+	//
+	// Purpose: Update the building's status based on the
+	//	given applied damage
+	//
+	// In:	pInfo - Hit or Explosion info
+	//		bIsHit - TRUE if Hit, FALSE if Explosion
+	////////////////////////////////////////////////////
+	virtual void _HandleDamage(void *pInfo, bool bIsHit);
 };
 
 #endif //_D6C_CBUILDINGCONTROLLER_H_
