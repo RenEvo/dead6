@@ -40,10 +40,10 @@ Input Ports:
 
 Output Ports:
  * !OnDamage - Triggered when damage has occured
- * !ShooterId - !EntityID of the Shooter
- * !TargetId - !EntityID of the Target
- * !WeaponId - !EntityID of the Weapon
- * !ProjectileId - !EntityID of the Projectile if it was a bullet hit
+ * !ShooterId - EntityID of the Shooter
+ * !TargetId - EntityID of the Target
+ * !WeaponId - EntityID of the Weapon
+ * !ProjectileId - EntityID of the Projectile if it was a bullet hit
  * !HitPos - Position of the Hit
  * !HitDir - Direction of the Hit
  * !HitNormal - Normal of the Hit Impact
@@ -74,7 +74,7 @@ Input Ports:
 Output Ports:
  * Status - (Boolean) Triggered when status has been retrieved. Sends out TRUE if power is on, or FALSE if power is off.
  * Power - Triggered when status has been retrieved and power is on.
- * NoPower - Triggered when status has been retrieved and power is off.
+ * !NoPower - Triggered when status has been retrieved and power is off.
 
 == !BuildingController:!SetPower ==
 Purpose: This node can be used to set the power status of a building.
