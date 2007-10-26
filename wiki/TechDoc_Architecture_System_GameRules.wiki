@@ -2,7 +2,7 @@
 
 = Overview =
 
-The Dead6 GameRules is derived from the Crysis' GameRules (CGameRules) and handles the specific rules of the Dead 6 Core. Mainly, it is used to overwrite the team management code present in Crysis, and instead delegate the workload to the Team Manager.
+The Dead6 !GameRules is derived from the Crysis' !GameRules (CGameRules) and handles the specific rules of the Dead 6 Core. Mainly, it is used to overwrite the team management code present in Crysis, and instead delegate the workload to the Team Manager.
 
 
 = Functionality =
@@ -63,5 +63,6 @@ void
 
 *Returns*:
 void
+
 
 [TechDoc_Architecture Back]
