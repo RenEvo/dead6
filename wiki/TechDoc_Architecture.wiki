@@ -53,7 +53,7 @@ The following sections will outline the system and game features present in the 
 
 = Appendix =
 
-*[TechDoc_Architecture_CrysisCodeChange Crysis Codebase Changes] - All changes to the Crysis SDK codebase are logged at this location. *
+[TechDoc_Architecture_CrysisCodeChange Crysis Codebase Changes] - All changes to the Crysis SDK codebase are logged at this location.
 
 [TechDoc Return to Front Page]
 
