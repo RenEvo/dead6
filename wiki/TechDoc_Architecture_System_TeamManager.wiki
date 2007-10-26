@@ -446,6 +446,64 @@ Returns how many channels a team has
 void
 
 
+== !ScriptBind_TeamManager ==
+Below are the methods defined in the !ScriptBind_TeamManager module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !AttachTo _* ===
+*Purpose*:
+Attaches binding to a team manager
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !RegisterGlobals _* ===
+*Purpose*:
+Registers any global values to the script system
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !RegisterMethods _* ===
+*Purpose*:
+Registers any binding methods to the script system
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
 = Sub Modules =
 
 == !STeamDef ==
