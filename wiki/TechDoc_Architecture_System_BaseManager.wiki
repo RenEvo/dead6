@@ -277,6 +277,76 @@ Call when an explosion occurs on the client
 void
 
 
+== !ScriptBind_BaseManager ==
+Below are the methods defined in the !ScriptBind_BaseManager module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !AttachTo _* ===
+*Purpose*:
+Attaches binding to a base manager
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !FindBuilding _* ===
+*Purpose*:
+Return a controller's script table by using the team and class names
+
+*Arguments*:
+ * _szClass_ - `[In]` Building class name
+ * _szTeam_ - `[In]` Owning team name
+
+*Returns*:
+controller's script table or nil on error
+
+
+=== *_ !RegisterGlobals _* ===
+*Purpose*:
+Registers any global values to the script system
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !RegisterMethods _* ===
+*Purpose*:
+Registers any binding methods to the script system
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
 = Sub Modules =
 
 == CBaseManagerEntitySink ==
