@@ -11,6 +11,27 @@ A Script Bind also exists that allows the Script System to communicate with the 
 
 = Functionality =
 
+== !SControllerEvent ==
+Below are the methods defined in the !SControllerEvent object.
+
+== !BuildingControllerEventListener ==
+Below are the methods defined in the !BuildingControllerEventListener interface.
+
+=== *_ !OnBuildingControllerEvent _* ===
+*Purpose*:
+Called when event occurs on controller
+
+*Arguments*:
+ * _event_ - `[In]` Event that occured
+ * _nGUID_ - `[In]` Controller's BuildingGUID
+ * _pController_ - `[In]` Building controller object
+
+*Returns*:
+void
+
+*Note*:
+See SControllerEvent
+
 == !BuildingController ==
 Below are the methods defined in the !BuildingController interface.
 
@@ -41,7 +62,6 @@ void
 Initialize the controller
 
 *Arguments*:
- * _fHealth_ - `[In]` Initial health
  * _nGUID_ - `[In]` Building controller's GUID
 
 *Returns*:
@@ -54,6 +74,19 @@ Shut the controller down
 
 *Arguments*:
 void
+
+*Returns*:
+void
+
+
+=== *_ Update _* ===
+*Purpose*:
+Update the controller
+
+*Arguments*:
+ * _bHaveFocus_ - `[In]` TRUE if game has focus
+ * _nControllerUpdateFlags_ - `[In]` Controller-specific update flags (see EControllerUpdateFlags)
+ * _nUpdateFlags_ - `[In]` Update flags
 
 *Returns*:
 void
@@ -92,15 +125,26 @@ void
 void
 
 
-=== *_ !LoadFromXml _* ===
+=== *_ !IsValidated _* ===
 *Purpose*:
-Define the building controller's attributes from the given XML file
+Returns TRUE if building has been validated
 
 *Arguments*:
- * _szName_ - `[In]` Class name of the building
+void
 
 *Returns*:
-TRUE if building controller is ready
+void
+
+
+=== *_ !LoadFromXml _* ===
+*Purpose*:
+Define the building controller's attributes from the given XML node
+
+*Arguments*:
+ * _pNode_ - `[In]` XML Node containing its attributes
+
+*Returns*:
+void
 
 
 === *_ !GetGUID _* ===
@@ -191,6 +235,328 @@ Remove an entity as an interface to this controller
 
 *Returns*:
 void
+
+
+=== *_ !HasInterface _* ===
+*Purpose*:
+Returns TRUE if the given entity is an
+
+*Arguments*:
+ * _nEntityId_ - `[In]` Entity to check
+ * _pEntity_ - `[In]` Entity to check
+
+*Returns*:
+void
+
+
+=== *_ !IsVisible _* ===
+*Purpose*:
+Returns TRUE if the controller is visible to the player (i.e. player is focused on an
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !SetMustBeDestroyed _* ===
+*Purpose*:
+Set if building wants to be destroyed for the team to lose
+
+*Arguments*:
+ * _b_ - `[In]` TRUE if it must be destroyed
+
+*Returns*:
+void
+
+*Note*:
+Will be ignored if building is not interfaced
+
+=== *_ !MustBeDestroyed _* ===
+*Purpose*:
+Returns TRUE if building must be destroyed for the team to lose
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !AddEventListener _* ===
+*Purpose*:
+Add an event listener to controller
+
+*Arguments*:
+ * _pListener_ - `[In]` Listening object
+
+*Returns*:
+void
+
+
+=== *_ !RemoveEventListener _* ===
+*Purpose*:
+Remove an event listener from controller
+
+*Arguments*:
+ * _pListener_ - `[In]` Listening object
+
+*Returns*:
+void
+
+
+=== *_ !AddScriptEventListener _* ===
+*Purpose*:
+Add an event listener to an entity's script
+
+*Arguments*:
+ * _nID_ - `[In]` Entity Id
+
+*Returns*:
+TRUE if added
+
+*Note*:
+Will call the entity's script's "OnBuildingEvent" when an event occurs
+
+=== *_ !RemoveScriptEventListener _* ===
+*Purpose*:
+Remove an event listener from an entity's script
+
+*Arguments*:
+ * _nID_ - `[In]` Entity Id
+
+*Returns*:
+void
+
+
+=== *_ !OnClientHit _* ===
+*Purpose*:
+Call when a hit occurs on the client
+
+*Arguments*:
+ * _hitinfo_ - `[In]` Hit information
+
+*Returns*:
+void
+
+
+=== *_ !OnServerHit _* ===
+*Purpose*:
+Call when a hit occurs on the server
+
+*Arguments*:
+ * _hitinfo_ - `[In]` Hit information
+
+*Returns*:
+void
+
+
+=== *_ !OnClientExplosion _* ===
+*Purpose*:
+Call when an explosion occurs on the client
+
+*Arguments*:
+ * _explosionInfo_ - `[In]` Explosion information
+ * _fObstruction_ - `[In]` Obstruction ratio (0 = fully obstructed, 1 = fully visible)
+ * _nInterfaceId_ - `[In]` ID of interface entity that was hit by this explosion
+
+*Returns*:
+void
+
+
+=== *_ !OnServerExplosion _* ===
+*Purpose*:
+Call when an explosion occurs on the server
+
+*Arguments*:
+ * _explosionInfo_ - `[In]` Explosion information
+ * _fObstruction_ - `[In]` Obstruction ratio (0 = fully obstructed, 1 = fully visible)
+ * _nInterfaceId_ - `[In]` ID of interface entity that was hit by this explosion
+
+*Returns*:
+void
+
+
+=== *_ !HasPower _* ===
+*Purpose*:
+Returns TRUE if the building has power
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !SetPower _* ===
+*Purpose*:
+Set the power status of the building
+
+*Arguments*:
+ * _bPowered_ - `[In]` TRUE to give it power, FALSE to take it away
+
+*Returns*:
+void
+
+
+=== *_ !GetHealth _* ===
+*Purpose*:
+Get the building's current health amount
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !IsAlive _* ===
+*Purpose*:
+Returns TRUE if the building is alive or FALSE if it is dead
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+== !ScriptBind_BuildingController ==
+Below are the methods defined in the !ScriptBind_BuildingController module.
+
+=== *_ !RegisterGlobals _* ===
+*Purpose*:
+Called to register global variables
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !RegisterMethods _* ===
+*Purpose*:
+Called to register function methods
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetController _* ===
+*Purpose*:
+Return the controller
+
+*Arguments*:
+ * _pH_ - `[In]` Function handler to get controller from
+
+*Returns*:
+void
+
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+ * _pGameFW_ - `[In]` Game frame work object
+ * _pSystem_ - `[In]` System object
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !AttachTo _* ===
+*Purpose*:
+Bind to a controller
+
+*Arguments*:
+ * _pController_ - `[In]` Controller to be bound
+
+*Returns*:
+void
+
+
+=== *_ !GetHealth _* ===
+*Purpose*:
+Get the health of the building
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !IsAlive _* ===
+*Purpose*:
+Returns TRUE if building is alive
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !HasPower _* ===
+*Purpose*:
+Returns TRUE if building has power
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !SetPower _* ===
+*Purpose*:
+Set the power of the building
+
+*Arguments*:
+ * _bPower_ - `[In]` TRUE to give it power, FALSE to take it away
+
+*Returns*:
+void
+
+
+=== *_ !AddEventListener _* ===
+*Purpose*:
+Add the given entity to the entity event listener on the controller
+
+*Arguments*:
+ * _nEntityID_ - `[In]` Entity Id to add
+
+*Returns*:
+'1' if succeeded, nil if not
+
+
+=== *_ !RemoveEventListener _* ===
+*Purpose*:
+Remove the given entity from the entity event listener on the controller
+
+*Arguments*:
+ * _nEntityID_ - `[In]` Entity Id to add
+
+*Returns*:
+void
+
 
 
 = Adding an Interface =
