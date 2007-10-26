@@ -19,28 +19,34 @@ The following sections will outline the system and game features present in the 
 == System Features ==
 
 === Low Level ===
- * [TechDoc_Architecture_System_Game Dead6 Main Game Module]
- * [TechDoc_Architecture_System_GameRules Dead6 GameRules]
+ * [TechDoc_Architecture_System_Game Dead6 Main Game Module] *
+ * [TechDoc_Architecture_System_GameRules Dead6 GameRules] *
  * [TechDoc_Architecture_System_GameFactory Dead6 Game Factory]
- * [TechDoc_Architecture_System_D6Player Dead6 Player Entity]
+ * [TechDoc_Architecture_System_D6Player Dead6 Player Entity] *
  * [TechDoc_Architecture_System_VMHarvester Vehicle Movement - Harvester]
+ * [TechDoc_Architecture_System_PortalManager Portal Manager] *
 
 === CNC Logic ===
- * [TechDoc_Architecture_System_TeamManager Team Manager]
- * [TechDoc_Architecture_System_BaseManager Base Manager]
- * [TechDoc_Architecture_System_BuildingController Building Controller]
+ * [TechDoc_Architecture_System_TeamManager Team Manager] *
+ * [TechDoc_Architecture_System_BaseManager Base Manager] *
+ * [TechDoc_Architecture_System_BuildingController Building Controller] *
  * [TechDoc_Architecture_System_Purchase Purchase System]
 
 == Game Features ==
 
- * [TechDoc_Architecture_Game_CNCRules CNC Game Rules (XML/Lua)]
- * [TechDoc_Architecture_Game_CNCTeams CNC Teams (XML/Lua)]
- * [TechDoc_Architecture_Game_CNCBuildingClasses CNC Building Classes (XML/Lua)]
+ * [TechDoc_Architecture_Game_CNCRules CNC Game Rules (XML/Lua)] *
+ * [TechDoc_Architecture_Game_CNCTeams CNC Teams (XML/Lua)] *
+ * [TechDoc_Architecture_Game_CNCBuildingClasses CNC Building Classes (XML/Lua)] *
  * [TechDoc_Architecture_Game_HarvesterFlow Harvester Flow]
+
+=== Entities ===
+ * [TechDoc_Architecture_Game_Entity_BuildingLight Building Light] *
+ * [TechDoc_Architecture_Game_Entity_BuildingSound Building Sound] *
+ * [TechDoc_Architecture_Game_Entity_BuildingParticle Building Particle] *
 
 = Appendix =
 
-[TechDoc_Architecture_CrysisCodeChange Crysis Codebase Changes] - All changes to the Crysis SDK codebase are logged at this location.
+[TechDoc_Architecture_CrysisCodeChange Crysis Codebase Changes] - All changes to the Crysis SDK codebase are logged at this location. *
 
 [TechDoc Return to Front Page]
 
