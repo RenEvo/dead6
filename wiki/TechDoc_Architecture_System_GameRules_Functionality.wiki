@@ -1,0 +1,65 @@
+#summary System Feature - Dead6 GameRules - Functionality
+
+[TechDoc_Architecture_System_GameRules Back]
+
+= Functionality =
+
+== !D6GameRules ==
+Below are the methods defined in the !D6GameRules module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !ClearAllTeams _* ===
+*Purpose*:
+Clears all teams that are currently loaded in the gamerules and removes all
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetServerStateScript _* ===
+*Purpose*:
+Returns server state script object
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetClientStateScript _* ===
+*Purpose*:
+Returns client state script object
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+[TechDoc_Architecture_System_GameRules Back]
