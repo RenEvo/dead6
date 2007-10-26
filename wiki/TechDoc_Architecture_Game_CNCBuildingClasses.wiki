@@ -7,17 +7,23 @@ A Building Class represents a unique building in CNC rules. Combined with an own
 = Building Class XML File =
 The Building Class XML file is the blueprint for a class. It defines the class' attributes and is the lookup book used by the Dead 6 Core to create the a Building Controller. When a Building Controller is created, the class' XML file is loaded from the Buildings\XML folder. (Game\Scripts\Buildings\XML)
 
+This file is used as the default definition for the Building Class. Attributes may be defined in the CNCRules.xml file that will overwrite the values contained here.
+
 == Sample XML File ==
 This is an example of a typical building class XML file:
 {{{
 <?xml version="1.0" encoding="utf-8"?>
-<Refinery Name="Refinery" Script="Refinery.lua" MaxHealth="500" />
+<Buildings>
+  <Building Name="Refinery" Script="Refinery.lua" InitHealth="500" MaxHealth="500" MustBeDestroyed="1" />
+</Buildings>
 }}}
 
 The Building Class' tag's attributes are as such:
  * Name - The name of the building class. This must match the script table defined in its Lua script.
  * Script - The Lua script inherited and used by the Building Controller for building behavior.
- * MaxHealth - Maximum amount of health this building can hold. If no Initial Health value is specified for the controller when it is created, the building's health is set to this value. This is also the cap point for repairing.
+ * InitHealth - Initial health of the building. If not specified or invalid, the building's health will be set to its Max value. An invalid value would be negative or greater than the building's Max health. The health of the building is also set to this value whenever it is "Reset".
+ * MaxHealth - The controller's max health. The building can be repaired up to this value.
+ * MustBeDestroyed - A boolean flag that determines if the building must be destroyed for its owning team to lose. If a building has an invalid max health on load or has no interfaces linking to it, this will be forced to false.
 
 
 = Building Class LUA File =
