@@ -13,9 +13,11 @@ This file is only utilized if the team is defined in element (non-inline) form i
 This is an example of a typical team XML file:
 {{{
 <?xml version="1.0" encoding="utf-8"?>
-<Team Name="GDI" LongName="Global Defense Initiative" Script="CNCTeam.lua" IsPlayerTeam="1">
-  <Harvester Entity="Harvester" Capacity="300.0" BuildTime="10.0" LoadRate="10.0" UnloadRate="20.0" />
-</Team>
+<Teams>
+  <Team Name="GDI" LongName="Global Defense Initiative" Script="CNCTeam.lua" IsPlayerTeam="1">
+    <Harvester Entity="Harvester" Capacity="300.0" BuildTime="10.0" LoadRate="10.0" UnloadRate="20.0" />
+  </Team>
+</Teams>
 }}}
 
 The Team tag's attributes are as such:
