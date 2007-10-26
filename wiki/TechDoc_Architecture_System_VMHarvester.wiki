@@ -4,46 +4,7 @@
 
 This Vehicle Movement class is utilized _Harvester_-type vehicles. It derives from the *StdWheeled* movement class and uses the same format for its movement properties. Essentially, all this class does is clone the standard wheel movements and removes the logic that requires a driver entity be present for the vehicle's engine to turn on and process AI movement requests.
 
-= Functionality =
-
-== !VehicleMovementHarvester ==
-Below are the methods defined in the !VehicleMovementHarvester module.
-
-=== *_ Constructor _* ===
-*Purpose*:
-Undefined.
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-
-=== *_ Destructor _* ===
-*Purpose*:
-Undefined.
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-
-=== *_ !StartEngine _* ===
-*Purpose*:
-Call to start the engine
-
-*Arguments*:
- * _driverId_ - `[In]` Ignored
-
-*Returns*:
-TRUE if engine started, FALSE otherwise
-
-*Note*:
-Overwritten to bypass needing a valid player to drive it!
-
+= [TechDoc_Architecture_System_VMHarvester_Functionality Functionality] =
 
 = Notes =
 When defining the vehicle entity to be used for the Harvester, you should not define any seats. If you do and a player jumps in to the "driver" seat of the Harvester, it may interfere with the flow logic assigned to the Harvester, causing unforeseen errors and a disruption to the Harvester flow.
