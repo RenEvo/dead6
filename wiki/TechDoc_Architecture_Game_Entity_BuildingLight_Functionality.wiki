@@ -1,0 +1,7 @@
+#summary Game Feature - Entities - Building Light - Functionality
+
+[TechDoc_Architecture_Game_Entity_BuildingLight Back]
+
+TODO
+
+[TechDoc_Architecture_Game_Entity_BuildingLight Back]
