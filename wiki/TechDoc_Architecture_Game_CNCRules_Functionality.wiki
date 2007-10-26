@@ -1,4 +1,4 @@
-#summary Game Feature - CNC Game Rules
+#summary Game Feature - CNC Game Rules - Script Functionality
 
 [TechDoc_Architecture_Game_CNCRules Back]
 
