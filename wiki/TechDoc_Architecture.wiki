@@ -27,17 +27,17 @@ The following sections will outline the system and game features present in the 
  * *[TechDoc_Architecture_System_PortalManager Portal Manager] *
 
 === CNC Logic ===
- * *[TechDoc_Architecture_System_TeamManager Team Manager] *
- * *[TechDoc_Architecture_System_BaseManager Base Manager] *
- * *[TechDoc_Architecture_System_BuildingController Building Controller] *
+ * [TechDoc_Architecture_System_TeamManager Team Manager]
+ * [TechDoc_Architecture_System_BaseManager Base Manager]
+ * [TechDoc_Architecture_System_BuildingController Building Controller]
  * [TechDoc_Architecture_System_Purchase Purchase System]
 
 == Game Features ==
 
 === CNC Game Features ===
- * *[TechDoc_Architecture_Game_CNCRules CNC Game Rules (XML/Lua)] *
- * *[TechDoc_Architecture_Game_CNCTeams CNC Teams (XML/Lua)] *
- * *[TechDoc_Architecture_Game_CNCBuildingClasses CNC Building Classes (XML/Lua)] *
+ * [TechDoc_Architecture_Game_CNCRules CNC Game Rules (XML/Lua)]
+ * [TechDoc_Architecture_Game_CNCTeams CNC Teams (XML/Lua)]
+ * [TechDoc_Architecture_Game_CNCBuildingClasses CNC Building Classes (XML/Lua)]
  * [TechDoc_Architecture_Game_HarvesterFlow Harvester Flow]
 
 === Entities ===
