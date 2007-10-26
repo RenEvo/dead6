@@ -1,0 +1,22 @@
+#summary Game Feature - General Flow Nodes
+
+[TechDoc_Architecture Back]
+
+= Overview =
+
+These General Flow Nodes fit in no special category. They exist to add or aid functionality present in the Flow Graphs.
+
+= [TechDoc_Architecture_Game_Node_General_Functionality Functionality] =
+
+= Flow Nodes =
+
+== Game:EditorGameStart ==
+Purpose: This Node can be used to start a chain of execution when the game in the Editor starts. It serves no purpose when ran through the game outside the Editor.
+
+Input Ports:
+N/A
+
+Output Ports:
+ * Start - Triggered when the game in the Editor starts.
+
+[TechDoc_Architecture Back]
