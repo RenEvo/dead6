@@ -24,17 +24,6 @@ void
 void
 
 
-=== *_ !GetMemoryStatistics _* ===
-*Purpose*:
-Used by memory management
-
-*Arguments*:
- * _s_ - `[In]` Cry Sizer object
-
-*Returns*:
-void
-
-
 === *_ Initialize _* ===
 *Purpose*:
 One-time initialization at the start
@@ -57,12 +46,49 @@ void
 void
 
 
+=== *_ Update _* ===
+*Purpose*:
+Update the controllers
+
+*Arguments*:
+ * _bHaveFocus_ - `[In]` TRUE if game has focus
+ * _nUpdateFlags_ - `[In]` Update flags
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+=== *_ !LoadBuildingControllers _* ===
+*Purpose*:
+Load building definitions contained in an XML node
+
+*Arguments*:
+ * _pNode_ - `[In]` XML node to extract from
+
+*Returns*:
+TRUE on success or FALSE on error
+
+*Note*:
+Used in conjunction with CNCRules parsing
+
 === *_ !CreateBuildingController _* ===
 *Purpose*:
 Create a building controller
 
 *Arguments*:
- * _pAttr_ - `[In]` XML node containing attributes for it
+ * _pAttr_ - `[In]` XML node containing attributes for it which overwrite the base attributes
+ * _pBaseAttr_ - `[In]` XML node containing base attributes for it
  * _ppController_ - `[Out]` Optional controller catcher
  * _szName_ - `[In]` Class name to use for controller
  * _szTeam_ - `[In]` Team that owns the controller
@@ -89,7 +115,7 @@ Should be called at the start of a level load
 Called when the game is reset, such as when the editor game starts up
 
 *Arguments*:
-void
+ * _bGameStart_ - `[In]` TRUE if game is starting, FALSE if game is stopping
 
 *Returns*:
 void
@@ -167,6 +193,90 @@ Generates a Building GUID given the team and class names
 building GUID or GUID_INVALID on error
 
 
+=== *_ !GetBuildingFromInterface _* ===
+*Purpose*:
+Returns the Building GUID that is interfaced by the given entity
+
+*Arguments*:
+ * _nEntityId_ - `[In]` ID of entity that is the interface
+ * _ppController_ - `[Out]` Pointer to controller object
+
+*Returns*:
+Building GUID or GUID_INVALID on error
+
+
+=== *_ !AddBuildingControllerEventListener _* ===
+*Purpose*:
+Add a listener to receive callbacks on a building controller during certain events
+
+*Arguments*:
+ * _nGUID_ - `[In]` Building GUID
+ * _pListener_ - `[In]` Listening object
+
+*Returns*:
+void
+
+*Note*:
+See EControllerEvent
+
+=== *_ !RemoveBuildingControllerEventListener _* ===
+*Purpose*:
+Remove a listener
+
+*Arguments*:
+ * _nGUID_ - `[In]` Building GUID
+ * _pListener_ - `[In]` Listening object
+
+*Returns*:
+void
+
+
+=== *_ !ClientHit _* ===
+*Purpose*:
+Call when a hit occurs on the client
+
+*Arguments*:
+ * _hitinfo_ - `[In]` Hit information
+
+*Returns*:
+void
+
+
+=== *_ !ServerHit _* ===
+*Purpose*:
+Call when a hit occurs on the server
+
+*Arguments*:
+ * _hitinfo_ - `[In]` Hit information
+
+*Returns*:
+void
+
+
+=== *_ !ServerExplosion _* ===
+*Purpose*:
+Call when an explosion occurs on the server
+
+*Arguments*:
+ * _affectedEntities_ - `[In]` Map of affected entities
+ * _explosionInfo_ - `[In]` Explosion information
+
+*Returns*:
+void
+
+
+=== *_ !ClientExplosion _* ===
+*Purpose*:
+Call when an explosion occurs on the client
+
+*Arguments*:
+ * _affectedEntities_ - `[In]` Map of affected entities
+ * _explosionInfo_ - `[In]` Explosion information
+
+*Returns*:
+void
+
+
 = Sub Modules =
 
 == CBaseManagerEntitySink ==
@@ -177,10 +287,15 @@ Description: This sub-module derives from the IEntitySystemSink and is used to l
 Based on the [TechDoc_Architecture_Game_CNCRules CNCRules] XML file, each building listed in the Buildings section is created through the base manager. The system first looks for the XML file of the listed team in the map's Buildings\XML folder. If not found, the system looks for it in the Game\Scripts\Buildings\XML folder. Therefore, if listed:
 
 {{{
-<Building Team="GDI" Class="Refinery" ... />
+<Buildings action="">
+  <Building Team="GDI" Class="Refinery" ... />
+</Buildings>
 }}}
 
-Then the system will look first for "<map>\Buildings\XML\Refinery.xml" and then "Game\Scripts\Buildings\XML\Refinery.xml". Additional attributes in the Building line are used to overwrite default values used when creating the building controller. These values are defined in the [TechDoc_Architecture_Game_CNCRules CNCRules] XML file. The other attributes used to define the building are contained in its XML file. To view the contents of this file, see [TechDoc_Architecture_Game_CNCBuildingControllers here].
+Then the system will look first for "<map>\Buildings\XML\Refinery.xml" and then "Game\Scripts\Buildings\XML\Refinery.xml". Additional attributes in the Building line are used to overwrite default values used when creating the building controller. These values are defined in the [TechDoc_Architecture_Game_CNCRules CNCRules] XML file. To view the contents of this file, see [TechDoc_Architecture_Game_CNCBuildingControllers here].
 
+It is also possible to define a building inline by including what would be stored in the external Building's XML file directly into the building entry in the CNCRules.xml file.
+
+Using *clear* as the _action_ attribute for the _Buildings_ tag will cause all existing building definitions to be cleared before parsing what is contained below. This can be useful if a map wishes to erase the default building definitions and load only the ones they define in their map's CNCRules. 
 
 [TechDoc_Architecture Back]
