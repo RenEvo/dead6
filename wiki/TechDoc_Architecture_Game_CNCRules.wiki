@@ -27,8 +27,8 @@ This is an example of a typical CNCRules.xml file:
     </Team>
   </Teams>
   <Buildings>
-    <Building Team="GDI" Class="Refinery" InitHealth="500" MustBeDestroyed="1"/>
-    <Building Team="Nod" Class="Refinery" InitHealth="500" MaxHealth="500" MustBeDestroyed="1"/>
+    <Building Team="GDI" Class="Refinery" Script="" InitHealth="500" MustBeDestroyed="1"/>
+    <Building Team="Nod" Class="Refinery" Script="" InitHealth="500" MaxHealth="500" MustBeDestroyed="1"/>
   </Buildings>
   <General>
     <TimeOfDay Hour="9" Minute="45" EnableLoop="0" />
