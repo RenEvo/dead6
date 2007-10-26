@@ -124,3 +124,5 @@ Parses the specified CNCRules file
 
 *Returns*:
 TRUE on success or FALSE if an error occured
+
+[TechDoc_Architecture_System_Game Back]
