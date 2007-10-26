@@ -14,7 +14,7 @@ The light profiles inherit from the Light entity. Please review its documentatio
  * Enabled - (Boolean) Set to TRUE to enable the active light, FALSE to disable it.
  * CNCBuilding.Team - (String) Name of controller's owning team. (Used to build GUID)
  * CNCBuilding.Class - (String) Name of controller's building class. (Used to build GUID)
- * CNCBuilding.Debug.IsDead - (Boolean) Used to debug in the Editor when not in game mode. Set to TRUE to make the building dead.
- * CNCBuilding.Debug.HasPower - (Boolean) Used to debug in the Editor when not in game mode. Set to TRUE to give the building power.
+ * CNCBuilding.Debug.!IsDead - (Boolean) Used to debug in the Editor when not in game mode. Set to TRUE to make the building dead.
+ * CNCBuilding.Debug.!HasPower - (Boolean) Used to debug in the Editor when not in game mode. Set to TRUE to give the building power.
 
 [TechDoc_Architecture Back]
