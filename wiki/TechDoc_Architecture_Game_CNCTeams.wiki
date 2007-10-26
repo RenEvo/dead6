@@ -7,11 +7,13 @@ Teams are handled with special care in Command & Conquer Mode game rules. A team
 = Team XML File =
 The Team XML file is the blueprint for a team. It defines the team's attributes and is the lookup book used by the Dead 6 Core to create the team at the beginning. Loaded from the map's [TechDoc_Architecture_Game_CNCRules CNCRules.xml] file, the team's XML file is located in the Teams\XML folder. (Game\Scripts\Teams\XML)
 
+This file is only utilized if the team is defined in element (non-inline) form in the CNCRules.xml fil.
+
 == Sample XML File ==
 This is an example of a typical team XML file:
 {{{
 <?xml version="1.0" encoding="utf-8"?>
-<Team Name="GDI" LongName="Global Defense Initiative" Script="CNCTeam.lua">
+<Team Name="GDI" LongName="Global Defense Initiative" Script="CNCTeam.lua" IsPlayerTeam="1">
   <Harvester Entity="Harvester" Capacity="300.0" BuildTime="10.0" LoadRate="10.0" UnloadRate="20.0" />
 </Team>
 }}}
@@ -20,6 +22,7 @@ The Team tag's attributes are as such:
  * Name - The short-hand name of the team.
  * !LongName - The long-hand name of the team.
  * Script - The Lua script inherited and used by this team for team behavior controlling.
+ * IsPlayerTeam - Boolean flag used to determine if a player can join this team or not.
 
 The contained Harvester tag is used to define the Team's Harvester properties, which are inherited by all Harvesters created on the team. It's attributes are defined as such:
  * Entity - The entity to use for the Harvester
