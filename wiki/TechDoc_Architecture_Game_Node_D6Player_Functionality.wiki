@@ -1,0 +1,168 @@
+#summary Game Feature - Dead6 Player Flow Nodes - Functionality
+
+[TechDoc_Architecture_Game_Node_D6Player Back]
+
+= Functionality =
+
+== !D6PlayerCreditBankNode ==
+Below are the methods defined in the !D6PlayerCreditBankNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Clone _* ===
+*Purpose*:
+Used to clone the controller
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ Seralize _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+== !D6PlayerCreditRangeNode ==
+Below are the methods defined in the !D6PlayerCreditRangeNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Clone _* ===
+*Purpose*:
+Used to clone the controller
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ Seralize _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+[TechDoc_Architecture_Game_Node_D6Player Back]
