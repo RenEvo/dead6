@@ -81,10 +81,10 @@ Purpose: This node can be used to set the power status of a building.
 
 Input Ports:
  * Set - (Boolean) Call to set the power status of the controller. Pass in TRUE to turn the power on, or FALSE to turn the power off.
- * !SetWithValue - Call to set the power status of the controller using what is in the _Value_ input port.
+ * !SetWithValue - Call to set the power status of the controller using what is in the Value input port.
  * Team - (String) Name of controller's owning team (Used to build GUID)
  * Class - (String) Name of controller's building class (Used to build GUID)
- * Value - (Boolean) Power status to set when _!SetWithValue_ is called. TRUE to turn the power on, FALSE to turn the power off.
+ * Value - (Boolean) Power status to set when !SetWithValue is called. TRUE to turn the power on, FALSE to turn the power off.
 
 Output Ports:
  * Done - (Boolean) Triggered when power status has been set. Returns new power status of the building, TRUE if on or FALSE if off.
