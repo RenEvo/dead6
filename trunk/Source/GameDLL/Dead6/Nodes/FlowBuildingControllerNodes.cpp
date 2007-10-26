@@ -81,6 +81,8 @@ void CBuildingControllerGeneralListenerNode::GetConfiguration(SFlowNodeConfig& c
 	{
 		OutputPortConfig_Void("Validated", _HELP("Triggered when controller has been validated")),
 		OutputPortConfig_Void("Reset", _HELP("Triggered when controller has been reset")),
+		OutputPortConfig<bool>("PowerChanged", _HELP("Triggered when controller's power status changed. Sends TRUE if power is online, FALSE if offline."), _HELP("Power Changed")),
+		OutputPortConfig_Void("Destroyed", _HELP("Triggered when controller is destroyed")),
 		{0},
 	};
 
@@ -130,6 +132,16 @@ void CBuildingControllerGeneralListenerNode::OnBuildingControllerEvent(IBuilding
 		case CONTROLLER_EVENT_RESET:
 		{
 			ActivateOutput(&m_actInfo, EOP_Reset, true);
+		}
+		break;
+		case CONTROLLER_EVENT_POWER:
+		{
+			ActivateOutput(&m_actInfo, EOP_PowerChanged, (bool)(event.nParam[0] ? true : false));
+		}
+		break;
+		case CONTROLLER_EVENT_DESTROYED:
+		{
+			ActivateOutput(&m_actInfo, EOP_Destroyed, true);
 		}
 		break;
 	}
@@ -469,9 +481,187 @@ void CBuildingControllerViewListenerNode::OnBuildingControllerEvent(IBuildingCon
 	}
 }
 
+
+////////////////////////////////////////////////////
+CBuildingControllerHasPowerNode::CBuildingControllerHasPowerNode(SActivationInfo * pActInfo)
+{
+
+}
+
+////////////////////////////////////////////////////
+CBuildingControllerHasPowerNode::~CBuildingControllerHasPowerNode()
+{
+
+}
+
+////////////////////////////////////////////////////
+void CBuildingControllerHasPowerNode::Serialize(SActivationInfo* pActInfo, TSerialize ser)
+{
+
+}
+
+////////////////////////////////////////////////////
+void CBuildingControllerHasPowerNode::GetConfiguration(SFlowNodeConfig& config)
+{
+	// Input
+	static const SInputPortConfig inputs[] =
+	{
+		InputPortConfig_Void("Check",_HELP("Check the power status")),
+		InputPortConfig<string>("Team", _HELP("Team name")),
+		InputPortConfig<string>("Class", _HELP("Class name")),
+		{0},
+	};
+
+	// Output
+	static const SOutputPortConfig outputs[] =
+	{
+		OutputPortConfig<bool>("Status", _HELP("Triggered when check occurs. Returns TRUE if controller has power, FALSE if it doesn't.")),
+		OutputPortConfig_Void("Power", _HELP("Triggered if controller has power")),
+		OutputPortConfig_Void("Power", _HELP("Triggered if controller does not have power")),
+		{0},
+	};
+
+	// Set up config
+	config.pInputPorts = inputs;
+	config.pOutputPorts = outputs;
+	config.sDescription = _HELP("Used to check the power status of a building");
+	config.SetCategory(EFLN_APPROVED);
+}
+
+////////////////////////////////////////////////////
+void CBuildingControllerHasPowerNode::ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo)
+{
+	switch (event)
+	{
+		case eFE_Activate:
+		{
+			if (IsPortActive(pActInfo, EIP_Check))
+			{
+				// Get base manager
+				IBaseManager *pBaseManager = g_D6Core->pBaseManager;
+				if (NULL == pBaseManager)
+				{
+					GameWarning("[Flow] CBuildingControllerHasPowerNode::ProcessEvent: No Base Manager!");
+					return;
+				}
+
+				// Get GUID info if not set
+				const string& szTeam = GetPortString(pActInfo, EIP_Team);
+				const string& szClass = GetPortString(pActInfo, EIP_Class);
+				BuildingGUID GUID = pBaseManager->GenerateGUID(szTeam.c_str(), szClass.c_str());
+
+				// Get controller
+				IBuildingController *pController = pBaseManager->FindBuildingController(GUID);
+				if (NULL == pController)
+				{
+					GameWarning("[Flow] CBuildingControllerHasPowerNode::ProcessEvent: Could not find controller!");
+					return;
+				}
+
+				// Check its status
+				bool bStatus = pController->HasPower();
+				ActivateOutput(pActInfo, EOP_Status, bStatus);
+				if (true == bStatus) ActivateOutput(pActInfo, EOP_Power, true);
+				else ActivateOutput(pActInfo, EOP_NoPower, true);
+			}
+		}
+		break;
+	};
+}
+
+
+////////////////////////////////////////////////////
+CBuildingControllerSetPowerNode::CBuildingControllerSetPowerNode(SActivationInfo * pActInfo)
+{
+
+}
+
+////////////////////////////////////////////////////
+CBuildingControllerSetPowerNode::~CBuildingControllerSetPowerNode()
+{
+
+}
+
+////////////////////////////////////////////////////
+void CBuildingControllerSetPowerNode::Serialize(SActivationInfo* pActInfo, TSerialize ser)
+{
+
+}
+
+////////////////////////////////////////////////////
+void CBuildingControllerSetPowerNode::GetConfiguration(SFlowNodeConfig& config)
+{
+	// Input
+	static const SInputPortConfig inputs[] =
+	{
+		InputPortConfig<bool>("Set",_HELP("Set the power status. Pass in TRUE to turn power on, FALSE to turn power off.")),
+		InputPortConfig_Void("SetWithValue",_HELP("Set the power status using what is specified in Value")),
+		InputPortConfig<string>("Team", _HELP("Team name")),
+		InputPortConfig<string>("Class", _HELP("Class name")),
+		InputPortConfig<bool>("Value", true, _HELP("Power status to use")),
+		{0},
+	};
+
+	// Output
+	static const SOutputPortConfig outputs[] =
+	{
+		OutputPortConfig_Void("Done", _HELP("Triggered when status is set. Returns building's new power status.")),
+		{0},
+	};
+
+	// Set up config
+	config.pInputPorts = inputs;
+	config.pOutputPorts = outputs;
+	config.sDescription = _HELP("Used to set the power status of a building");
+	config.SetCategory(EFLN_APPROVED);
+}
+
+////////////////////////////////////////////////////
+void CBuildingControllerSetPowerNode::ProcessEvent(EFlowEvent event, SActivationInfo *pActInfo)
+{
+	switch (event)
+	{
+		case eFE_Activate:
+		{
+			if (true == IsPortActive(pActInfo, EIP_Set) || 
+				true == IsPortActive(pActInfo, EIP_SetWithValue))
+			{
+				// Get base manager
+				IBaseManager *pBaseManager = g_D6Core->pBaseManager;
+				if (NULL == pBaseManager)
+				{
+					GameWarning("[Flow] CBuildingControllerSetPowerNode::ProcessEvent: No Base Manager!");
+					return;
+				}
+
+				// Get GUID info if not set
+				const string& szTeam = GetPortString(pActInfo, EIP_Team);
+				const string& szClass = GetPortString(pActInfo, EIP_Class);
+				BuildingGUID GUID = pBaseManager->GenerateGUID(szTeam.c_str(), szClass.c_str());
+
+				// Get controller
+				IBuildingController *pController = pBaseManager->FindBuildingController(GUID);
+				if (NULL == pController)
+				{
+					GameWarning("[Flow] CBuildingControllerSetPowerNode::ProcessEvent: Could not find controller!");
+					return;
+				}
+
+				// Set its status
+				bool bStatus =  GetPortBool(pActInfo, (true == IsPortActive(pActInfo, EIP_Set) ? EIP_Set : EIP_Value));
+				pController->SetPower(bStatus);
+				ActivateOutput(pActInfo, EOP_Done, pController->HasPower());
+			}
+		}
+		break;
+	};
+}
+
 ////////////////////////////////////////////////////
 ////////////////////////////////////////////////////
 
 REGISTER_FLOW_NODE("BuildingController:GeneralListener", CBuildingControllerGeneralListenerNode);
 REGISTER_FLOW_NODE("BuildingController:DamageListener", CBuildingControllerDamageListenerNode);
 REGISTER_FLOW_NODE("BuildingController:ViewListener", CBuildingControllerViewListenerNode);
+REGISTER_FLOW_NODE("BuildingController:HasPower", CBuildingControllerHasPowerNode);
+REGISTER_FLOW_NODE("BuildingController:SetPower", CBuildingControllerSetPowerNode);
