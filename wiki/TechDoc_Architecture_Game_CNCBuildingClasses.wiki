@@ -1,8 +1,11 @@
 #summary Game Feature - CNC Building Classes
 
+[TechDoc_Architecture Back]
+
 = Overview =
 A Building Class represents a unique building in CNC rules. Combined with an owning team, a Building Class becomes a living Building Controller which in turn has its own interface entities that allow players to communicate with the building. A Building Class has its own XML file that is used to define its attributes and a Lua Script that is used to define its behaviors.
 
+= [TechDoc_Architecture_Game_CNCBuildingClasses_Functionality Script Functionality] =
 
 = Building Class XML File =
 The Building Class XML file is the blueprint for a class. It defines the class' attributes and is the lookup book used by the Dead 6 Core to create the a Building Controller. When a Building Controller is created, the class' XML file is loaded from the Buildings\XML folder. (Game\Scripts\Buildings\XML)
@@ -28,38 +31,5 @@ The Building Class' tag's attributes are as such:
 
 = Building Class LUA File =
 Each Building Controller has the ability to run a Lua script along side it to handle building behaviors. Special callbacks are made to it to control when the building gains/losses an interface, when the building is damaged, and when special events take place on the building such as power loss.
-
-== Script Functionality ==
-All callbacks have a separate server and client path that are called on the server and local client's ends, respectively.
-
-=== *_ !OnInit _* ===
-*Purpose*:
-Called when the controller is first initialized at the start of the game.
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-=== *_ !OnShutdown _* ===
-*Purpose*:
-Called when the controller is destroyed at the end of the game.
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-=== *_ !OnReset _* ===
-*Purpose*:
-Called when the controller is being reset to its initial state.
-
-*Arguments*:
-void
-
-*Returns*:
-void
 
 [TechDoc_Architecture Back]
