@@ -1,0 +1,38 @@
+= RenEvo.Dead6.Tools = 
+
+===Dead6.Tools.Plugins.ApplicationPlugins=== 
+_ Class to interact with the application plugins _ 
+* Properties * 
+   * Plugins
+     * _ Returns a list of loaded plugins _ 
+
+
+* Methods * 
+   * Constructor: Dead6.Tools.Plugins.ApplicationPlugins
+     * _ Default constructor, this will load all of the plugins in the "<CurDir>\Plugins\" directory _ 
+
+   * InvokeMethod(System.String,System.Object[])
+     * _ Method to "Call By Name" Methods in the plugins. _ 
+     * Parameters 
+       * MethodName: 
+         * _ The name of the Method to call _ 
+       * args: 
+         * _ Any arguments to pass to the Method call _ 
+
+
+
+===Dead6.Tools.Logging.LogTraceListener=== 
+_ Private implementation of a log file _ 
+
+
+===Dead6.Tools.My.Resources.Resources=== 
+_ A strongly-typed resource class, for looking up localized strings, etc. _ 
+* Properties * 
+   * ResourceManager
+     * _ Returns the cached ResourceManager instance used by this class. _ 
+
+   * Culture
+     * _ Overrides the current thread's CurrentUICulture property for all resource lookups using this strongly typed resource class. _ 
+
+
+
