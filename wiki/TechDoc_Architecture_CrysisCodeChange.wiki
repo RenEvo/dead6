@@ -1,5 +1,7 @@
 #summary Crysis Codebase Changes
 
+[TechDoc_Architecture Back]
+
 All changes to the Crysis SDK codebase are logged at this location. All changes made in the source files are commented using the following special syntax:
 
 {{{
@@ -477,7 +479,39 @@ Lines 3235 - 3253:
 	// [/D6]
 }}}
 
-Lines 3570 - 3576:
+Lines 3271 - 3284:
+{{{
+		// [D6] Check if system exists
+		/*IEntity *pTarget=m_pEntitySystem->GetEntity(hitInfo.targetId);
+		IEntity *pShooter=m_pEntitySystem->GetEntity(hitInfo.shooterId);
+		IEntity *pWeapon=m_pEntitySystem->GetEntity(hitInfo.weaponId);
+		IEntity *pProjectile=m_pEntitySystem->GetEntity(hitInfo.projectileId);*/
+		IEntity *pTarget = NULL, *pShooter = NULL, *pWeapon = NULL, *pProjectile = NULL;
+		if (NULL != m_pEntitySystem)
+		{
+			pTarget=m_pEntitySystem->GetEntity(hitInfo.targetId);
+			pShooter=m_pEntitySystem->GetEntity(hitInfo.shooterId);
+			pWeapon=m_pEntitySystem->GetEntity(hitInfo.weaponId);
+			pProjectile=m_pEntitySystem->GetEntity(hitInfo.projectileId);
+		}
+		// [/D6]
+}}}
+
+Lines 3344 - 3353:
+{{{
+		// [D6] Check if system exists
+		/*IEntity *pShooter=m_pEntitySystem->GetEntity(explosionInfo.shooterId);
+		IEntity *pWeapon=m_pEntitySystem->GetEntity(explosionInfo.weaponId);  */
+		IEntity *pShooter = NULL, *pWeapon = NULL;
+		if (NULL != m_pEntitySystem)
+		{
+			pShooter=m_pEntitySystem->GetEntity(explosionInfo.shooterId);
+			pWeapon=m_pEntitySystem->GetEntity(explosionInfo.weaponId);    
+		}
+		// [/D6]
+}}}
+
+Lines 3588 - 3594:
 {{{
 	// [D6] No longer needed here
 	/*m_entityteams.clear();
@@ -488,7 +522,7 @@ Lines 3570 - 3576:
 	// [/D6]
 }}}
 
-Lines 3896 - 3910:
+Lines 3914 - 3928:
 {{{
 				// [D6] Use team's player map
 				/*TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
@@ -507,7 +541,7 @@ Lines 3896 - 3910:
 				// [/D6]
 }}}
 
-Lines 4020 - 4025:
+Lines 4038 - 4043:
 {{{
 	// [D6] Following containers are no longer part of the GameRules class, migrated to Team Manager
 	//s->AddContainer(m_teams);
@@ -517,7 +551,7 @@ Lines 4020 - 4025:
 	// [/D6]
 }}}
 
-Lines 4039 - 4044:
+Lines 4057 - 4062:
 {{{
 	// [D6] Migrated to Team Manager
 	/*for (TTeamIdMap::iterator iter = m_teams.begin(); iter != m_teams.end(); ++iter)
