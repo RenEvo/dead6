@@ -6,6 +6,6 @@
 
 The Dead6 Main Game Module is derived from the Crysis' Main Game Module (CGame) and handles the initialization and updating of the many Core modules.
 
-[TechDoc_Architecture_System_Game_Functionality Functionality]
+= [TechDoc_Architecture_System_Game_Functionality Functionality] =
 
 [TechDoc_Architecture Back]
