@@ -1,5 +1,7 @@
 #summary System Feature - Dead6 Game Factory
 
+[TechDoc_Architecture Back]
+
 = Overview =
 
 The Dead6 Game Factory module replaces the Crysis Game Factory and is used to force game entities such as the Player and Vehicles to use the derived Dead6 entity replacements.
