@@ -1,8 +1,11 @@
 #summary Game Feature - CNC Teams
 
+[TechDoc_Architecture Back]
+
 = Overview =
 Teams are handled with special care in Command & Conquer Mode game rules. A team runs as much more than an integer value attached to all players and buildings. Instead, teams have their own virtual identity running along side the game, with defined attributes and special scripts used to handle team behavior. Each team has its own XML file which identifies that team and sets its Purchase Menu content. Each team also has a Lua script that handles team behavior.
 
+= [TechDoc_Architecture_Game_CNCTeams_Functionality Script Functionality] =
 
 = Team XML File =
 The Team XML file is the blueprint for a team. It defines the team's attributes and is the lookup book used by the Dead 6 Core to create the team at the beginning. Loaded from the map's [TechDoc_Architecture_Game_CNCRules CNCRules.xml] file, the team's XML file is located in the Teams\XML folder. (Game\Scripts\Teams\XML)
@@ -36,28 +39,5 @@ The contained Harvester tag is used to define the Team's Harvester properties, w
 
 = Team LUA File =
 Each team has the ability to run a Lua script along side it to handle team behaviors. Special callbacks are made to it to control when players join/leave the team, when team members speak in public chat, when team-controlled buildings, vehicles and soldiers are damaged and killed, etc.
-
-== Script Functionality ==
-All callbacks have a separate server and client path that are called on the server and local client's ends, respectively.
-
-=== *_ !OnInit _* ===
-*Purpose*:
-Called when the team is first created
-
-*Arguments*:
-void
-
-*Returns*:
-void
-
-=== *_ !OnShutdown _* ===
-*Purpose*:
-Called when the team is destroyed
-
-*Arguments*:
-void
-
-*Returns*:
-void
 
 [TechDoc_Architecture Back]
