@@ -1,0 +1,18 @@
+#summary Game Feature - CNC Game Rules
+
+[TechDoc_Architecture_Game_CNCRules Back]
+
+= Script Functionality =
+All callbacks have a separate server and client path that are called on the server and local client's ends, respectively.
+
+=== *_ !OnInit _* ===
+*Purpose*:
+Called when the gamerules are first initialized at the start of the game.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+[TechDoc_Architecture_Game_CNCRules Back]
