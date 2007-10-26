@@ -105,7 +105,7 @@ Should be called at the start of a level load
 Called when the game is reset, such as when the editor game starts up
 
 *Arguments*:
-void
+ * _bGameStart_ - `[In]` TRUE if game is starting, FALSE if game is stopping
 
 *Returns*:
 void
@@ -172,12 +172,25 @@ void
 *Note*:
 Delegated from GameRules
 
+=== *_ !LoadTeams _* ===
+*Purpose*:
+Load team definitions contained in an XML node
+
+*Arguments*:
+ * _pNode_ - `[In]` XML node to extract from
+
+*Returns*:
+TRUE on success or FALSE on error
+
+*Note*:
+Used in conjunction with CNCRules parsing
+
 === *_ !CreateTeam _* ===
 *Purpose*:
 Create a team definition
 
 *Arguments*:
- * _szTeam_ - `[In]` Team to load (looks for its .XML file)
+ * _pTeamNode_ - `[In]` XML Node containing team data
 
 *Returns*:
 ID of the team created or TEAMID_INVALID on error
@@ -345,6 +358,20 @@ void
 *Note*:
 Using the name is slower than the ID!
 
+=== *_ !IsPlayerTeam _* ===
+*Purpose*:
+Returns TRUE if the specified team can be used by a player (for joining rights)
+
+*Arguments*:
+ * _nID_ - `[In]` Team ID
+ * _szName_ - `[In]` Name of the team
+
+*Returns*:
+void
+
+*Note*:
+Using the name is slower than the ID!
+
 === *_ !CreateTeamHarvester _* ===
 *Purpose*:
 Create a harvester for the team
@@ -427,9 +454,10 @@ Description: This structure is used to represent a defined team. It contains inf
 Member Variables:
  * nID - Team's unique ID
  * nSpawnGroupID - Default spawn group ID used by team
+ * nFlags - Team flags (see ETeamFlags)
  * szName - Name of the team
+ * szLongName - Long name of the team
  * szScript - Lua script used by the team
- * szXML - XML file that defines the team
  * !PlayerList - List of player IDs who are on the team
  * !DefHarvester - Default Harvester definition inherited by all harvesters created on the team
  * !HarvesterList - List of Harvesters owned by the team
@@ -454,15 +482,26 @@ Member Variables:
  * szEntityName - Vehicle entity name to use to represent the harvester
  * SignalQueue - Queue of signals that need processing
 
+== !ETeamFlags ==
+Below are the list of valid Team Flags and their meanings:
+
+ * TEAM_FLAG_ISPLAYERTEAM - Set if player can be on this team, or strictly AI
+
 
 = Creating a Team =
 Based on the [TechDoc_Architecture_Game_CNCRules CNCRules] XML file, each team listed in the Teams section is created through the team manager. The system first looks for the XML file of the listed team in the map's Teams\XML folder. If not found, the system looks for it in the Game\Scripts\Teams\XML folder. Therefore, if listed:
 
 {{{
-<Team>GDI</Team>
+<Teams action="">
+  <Team>GDI</Team>
+</Teams>
 }}}
 
 Then the system will look first for "<map>\Teams\XML\GDI.xml" and then "Game\Scripts\Teams\XML\GDI.xml". The attributes contained in this file are used to define the team, including the name, Lua script, and other properties. To view the contents of this file, see [TechDoc_Architecture_Game_CNCTeams here].
+
+It is also possible to define a team inline by including what would be stored in the external Team's XML file directly into the team entry in the CNCRules.xml file.
+
+Using *clear* as the _action_ attribute for the _Teams_ tag will cause all existing teams to be cleared before parsing what is contained below. This can be useful if a map wishes to erase the default teams and load only the teams they define in their map's CNCRules.
 
 
 = Team Harvesters =
