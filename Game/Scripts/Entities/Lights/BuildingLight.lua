@@ -76,6 +76,11 @@ end
 ------------------------------------------------
 function BuildingLight:OnShutDown()
 	self:FreeSlot(1);
+
+	-- Remove me from listening
+	if (self.Building) then
+		self.Building.controller:RemoveEventListener(self.id);
+	end
 end
 
 ------------------------------------------------
@@ -119,6 +124,14 @@ end
 ------------------------------------------------
 function BuildingLight:OnReset()
 	self.bEnabled = self.Properties.bEnabled;
+	self.ActiveProfile = nil;
+	self.ActiveProfileStr = "";
+
+	-- Remove me from listening
+	if (self.Building) then
+		self.Building.controller:RemoveEventListener(self.id);
+	end
+	self.Building = nil;
 
 	-- Get owning building's controller
 	self.Building = Base.FindBuilding(self.Properties.CNCBuilding.Team, self.Properties.CNCBuilding.Class);
@@ -127,6 +140,9 @@ function BuildingLight:OnReset()
 		self:ActivateLight(0);
 		return;
 	end
+
+	-- Add me to listener
+	self.Building.controller:AddEventListener(self.id);
 
 	-- If in editor, use the debug values
 	if (g_gameRules.game:IsEditor() and not g_gameRules.game:IsInEditorGame()) then
@@ -144,10 +160,19 @@ function BuildingLight:OnReset()
 				self.ActiveProfile = self.Properties.Profile_Dead_Power;
 			end
 		end
+		self:ResetLight();
 	else
 		self:GetBuildingStatus();
 	end
+end
 
+------------------------------------------------
+-- ResetLight
+--
+-- Purpose: Reset the active light
+------------------------------------------------
+function BuildingLight:ResetLight()
+	-- Load profile
 	if (self.ActiveProfile.Options.object_RenderGeometry ~= "") then
 		self:LoadGeometry(0, self.ActiveProfile.Options.object_RenderGeometry);
 		self:DrawSlot(0, 1);
@@ -156,14 +181,33 @@ function BuildingLight:OnReset()
 end
 
 ------------------------------------------------
--- OnUpdate
+-- SetBuildingStatus
 --
--- Purpose: Called every frame to update lights
+-- Purpose: Set the status to use
 --
--- In:	dt - delta time
+-- In:	status - Status string
+--
+-- Returns '1' if status was changed
 ------------------------------------------------
-function BuildingLight:OnUpdate(dt)
-	-- TODO Detect change in building status
+function BuildingLight:SetBuildingStatus(status)
+	if (status == self.ActiveProfileStr) then return end
+	if (status == "AlivePower") then
+		self.ActiveProfile = self.Properties.Profile_Alive_Power;
+		self.ActiveProfileStr = "AlivePower";
+	elseif (status == "AliveNoPower") then
+		self.ActiveProfile = self.Properties.Profile_Alive_NoPower;
+		self.ActiveProfileStr = "AliveNoPower";
+	elseif (status == "DeadPower") then
+		self.ActiveProfile = self.Properties.Profile_Dead_Power;
+		self.ActiveProfileStr = "DeadPower";
+	elseif (status == "DeadNoPower") then
+		self.ActiveProfile = self.Properties.Profile_Dead_NoPower;
+		self.ActiveProfileStr = "DeadNoPower";
+	else
+		self.ActiveProfile = nil;
+		self.ActiveProfileStr = "";
+	end
+	return 1;
 end
 
 ------------------------------------------------
@@ -174,8 +218,72 @@ end
 -- Note: Should update ActiveProfile table
 ------------------------------------------------
 function BuildingLight:GetBuildingStatus()
-	-- TODO Get active profile based on building's status
-	self.ActiveProfile = self.Properties.Profile_Alive_Power;
+	if (not self.Building) then return end
+
+	-- Look at the status of the building
+	local changed = nil;
+	if (true == self.Building.controller:IsAlive()) then
+		if (true == self.Building.controller:HasPower()) then
+			changed = self:SetBuildingStatus("AlivePower");
+		else
+			changed = self:SetBuildingStatus("AliveNoPower");
+		end
+	else
+		if (true == self.Building.controller:HasPower()) then
+			changed = self:SetBuildingStatus("DeadPower");
+		else
+			changed = self:SetBuildingStatus("DeadNoPower");
+		end
+	end
+
+	-- Detect change
+	if (changed and self.ActiveProfile) then
+		self:ResetLight();
+	end
+end
+
+------------------------------------------------
+-- OnBuildingEvent
+--
+-- Purpose: Called when building event occurs
+--
+-- In:	building - Building controller
+--	event - Event that occured
+--	params - Table of params following event
+------------------------------------------------
+function BuildingLight:OnBuildingEvent(building, event, params)
+	local changed = nil;
+
+	if (event == CONTROLLER_EVENT_POWER) then
+		local bHasPower = params[0];
+
+		-- Switch to correct power profile
+		if (true == bHasPower) then
+			if (self.ActiveProfileStr == "AlivePower" or self.ActiveProfileStr == "AliveNoPower") then
+				changed = self:SetBuildingStatus("AlivePower");
+			elseif (self.ActiveProfileStr == "DeadPower" or self.ActiveProfileStr == "DeadNoPower") then
+				changed = self:SetBuildingStatus("DeadPower");
+			end
+		else
+			if (self.ActiveProfileStr == "AlivePower" or self.ActiveProfileStr == "AliveNoPower") then
+				changed = self:SetBuildingStatus("AliveNoPower");
+			elseif (self.ActiveProfileStr == "DeadPower" or self.ActiveProfileStr == "DeadNoPower") then
+				changed = self:SetBuildingStatus("DeadNoPower");
+			end
+		end
+	elseif (event == CONTROLLER_EVENT_DESTROYED) then
+		-- Switch to correct power profile
+		if (self.ActiveProfileStr == "AlivePower" or self.ActiveProfileStr == "DeadPower") then
+			changed = self:SetBuildingStatus("DeadPower");
+		elseif (self.ActiveProfileStr == "AliveNoPower" or self.ActiveProfileStr == "DeadNoPower") then
+			changed = self:SetBuildingStatus("DeadNoPower");
+		end
+	end
+
+	-- Detect change
+	if (changed and self.ActiveProfile) then
+		self:ResetLight();
+	end
 end
 
 ------------------------------------------------

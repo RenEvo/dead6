@@ -41,7 +41,7 @@ public:
 	//
 	// Purpose: Attaches binding to a portal manager
 	////////////////////////////////////////////////////
-	void AttachTo(IPortalManager *pPortalManager);
+	virtual void AttachTo(IPortalManager *pPortalManager);
 
 public:
 	////////////////////////////////////////////////////
@@ -60,7 +60,7 @@ public:
 	//
 	// Note: See Portal Manager's MakeEntityPortal
 	////////////////////////////////////////////////////
-	int MakeEntityPortal(IFunctionHandler *pH, ScriptHandle nEntityID, char const* szCameraEntity,
+	virtual int MakeEntityPortal(IFunctionHandler *pH, ScriptHandle nEntityID, char const* szCameraEntity,
 		char const* szTexture, int nFrameSkip);
 
 	////////////////////////////////////////////////////
@@ -72,9 +72,9 @@ public:
 	//
 	// Note: See Portal Manager's RemoveEntityPortal
 	////////////////////////////////////////////////////
-	int RemoveEntityPortal(IFunctionHandler *pH, ScriptHandle nEntityID);
+	virtual int RemoveEntityPortal(IFunctionHandler *pH, ScriptHandle nEntityID);
 
-private:
+protected:
 	////////////////////////////////////////////////////
 	// RegisterGlobals
 	//

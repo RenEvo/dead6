@@ -25,7 +25,7 @@ CBuildingController::CBuildingController(void)
 	m_nGUID = GUID_INVALID;
 	m_nFlags = 0;
 	m_fHealth = m_fInitHealth = m_fMaxHealth = 0.0f;
-	m_pSS = NULL;
+	m_pSS = g_D6Core->pSystem->GetIScriptSystem();
 }
 
 ////////////////////////////////////////////////////
@@ -59,8 +59,8 @@ void CBuildingController::Initialize(BuildingGUID nGUID)
 	m_fHealth = m_fInitHealth;
 
 	// Load script and get table
-	m_pSS = g_D6Core->pSystem->GetIScriptSystem();
 	ScriptAnyValue temp;
+	SmartScriptTable tempTable;
 	if (true == m_szScript.empty() || false == m_pSS->ExecuteFile(m_szScript.c_str(), true, false))
 	{
 		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
@@ -68,7 +68,7 @@ void CBuildingController::Initialize(BuildingGUID nGUID)
 			GetTeamName(), m_szName.c_str());
 	}
 	else if (false == m_pSS->GetGlobalAny(m_szName, temp) ||
-		false == temp.CopyTo(m_pScriptTable))
+		false == temp.CopyTo(tempTable))
 	{
 		g_D6Core->pSystem->Warning(VALIDATOR_MODULE_GAME, VALIDATOR_WARNING,
 			VALIDATOR_FLAG_FILE, m_szScript.c_str(), "Failed to get script table for building [%s %s]",
@@ -76,6 +76,10 @@ void CBuildingController::Initialize(BuildingGUID nGUID)
 	}
 	else
 	{
+		// Clone it
+		m_pScriptTable.Create(m_pSS, false);
+		m_pScriptTable->Clone(tempTable, true);
+
 		// Attach it to the building controller script bind
 		if (NULL != g_D6Core->pD6Game)
 		{
@@ -114,6 +118,14 @@ void CBuildingController::Shutdown(void)
 		(*itI)->ClearFlags(ENTITY_FLAG_ISINTERFACE);
 	}
 	m_Interfaces.clear();
+
+	// Release script listeners
+	for (EventScriptListeners::iterator itI = m_EventScriptListeners.begin(); itI != m_EventScriptListeners.end(); itI++)
+	{
+		gEnv->pScriptSystem->ReleaseFunc(itI->second.first);
+	}
+	m_EventListeners.clear();
+	m_EventScriptListeners.clear();
 }
 
 ////////////////////////////////////////////////////
@@ -176,14 +188,63 @@ void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, uns
 		// Apply what is in it
 		for (ExplosionQueue::iterator itDamage = m_ExplosionQueue.begin(); itDamage != m_ExplosionQueue.end(); itDamage++)
 		{
-			// TODO Adjust health
-			CryLogAlways("[%s %s] Damaged by explosion: %.4f", GetTeamName(), GetClassName(), itDamage->second.damage);
+			// Adjust health
+			if (true == gEnv->bServer)
+			{
+				_HandleDamage((void*)&(itDamage->second), false);
+			}
 
-			SControllerEvent event(CONTROLLER_EVENT_ONEXPLOSION);
-			event.nParam[0] = (INT_PTR)&(itDamage->second);
-			_SendListenerEvent(event);
+			// Send event
+			if (m_fHealth > 0.0f)
+			{
+				SControllerEvent event(CONTROLLER_EVENT_ONEXPLOSION);
+				event.nParam[0] = (INT_PTR)&(itDamage->second);
+				_SendListenerEvent(event);
+			}
 		}
 		m_ExplosionQueue.clear();
+	}
+}
+
+////////////////////////////////////////////////////
+void CBuildingController::_HandleDamage(void *pInfo, bool bIsHit)
+{
+	if (NULL == pInfo) return;
+	if (m_fHealth <= 0.0f) return;
+
+	// Get damage
+	float fDamage = 0.0f;
+	if (true == bIsHit)
+	{
+		HitInfo *pHitInfo = (HitInfo*)pInfo;
+		fDamage = pHitInfo->damage;
+	}
+	else
+	{
+		ExplosionInfo *pExplInfo = (ExplosionInfo*)pInfo;
+		fDamage = pExplInfo->damage;
+	}
+
+	// Apply to health
+	m_fHealth -= fDamage;
+	CryLogAlways("[%s %s] Damaged by %s: %.4f (%.4f/%.4f)", GetTeamName(), GetClassName(), (bIsHit?"hit":"explosion"), fDamage,
+		m_fHealth, m_fMaxHealth);
+	// TODO Notify script
+
+
+	// Is dead?
+	if (m_fHealth <= 0.0f)
+	{
+		CryLogAlways("[%s %s] Dead", GetTeamName(), GetClassName());
+
+		// TODO Notify script
+
+
+		// Send out event
+		SControllerEvent event(CONTROLLER_EVENT_DESTROYED);
+		event.nParam[0] = (INT_PTR)bIsHit;
+		event.nParam[1] = (INT_PTR)pInfo;
+		_SendListenerEvent(event);
 	}
 }
 
@@ -192,6 +253,7 @@ void CBuildingController::Reset(void)
 {
 	// Reset to initial state
 	m_fHealth = m_fInitHealth;
+	SetPower(true);
 
 	// Reset flags
 	m_nFlags &= ~CSF_ISVISIBLE;
@@ -442,6 +504,42 @@ void CBuildingController::RemoveEventListener(IBuildingControllerEventListener *
 }
 
 ////////////////////////////////////////////////////
+bool CBuildingController::AddScriptEventListener(EntityId nID)
+{
+	// If already added, ignore
+	EventScriptListeners::iterator itEntry = m_EventScriptListeners.find(nID);
+	if (itEntry != m_EventScriptListeners.end()) return true;
+
+	// Get the entity's script table
+	IEntity *pEntity = gEnv->pEntitySystem->GetEntity(nID);
+	if (NULL == pEntity) return false;
+	SmartScriptTable pEntityTable = pEntity->GetScriptTable();
+	if (NULL == *pEntityTable) return false;
+
+	// Get the function handler
+	ScriptAnyValue temp;
+	HSCRIPTFUNCTION handle = NULL;
+	if (false == pEntityTable->GetValueAny("OnBuildingEvent", temp))
+		return false;
+	temp.CopyTo(handle);
+
+	// Add entry
+	m_EventScriptListeners[nID] = EventScriptListenerPair(handle, pEntityTable);
+	return true;
+}
+
+////////////////////////////////////////////////////
+void CBuildingController::RemoveScriptEventListener(EntityId nID)
+{
+	EventScriptListeners::iterator itEntry = m_EventScriptListeners.find(nID);
+	if (itEntry != m_EventScriptListeners.end())
+	{
+		gEnv->pScriptSystem->ReleaseFunc(itEntry->second.first);
+		m_EventScriptListeners.erase(itEntry);
+	}
+}
+
+////////////////////////////////////////////////////
 void CBuildingController::_SendListenerEvent(SControllerEvent &event)
 {
 	// Send it out
@@ -449,14 +547,95 @@ void CBuildingController::_SendListenerEvent(SControllerEvent &event)
 	{
 		(*itListener)->OnBuildingControllerEvent(this, m_nGUID, event);
 	}
+
+	if (NULL == m_pSS || true == m_EventScriptListeners.empty()) return;
+
+	// Prepare script event args
+	SmartScriptTable pArgs(m_pSS, false);
+	switch (event.event)
+	{
+		case CONTROLLER_EVENT_ONHIT:
+		{
+			/*SmartScriptTable pHitArg(m_pSS, false);
+			HitInfo *pHitTbl = (HitInfo*)event.nParam[0];
+			g_D6Core->pD6GameRules->CreateScriptHitInfo(pHitArg, *pHitTbl);
+			pArgs->SetAt(1, pHitArg);*/
+		}
+		break;
+		case CONTROLLER_EVENT_ONEXPLOSION:
+		{
+			/*SmartScriptTable pExplArg(m_pSS, false);
+			ExplosionInfo *pExplTbl = (ExplosionInfo*)event.nParam[0];
+			g_D6Core->pD6GameRules->CreateScriptExplosionInfo(pExplArg, *pExplTbl);
+			pArgs->SetAt(1, pExplArg);*/
+		}
+		break;
+		case CONTROLLER_EVENT_INVIEW:
+		{
+			pArgs->SetAt(1, (EntityId)event.nParam[0]);
+		}
+		break;
+		case CONTROLLER_EVENT_POWER:
+		{
+			pArgs->SetAt(1, (bool)(event.nParam[0] ? true : false));
+		}
+		break;
+		case CONTROLLER_EVENT_DESTROYED:
+		{
+			bool bIsHit = (bool)(event.nParam[0] ? true : false);
+			pArgs->SetAt(1, bIsHit);
+			if (true == bIsHit)
+			{
+				/*SmartScriptTable pHitArg(m_pSS, false);
+				HitInfo *pHitTbl = (HitInfo*)event.nParam[1];
+				g_D6Core->pD6GameRules->CreateScriptHitInfo(pHitArg, *pHitTbl);
+				pArgs->SetAt(2, pHitArg);*/
+			}
+			else
+			{
+				/*SmartScriptTable pExplArg(m_pSS, false);
+				ExplosionInfo *pExplTbl = (ExplosionInfo*)event.nParam[1];
+				g_D6Core->pD6GameRules->CreateScriptExplosionInfo(pExplArg, *pExplTbl);
+				pArgs->SetAt(2, pExplArg);*/
+			}
+		}
+		break;
+	}
+	SmartScriptTable pMyTable = GetScriptTable();
+
+	// Sent script events out
+	for (EventScriptListeners::iterator itListener = m_EventScriptListeners.begin();
+		itListener != m_EventScriptListeners.end(); itListener++)
+	{
+		m_pSS->BeginCall(itListener->second.first);
+		m_pSS->PushFuncParamAny(itListener->second.second);
+		m_pSS->PushFuncParamAny(pMyTable);
+		m_pSS->PushFuncParamAny(event.event);
+		m_pSS->PushFuncParamAny(pArgs);
+		m_pSS->EndCall();
+	}
 }
 
 ////////////////////////////////////////////////////
 void CBuildingController::OnClientHit(HitInfo const& hitInfo)
 {
-	// TODO Anything local on the client
+	if (false == gEnv->bServer)
+	{
+		OnServerHit(hitInfo);
+	}
+}
 
-	if (!gEnv->bServer)
+////////////////////////////////////////////////////
+void CBuildingController::OnServerHit(HitInfo const& hitInfo)
+{
+	// TODO Update building health
+	if (true == gEnv->bServer)
+	{
+		_HandleDamage((void*)&hitInfo, true);
+	}
+
+	// Send event
+	if (m_fHealth > 0.0f)
 	{
 		SControllerEvent event(CONTROLLER_EVENT_ONHIT);
 		event.nParam[0] = (INT_PTR)&hitInfo;
@@ -465,20 +644,12 @@ void CBuildingController::OnClientHit(HitInfo const& hitInfo)
 }
 
 ////////////////////////////////////////////////////
-void CBuildingController::OnServerHit(HitInfo const& hitInfo)
-{
-	// TODO Update building health
-	CryLogAlways("[%s %s] Damaged by weapon: %.4f", GetTeamName(), GetClassName(), hitInfo.damage);
-
-	SControllerEvent event(CONTROLLER_EVENT_ONHIT);
-	event.nParam[0] = (INT_PTR)&hitInfo;
-	_SendListenerEvent(event);
-}
-
-////////////////////////////////////////////////////
 void CBuildingController::OnClientExplosion(ExplosionInfo const& explosionInfo, EntityId nInterfaceId, float fObstruction)
 {
-	// TODO Anything local on the client
+	if (false == gEnv->bServer)
+	{
+		OnServerExplosion(explosionInfo, nInterfaceId, fObstruction);
+	}
 }
 
 ////////////////////////////////////////////////////
@@ -528,4 +699,36 @@ void CBuildingController::OnServerExplosion(ExplosionInfo const& explosionInfo, 
 			m_ExplosionQueue[updatedInfo.weaponId] = updatedInfo;
 		}
 	}
+}
+
+////////////////////////////////////////////////////
+bool CBuildingController::HasPower(void) const
+{
+	return (CSF_ISPOWERED == (m_nFlags&CSF_ISPOWERED));
+}
+
+////////////////////////////////////////////////////
+void CBuildingController::SetPower(bool bPowered)
+{
+	// Set and report correctly
+	if (true == bPowered)
+		m_nFlags |= CSF_ISPOWERED;
+	else
+		m_nFlags &= ~CSF_ISPOWERED;
+
+	SControllerEvent event(CONTROLLER_EVENT_POWER);
+	event.nParam[0] = (INT_PTR)bPowered;
+	_SendListenerEvent(event);
+}
+
+////////////////////////////////////////////////////
+float CBuildingController::GetHealth(void) const
+{
+	return m_fHealth;
+}
+
+////////////////////////////////////////////////////
+bool CBuildingController::IsAlive(void) const
+{
+	return (m_fHealth > 0.0f);
 }

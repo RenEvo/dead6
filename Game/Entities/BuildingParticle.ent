@@ -1,0 +1,4 @@
+<Entity
+ Name="BuildingParticle" 
+ Script="Scripts/Entities/Particle/BuildingParticle.lua"
+/>

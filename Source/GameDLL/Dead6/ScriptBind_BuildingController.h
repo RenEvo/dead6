@@ -72,11 +72,61 @@ public:
 	//
 	// In:	pController - Controller to be bound
 	////////////////////////////////////////////////////
-	void AttachTo(IBuildingController *pController);
+	virtual void AttachTo(IBuildingController *pController);
 
 public:
-	// TODO Functions
-	int Test(IFunctionHandler *pH, int nTest);
+	////////////////////////////////////////////////////
+	// GetHealth
+	//
+	// Purpose: Get the health of the building
+	////////////////////////////////////////////////////
+	virtual int GetHealth(IFunctionHandler *pH);
+
+	////////////////////////////////////////////////////
+	// IsAlive
+	//
+	// Purpose: Returns TRUE if building is alive
+	////////////////////////////////////////////////////
+	virtual int IsAlive(IFunctionHandler *pH);
+
+	////////////////////////////////////////////////////
+	// HasPower
+	//
+	// Purpose: Returns TRUE if building has power
+	////////////////////////////////////////////////////
+	virtual int HasPower(IFunctionHandler *pH);
+
+	////////////////////////////////////////////////////
+	// SetPower
+	//
+	// Purpose: Set the power of the building
+	//
+	// In:	bPower - TRUE to give it power, FALSE to
+	//			take it away
+	////////////////////////////////////////////////////
+	virtual int SetPower(IFunctionHandler *pH, bool bPower);
+
+	////////////////////////////////////////////////////
+	// AddEventListener
+	//
+	// Purpose: Add the given entity to the entity event
+	//	listener on the controller
+	//
+	// In:	nEntityID - Entity Id to add
+	//
+	// Returns '1' if succeeded, nil if not
+	////////////////////////////////////////////////////
+	virtual int AddEventListener(IFunctionHandler *pH, ScriptHandle nEntityID);
+
+	////////////////////////////////////////////////////
+	// RemoveEventListener
+	//
+	// Purpose: Remove the given entity from the entity event
+	//	listener on the controller
+	//
+	// In:	nEntityID - Entity Id to add
+	////////////////////////////////////////////////////
+	virtual int RemoveEventListener(IFunctionHandler *pH, ScriptHandle nEntityID);
 };
 
 #endif //_D6C_SCRIPTBIND_BUILDINGCONTROLLER_H_

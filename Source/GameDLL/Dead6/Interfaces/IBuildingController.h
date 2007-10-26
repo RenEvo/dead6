@@ -37,6 +37,7 @@ enum EControllerStateFlags
 	CSF_WANTSTOBEDESTROYED	= 0x02,		// Set if building wants to be destroyed
 	CSF_ISVISIBLE			= 0x04,		// Set if building is visible by the player
 	CSF_ISVALIDATED			= 0x08,		// Set if building has been validated
+	CSF_ISPOWERED			= 0x10,		// Set if building has power
 };
 
 // Controller events
@@ -62,6 +63,15 @@ enum EControllerEvent
 
 	// Sent when the controller is no longer being looked at by the local client
 	CONTROLLER_EVENT_OUTOFVIEW,
+
+	// Sent when the controller's power status changes
+	// nParam[0] = TRUE if it has power, FALSE if it doesn't
+	CONTROLLER_EVENT_POWER,
+
+	// Sent when the controller has been destroyed
+	// nParam[0] = TRUE if it was a hit, FALSE if it was an explosion
+	// nParam[1] = HitInfo or ExplosionInfo that did the building in
+	CONTROLLER_EVENT_DESTROYED,
 
 	// Last event in list.
 	CONTROLLER_EVENT_LAST,
@@ -322,6 +332,29 @@ struct IBuildingController
 	virtual void RemoveEventListener(IBuildingControllerEventListener *pListener) = 0;
 
 	////////////////////////////////////////////////////
+	// AddScriptEventListener
+	//
+	// Purpose: Add an event listener to an entity's script
+	//
+	// In:	nID - Entity Id
+	//
+	// Returns TRUE if added
+	//
+	// Note: Will call the entity's script's "OnBuildingEvent"
+	//	when an event occurs
+	////////////////////////////////////////////////////
+	virtual bool AddScriptEventListener(EntityId nID) = 0;
+
+	////////////////////////////////////////////////////
+	// RemoveScriptEventListener
+	//
+	// Purpose: Remove an event listener from an entity's script
+	//
+	// In:	nID - Entity Id
+	////////////////////////////////////////////////////
+	virtual void RemoveScriptEventListener(EntityId nID) = 0;
+
+	////////////////////////////////////////////////////
 	// OnClientHit
 	//
 	// Purpose: Call when a hit occurs on the client
@@ -364,6 +397,38 @@ struct IBuildingController
 	//			obstructed, 1 = fully visible)
 	////////////////////////////////////////////////////
 	virtual void OnServerExplosion(ExplosionInfo const& explosionInfo, unsigned int nInterfaceId, float fObstruction) = 0;
+
+	////////////////////////////////////////////////////
+	// HasPower
+	//
+	// Purpose: Returns TRUE if the building has power
+	////////////////////////////////////////////////////
+	virtual bool HasPower(void) const = 0;
+
+	////////////////////////////////////////////////////
+	// SetPower
+	//
+	// Purpose: Set the power status of the building
+	//
+	// In:	bPowered - TRUE to give it power, FALSE to
+	//			take it away
+	////////////////////////////////////////////////////
+	virtual void SetPower(bool bPowered) = 0;
+
+	////////////////////////////////////////////////////
+	// GetHealth
+	//
+	// Purpose: Get the building's current health amount
+	////////////////////////////////////////////////////
+	virtual float GetHealth(void) const = 0;
+
+	////////////////////////////////////////////////////
+	// IsAlive
+	//
+	// Purpose: Returns TRUE if the building is alive
+	//	or FALSE if it is dead
+	////////////////////////////////////////////////////
+	virtual bool IsAlive(void) const = 0;
 };
 
 #endif //_D6C_IBUILDINGCONTROLLER_H_

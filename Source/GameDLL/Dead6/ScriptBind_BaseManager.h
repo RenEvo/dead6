@@ -41,7 +41,7 @@ public:
 	//
 	// Purpose: Attaches binding to a base manager
 	////////////////////////////////////////////////////
-	void AttachTo(IBaseManager *pBaseManager);
+	virtual void AttachTo(IBaseManager *pBaseManager);
 
 public:
 	////////////////////////////////////////////////////
@@ -55,9 +55,9 @@ public:
 	//
 	// Returns controller's script table or nil on error
 	////////////////////////////////////////////////////
-	int FindBuilding(IFunctionHandler *pH, char const* szTeam, char const* szClass);
+	virtual int FindBuilding(IFunctionHandler *pH, char const* szTeam, char const* szClass);
 
-private:
+protected:
 	////////////////////////////////////////////////////
 	// RegisterGlobals
 	//

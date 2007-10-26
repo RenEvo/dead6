@@ -52,7 +52,7 @@ protected:
 	//
 	// Purpose: Get the D6 GameRules using attached gr
 	////////////////////////////////////////////////////
-	CD6GameRules *GetD6GameRules(IFunctionHandler *pH);
+	virtual CD6GameRules *GetD6GameRules(IFunctionHandler *pH);
 	
 	IGameFramework *m_pGameFW;
 };

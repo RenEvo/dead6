@@ -2,30 +2,27 @@
 -- C&C: The Dead 6 - Core File
 -- Copyright (C), RenEvo Software & Designs, 2007
 --
--- BuildingSound.lua
+-- BuildingParticle.lua
 --
--- Purpose: Used as a multi-purpose sound based
---	on a building's status
+-- Purpose: Used as a multi-purpose particle
+--	emitter based on a building's status
 --
 -- History:
---      - 10/24/07 : File created - KAK
+--      - 10/25/07 : File created - KAK
 ------------------------------------------------
 
-Script.ReloadScript("Scripts/Entities/Sound/SoundSpot.lua" );
+Script.ReloadScript("Scripts/Entities/Particle/ParticleEffect.lua" );
 
--- Sound properties
-local BuildingSound_SoundProp = new(SoundSpot.Properties);
-BuildingSound_SoundProp.bEnabled = nil;
-BuildingSound_SoundProp.bPlay = 1;
+-- Particle properties
+local BuildingParticle_ParticleProp = new(ParticleEffect.Properties);
+BuildingParticle_ParticleProp.bActive = nil;
 
-BuildingSound =
+BuildingParticle =
 {
 	Properties =
 	{
 		-- Initially enabled
 		bEnabled = 1,
-		InnerRadius = 0,
-		OuterRadius = 0,
 
 		-- CNC Building items
 		CNCBuilding =
@@ -41,7 +38,7 @@ BuildingSound =
 			},
 		},
 
-		-- Sound profiles
+		-- Particle profiles
 		Profile_Alive_Power = {},
 		Profile_Alive_NoPower = {},
 		Profile_Dead_Power = {},
@@ -49,44 +46,46 @@ BuildingSound =
 	};
 	Editor = {},
 
-	started = 0,
-
 	-- Active profile
 	ActiveProfile = nil,
+	ActiveProfileStr = "",
 };
-BuildingSound.Editor = merge(BuildingSound.Editor, SoundSpot.Editor, 1);
+BuildingParticle.Editor = merge(BuildingParticle.Editor, ParticleEffect.Editor, 1);
 -- Profile copies
-BuildingSound.Properties.Profile_Alive_Power = merge(BuildingSound.Properties.Profile_Alive_Power, BuildingSound_SoundProp, 1);
-BuildingSound.Properties.Profile_Alive_NoPower = merge(BuildingSound.Properties.Profile_Alive_NoPower, BuildingSound_SoundProp, 1);
-BuildingSound.Properties.Profile_Dead_Power = merge(BuildingSound.Properties.Profile_Dead_Power, BuildingSound_SoundProp, 1);
-BuildingSound.Properties.Profile_Dead_NoPower = merge(BuildingSound.Properties.Profile_Dead_NoPower, BuildingSound_SoundProp, 1);
-
-------------------------------------------------
--- OnSpawn
---
--- Purpose: Called when sound object spawns
-------------------------------------------------
-function BuildingSound:OnSpawn()
-	self:SetFlags(ENTITY_FLAG_CLIENT_ONLY, 0);
-end
+BuildingParticle.Properties.Profile_Alive_Power = merge(BuildingParticle.Properties.Profile_Alive_Power, BuildingParticle_ParticleProp, 1);
+BuildingParticle.Properties.Profile_Alive_NoPower = merge(BuildingParticle.Properties.Profile_Alive_NoPower, BuildingParticle_ParticleProp, 1);
+BuildingParticle.Properties.Profile_Dead_Power = merge(BuildingParticle.Properties.Profile_Dead_Power, BuildingParticle_ParticleProp, 1);
+BuildingParticle.Properties.Profile_Dead_NoPower = merge(BuildingParticle.Properties.Profile_Dead_NoPower, BuildingParticle_ParticleProp, 1);
 
 ------------------------------------------------
 -- OnInit
 --
--- Purpose: Called when sound is initialized
+-- Purpose: Called when effect is initialized
 ------------------------------------------------
-function BuildingSound:OnInit()
+function BuildingParticle:OnInit()
+	self.nParticleSlot = -1;
+	self.spawnTimer = 0;
+	
+	self:SetRegisterInSectors(1);
+	
+	self:SetUpdatePolicy(ENTITY_UPDATE_POT_VISIBLE);
+	self:SetFlags(ENTITY_FLAG_CLIENT_ONLY, 0);
+
 	self:OnReset();
+
+	-- Preload all the effects
+	self:PreLoadParticleEffect(self.Properties.Profile_Alive_Power.ParticleEffect);
+	self:PreLoadParticleEffect(self.Properties.Profile_Alive_NoPower.ParticleEffect);
+	self:PreLoadParticleEffect(self.Properties.Profile_Dead_Power.ParticleEffect);
+	self:PreLoadParticleEffect(self.Properties.Profile_Dead_NoPower.ParticleEffect);
 end
 
 ------------------------------------------------
 -- OnShutdown
 --
--- Purpose: Called when sound is destroyed
+-- Purpose: Called when effect is destroyed
 ------------------------------------------------
-function BuildingSound:OnShutDown()
-	self:Stop();
-
+function BuildingParticle:OnShutDown()
 	-- Remove me from listening
 	if (self.Building) then
 		self.Building.controller:RemoveEventListener(self.id);
@@ -96,48 +95,51 @@ end
 ------------------------------------------------
 -- OnLoad
 --
--- Purpose: Called when sound is loaded
+-- Purpose: Called when effect is loaded
 --
 -- In:	props - Serialization object
 ------------------------------------------------
-function BuildingSound:OnLoad(props)
-	self.started = props.started;
-	self.bEnabled = props.bEnabled;
-	self:OnReset();
+function BuildingParticle:OnLoad(props)
+	if (not props.nParticleSlot) then
+		self:Reset();
+	elseif (not self.nParticleSlot or self.nParticleSlot ~= props.nParticleSlot) then
+		self:Reset();
+		if (props.nParticleSlot >= 0 and self.ActiveProfile) then
+			self.nParticleSlot = self:LoadParticleEffect(props.nParticleSlot, self.ActiveProfile.ParticleEffect, self.ActiveProfile);
+		end
+	end
 end
 
 ------------------------------------------------
 -- OnSave
 --
--- Purpose: Called when sound is saved
+-- Purpose: Called when effect is saved
 --
 -- In:	props - Serialization object
 ------------------------------------------------
-function BuildingSound:OnSave(props)
-	props.started = self.started;
-	props.bEnabled = self.bEnabled;
+function BuildingParticle:OnSave(props)
+	props.nParticleSlot = self.nParticleSlot;
 end
 
 ------------------------------------------------
 -- OnPropertyChange
 --
 -- Purpose: Called when a property changes on
---	the sound
+--	the effect emitter
 ------------------------------------------------
-function BuildingSound:OnPropertyChange()
+function BuildingParticle:OnPropertyChange()
 	self:OnReset();
 end
 
 ------------------------------------------------
 -- OnReset
 --
--- Purpose: Reset the sound to initial state
+-- Purpose: Reset the effect to initial state
 ------------------------------------------------
-function BuildingSound:OnReset()
-	self:NetPresent(0);
-	self:Stop();
-	self.soundid = nil;
+function BuildingParticle:OnReset()
 	self.bEnabled = self.Properties.bEnabled;
+	self:Disable();
+	self.nParticleSlot = nil;
 	self.ActiveProfile = nil;
 	self.ActiveProfileStr = "";
 
@@ -150,7 +152,7 @@ function BuildingSound:OnReset()
 	-- Get owning building's controller
 	self.Building = Base.FindBuilding(self.Properties.CNCBuilding.Team, self.Properties.CNCBuilding.Class);
 	if (not self.Building) then
-		System.Log("[BuildingSound] Could not find building Team=" .. self.Properties.CNCBuilding.Team .. " Class=" .. self.Properties.CNCBuilding.Class);
+		System.Log("[BuildingParticle] Could not find building Team=" .. self.Properties.CNCBuilding.Team .. " Class=" .. self.Properties.CNCBuilding.Class);
 		return;
 	end
 
@@ -163,34 +165,39 @@ function BuildingSound:OnReset()
 		if (0 == self.Properties.CNCBuilding.Debug.bIsDead) then
 			if (0 == self.Properties.CNCBuilding.Debug.bHasPower) then
 				self.ActiveProfile = self.Properties.Profile_Alive_NoPower;
+				self.ActiveProfileStr = "AliveNoPower";
 			else
 				self.ActiveProfile = self.Properties.Profile_Alive_Power;
+				self.ActiveProfileStr = "AlivePower";
 			end
 		else
 			if (0 == self.Properties.CNCBuilding.Debug.bHasPower) then
 				self.ActiveProfile = self.Properties.Profile_Dead_NoPower;
+				self.ActiveProfileStr = "DeadNoPower";
 			else
 				self.ActiveProfile = self.Properties.Profile_Dead_Power;
+				self.ActiveProfileStr = "DeadPower";
 			end
 		end
-		self:ResetSound();
+		self:ResetEffect();
 	else
 		self:GetBuildingStatus();
 	end
 end
 
 ------------------------------------------------
--- ResetSound
+-- ResetEffect
 --
--- Purpose: Reset the active sound
+-- Purpose: Reset the active effect
 ------------------------------------------------
-function BuildingSound:ResetSound()
-	-- Stop old sound
-	self:Stop();
+function BuildingParticle:ResetEffect()
+	-- Destroy old effect
+	self:Disable();
+	self.nParticleSlot = nil;
 
-	-- If play immediatly, play it
-	if (self.ActiveProfile.bPlay == 1) then
-		self:Play();
+	-- Go to correct state
+	if (self.bEnabled ~= 0) then
+		self:Enable();
 	end
 end
 
@@ -203,7 +210,7 @@ end
 --
 -- Returns '1' if status was changed
 ------------------------------------------------
-function BuildingSound:SetBuildingStatus(status)
+function BuildingParticle:SetBuildingStatus(status)
 	if (status == self.ActiveProfileStr) then return end
 	if (status == "AlivePower") then
 		self.ActiveProfile = self.Properties.Profile_Alive_Power;
@@ -231,7 +238,7 @@ end
 --
 -- Note: Should update ActiveProfile table
 ------------------------------------------------
-function BuildingSound:GetBuildingStatus()
+function BuildingParticle:GetBuildingStatus()
 	if (not self.Building) then return end
 
 	-- Look at the status of the building
@@ -252,7 +259,7 @@ function BuildingSound:GetBuildingStatus()
 
 	-- Detect change
 	if (changed and self.ActiveProfile) then
-		self:ResetSound();
+		self:ResetEffect();
 	end
 end
 
@@ -265,7 +272,7 @@ end
 --	event - Event that occured
 --	params - Table of params following event
 ------------------------------------------------
-function BuildingSound:OnBuildingEvent(building, event, params)
+function BuildingParticle:OnBuildingEvent(building, event, params)
 	local changed = nil;
 
 	if (event == CONTROLLER_EVENT_POWER) then
@@ -296,136 +303,94 @@ function BuildingSound:OnBuildingEvent(building, event, params)
 
 	-- Detect change
 	if (changed and self.ActiveProfile) then
-		self:ResetSound();
+		self:ResetEffect();
 	end
 end
 
 ------------------------------------------------
--- OnSoundDone
+-- Enable
 --
--- Purpose: Called when sound is done playing
+-- Purpose: Create the effect
 ------------------------------------------------
-function BuildingSound:OnSoundDone()
-	self:ActivateOutput("DonePlaying", true);
-end
-
-------------------------------------------------
--- Play
---
--- Purpose: Play the selected sound
-------------------------------------------------
-function BuildingSound:Play()
-	if (self.bEnabled == 0 or not self.ActiveProfile) then return end
-
-	-- Stop current sound
-	if (self.soundid ~= nil) then
-		self:Stop(); -- entity proxy
-	end
-
-	-- Set the flags
-	local sndFlags = bor(SOUND_DEFAULT_3D,SOUND_RADIUS);
-	if (self.ActiveProfile.bLoop ~=0) then
-		sndFlags = bor(sndFlags, SOUND_LOOP);
-	end;
-
-	-- Play it
-	self.soundid = self:PlaySoundEventEx(self.ActiveProfile.sndSource, sndFlags, self.ActiveProfile.fVolume, g_Vectors.v000, self.ActiveProfile.InnerRadius, self.ActiveProfile.OuterRadius, SOUND_SEMANTIC_SOUNDSPOT);
-	if (self.soundid) then
-		--Sound.SetSoundVolume(self.soundid, self.ActiveProfile.fVolume);
-		--Sound.SetMinMaxDistance(self.soundid, self.ActiveProfile.InnerRadius, self.ActiveProfile.OuterRadius);
-		self.started = 1;
+function BuildingParticle:Enable()
+	if (not self.nParticleSlot or self.nParticleSlot < 0) then
+		self.nParticleSlot = self:LoadParticleEffect(-1, self.ActiveProfile.ParticleEffect, self.ActiveProfile);
 	end
 end
 
 ------------------------------------------------
--- Stop
+-- Disable
 --
--- Purpose: Stop the current playing sound
+-- Purpose: Destroy the effect
 ------------------------------------------------
-function BuildingSound:Stop()
-	if (self.soundid ~= nil) then
-		self:StopSound(self.soundid); -- stopping through entity proxy
-		self.soundid = nil;
-	end
-	self.started = 0;
-end
-
-------------------------------------------------
--- Event_Play
---
--- Purpose: Play the current sound
-------------------------------------------------
-function SoundSpot:Event_Play(sender)
-	-- Stop current sond
-	if (self.soundid ~= nil) then
-		self:Stop();
-	end
-
-	-- If we only play once, don't go on
-	if (self.ActiveProfile and self.ActiveProfile.bOnce ~= 0 and self.started ~= 0) then return end
-
-	-- Play it
-	self:Play();
-end
-
-------------------------------------------------
--- Event_Stop
---
--- Purpose: Stop the current playing sound
-------------------------------------------------
-function SoundSpot:Event_Stop(sender, bStop)
-	if (bStop == true and self.soundid ~= nil) then
-		self:Stop();
+function BuildingParticle:Disable()
+	if (self.nParticleSlot and self.nParticleSlot >= 0) then
+		self:FreeSlot(self.nParticleSlot);
+		self.nParticleSlot = -1;
 	end
 end
 
 ------------------------------------------------
 -- Event_Enable
 --
--- Purpose: Enable the system to play sounds
+-- Purpose: Event called to enable the effect
 ------------------------------------------------
-function SoundSpot:Event_Enable(sender)
-	self.Properties.bEnabled = 1;
-	OnReset();
+function BuildingParticle:Event_Enable(sender)
+	self:Enable();
+	self:ActivateOutput("Active", true);
 end
 
 ------------------------------------------------
 -- Event_Disable
 --
--- Purpose: Disable the system from playing sounds
+-- Purpose: Event called to disable the effect
 ------------------------------------------------
-function BuildingSound:Event_Disable(sender)
-	self.Properties.bEnabled = 0;
-	OnReset();
+function BuildingParticle:Event_Disable(sender)
+	self:Disable();
+	self:ActivateOutput("Active", false);
 end
 
 ------------------------------------------------
 -- Event_Active
 --
--- Purpose: Event called to activate the light
+-- Purpose: Event called to activate the effect
 ------------------------------------------------
-function BuildingSound:Event_Active(sender, bEnabled)
-	self.Properties.bEnabled = bEnabled;
-	OnReset();
+function BuildingParticle:Event_Active(sender, bEnabled)
+	if (bEnabled ~= 0) then
+		self:Enable();
+	else
+		self:Disable();
+	end
+	self:ActivateOutput("Active", bEnabled);
+end
+
+------------------------------------------------
+-- Event_Restart
+--
+-- Purpose: Event called to restart the effect
+------------------------------------------------
+function BuildingParticle:Event_Restart()
+	self:Disable();
+	self:Enable();
+	self:ActivateOutput("Restarted", true);
 end
 
 ------------------------------------------------
 ------------------------------------------------
 
 -- Flow events
-BuildingSound.FlowEvents =
+BuildingParticle.FlowEvents =
 {
 	Inputs =
 	{
-		Play = { BuildingSound.Event_Play, "bool" },
-		Stop = { BuildingSound.Event_Stop, "bool" },
-		Active = { BuildingSound.Event_Active, "bool" },
-		Enable = { BuildingSound.Event_Enable, "bool" },
-		Disable = { BuildingSound.Event_Disable, "bool" },
+		Active = { BuildingParticle.Event_Active, "bool" },
+		Enable = { BuildingParticle.Event_Enable, "bool" },
+		Disable = { BuildingParticle.Event_Disable, "bool" },
+		Restart = { BuildingParticle.Event_Restart, "bool" },
 	},
 	Outputs =
 	{
 		Active = "bool",
-		DonePlaying = "bool",
-	},	
+		Restarted = "bool",
+	},
 }
