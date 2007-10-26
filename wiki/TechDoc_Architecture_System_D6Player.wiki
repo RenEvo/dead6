@@ -8,6 +8,6 @@ The Dead6 Player Entity derives from the Crysis Player Entity and is used to exp
 
 The Dead6 Player also takes advantage of an overloaded Actor Script Bind, known as the Dead6 Player Script Bind. It inherits all functionality of the Actor Script Bind, but adds accessibility for altering a player's credits from the Script System.
 
-[TechDoc_Architecture_System_D6Player_Functionality Functionality]
+= [TechDoc_Architecture_System_D6Player_Functionality Functionality] =
 
 [TechDoc_Architecture Back]
