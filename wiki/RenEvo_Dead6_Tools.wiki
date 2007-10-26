@@ -26,6 +26,7 @@ _ Class to interact with the application plugins _
 _ Private implementation of a log file _ 
 
 
+
 ===Dead6.Tools.My.Resources.Resources=== 
 _ A strongly-typed resource class, for looking up localized strings, etc. _ 
 
@@ -35,4 +36,6 @@ _ A strongly-typed resource class, for looking up localized strings, etc. _
 
    * Culture
      * _ Overrides the current thread's CurrentUICulture property for all resource lookups using this strongly typed resource class. _ 
+
+
 
