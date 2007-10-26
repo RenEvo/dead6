@@ -44,10 +44,8 @@ Similar to how the Teams section works, this area defines what Building Controll
 
 Below are the attributes that can be defined alongside the _Building_ tag:
  * Team - The owning team. This name must match the name of the Team specified in the team's XML file.
- * Class - Building class. This serves two purposes: 1. The name is used in the Class Repository of the [TechDoc_Architecture_System_BaseManager Base Manager] to create a unique ID for it, which is in turn used to create the building's GUID. 2. The name is used to determine which Building XML file should be used to define the controller's attributes. See [TechDoc_Architecture_System_BaseManager here] for more information on how this works.
- * InitHealth - Initial health of the building. If not specified or invalid, the building's health will be set to its Max value. An invalid value would be negative or greater than the building's Max health. The health of the building is also set to this value whenever it is "Reset".
- * MaxHealth - The controller's max health. The building can be repaired up to this value.
- * MustBeDestroyed - A boolean flag that determines if the building must be destroyed for its owning team to lose. If a building has an invalid max health on load or has no interfaces linking to it, this will be forced to false.
+ * Name - Building class. This serves two purposes: 1. The name is used in the Class Repository of the [TechDoc_Architecture_System_BaseManager Base Manager] to create a unique ID for it, which is in turn used to create the building's GUID. 2. The name is used to determine which Building XML file should be used to define the controller's default attributes. See [TechDoc_Architecture_System_BaseManager here] for more information on how this works.
+ * Please view the [TechDoc_Architecture_Game_CNCBuildingClasses CNC Building Classes] for the definitions of the remaining attributes.
 
 These values must be defined in the Building Controller's XML file, but not necessarily in the CNCRules.xml line. Any values present in CNCRules.xml will overwrite the values defined in the Building Controller's XML file.
 
