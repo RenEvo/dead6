@@ -1,0 +1,275 @@
+#summary Game Feature - Harvester Flow Logic - Functionality
+
+[TechDoc_Architecture_Game_HarvesterFlow Back]
+
+= Functionality =
+
+== !FlowHarvesterControllerNode ==
+Below are the methods defined in the !FlowHarvesterControllerNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !RemakeHarvester _* ===
+*Purpose*:
+Removes the harvester from the world
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+== !FlowHarvesterSignalNode ==
+Below are the methods defined in the !FlowHarvesterSignalNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+== !FlowHarvesterGotoNode ==
+Below are the methods defined in the !FlowHarvesterGotoNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ Reset _* ===
+*Purpose*:
+Reset the node for the harvester to use
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+== !FlowHarvesterTurnNode ==
+Below are the methods defined in the !FlowHarvesterTurnNode module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetConfiguration _* ===
+*Purpose*:
+Set up and return the configuration for this node for the Flow Graph
+
+*Arguments*:
+ * _config_ - `[Out]` The node's config
+
+*Returns*:
+void
+
+
+=== *_ Reset _* ===
+*Purpose*:
+Reset the node for the harvester to use
+
+*Arguments*:
+ * _pActInfo_ - `[In]` Activation info
+
+*Returns*:
+void
+
+
+=== *_ !ProcessEvent _* ===
+*Purpose*:
+Called when an event is to be processed
+
+*Arguments*:
+ * _event_ - `[In]` Flow event to process
+ * _pActInfo_ - `[In]` Activation info for the event
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+[TechDoc_Architecture_Game_HarvesterFlow Back]
