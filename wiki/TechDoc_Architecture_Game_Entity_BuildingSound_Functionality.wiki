@@ -1,0 +1,7 @@
+#summary Game Feature - Entities - Building Sound - Functionality
+
+[TechDoc_Architecture_Game_Entity_BuildingSound Back]
+
+TODO
+
+[TechDoc_Architecture_Game_Entity_BuildingSound Back]
