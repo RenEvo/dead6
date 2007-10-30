@@ -36,6 +36,11 @@ public:
 	// Serialization overloads
 	virtual bool NetSerialize(TSerialize ser, EEntityAspects aspect, uint8 profile, int flags);
 	virtual void FullSerialize(TSerialize ser);
+	virtual void Reset(bool toGame);
+
+	// Class type
+	static const char* GetActorClassType() { return "CD6Player"; }
+	virtual const char* GetActorClass() const { return CD6Player::GetActorClassType(); }
 
 	////////////////////////////////////////////////////
 	// SetCredits

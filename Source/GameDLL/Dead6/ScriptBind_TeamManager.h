@@ -45,6 +45,53 @@ public:
 
 public:
 	////////////////////////////////////////////////////
+	// SetEditorTeam
+	//
+	// Purpose: Set the team to use in the editor game
+	//
+	// In:	nTeamID - Team ID
+	////////////////////////////////////////////////////
+	virtual int SetEditorTeam(IFunctionHandler *pH, int nTeamID);
+
+	////////////////////////////////////////////////////
+	// SetEditorTeamByName
+	//
+	// Purpose: Set the team to use in the editor game
+	//		using the name
+	//
+	// In:	szTeam - Team name
+	////////////////////////////////////////////////////
+	virtual int SetEditorTeamByName(IFunctionHandler *pH, char const* szTeam);
+
+	////////////////////////////////////////////////////
+	// SetTeamCredits
+	//
+	// Purpose: Set everyone on the team's credits
+	//
+	// In:	nTeamID - team ID
+	//		nAmount - Amount to set
+	////////////////////////////////////////////////////
+	virtual int SetTeamCredits(IFunctionHandler *pH, int nTeamID, unsigned int nAmount);
+
+	////////////////////////////////////////////////////
+	// GiveTeamCredits
+	//
+	// Purpose: Give everyone on the team credits
+	//
+	// In:	nTeamID - team ID
+	//		nAmount - Amount to give
+	////////////////////////////////////////////////////
+	virtual int GiveTeamCredits(IFunctionHandler *pH, int nTeamID, unsigned int nAmount);
+
+	////////////////////////////////////////////////////
+	// TakeTeamCredits
+	//
+	// Purpose: Take from everyone on the team's credits
+	//
+	// In:	nTeamID - team ID
+	//		nAmount - Amount to take
+	////////////////////////////////////////////////////
+	virtual int TakeTeamCredits(IFunctionHandler *pH, int nTeamID, unsigned int nAmount);
 
 protected:
 	////////////////////////////////////////////////////

@@ -28,12 +28,40 @@ class CScriptBind_D6Player;
 class CScriptBind_D6GameRules;
 
 class CD6GameRules;
+class CD6Player;
+
+// Editor game listener
+struct IEditorGameListener
+{
+	////////////////////////////////////////////////////
+	// OnEditorGameStart
+	//
+	// Purpose: Called when the game has started
+	//
+	// In:	pLocalPlayer - Local player object
+	////////////////////////////////////////////////////
+	virtual void OnEditorGameStart(CD6Player *pLocalPlayer) = 0;
+
+	////////////////////////////////////////////////////
+	// OnEditorGameEnd
+	//
+	// Purpose: Called when the game has ended
+	//
+	// In:	pLocalPlayer - Local player object
+	////////////////////////////////////////////////////
+	virtual void OnEditorGameEnd(CD6Player *pLocalPlayer) = 0;
+};
 
 ////////////////////////////////////////////////////
 class CD6Game : public CGame, public ILevelSystemListener
 {
+protected:
 	// TRUE if the game in the editor is going
 	bool m_bEditorGameStarted;
+
+	// Editor game listeners
+	typedef std::list<IEditorGameListener*> EditorGameListeners;
+	EditorGameListeners m_EditorGameListeners;
 
 public:
 	////////////////////////////////////////////////////
@@ -126,6 +154,24 @@ public:
 	virtual void OnLevelNotFound(const char *levelName) {}
 	virtual void OnLoadingError(ILevelInfo *pLevel, const char *error) {}
 	virtual void OnLoadingProgress(ILevelInfo *pLevel, int progressAmount) {}
+
+	////////////////////////////////////////////////////
+	// AddEditorGameListener
+	//
+	// Purpose: Add a listener for the editor game
+	//
+	// In:	pListener - Listening object
+	////////////////////////////////////////////////////
+	virtual void AddEditorGameListener(IEditorGameListener *pListener);
+
+	////////////////////////////////////////////////////
+	// RemoveEditorGameListener
+	//
+	// Purpose: Remove a listener for the editor game
+	//
+	// In:	pListener - Listening object
+	////////////////////////////////////////////////////
+	virtual void RemoveEditorGameListener(IEditorGameListener *pListener);
 
 protected:
 	////////////////////////////////////////////////////

@@ -27,6 +27,15 @@ CD6Player::~CD6Player()
 }
 
 ////////////////////////////////////////////////////
+void CD6Player::Reset(bool toGame)
+{
+	// Base reset
+	CActor::Reset(toGame);
+
+	m_nCredits = 0;
+}
+
+////////////////////////////////////////////////////
 bool CD6Player::NetSerialize(TSerialize ser, EEntityAspects aspect, uint8 profile, int flags)
 {
 	// Base update
@@ -59,6 +68,7 @@ void CD6Player::SetCredits(unsigned int nCredits)
 {
 	m_nCredits = nCredits;
 	GetGameObject()->ChangedNetworkState(ASPECT_CREDITS);
+		CryLog("Player %d credits changed to: %u", GetEntity()->GetId(), m_nCredits);
 }
 
 ////////////////////////////////////////////////////
@@ -72,6 +82,7 @@ void CD6Player::GiveCredits(unsigned int nCredits)
 {
 	m_nCredits += nCredits;
 	GetGameObject()->ChangedNetworkState(ASPECT_CREDITS);
+		CryLog("Player %d credits changed to: %u", GetEntity()->GetId(), m_nCredits);
 }
 
 ////////////////////////////////////////////////////
@@ -79,4 +90,5 @@ void CD6Player::TakeCredits(unsigned int nCredits)
 {
 	m_nCredits -= nCredits;
 	GetGameObject()->ChangedNetworkState(ASPECT_CREDITS);
+		CryLog("Player %d credits changed to: %u", GetEntity()->GetId(), m_nCredits);
 }

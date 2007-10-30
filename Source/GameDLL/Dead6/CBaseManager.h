@@ -20,6 +20,7 @@
 class CBaseManagerEntitySink;
 class CBaseManager : public IBaseManager
 {
+protected:
 	friend class CBaseManagerEntitySink;
 	CBaseManagerEntitySink *m_pSink;
 
@@ -282,6 +283,17 @@ public:
 	//		affectedEntities - Map of affected entities
 	////////////////////////////////////////////////////
 	virtual void ClientExplosion(ExplosionInfo const& explosionInfo, GRTExplosionAffectedEntities const& affectedEntities);
+
+	////////////////////////////////////////////////////
+	// SetBasePower
+	//
+	// Purpose: Set the power on all buildings
+	//
+	// In:	nTeamID - Team that owns the base
+	//		bState - TRUE to turn power on, FALSE to turn
+	//			power off
+	////////////////////////////////////////////////////
+	virtual void SetBasePower(TeamID nTeamID, bool bState) const;
 };
 
 ////////////////////////////////////////////////////

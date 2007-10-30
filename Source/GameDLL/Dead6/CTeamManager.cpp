@@ -13,6 +13,7 @@
 
 #include "stdafx.h"
 #include "CTeamManager.h"
+#include "CD6Player.h"
 
 #include "IVehicleSystem.h"
 #include "IWorldQuery.h"
@@ -25,7 +26,10 @@
 CTeamManager::CTeamManager(void)
 {
 	m_nTeamIDGen = TEAMID_NOTEAM;
+	m_nEditorTeam = TEAMID_NOTEAM;
 	m_nHarvIDGen = HARVESTERID_INVALID;
+
+	m_EditorGameListener.pTeamManager = this;
 }
 
 ////////////////////////////////////////////////////
@@ -39,6 +43,9 @@ void CTeamManager::Initialize(void)
 {
 	CryLogAlways("Initializing Dead6 Core: CTeamManager...");
 
+	// Add listener
+	g_D6Core->pD6Game->AddEditorGameListener(&m_EditorGameListener);
+
 	// Initial reset
 	Reset();
 }
@@ -48,6 +55,9 @@ void CTeamManager::Shutdown(void)
 {
 	// Final reset
 	Reset();
+
+	// Remove listener
+	g_D6Core->pD6Game->RemoveEditorGameListener(&m_EditorGameListener);
 }
 
 ////////////////////////////////////////////////////
@@ -439,7 +449,7 @@ bool CTeamManager::SetTeam(TeamID nTeamID, EntityId nEntityID)
 	// If we have a new valid team, set the player into it
 	if (nTeamID)
 	{
-		TeamMap::iterator itTeam = m_TeamMap.find(nOldTeam);
+		TeamMap::iterator itTeam = m_TeamMap.find(nTeamID);
 		if (itTeam != m_TeamMap.end())
 		{
 			itTeam->second.PlayerList.push_back(nEntityID);
@@ -651,6 +661,7 @@ bool CTeamManager::_CreateHarvesterEntity(STeamHarvesterDef *def)
 	if (NULL == pNewEntity) return false;
 	pNewEntity->SetUpdatePolicy(ENTITY_UPDATE_ALWAYS);
 	pNewEntity->EnablePhysics(true);
+	//TODO SetTeam(def->nTeamID, pNewEntity->GetId());
 
 	// Set ID
 	def->nEntityID = pNewEntity->GetId();
@@ -741,6 +752,92 @@ int CTeamManager::GetTeamChannelCount(TeamID nTeamID, bool bInGame) const
 		}
 	}
 	return nCount;
+}
+
+////////////////////////////////////////////////////
+void CTeamManager::SetEditorTeam(TeamID nTeamID, bool bResetNow)
+{
+	// Validate team first
+	if (m_TeamMap.end() == m_TeamMap.find(nTeamID)) return;
+	m_nEditorTeam = nTeamID;
+
+	CryLog("[TeamManager] Set Editor team to: \'%s\' (%u)", GetTeamName(nTeamID), nTeamID);
+
+	// Set player to team
+	if (true == bResetNow)
+	{
+		CD6Player *pLocalPlayer = static_cast<CD6Player*>(g_pGame->GetIGameFramework()->GetClientActor());
+		SetTeam(nTeamID, pLocalPlayer?pLocalPlayer->GetEntity()->GetId():0);
+	}
+}
+
+////////////////////////////////////////////////////
+void CTeamManager::SetTeamCredits(TeamID nTeamID, unsigned int nAmount) const
+{
+	// Find team
+	TeamMap::const_iterator itTeam = m_TeamMap.find(nTeamID);
+	if (itTeam == m_TeamMap.end()) return;
+
+	// Set credits
+	CD6Player *pPlayer;
+	for (TeamPlayerList::const_iterator itPlayer = itTeam->second.PlayerList.begin();
+		itPlayer != itTeam->second.PlayerList.end(); itPlayer++)
+	{
+		pPlayer = (CD6Player*)g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(*itPlayer);
+		if (NULL != pPlayer && CD6Player::GetActorClassType() == pPlayer->GetActorClass()) pPlayer->SetCredits(nAmount);
+	}
+}
+
+////////////////////////////////////////////////////
+void CTeamManager::GiveTeamCredits(TeamID nTeamID, unsigned int nAmount) const
+{
+	// Find team
+	TeamMap::const_iterator itTeam = m_TeamMap.find(nTeamID);
+	if (itTeam == m_TeamMap.end()) return;
+
+	// Set credits
+	CD6Player *pPlayer;
+	for (TeamPlayerList::const_iterator itPlayer = itTeam->second.PlayerList.begin();
+		itPlayer != itTeam->second.PlayerList.end(); itPlayer++)
+	{
+		pPlayer = (CD6Player*)g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(*itPlayer);
+		if (NULL != pPlayer && CD6Player::GetActorClassType() == pPlayer->GetActorClass()) pPlayer->GiveCredits(nAmount);
+	}
+}
+
+////////////////////////////////////////////////////
+void CTeamManager::TakeTeamCredits(TeamID nTeamID, unsigned int nAmount) const
+{
+	// Find team
+	TeamMap::const_iterator itTeam = m_TeamMap.find(nTeamID);
+	if (itTeam == m_TeamMap.end()) return;
+
+	// Set credits
+	CD6Player *pPlayer;
+	for (TeamPlayerList::const_iterator itPlayer = itTeam->second.PlayerList.begin();
+		itPlayer != itTeam->second.PlayerList.end(); itPlayer++)
+	{
+		pPlayer = (CD6Player*)g_pGame->GetIGameFramework()->GetIActorSystem()->GetActor(*itPlayer);
+		if (NULL != pPlayer && CD6Player::GetActorClassType() == pPlayer->GetActorClass()) pPlayer->TakeCredits(nAmount);
+	}
+}
+
+////////////////////////////////////////////////////
+////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////
+void CTeamManager::tEditorGameListener::OnEditorGameStart(CD6Player *pLocalPlayer)
+{
+	// Set player's team to editor team
+	pTeamManager->SetTeam(pTeamManager->m_nEditorTeam, (pLocalPlayer?pLocalPlayer->GetEntity()->GetId():0));
+	CryLog("[TeamManager] Set local player to Editor team: \'%s\' (%u)", pTeamManager->GetTeamName(pTeamManager->m_nEditorTeam),
+		pTeamManager->m_nEditorTeam);
+}
+
+////////////////////////////////////////////////////
+void CTeamManager::tEditorGameListener::OnEditorGameEnd(CD6Player *pLocalPlayer)
+{
+
 }
 
 ////////////////////////////////////////////////////

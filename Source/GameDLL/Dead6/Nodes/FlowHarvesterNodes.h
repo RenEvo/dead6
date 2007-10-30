@@ -44,6 +44,7 @@ protected:
 	bool m_bReportPurchase;
 	float m_fLastUpdate;
 	float m_fMakerTime;					// Set to time when harvester was marked for recreation or 0 if it doesn't need to be remade
+	float m_fGiveAmount;				// How much to give to team when unloading is done
 	TeamID m_nTeamID;
 	STeamHarvesterDef *m_pHarvester;	// Harvester definition
 

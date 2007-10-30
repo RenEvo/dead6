@@ -24,7 +24,7 @@ CScriptBind_TeamManager::CScriptBind_TeamManager(ISystem *pSystem)
 
 	// Initial init
 	Init(m_pSS, m_pSystem);
-	SetGlobalName("Team");
+	SetGlobalName("Teams");
 	RegisterMethods();
 	RegisterGlobals();
 }
@@ -44,7 +44,7 @@ void CScriptBind_TeamManager::AttachTo(ITeamManager *pTeamManager)
 ////////////////////////////////////////////////////
 void CScriptBind_TeamManager::RegisterGlobals(void)
 {
-	//m_pSS->SetGlobalValue("Name", Value);
+	m_pSS->SetGlobalValue("TEAMID_NOTEAM", TEAMID_NOTEAM);
 }
 
 ////////////////////////////////////////////////////
@@ -53,5 +53,49 @@ void CScriptBind_TeamManager::RegisterMethods(void)
 #undef SCRIPT_REG_CLASSNAME
 #define SCRIPT_REG_CLASSNAME &CScriptBind_TeamManager::
 
-	//SCRIPT_REG_TEMPLFUNC(Function, "arg1, arg2, arg3");
+	SCRIPT_REG_TEMPLFUNC(SetEditorTeam, "nTeamID");
+	SCRIPT_REG_TEMPLFUNC(SetEditorTeamByName, "szTeam");
+	SCRIPT_REG_TEMPLFUNC(SetTeamCredits, "nTeamID, nAmount");
+	SCRIPT_REG_TEMPLFUNC(GiveTeamCredits, "nTeamID, nAmount");
+	SCRIPT_REG_TEMPLFUNC(TakeTeamCredits, "nTeamID, nAmount");
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_TeamManager::SetEditorTeam(IFunctionHandler *pH, int nTeamID)
+{
+	assert(m_pTeamManager);
+	m_pTeamManager->SetEditorTeam(nTeamID);
+	return pH->EndFunctionNull();
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_TeamManager::SetEditorTeamByName(IFunctionHandler *pH, char const* szTeam)
+{
+	assert(m_pTeamManager);
+	m_pTeamManager->SetEditorTeam(m_pTeamManager->GetTeamId(szTeam));
+	return pH->EndFunctionNull();
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_TeamManager::SetTeamCredits(IFunctionHandler *pH, int nTeamID, unsigned int nAmount)
+{
+	assert(m_pTeamManager);
+	m_pTeamManager->SetTeamCredits(nTeamID, nAmount);
+	return pH->EndFunctionNull();
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_TeamManager::GiveTeamCredits(IFunctionHandler *pH, int nTeamID, unsigned int nAmount)
+{
+	assert(m_pTeamManager);
+	m_pTeamManager->GiveTeamCredits(nTeamID, nAmount);
+	return pH->EndFunctionNull();
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_TeamManager::TakeTeamCredits(IFunctionHandler *pH, int nTeamID, unsigned int nAmount)
+{
+	assert(m_pTeamManager);
+	m_pTeamManager->TakeTeamCredits(nTeamID, nAmount);
+	return pH->EndFunctionNull();
 }

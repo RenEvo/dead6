@@ -20,6 +20,7 @@ CFlowHarvesterControllerNode::CFlowHarvesterControllerNode(SActivationInfo * pAc
 {
 	m_fLastUpdate = 0.0f;
 	m_fMakerTime = 0.0f;
+	m_fGiveAmount = 0.0f;
 	m_pHarvester = NULL;
 	m_nTeamID = TEAMID_NOTEAM;
 }
@@ -36,6 +37,7 @@ void CFlowHarvesterControllerNode::Serialize(SActivationInfo* pActInfo, TSeriali
 	ser.Value("m_bReportPurchase", m_bReportPurchase);
 	ser.Value("m_fLastUpdate", m_fLastUpdate);
 	ser.Value("m_fMakerTime", m_fMakerTime);
+	ser.Value("m_fGiveAmount", m_fGiveAmount);
 	ser.Value("m_nTeamID", m_nTeamID);
 }
 
@@ -152,6 +154,7 @@ void CFlowHarvesterControllerNode::ProcessEvent(EFlowEvent event, SActivationInf
 				m_fLastUpdate = gEnv->pTimer->GetCurrTime();
 			}
 			m_fMakerTime = 0.0f;
+			m_fGiveAmount = 0.0f;
 		}
 		break;
 
@@ -335,11 +338,9 @@ void CFlowHarvesterControllerNode::ProcessEvent(EFlowEvent event, SActivationInf
 				if (m_pHarvester->fPayload - fDecAmount < 0.0f)
 					fTransferAmount = m_pHarvester->fPayload;
 
-				// TODO Give players on team fTransferAmount
-
-
 				// Check if we are done unloading
 				m_pHarvester->fPayload -= fTransferAmount;
+				m_fGiveAmount += fTransferAmount;
 #ifdef _DEBUG
 				static int nLastPercent = 10;
 				int nCurrPercent = int((m_pHarvester->fPayload/m_pHarvester->fCapacity)*10.0f);
@@ -355,6 +356,10 @@ void CFlowHarvesterControllerNode::ProcessEvent(EFlowEvent event, SActivationInf
 					m_pHarvester->SetFlag(HARVESTER_ISUNLOADING, false);
 					m_pHarvester->SetFlag(HARVESTER_HASLOAD, false);
 					m_pHarvester->fPayloadTimer = 0.0f;
+
+					// Give players on team the amont
+					g_D6Core->pTeamManager->GiveTeamCredits(m_pHarvester->nTeamID, m_fGiveAmount);
+					m_fGiveAmount = 0.0f;
 
 					// Signal we are done
 					ActivateOutput(pActInfo, EOP_Unloaded, true);

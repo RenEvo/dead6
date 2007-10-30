@@ -15,12 +15,15 @@
 #define _D6C_CTEAMMANAGER_H_
 
 #include "ITeamManager.h"
+#include "CD6Game.h"
 
 class CD6Game;
 class CTeamManager : public ITeamManager
 {
+protected:
 	// Team ID generator
 	TeamID m_nTeamIDGen;
+	TeamID m_nEditorTeam;
 
 	// Harvester ID generator
 	HarvesterID m_nHarvIDGen;
@@ -28,6 +31,15 @@ class CTeamManager : public ITeamManager
 	// Team map
 	TeamMap m_TeamMap;
 	ChannelMap m_ChannelMap;
+	
+	// Editor game listener helper
+	struct tEditorGameListener : public IEditorGameListener
+	{
+		CTeamManager *pTeamManager;
+		virtual void OnEditorGameStart(CD6Player *pLocalPlayer);
+		virtual void OnEditorGameEnd(CD6Player *pLocalPlayer);
+	} m_EditorGameListener;
+	friend struct tEditorGameListener;
 
 public:
 	////////////////////////////////////////////////////
@@ -407,6 +419,46 @@ public:
 	//		bInGame - TRUE to only count those in the game
 	////////////////////////////////////////////////////
 	virtual int GetTeamChannelCount(TeamID nTeamID, bool bInGame = false) const;
+
+	////////////////////////////////////////////////////
+	// SetEditorTeam
+	//
+	// Purpose: Set which team you are on in the editor
+	//
+	// In:	nTeamID - team ID
+	//		bResetNow - Reset local player's team now
+	////////////////////////////////////////////////////
+	virtual void SetEditorTeam(TeamID nTeamID, bool bResetNow = true);
+
+	////////////////////////////////////////////////////
+	// SetTeamCredits
+	//
+	// Purpose: Set everyone on the team's credits
+	//
+	// In:	nTeamID - team ID
+	//		nAmount - Amount to set
+	////////////////////////////////////////////////////
+	virtual void SetTeamCredits(TeamID nTeamID, unsigned int nAmount) const;
+
+	////////////////////////////////////////////////////
+	// GiveTeamCredits
+	//
+	// Purpose: Give everyone on the team credits
+	//
+	// In:	nTeamID - team ID
+	//		nAmount - Amount to give
+	////////////////////////////////////////////////////
+	virtual void GiveTeamCredits(TeamID nTeamID, unsigned int nAmount) const;
+
+	////////////////////////////////////////////////////
+	// TakeTeamCredits
+	//
+	// Purpose: Take from everyone on the team's credits
+	//
+	// In:	nTeamID - team ID
+	//		nAmount - Amount to take
+	////////////////////////////////////////////////////
+	virtual void TakeTeamCredits(TeamID nTeamID, unsigned int nAmount) const;
 
 protected:
 	////////////////////////////////////////////////////

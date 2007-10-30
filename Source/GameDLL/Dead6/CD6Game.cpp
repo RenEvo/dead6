@@ -148,6 +148,8 @@ bool CD6Game::CompleteInit()
 {
 	CryLogAlways("CD6Game::CompleteInit()");
 
+	m_bEditorGameStarted = false;
+
 	// Base complete init
 	return CGame::CompleteInit();
 }
@@ -156,6 +158,8 @@ bool CD6Game::CompleteInit()
 void CD6Game::Shutdown()
 {
 	CryLogAlways("CD6Game::Shutdown()");
+
+	m_EditorGameListeners.clear();
 
 	// Remove as listener
 	m_pFramework->GetILevelSystem()->RemoveListener(this);
@@ -247,6 +251,14 @@ void CD6Game::EditorResetGame(bool bStart)
 	// Reset portal manager
 	assert(g_D6Core->pPortalManager);
 	g_D6Core->pPortalManager->Reset();
+
+	// Signal listeners
+	CD6Player *pLocalPlayer = static_cast<CD6Player*>(g_pGame->GetIGameFramework()->GetClientActor());
+	void (IEditorGameListener::*fCallBack)(CD6Player*) = (true == bStart ? &IEditorGameListener::OnEditorGameStart : &IEditorGameListener::OnEditorGameEnd);
+	for (EditorGameListeners::iterator itListener = m_EditorGameListeners.begin(); itListener != m_EditorGameListeners.end(); itListener++)
+	{
+		((*itListener)->*fCallBack)(pLocalPlayer);
+	}
 }
 
 ////////////////////////////////////////////////////
@@ -375,7 +387,35 @@ CScriptBind_Actor *CD6Game::GetActorScriptBind()
 	return m_pScriptBindD6Player;
 }
 
+////////////////////////////////////////////////////
 CScriptBind_GameRules *CD6Game::GetGameRulesScriptBind()
 {
 	return m_pScriptBindD6GameRules;
+}
+
+////////////////////////////////////////////////////
+void CD6Game::AddEditorGameListener(IEditorGameListener *pListener)
+{
+	// If already added, drop it
+	for (EditorGameListeners::iterator itListener = m_EditorGameListeners.begin();
+		itListener != m_EditorGameListeners.end(); itListener++)
+	{
+		if (*itListener == pListener) return;
+	}
+	m_EditorGameListeners.push_back(pListener);
+}
+
+////////////////////////////////////////////////////
+void CD6Game::RemoveEditorGameListener(IEditorGameListener *pListener)
+{
+	// Find and remove
+	for (EditorGameListeners::iterator itListener = m_EditorGameListeners.begin();
+		itListener != m_EditorGameListeners.end(); itListener++)
+	{
+		if (*itListener == pListener)
+		{
+			m_EditorGameListeners.erase(itListener);
+			return;
+		}
+	}
 }

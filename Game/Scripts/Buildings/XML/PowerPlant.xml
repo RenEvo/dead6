@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Buildings>
-  <Building Name="Generic" Script="Generic.lua" MaxHealth="200">
+  <Building Name="PowerPlant" Script="PowerPlant.lua" MaxHealth="500">
     <Properties>
     </Properties>
   </Building>

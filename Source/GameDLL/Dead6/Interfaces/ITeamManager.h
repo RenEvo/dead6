@@ -505,6 +505,46 @@ struct ITeamManager
 	//		bInGame - TRUE to only count those in the game
 	////////////////////////////////////////////////////
 	virtual int GetTeamChannelCount(TeamID nTeamID, bool bInGame = false) const = 0;
+
+	////////////////////////////////////////////////////
+	// SetEditorTeam
+	//
+	// Purpose: Set which team you are on in the editor
+	//
+	// In:	nTeamID - team ID
+	//		bResetNow - Reset local player's team now
+	////////////////////////////////////////////////////
+	virtual void SetEditorTeam(TeamID nTeamID, bool bResetNow = true) = 0;
+
+	////////////////////////////////////////////////////
+	// SetTeamCredits
+	//
+	// Purpose: Set everyone on the team's credits
+	//
+	// In:	nTeamID - team ID
+	//		nAmount - Amount to set
+	////////////////////////////////////////////////////
+	virtual void SetTeamCredits(TeamID nTeamID, unsigned int nAmount) const = 0;
+
+	////////////////////////////////////////////////////
+	// GiveTeamCredits
+	//
+	// Purpose: Give everyone on the team credits
+	//
+	// In:	nTeamID - team ID
+	//		nAmount - Amount to give
+	////////////////////////////////////////////////////
+	virtual void GiveTeamCredits(TeamID nTeamID, unsigned int nAmount) const = 0;
+
+	////////////////////////////////////////////////////
+	// TakeTeamCredits
+	//
+	// Purpose: Take from everyone on the team's credits
+	//
+	// In:	nTeamID - team ID
+	//		nAmount - Amount to take
+	////////////////////////////////////////////////////
+	virtual void TakeTeamCredits(TeamID nTeamID, unsigned int nAmount) const = 0;
 };
 
 #endif //_D6C_ITEAMMANAGER_H_

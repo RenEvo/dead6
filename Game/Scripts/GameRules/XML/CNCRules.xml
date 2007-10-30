@@ -9,10 +9,12 @@
   <Buildings>
     <!-- GDI Buildings -->
     <Building Team="GDI" Name="Refinery" InitHealth="500" MustBeDestroyed="1"/>
+    <Building Team="GDI" Name="PowerPlant" InitHealth="500" MustBeDestroyed="1"/>
     <Building Team="GDI" Name="Generic" InitHealth="200" MustBeDestroyed="0"/>
 
     <!-- Nod Buildings -->
     <Building Team="Nod" Name="Refinery" InitHealth="500" MustBeDestroyed="1"/>
+    <Building Team="Nod" Name="PowerPlant" InitHealth="500" MustBeDestroyed="1"/>
     <Building Team="Nod" Name="Generic" InitHealth="200" MustBeDestroyed="0"/>
   </Buildings>
 

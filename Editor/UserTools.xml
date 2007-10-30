@@ -1,0 +1,30 @@
+<Tools>
+ <Tool Title="displayInfo" Command="r_DisplayInfo" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="HDR" Command="r_HDRRendering" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="indirectLighting" Command="e_indir_lighting" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="LightingMorning" Command="exec Editor/LightingMorning.exc" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="LightingDay" Command="exec Editor/LightingDay.exc" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="LightingNight" Command="exec Editor/LightingNight.exc" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="LightingIce" Command="exec Editor/LightingIce.exc" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="debugLights" Command="e_debug_lights" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="showTextureUsagePerObject" Command="e_debug_draw 2" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="fixedTimeStep 0.0(3)" Command="fixed_time_step 0.03333" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="captureFrame" Command="e_capture_frames" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="ai_system_update" Command="ai_systemupdate" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="ai debug draw" Command="ai_debugdraw" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="ai_debugdraw 79" Command="ai_debugdraw 79" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="ai_debugdraw 85" Command="ai_debugdraw 85" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="ai_agentstatsdist 200" Command="ai_agentstatsdist 200" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="ai_draw_path" Command="ai_drawpath all" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="ai_debugdrawhidespotrange 50" Command="ai_debugdrawhidespotrange 50" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="p_draw_helpers" Command="p_draw_helpers" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="p_profile_entities" Command="p_profile_entities" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="comments" Command="cl_comment" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="cloudShadows" Command="e_shadows_clouds" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="showPolys" Command="r_ShowLines" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="memoryStats" Command="#System.DumpMemStats()" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="music" Command="s_MusicEnable" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="sound" Command="s_SoundEnable" EditorCmd="" ToggleVar="1"/>
+ <Tool Title="Set Team: GDI" Command="#Teams.SetEditorTeamByName(&apos;GDI&apos;)" EditorCmd="" ToggleVar="0"/>
+ <Tool Title="Set Team: Nod" Command="#Teams.SetEditorTeamByName(&apos;Nod&apos;)" EditorCmd="" ToggleVar="0"/>
+</Tools>
