@@ -19,6 +19,7 @@
 
 class CBuildingController : public IBuildingController
 {
+protected:
 	// Building's GUID
 	BuildingGUID m_nGUID;
 
@@ -28,9 +29,13 @@ class CBuildingController : public IBuildingController
 	// Building's health
 	float m_fHealth, m_fInitHealth, m_fMaxHealth;
 
+	// Last update time
+	float m_fLastUpdate;
+
 	// Script object
 	IScriptSystem *m_pSS;
 	SmartScriptTable m_pScriptTable;
+	SmartScriptTable m_pXMLProperties;
 
 	// Name of the building
 	string m_szName;
@@ -399,6 +404,15 @@ protected:
 	//		bIsHit - TRUE if Hit, FALSE if Explosion
 	////////////////////////////////////////////////////
 	virtual void _HandleDamage(void *pInfo, bool bIsHit);
+
+	////////////////////////////////////////////////////
+	// _ResetProperties
+	//
+	// Purpose: Reset the values in the script table's
+	//	Properties table with the ones loaded in from the
+	//	XML files
+	////////////////////////////////////////////////////
+	virtual void _ResetProperties(void);
 };
 
 #endif //_D6C_CBUILDINGCONTROLLER_H_

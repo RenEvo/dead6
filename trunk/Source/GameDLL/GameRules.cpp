@@ -3268,20 +3268,10 @@ void CGameRules::CreateScriptHitInfo(SmartScriptTable &scriptHitInfo, const HitI
 		hit.SetValue("weaponId", ScriptHandle(hitInfo.weaponId));
 		hit.SetValue("projectileId", ScriptHandle(hitInfo.projectileId));
 
-		// [D6] Check if system exists
-		/*IEntity *pTarget=m_pEntitySystem->GetEntity(hitInfo.targetId);
+		IEntity *pTarget=m_pEntitySystem->GetEntity(hitInfo.targetId);
 		IEntity *pShooter=m_pEntitySystem->GetEntity(hitInfo.shooterId);
 		IEntity *pWeapon=m_pEntitySystem->GetEntity(hitInfo.weaponId);
-		IEntity *pProjectile=m_pEntitySystem->GetEntity(hitInfo.projectileId);*/
-		IEntity *pTarget = NULL, *pShooter = NULL, *pWeapon = NULL, *pProjectile = NULL;
-		if (NULL != m_pEntitySystem)
-		{
-			pTarget=m_pEntitySystem->GetEntity(hitInfo.targetId);
-			pShooter=m_pEntitySystem->GetEntity(hitInfo.shooterId);
-			pWeapon=m_pEntitySystem->GetEntity(hitInfo.weaponId);
-			pProjectile=m_pEntitySystem->GetEntity(hitInfo.projectileId);
-		}
-		// [/D6]
+		IEntity *pProjectile=m_pEntitySystem->GetEntity(hitInfo.projectileId);
 
 		hit.SetValue("projectile", pProjectile?pProjectile->GetScriptTable():(IScriptTable *)0);
 		hit.SetValue("target", pTarget?pTarget->GetScriptTable():(IScriptTable *)0);
@@ -3342,15 +3332,8 @@ void CGameRules::CreateScriptExplosionInfo(SmartScriptTable &scriptExplosionInfo
 		explosion.SetValue("shooterId", ScriptHandle(explosionInfo.shooterId));
 		explosion.SetValue("weaponId", ScriptHandle(explosionInfo.weaponId));  
 		// [D6] Check if system exists
-		/*IEntity *pShooter=m_pEntitySystem->GetEntity(explosionInfo.shooterId);
-		IEntity *pWeapon=m_pEntitySystem->GetEntity(explosionInfo.weaponId);  */
-		IEntity *pShooter = NULL, *pWeapon = NULL;
-		if (NULL != m_pEntitySystem)
-		{
-			pShooter=m_pEntitySystem->GetEntity(explosionInfo.shooterId);
-			pWeapon=m_pEntitySystem->GetEntity(explosionInfo.weaponId);    
-		}
-		// [/D6]
+		IEntity *pShooter=m_pEntitySystem->GetEntity(explosionInfo.shooterId);
+		IEntity *pWeapon=m_pEntitySystem->GetEntity(explosionInfo.weaponId);
 		explosion.SetValue("shooter", pShooter?pShooter->GetScriptTable():(IScriptTable *)0);
 		explosion.SetValue("weapon", pWeapon?pWeapon->GetScriptTable():(IScriptTable *)0);
 		explosion.SetValue("materialId", 0);

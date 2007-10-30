@@ -26,6 +26,8 @@ CBuildingController::CBuildingController(void)
 	m_nFlags = 0;
 	m_fHealth = m_fInitHealth = m_fMaxHealth = 0.0f;
 	m_pSS = g_D6Core->pSystem->GetIScriptSystem();
+
+	m_pXMLProperties.Create(m_pSS);
 }
 
 ////////////////////////////////////////////////////
@@ -86,6 +88,9 @@ void CBuildingController::Initialize(BuildingGUID nGUID)
 			g_D6Core->pD6Game->GetBuildingControllerScriptBind()->AttachTo(this);
 		}
 
+		// Reset properties
+		_ResetProperties();
+
 		// Call OnInit
 		BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnInit")
 		END_CALL(m_pSS)
@@ -131,6 +136,10 @@ void CBuildingController::Shutdown(void)
 ////////////////////////////////////////////////////
 void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, unsigned int nControllerUpdateFlags)
 {
+	float fCurrTime = gEnv->pTimer->GetCurrTime();
+	float fDT = fCurrTime-m_fLastUpdate;
+	m_fLastUpdate = fCurrTime;
+
 	// Update visibility
 	EntityId nViewID = 0;
 	bool bPrevInView = (CSF_ISVISIBLE == (m_nFlags&CSF_ISVISIBLE));
@@ -189,10 +198,7 @@ void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, uns
 		for (ExplosionQueue::iterator itDamage = m_ExplosionQueue.begin(); itDamage != m_ExplosionQueue.end(); itDamage++)
 		{
 			// Adjust health
-			if (true == gEnv->bServer)
-			{
-				_HandleDamage((void*)&(itDamage->second), false);
-			}
+			_HandleDamage((void*)&(itDamage->second), false);
 
 			// Send event
 			if (m_fHealth > 0.0f)
@@ -203,6 +209,17 @@ void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, uns
 			}
 		}
 		m_ExplosionQueue.clear();
+	}
+
+	// Update script
+	if (CUF_SCRIPT == (nControllerUpdateFlags&CUF_SCRIPT))
+	{
+		BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnUpdate")
+			m_pSS->PushFuncParam(fDT);
+		END_CALL(m_pSS)
+		BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnUpdate")
+			m_pSS->PushFuncParam(fDT);
+		END_CALL(m_pSS)
 	}
 }
 
@@ -215,30 +232,87 @@ void CBuildingController::_HandleDamage(void *pInfo, bool bIsHit)
 	// Get damage
 	float fDamage = 0.0f;
 	if (true == bIsHit)
-	{
-		HitInfo *pHitInfo = (HitInfo*)pInfo;
-		fDamage = pHitInfo->damage;
-	}
+		fDamage = ((HitInfo*)pInfo)->damage;
 	else
-	{
-		ExplosionInfo *pExplInfo = (ExplosionInfo*)pInfo;
-		fDamage = pExplInfo->damage;
-	}
+		fDamage = ((ExplosionInfo*)pInfo)->damage;
 
 	// Apply to health
 	m_fHealth -= fDamage;
 	CryLogAlways("[%s %s] Damaged by %s: %.4f (%.4f/%.4f)", GetTeamName(), GetClassName(), (bIsHit?"hit":"explosion"), fDamage,
 		m_fHealth, m_fMaxHealth);
-	// TODO Notify script
 
+	// Notify script
+	if (true == bIsHit)
+	{
+		// Make table
+		SmartScriptTable pHitArg = g_D6Core->pD6GameRules->GetHitTable();
+		HitInfo *pHitTbl = (HitInfo*)pInfo;
+		g_D6Core->pD6GameRules->CreateScriptHitInfo(pHitArg, *pHitTbl);
+
+		BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnDamaged")
+			m_pSS->PushFuncParam(pHitArg);
+			m_pSS->PushFuncParam(false);
+		END_CALL(m_pSS)
+		BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnDamaged")
+			m_pSS->PushFuncParam(pHitArg);
+			m_pSS->PushFuncParam(false);
+		END_CALL(m_pSS)
+	}
+	else
+	{
+		// Make table
+		SmartScriptTable pExplArg = g_D6Core->pD6GameRules->GetExplosionTable();
+		ExplosionInfo *pExplTbl = (ExplosionInfo*)pInfo;
+		g_D6Core->pD6GameRules->CreateScriptExplosionInfo(pExplArg, *pExplTbl);
+
+		BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnDamaged")
+			m_pSS->PushFuncParam(pExplArg);
+			m_pSS->PushFuncParam(true);
+		END_CALL(m_pSS)
+		BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnDamaged")
+			m_pSS->PushFuncParam(pExplArg);
+			m_pSS->PushFuncParam(true);
+		END_CALL(m_pSS)
+	}
 
 	// Is dead?
 	if (m_fHealth <= 0.0f)
 	{
 		CryLogAlways("[%s %s] Dead", GetTeamName(), GetClassName());
 
-		// TODO Notify script
+		// Notify script
+		if (true == bIsHit)
+		{
+			// Make table
+			SmartScriptTable pHitArg = g_D6Core->pD6GameRules->GetHitTable();
+			HitInfo *pHitTbl = (HitInfo*)pInfo;
+			g_D6Core->pD6GameRules->CreateScriptHitInfo(pHitArg, *pHitTbl);
 
+			BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnDestroyed")
+				m_pSS->PushFuncParam(pHitArg);
+				m_pSS->PushFuncParam(false);
+			END_CALL(m_pSS)
+			BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnDestroyed")
+				m_pSS->PushFuncParam(pHitArg);
+				m_pSS->PushFuncParam(false);
+			END_CALL(m_pSS)
+		}
+		else
+		{
+			// Make table
+			SmartScriptTable pExplArg = g_D6Core->pD6GameRules->GetExplosionTable();
+			ExplosionInfo *pExplTbl = (ExplosionInfo*)pInfo;
+			g_D6Core->pD6GameRules->CreateScriptExplosionInfo(pExplArg, *pExplTbl);
+
+			BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnDestroyed")
+				m_pSS->PushFuncParam(pExplArg);
+				m_pSS->PushFuncParam(true);
+			END_CALL(m_pSS)
+			BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnDestroyed")
+				m_pSS->PushFuncParam(pExplArg);
+				m_pSS->PushFuncParam(true);
+			END_CALL(m_pSS)
+		}
 
 		// Send out event
 		SControllerEvent event(CONTROLLER_EVENT_DESTROYED);
@@ -264,8 +338,44 @@ void CBuildingController::Reset(void)
 	BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnReset")
 	END_CALL(m_pSS)
 
+	// Reset properties before signaling event
+	_ResetProperties();
 	SControllerEvent event(CONTROLLER_EVENT_RESET);
 	_SendListenerEvent(event);
+}
+
+////////////////////////////////////////////////////
+void CBuildingController::_ResetProperties(void)
+{
+	if (NULL == *m_pXMLProperties) return;
+	if (NULL == *m_pScriptTable) return;
+
+	// Open up script table's Properties
+	ScriptAnyValue temp;
+	SmartScriptTable pProperties;
+	if (false == m_pScriptTable->GetValueAny("Properties", temp) ||
+		false == temp.CopyTo(pProperties))
+		return;
+
+	// Overwrite values in it with ones from XML file
+	IScriptTable::Iterator itIter = m_pXMLProperties->BeginIteration();
+	float fValue;
+	char const* szValue;
+	while (true == m_pXMLProperties->MoveNext(itIter))
+	{
+		// Get value
+		itIter.value.CopyTo(szValue);
+		if (EOF == sscanf(szValue, "%f", &fValue))
+		{
+			// Do string
+			pProperties->SetValueAny(itIter.sKey, szValue);
+		}
+		else
+		{
+			// Do float
+			pProperties->SetValueAny(itIter.sKey, fValue);
+		}
+	}
 }
 
 ////////////////////////////////////////////////////
@@ -345,6 +455,21 @@ void CBuildingController::LoadFromXml(XmlNodeRef pNode)
 		bool bMustBeDestroyed = false;
 		pNode->getAttr("MustBeDestroyed", bMustBeDestroyed);
 		SetMustBeDestroyed(bMustBeDestroyed);
+	}
+
+	// Properties
+	if (XmlNodeRef pProperties = pNode->findChild("Properties"))
+	{
+		XmlNodeRef pProp;
+		int nCount = pProperties->getChildCount();
+		for (int i = 0; i < nCount; i++)
+		{
+			pProp = pProperties->getChild(i);
+			if (0 != stricmp(pProp->getTag(), "add")) continue;
+
+			// Add it to the table
+			m_pXMLProperties->SetValueAny(pProp->getAttr("key"), pProp->getAttr("value"));
+		}
 	}
 }
 
@@ -556,18 +681,18 @@ void CBuildingController::_SendListenerEvent(SControllerEvent &event)
 	{
 		case CONTROLLER_EVENT_ONHIT:
 		{
-			/*SmartScriptTable pHitArg(m_pSS, false);
+			SmartScriptTable pHitArg = g_D6Core->pD6GameRules->GetHitTable();
 			HitInfo *pHitTbl = (HitInfo*)event.nParam[0];
 			g_D6Core->pD6GameRules->CreateScriptHitInfo(pHitArg, *pHitTbl);
-			pArgs->SetAt(1, pHitArg);*/
+			pArgs->SetAt(1, pHitArg);
 		}
 		break;
 		case CONTROLLER_EVENT_ONEXPLOSION:
 		{
-			/*SmartScriptTable pExplArg(m_pSS, false);
+			SmartScriptTable pExplArg = g_D6Core->pD6GameRules->GetExplosionTable();
 			ExplosionInfo *pExplTbl = (ExplosionInfo*)event.nParam[0];
 			g_D6Core->pD6GameRules->CreateScriptExplosionInfo(pExplArg, *pExplTbl);
-			pArgs->SetAt(1, pExplArg);*/
+			pArgs->SetAt(1, pExplArg);
 		}
 		break;
 		case CONTROLLER_EVENT_INVIEW:
@@ -586,17 +711,17 @@ void CBuildingController::_SendListenerEvent(SControllerEvent &event)
 			pArgs->SetAt(1, bIsHit);
 			if (true == bIsHit)
 			{
-				/*SmartScriptTable pHitArg(m_pSS, false);
+				SmartScriptTable pHitArg = g_D6Core->pD6GameRules->GetHitTable();
 				HitInfo *pHitTbl = (HitInfo*)event.nParam[1];
 				g_D6Core->pD6GameRules->CreateScriptHitInfo(pHitArg, *pHitTbl);
-				pArgs->SetAt(2, pHitArg);*/
+				pArgs->SetAt(2, pHitArg);
 			}
 			else
 			{
-				/*SmartScriptTable pExplArg(m_pSS, false);
+				SmartScriptTable pExplArg = g_D6Core->pD6GameRules->GetExplosionTable();
 				ExplosionInfo *pExplTbl = (ExplosionInfo*)event.nParam[1];
 				g_D6Core->pD6GameRules->CreateScriptExplosionInfo(pExplArg, *pExplTbl);
-				pArgs->SetAt(2, pExplArg);*/
+				pArgs->SetAt(2, pExplArg);
 			}
 		}
 		break;
@@ -628,11 +753,7 @@ void CBuildingController::OnClientHit(HitInfo const& hitInfo)
 ////////////////////////////////////////////////////
 void CBuildingController::OnServerHit(HitInfo const& hitInfo)
 {
-	// TODO Update building health
-	if (true == gEnv->bServer)
-	{
-		_HandleDamage((void*)&hitInfo, true);
-	}
+	_HandleDamage((void*)&hitInfo, true);
 
 	// Send event
 	if (m_fHealth > 0.0f)

@@ -25,9 +25,11 @@ enum EControllerUpdateFlags
 {
 	CUF_CHECKVISIBILITY		= 0x01,		// Check if player is looking at controller
 	CUF_PARSEEXPLOSIONQUEUE	= 0x02,		// Parse the explosion queues
+	CUF_SCRIPT				= 0x04,		// Update the script
 
 	// Update all
-	CUF_ALL = (CUF_CHECKVISIBILITY|CUF_PARSEEXPLOSIONQUEUE),
+	CUF_ALL_NOSCRIPT = (CUF_CHECKVISIBILITY|CUF_PARSEEXPLOSIONQUEUE),
+	CUF_ALL = (CUF_ALL_NOSCRIPT|CUF_SCRIPT),
 };
 
 // Building state flags - EControllerStateFlags

@@ -157,7 +157,9 @@ public:
 
 	CGameActions&	Actions() const {	return *m_pGameActions;	};
 
-	CGameRules *GetGameRules() const;
+	// [D6] Made virutal...
+	virtual CGameRules *GetGameRules() const;
+	// [/D6]
 	CBulletTime *GetBulletTime() const;
 	CSoundMoods *GetSoundMoods() const;
 	CLaptopUtil *GetLaptopUtil() const;

@@ -11,68 +11,16 @@
 --      - 10/23/2007 : File created - TDA
 ------------------------------------------------
 
+Script.ReloadScript("Scripts/Buildings/CNCBuilding/CNCBuilding.lua");
+
 Generic = 
 {
-	Server = {},
-	Client = {},
+	Name = "Generic",
+
+	Properties =
+	{
+
+	},
 };
 
-------------------------------------------------
--- Server.OnInit
---
--- Purpose: Called when the building controller
---	is created on the server
-------------------------------------------------
-function Generic.Server:OnInit()
-	System.Log("Generic.Server:OnInit()");
-end
-
-------------------------------------------------
--- Client.OnInit
---
--- Purpose: Called when the building controller
---	is created on the client
-------------------------------------------------
-function Generic.Client:OnInit()
-	System.Log("Generic.Client:OnInit()");
-end
-
-------------------------------------------------
--- Server.OnShutdown
---
--- Purpose: Called when the building controller
---	is destroyed on the server
-------------------------------------------------
-function Generic.Server:OnShutdown()
-	System.Log("Generic.Server:OnShutdown()");
-end
-
-------------------------------------------------
--- Client.OnShutdown
---
--- Purpose: Called when the building controller
---	is destroyed on the client
-------------------------------------------------
-function Generic.Client:OnShutdown()
-	System.Log("Generic.Client:OnShutdown()");
-end
-
-------------------------------------------------
--- Server.OnReset
---
--- Purpose: Called when the building controller
---	is reset on the server
-------------------------------------------------
-function Generic.Server:OnReset()
-	System.Log("Generic.Server:OnReset()");
-end
-
-------------------------------------------------
--- Client.OnReset
---
--- Purpose: Called when the building controller
---	is reset on the client
-------------------------------------------------
-function Generic.Client:OnReset()
-	System.Log("Generic.Client:OnReset()");
-end
+Generic = MakeBuilding(Generic);
