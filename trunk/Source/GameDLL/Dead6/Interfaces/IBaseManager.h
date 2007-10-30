@@ -284,6 +284,17 @@ struct IBaseManager
 	//		affectedEntities - Map of affected entities
 	////////////////////////////////////////////////////
 	virtual void ClientExplosion(ExplosionInfo const& explosionInfo, GRTExplosionAffectedEntities const& affectedEntities) = 0;
+
+	////////////////////////////////////////////////////
+	// SetBasePower
+	//
+	// Purpose: Set the power on all buildings
+	//
+	// In:	nTeamID - Team that owns the base
+	//		bState - TRUE to turn power on, FALSE to turn
+	//			power off
+	////////////////////////////////////////////////////
+	virtual void SetBasePower(unsigned short nTeamID, bool bState) const = 0;
 };
 
 #endif //_D6C_IBASEMANAGER_H_

@@ -40,7 +40,36 @@ Script.ReloadScript("Scripts/Buildings/CNCBuilding/CNCBuilding_Common.lua");
 function MakeBuilding(building)
 	local res = mergef(building, CNCBuilding, 1);
 	res.Base = CNCBuilding;
+
+	-- Create defined states
+	CNCBuilding.InitializeStates(building);
+
 	return res;
+end
+
+------------------------------------------------
+------------------------------------------------
+
+------------------------------------------------
+-- GetFullName
+--
+-- Purpose: Return building's full name
+--
+-- Example: "[GDI Refiner]"
+------------------------------------------------
+function CNCBuilding:GetFullName()
+	return "[" .. self.controller:GetTeamName() .. " " .. self.controller:GetClassName() .. "]";
+end
+
+------------------------------------------------
+-- LogMessage
+--
+-- Purpose: Log a message from the controller
+--
+-- In:	szMsg - Message to log
+------------------------------------------------
+function CNCBuilding:LogMessage(szMsg)
+	System.Log(self:GetFullName() .. " " .. szMsg);
 end
 
 ------------------------------------------------
@@ -53,9 +82,10 @@ end
 --	is created on the server
 ------------------------------------------------
 function CNCBuilding.Server:OnInit()
-	System.Log(self.Name .. ".Server:OnInit()");
+	--System.Log(self.Name .. ".Server:OnInit()");
 
-	self._state = nil;
+	-- Common call
+	self:Init();
 end
 
 ------------------------------------------------
@@ -65,9 +95,12 @@ end
 --	is created on the client
 ------------------------------------------------
 function CNCBuilding.Client:OnInit()
-	System.Log(self.Name .. ".Client:OnInit()");
+	--System.Log(self.Name .. ".Client:OnInit()");
 
-	self._state = nil;
+	-- Common call
+	if (not self.isServer) then
+		self:Init();
+	end
 end
 
 ------------------------------------------------
@@ -77,7 +110,10 @@ end
 --	is destroyed on the server
 ------------------------------------------------
 function CNCBuilding.Server:OnShutdown()
-	System.Log(self.Name .. ".Server:OnShutdown()");
+	--System.Log(self.Name .. ".Server:OnShutdown()");
+
+	-- Common call
+	self:Shutdown();
 end
 
 ------------------------------------------------
@@ -87,7 +123,12 @@ end
 --	is destroyed on the client
 ------------------------------------------------
 function CNCBuilding.Client:OnShutdown()
-	System.Log(self.Name .. ".Client:OnShutdown()");
+	--System.Log(self.Name .. ".Client:OnShutdown()");
+
+	-- Common call
+	if (not self.isServer) then
+		self:Shutdown();
+	end
 end
 
 ------------------------------------------------
@@ -97,9 +138,9 @@ end
 --	is reset on the server
 ------------------------------------------------
 function CNCBuilding.Server:OnReset()
-	System.Log(self.Name .. ".Server:OnReset()");
+	--System.Log(self.Name .. ".Server:OnReset()");
 
-	-- Common reset
+	-- Common call
 	self:Reset();
 end
 
@@ -110,9 +151,9 @@ end
 --	is reset on the client
 ------------------------------------------------
 function CNCBuilding.Client:OnReset()
-	System.Log(self.Name .. ".Client:OnReset()");
+	--System.Log(self.Name .. ".Client:OnReset()");
 
-	-- Common reset
+	-- Common call
 	if (not self.isServer) then
 		self:Reset();
 	end
@@ -132,7 +173,7 @@ function CNCBuilding.Server:OnUpdate(dt)
 	-- Call state
 	self:CallStateFunc("OnUpdate_Server", dt);
 
-	-- Common reset
+	-- Common call
 	self:Update();
 end
 
@@ -150,7 +191,7 @@ function CNCBuilding.Client:OnUpdate(dt)
 	-- Call state
 	self:CallStateFunc("OnUpdate_Client", dt);
 
-	-- Common reset
+	-- Common call
 	if (not self.isServer) then
 		self:Update();
 	end
@@ -166,13 +207,13 @@ end
 --	bIsExplosion - TRUE if explosion
 ------------------------------------------------
 function CNCBuilding.Server:OnDamaged(info, bIsExplosion)
-	System.Log(self.Name .. ".Server:OnDamaged(" .. info.damage .. ")");
+	--System.Log(self.Name .. ".Server:OnDamaged(" .. info.damage .. ")");
 
 	-- Call state
 	self:CallStateFunc("OnDamaged_Server", info, bIsExplosion);
 
-	-- Common damage
-	self:Damage(info, bIsExplosion);
+	-- Common call
+	self:Damaged(info, bIsExplosion);
 end
 
 ------------------------------------------------
@@ -185,14 +226,14 @@ end
 --	bIsExplosion - TRUE if explosion
 ------------------------------------------------
 function CNCBuilding.Client:OnDamaged(info, bIsExplosion)
-	System.Log(self.Name .. ".Client:OnDamaged(" .. info.damage .. ")");
+	--System.Log(self.Name .. ".Client:OnDamaged(" .. info.damage .. ")");
 
 	-- Call state
 	self:CallStateFunc("OnDamaged_Client", info, bIsExplosion);
 
-	-- Common reset
+	-- Common call
 	if (not self.isServer) then
-		self:Damage(info, bIsExplosion);
+		self:Damaged(info, bIsExplosion);
 	end
 end
 
@@ -206,7 +247,13 @@ end
 --	bIsExplosion - TRUE if explosion
 ------------------------------------------------
 function CNCBuilding.Server:OnDestroyed(info, bIsExplosion)
-	System.Log(self.Name .. ".Server:OnDestroyed()");
+	--System.Log(self.Name .. ".Server:OnDestroyed()");
+
+	-- Call state
+	self:CallStateFunc("OnDestroyed_Server", info, bIsExplosion);
+
+	-- Common call
+	self:Destroyed(info, bIsExplosion);
 end
 
 ------------------------------------------------
@@ -219,5 +266,53 @@ end
 --	bIsExplosion - TRUE if explosion
 ------------------------------------------------
 function CNCBuilding.Client:OnDestroyed(info, bIsExplosion)
-	System.Log(self.Name .. ".Client:OnDestroyed()");
+	--System.Log(self.Name .. ".Client:OnDestroyed()");
+
+	-- Call state
+	self:CallStateFunc("OnDestroyed_Client", info, bIsExplosion);
+
+	-- Common call
+	if (not self.isServer) then
+		self:Destroyed(info, bIsExplosion);
+	end
+end
+
+------------------------------------------------
+-- Server.OnEvent
+--
+-- Purpose: Called when building event occurs
+--	on the server
+--
+-- In:	event - Event that occured
+--	params - Table of params following event
+------------------------------------------------
+function CNCBuilding.Server:OnEvent(event, params)
+	--System.Log(self.Name .. ".Server:OnEvent(" .. event .. ")");
+
+	-- Call state
+	self:CallStateFunc("OnEvent_Server", event, params);
+
+	-- Common call
+	self:Event(event, params);
+end
+
+------------------------------------------------
+-- Client.OnEvent
+--
+-- Purpose: Called when building event occurs
+--	on the client
+--
+-- In:	event - Event that occured
+--	params - Table of params following event
+------------------------------------------------
+function CNCBuilding.Client:OnEvent(event, params)
+	--System.Log(self.Name .. ".Client:OnEvent(" .. event .. ")");
+
+	-- Call state
+	self:CallStateFunc("OnEvent_Client", event, params);
+
+	-- Common call
+	if (not self.isServer) then
+		self:Event(event, params);
+	end
 end

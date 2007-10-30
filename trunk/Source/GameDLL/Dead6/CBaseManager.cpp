@@ -475,6 +475,20 @@ void CBaseManager::ServerExplosion(ExplosionInfo const& explosionInfo, GRTExplos
 }
 
 ////////////////////////////////////////////////////
+void CBaseManager::SetBasePower(TeamID nTeamID, bool bState) const
+{
+	for (ControllerList::const_iterator itBuilding = m_ControllerList.begin(); itBuilding != m_ControllerList.end(); itBuilding++)
+	{
+		// Check team
+		if (NULL == itBuilding->second) continue;
+		if (nTeamID != itBuilding->second->GetTeam()) continue;
+
+		// Set its power
+		itBuilding->second->SetPower(bState);
+	}
+}
+
+////////////////////////////////////////////////////
 ////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////

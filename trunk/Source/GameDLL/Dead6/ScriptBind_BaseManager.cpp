@@ -44,7 +44,8 @@ void CScriptBind_BaseManager::AttachTo(IBaseManager *pBaseManager)
 ////////////////////////////////////////////////////
 void CScriptBind_BaseManager::RegisterGlobals(void)
 {
-	//m_pSS->SetGlobalValue("Name", Value);
+	m_pSS->SetGlobalValue("GUID_INVALID", GUID_INVALID);
+	m_pSS->SetGlobalValue("BC_INVALID", BC_INVALID);
 }
 
 ////////////////////////////////////////////////////
@@ -54,6 +55,7 @@ void CScriptBind_BaseManager::RegisterMethods(void)
 #define SCRIPT_REG_CLASSNAME &CScriptBind_BaseManager::
 
 	SCRIPT_REG_TEMPLFUNC(FindBuilding, "szTeam, szClass");
+	SCRIPT_REG_TEMPLFUNC(SetBasePower, "nTeamID, bState");
 }
 
 ////////////////////////////////////////////////////
@@ -69,4 +71,12 @@ int CScriptBind_BaseManager::FindBuilding(IFunctionHandler *pH, char const* szTe
 	IBuildingController *pController = m_pBaseManager->FindBuildingController(GUID);
 	if (NULL == pController) return pH->EndFunctionNull();
 	return pH->EndFunction(pController->GetScriptTable());
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_BaseManager::SetBasePower(IFunctionHandler *pH, int nTeamID, bool bState)
+{
+	assert(m_pBaseManager);
+	m_pBaseManager->SetBasePower(nTeamID, bState);
+	return pH->EndFunctionNull();
 }

@@ -16,29 +16,65 @@ CNCBuilding.States = { "Alive", "Dead", "NoPower" };
 ------------------------------------------------
 -- Default state definition
 ------------------------------------------------
-function _MakeDefState(state)
+function _MakeDefState(building, state)
 	local _DefaultStateDef =
 	{
+		Name = state,
 		OnBeginState = function(self)
-			System.Log(self.Name .. ".BeginState(Alive)");
+			--System.Log(self.Name .. ".BeginState(" .. building.States[state].Name .. ")");
 		end,
 		OnEndState = function(self)
-			System.Log(self.Name .. ".EndState(Alive)");
+			--System.Log(self.Name .. ".EndState(" .. building.States[state].Name .. ")");
 		end,
+		OnInit = function(self) end,
+		OnInit_Server = function(self) end,
+		OnInit_Client = function(self) end,
+		OnShutdown = function(self) end,
+		OnShutdown_Server = function(self) end,
+		OnShutdown_Client = function(self) end,
 		OnUpdate = function(self,dt) end,
 		OnUpdate_Server = function(self,dt) end,
 		OnUpdate_Client = function(self,dt) end,
+		OnReset = function(self) end,
+		OnReset_Server = function(self) end,
+		OnReset_Client = function(self) end,
 		OnDamaged = function(self,info,bIsExplosion) end,
 		OnDamaged_Server = function(self,info,bIsExplosion) end,
 		OnDamaged_Client = function(self,info,bIsExplosion) end,
+		OnDestroyed = function(self,info,bIsExplosion) end,
+		OnDestroyed_Server = function(self,info,bIsExplosion) end,
+		OnDestroyed_Client = function(self,info,bIsExplosion) end,
+		OnEvent = function(self,event,params) end,
+		OnEvent_Server = function(self,event,params) end,
+		OnEvent_Client = function(self,event,params) end,
 	};
 
-	CNCBuilding.States[state] = {};
-	mergef(CNCBuilding.States[state], _DefaultStateDef, 1);
+	building.States[state] = {};
+	mergef(building.States[state], _DefaultStateDef, 1);
 end
-_MakeDefState("Alive");
-_MakeDefState("Dead");
-_MakeDefState("NoPower");
+
+------------------------------------------------
+-- InitializeStates
+--
+-- Purpose: Initialize the states defined for
+--	the building
+------------------------------------------------
+function CNCBuilding:InitializeStates()
+	self._state = nil;
+	for i,v in ipairs(self.States) do
+		_MakeDefState(self, v);
+	end
+end
+
+------------------------------------------------
+-- ResetStates
+--
+-- Purpose: Reset state machine
+------------------------------------------------
+function CNCBuilding:ResetStates()
+	self:CallStateFunc("OnEndState");
+	self._state = nil;
+end
 
 ------------------------------------------------
 -- CallStateFunc

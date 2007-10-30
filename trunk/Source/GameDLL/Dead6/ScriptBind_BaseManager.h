@@ -57,6 +57,17 @@ public:
 	////////////////////////////////////////////////////
 	virtual int FindBuilding(IFunctionHandler *pH, char const* szTeam, char const* szClass);
 
+	////////////////////////////////////////////////////
+	// SetBasePower
+	//
+	// Purpose: Set the power on all buildings
+	//
+	// In:	nTeamID - Team that owns the base
+	//		bState - TRUE to turn power on, FALSE to turn
+	//			power off
+	////////////////////////////////////////////////////
+	virtual int SetBasePower(IFunctionHandler *pH, int nTeamID, bool bState);
+
 protected:
 	////////////////////////////////////////////////////
 	// RegisterGlobals

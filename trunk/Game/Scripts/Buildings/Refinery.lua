@@ -55,8 +55,11 @@ function Refinery:UpdateTick(power)
 	end
 	if (not tickOccured) then return end
 
-	-- TODO Give team money
-	System.Log("[TODO_TEAM TODO_CLASS] Ticked!");
+	-- Give team money
+	self:LogMessage("Ticked!");
+	local amount = self.Properties.TickValue_Power;
+	if (not power) then amount = self.Properties.TickValue_NoPower; end
+	Teams.GiveTeamCredits(self.controller:GetTeam(), amount);
 
 	-- Prepare for next tick
 	self.lastTick = _time;

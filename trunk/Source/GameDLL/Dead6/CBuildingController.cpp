@@ -102,9 +102,6 @@ void CBuildingController::Initialize(BuildingGUID nGUID)
 ////////////////////////////////////////////////////
 void CBuildingController::Shutdown(void)
 {
-	// Final reset
-	Reset();
-
 	// Call OnShutdown before releasing
 	BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnShutdown")
 	END_CALL(m_pSS)
@@ -155,7 +152,7 @@ void CBuildingController::Update(bool bHaveFocus, unsigned int nUpdateFlags, uns
 
 		// Perform hit
 		ray_hit hit;
-		IPhysicalEntity *pSkip[1] = {pPlayer->GetEntity()->GetPhysics()};
+		IPhysicalEntity *pSkip[1] = {pPlayer?pPlayer->GetEntity()->GetPhysics():NULL};
 		if (gEnv->pPhysicalWorld->RayWorldIntersection(vPlayerPos, vPlayerForward, (ent_terrain|ent_static), 
 				(rwi_stop_at_pierceable|rwi_colltype_any), &hit, 1, (NULL==pPlayer?NULL:pSkip), (NULL==pPlayer?0:1)) &&
 			NULL != hit.pCollider)
@@ -673,9 +670,8 @@ void CBuildingController::_SendListenerEvent(SControllerEvent &event)
 		(*itListener)->OnBuildingControllerEvent(this, m_nGUID, event);
 	}
 
-	if (NULL == m_pSS || true == m_EventScriptListeners.empty()) return;
-
 	// Prepare script event args
+	if (NULL == m_pSS) return;
 	SmartScriptTable pArgs(m_pSS, false);
 	switch (event.event)
 	{
@@ -727,6 +723,16 @@ void CBuildingController::_SendListenerEvent(SControllerEvent &event)
 		break;
 	}
 	SmartScriptTable pMyTable = GetScriptTable();
+
+	// Send to my script
+	BEGIN_CALL_SERVER(m_pSS, m_pScriptTable, "OnEvent")
+		m_pSS->PushFuncParamAny(event.event);
+		m_pSS->PushFuncParamAny(pArgs);
+	END_CALL(m_pSS)
+	BEGIN_CALL_CLIENT(m_pSS, m_pScriptTable, "OnEvent")
+		m_pSS->PushFuncParamAny(event.event);
+		m_pSS->PushFuncParamAny(pArgs);
+	END_CALL(m_pSS)
 
 	// Sent script events out
 	for (EventScriptListeners::iterator itListener = m_EventScriptListeners.begin();

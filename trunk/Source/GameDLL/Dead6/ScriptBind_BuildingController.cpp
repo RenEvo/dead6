@@ -63,6 +63,7 @@ IBuildingController *CScriptBind_BuildingController::GetController(IFunctionHand
 ////////////////////////////////////////////////////
 void CScriptBind_BuildingController::RegisterGlobals(void)
 {
+	// Events
 	m_pSS->SetGlobalValue("CONTROLLER_EVENT_VALIDATED",		CONTROLLER_EVENT_VALIDATED);
 	m_pSS->SetGlobalValue("CONTROLLER_EVENT_RESET",			CONTROLLER_EVENT_RESET);
 	m_pSS->SetGlobalValue("CONTROLLER_EVENT_ONHIT",			CONTROLLER_EVENT_ONHIT);
@@ -86,12 +87,16 @@ void CScriptBind_BuildingController::RegisterMethods(void)
 	SCRIPT_REG_TEMPLFUNC(SetPower, "bPower");
 	SCRIPT_REG_TEMPLFUNC(AddEventListener, "nEntityID");
 	SCRIPT_REG_TEMPLFUNC(RemoveEventListener, "nEntityID");
+	SCRIPT_REG_FUNC(GetGUID);
+	SCRIPT_REG_FUNC(GetClass);
+	SCRIPT_REG_FUNC(GetClassName);
+	SCRIPT_REG_FUNC(GetTeam);
+	SCRIPT_REG_FUNC(GetTeamName);
 }
 
 ////////////////////////////////////////////////////
 int CScriptBind_BuildingController::GetHealth(IFunctionHandler *pH)
 {
-	// Get controler
 	IBuildingController *pController = GetController(pH);
 	return pH->EndFunction(NULL == pController ? 0.0f : pController->GetHealth());
 }
@@ -99,7 +104,6 @@ int CScriptBind_BuildingController::GetHealth(IFunctionHandler *pH)
 ////////////////////////////////////////////////////
 int CScriptBind_BuildingController::IsAlive(IFunctionHandler *pH)
 {
-	// Get controler
 	IBuildingController *pController = GetController(pH);
 	return pH->EndFunction(NULL == pController ? false : pController->IsAlive());
 }
@@ -107,7 +111,6 @@ int CScriptBind_BuildingController::IsAlive(IFunctionHandler *pH)
 ////////////////////////////////////////////////////
 int CScriptBind_BuildingController::HasPower(IFunctionHandler *pH)
 {
-	// Get controler
 	IBuildingController *pController = GetController(pH);
 	return pH->EndFunction(NULL == pController ? false : pController->HasPower());
 }
@@ -115,7 +118,6 @@ int CScriptBind_BuildingController::HasPower(IFunctionHandler *pH)
 ////////////////////////////////////////////////////
 int CScriptBind_BuildingController::SetPower(IFunctionHandler *pH, bool bPower)
 {
-	// Get controler
 	IBuildingController *pController = GetController(pH);
 	if (NULL != pController) pController->SetPower(bPower);
 	return pH->EndFunctionNull();
@@ -124,7 +126,6 @@ int CScriptBind_BuildingController::SetPower(IFunctionHandler *pH, bool bPower)
 ////////////////////////////////////////////////////
 int CScriptBind_BuildingController::AddEventListener(IFunctionHandler *pH, ScriptHandle nEntityID)
 {
-	// Get controler
 	IBuildingController *pController = GetController(pH);
 	if (NULL != pController && true == pController->AddScriptEventListener(nEntityID.n))
 		return pH->EndFunction(1);
@@ -132,17 +133,44 @@ int CScriptBind_BuildingController::AddEventListener(IFunctionHandler *pH, Scrip
 }
 
 ////////////////////////////////////////////////////
-// RemoveEventListener
-//
-// Purpose: Remove the given entity from the entity event
-//	listener on the controller
-//
-// In:	nEntityID - Entity Id to add
-////////////////////////////////////////////////////
 int CScriptBind_BuildingController::RemoveEventListener(IFunctionHandler *pH, ScriptHandle nEntityID)
 {
-	// Get controler
 	IBuildingController *pController = GetController(pH);
 	if (NULL != pController) pController->RemoveScriptEventListener(nEntityID.n);
 	return pH->EndFunctionNull();
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_BuildingController::GetGUID(IFunctionHandler *pH)
+{
+	IBuildingController *pController = GetController(pH);
+	return pH->EndFunction(NULL == pController ? GUID_INVALID : pController->GetGUID());
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_BuildingController::GetClass(IFunctionHandler *pH)
+{
+	IBuildingController *pController = GetController(pH);
+	return pH->EndFunction(NULL == pController ? BC_INVALID : pController->GetClass());
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_BuildingController::GetClassName(IFunctionHandler *pH)
+{
+	IBuildingController *pController = GetController(pH);
+	return pH->EndFunction(NULL == pController ? "" : pController->GetClassName());
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_BuildingController::GetTeam(IFunctionHandler *pH)
+{
+	IBuildingController *pController = GetController(pH);
+	return pH->EndFunction(NULL == pController ? TEAMID_NOTEAM : pController->GetTeam());
+}
+
+////////////////////////////////////////////////////
+int CScriptBind_BuildingController::GetTeamName(IFunctionHandler *pH)
+{
+	IBuildingController *pController = GetController(pH);
+	return pH->EndFunction(NULL == pController ? "" : pController->GetTeamName());
 }
