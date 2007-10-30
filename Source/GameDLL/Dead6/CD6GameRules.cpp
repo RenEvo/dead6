@@ -16,13 +16,13 @@
 ////////////////////////////////////////////////////
 CD6GameRules::CD6GameRules(void)
 {
-
+	g_D6Core->pD6GameRules = this;
 }
 
 ////////////////////////////////////////////////////
 CD6GameRules::~CD6GameRules(void)
 {
-
+	g_D6Core->pD6GameRules = NULL;
 }
 
 ////////////////////////////////////////////////////
@@ -272,4 +272,16 @@ void CD6GameRules::ClientExplosion(const ExplosionInfo &explosionInfo)
 	// Let base manager handle it for controllers
 	assert(g_D6Core->pBaseManager);
 	g_D6Core->pBaseManager->ClientExplosion(explosionInfo, affectedEntities);
+}
+
+////////////////////////////////////////////////////
+void CD6GameRules::CreateScriptHitInfo(SmartScriptTable &scriptHitInfo, const HitInfo &hitInfo)
+{
+	CGameRules::CreateScriptHitInfo(scriptHitInfo, hitInfo);
+}
+
+////////////////////////////////////////////////////
+void CD6GameRules::CreateScriptExplosionInfo(SmartScriptTable &scriptExplosionInfo, const ExplosionInfo &explosionInfo)
+{
+	CGameRules::CreateScriptExplosionInfo(scriptExplosionInfo, explosionInfo);
 }

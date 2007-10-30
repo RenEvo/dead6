@@ -18,8 +18,6 @@
 ////////////////////////////////////////////////////
 class CD6GameRules : public CGameRules
 {
-	friend class CBuildingController;
-
 public:
 	////////////////////////////////////////////////////
 	// Constructor
@@ -72,14 +70,54 @@ public:
 	//
 	// Purpose: Returns server state script object
 	////////////////////////////////////////////////////
-	SmartScriptTable& GetServerStateScript(void) { return m_serverStateScript; }
+	virtual SmartScriptTable& GetServerStateScript(void) { return m_serverStateScript; }
 
 	////////////////////////////////////////////////////
 	// GetClientStateScript
 	//
 	// Purpose: Returns client state script object
 	////////////////////////////////////////////////////
-	SmartScriptTable& GetClientStateScript(void) { return m_clientStateScript; }
+	virtual SmartScriptTable& GetClientStateScript(void) { return m_clientStateScript; }
+
+	////////////////////////////////////////////////////
+	// GetHitTable
+	//
+	// Purpose: Returns hit script object
+	////////////////////////////////////////////////////
+	virtual SmartScriptTable& GetHitTable(void) { return m_scriptHitInfo; }
+
+	////////////////////////////////////////////////////
+	// GetExplosionTable
+	//
+	// Purpose: Returns explosion script object
+	////////////////////////////////////////////////////
+	virtual SmartScriptTable& GetExplosionTable(void) { return m_scriptExplosionInfo; }
+	
+	////////////////////////////////////////////////////
+	// CreateScriptHitInfo
+	//
+	// Purpose: Create a script table that contains the
+	//	given hit info
+	//
+	// In:	hitInfo - Hit info to build from
+	//
+	// Out:	scriptHitInfo - Script table containing hit
+	//			info
+	////////////////////////////////////////////////////
+	virtual void CreateScriptHitInfo(SmartScriptTable &scriptHitInfo, const HitInfo &hitInfo);
+	
+	////////////////////////////////////////////////////
+	// CreateScriptExplosionInfo
+	//
+	// Purpose: Create a script table that contains the
+	//	given explosion info
+	//
+	// In:	explosionInfo - Explosion info to build from
+	//
+	// Out:	scriptExplosionInfo - Script table containing 
+	//			explosion info
+	////////////////////////////////////////////////////
+	virtual void CreateScriptExplosionInfo(SmartScriptTable &scriptExplosionInfo, const ExplosionInfo &explosionInfo);
 };
 
 #endif //_D6C_CD6GAMERULES_H_

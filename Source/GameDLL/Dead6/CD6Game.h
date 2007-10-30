@@ -109,8 +109,8 @@ public:
 	////////////////////////////////////////////////////
 	virtual CScriptBind_GameRules *GetGameRulesScriptBind();
 
-	////////////////////////////////////////////////////
 	// CGame overloads
+	virtual CGameRules *GetGameRules() const;
 	virtual void GetMemoryStatistics(ICrySizer *s);
 	virtual bool Init(IGameFramework *pFramework);
 	virtual bool CompleteInit();
@@ -120,7 +120,6 @@ public:
 	virtual const char *GetName();
 	virtual void EditorResetGame(bool bStart);
 	
-	////////////////////////////////////////////////////
 	// ILevelSystemListener overloads
 	virtual void OnLoadingStart(ILevelInfo *pLevel);
 	virtual void OnLoadingComplete(ILevel *pLevel);
@@ -140,10 +139,15 @@ protected:
 	////////////////////////////////////////////////////
 	bool ParseCNCRules(char const* szXMLFile);
 
-	////////////////////////////////////////////////////
 	// CGame overloads
 	virtual void InitScriptBinds();
 	virtual void ReleaseScriptBinds();
+	virtual void RegisterConsoleVars();
+	virtual void RegisterConsoleCommands();
+	virtual void UnregisterConsoleCommands();
+
+	// Console commands
+	static void CmdLoadLevel(IConsoleCmdArgs *pArgs);
 
 	CScriptBind_BaseManager *m_pScriptBindBaseManager;
 	CScriptBind_TeamManager *m_pScriptBindTeamManager;

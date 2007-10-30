@@ -49,6 +49,69 @@ CD6GameRules *CD6Game::GetD6GameRules() const
 {
 	return static_cast<CD6GameRules*>(m_pFramework->GetIGameRulesSystem()->GetCurrentGameRules());
 }
+CGameRules *CD6Game::GetGameRules() const
+{
+	return GetD6GameRules();
+}
+
+////////////////////////////////////////////////////
+void CD6Game::RegisterConsoleVars()
+{
+	CGame::RegisterConsoleVars();
+}
+
+////////////////////////////////////////////////////
+void CD6Game::RegisterConsoleCommands()
+{
+	CGame::RegisterConsoleCommands();
+
+	// D6 commands
+	m_pConsole->AddCommand("level", CmdLoadLevel, 0, "Load specified level");
+}
+
+////////////////////////////////////////////////////
+void CD6Game::UnregisterConsoleCommands()
+{
+	CGame::UnregisterConsoleCommands();
+
+	// D6 commands
+	m_pConsole->RemoveCommand("level");
+}
+
+////////////////////////////////////////////////////
+void CD6Game::CmdLoadLevel(IConsoleCmdArgs *pArgs)
+{
+	if (pArgs->GetArgCount() <= 0) return;
+
+	// Get level to load
+	string szLevel = pArgs->GetArg(1);
+
+	// Prepare for loading
+	ILevelSystem *pLevelSystem = g_D6Core->pD6Game->GetIGameFramework()->GetILevelSystem();
+	ILevel *pLevel = pLevelSystem->LoadLevel(szLevel.c_str());
+	ILevelInfo *pLevelInfo = pLevelSystem->GetLevelInfo(szLevel.c_str());
+	if (NULL == pLevel || NULL == pLevelInfo) return;
+	//gEnv->pMovieSystem->StopAllCutScenes();
+	//GetISystem()->SerializingFile(1);
+
+	//// Load level
+	//EntityId playerID = GetIGameFramework()->GetClientActorId();
+	//pLevelSystem->OnLoadingStart(pLevelInfo);
+	//PlayerIdSet(playerID);
+	//if(const char* visibleName = GetMappedLevelName(levelstart))
+	//	levelstart = visibleName;
+	////levelstart.append("_levelstart.crysisjmsf"); //because of the french law we can't do this ...
+	//levelstart.append("_crysis.crysisjmsf");
+	//GetIGameFramework()->LoadGame(levelstart.c_str(), true, true);
+	////**********
+	//pLevelSystem->OnLoadingComplete(pLevel);
+	//GetMenu()->OnActionEvent(SActionEvent(eAE_inGame));	//reset the menu
+	//m_bReload = false;	//if m_bReload is true - load at levelstart
+
+	//// Unpause and continue
+	//m_pFramework->PauseGame(false, true);
+	//GetISystem()->SerializingFile(0);
+}
 
 ////////////////////////////////////////////////////
 bool CD6Game::Init(IGameFramework *pFramework)

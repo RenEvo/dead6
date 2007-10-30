@@ -1,4 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Buildings>
-  <Building Name="Refinery" Script="Refinery.lua" MaxHealth="500" />
+  <Building Name="Refinery" Script="Refinery.lua" MaxHealth="500">
+    <Properties>
+      <add key="TickRate_Power" value="1.0" />
+      <add key="TickRate_NoPower" value="2.0" />
+      <add key="TickValue_Power" value="1.0" />
+      <add key="TickValue_Power" value="1.0" />
+    </Properties>
+  </Building>
 </Buildings>

@@ -170,7 +170,7 @@ void InitD6GameFactory(IGameFramework *pFramework)
 
 	// Load our gamerules in here
 	REGISTER_FACTORY(pFramework, "GameRules", CD6GameRules, false);
-	g_D6Core->pD6GameRules = (CD6GameRules*)(g_D6Core->pD6Game->GetIGameFramework()->GetIGameRulesSystem());
+	//g_D6Core->pD6GameRules = (CD6GameRules*)(g_D6Core->pD6Game->GetIGameFramework()->GetIGameRulesSystem());
 
 	REGISTER_GAME_OBJECT_EXTENSION(pFramework, ScriptControlledPhysics);
 
