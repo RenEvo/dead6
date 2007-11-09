@@ -11,7 +11,7 @@ Purchasing holds vital importance in Command & Conquer Mode. It allows a player 
 
 = Definition =
 See [TechDoc_Architecture_Game_CNCTeams CNC Teams] section for an overview of how Purchase Entries are defined per team.
+
 See [TechDoc_Architecture_Game_PurchaseTypes Purchase Types] section for an overview of the different Purchase Types.
 
 [TechDoc_Architecture Back]
-
