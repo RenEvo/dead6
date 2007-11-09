@@ -27,4 +27,7 @@ It is also possible to define a building inline by including what would be store
 
 Using *clear* as the _action_ attribute for the _Buildings_ tag will cause all existing building definitions to be cleared before parsing what is contained below. This can be useful if a map wishes to erase the default building definitions and load only the ones they define in their map's CNCRules. 
 
+= Base Power =
+Each Building Controller retains its own power status. This enables some buildings to go underpowered while others remain fully powered. Some logic exists where all buildings are to go underpowered (such as when the team's [TechDoc_Architecture_Game_Buildings_PowerPlant Power Plant] is destroyed) and therefore, functionality exists in the Base Manager to quickly toggle the power status of all controllers that belong to a given team.
+
 [TechDoc_Architecture Back]
