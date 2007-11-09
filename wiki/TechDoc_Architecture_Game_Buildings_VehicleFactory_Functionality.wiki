@@ -1,0 +1,7 @@
+#summary Game Feature - Buildings - Vehicle Factory - Functionality
+
+[TechDoc_Architecture_Game_Buildings_VehicleFactory Back]
+
+TODO
+
+[TechDoc_Architecture_Game_Buildings_VehicleFactory Back]
