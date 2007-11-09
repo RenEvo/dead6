@@ -8,4 +8,8 @@ The Dead6 !GameRules is derived from the Crysis' !GameRules (CGameRules) and han
 
 = [TechDoc_Architecture_System_GameRules_Functionality Functionality] =
 
+= Damage Reports =
+
+The Dead6 !GameRules overloads the damage-control functions for Hit and Explosion types on both the Client and Server. It first delegates the workload to the base !GameRules module to ensure compatibility with normal damage. It then delegates the same info to the Base Manager to handle interface lookups on the Building Controllers. This info is then passed along to the corresponding controller if it uses the hit entity as an interface.
+
 [TechDoc_Architecture Back]
