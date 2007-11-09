@@ -3,68 +3,15 @@
 [TechDoc_Architecture Back]
 
 = Overview =
-The Purchase System manages all the purchase systems and handles player and logic communication between making purchases and altering the attributes of each purchasable item
+The Purchase System manages all the purchase entries for the teams and controls the server/client communication for getting menu updates and making/confirming purchases.
 
-Purchasing holds vital importance in Command & Conquer Mode. It allows a player to upgrade their character class, obtain new weapons, vehicles and items, and replenish their ammo and health counts. Loosely, the contents in the purchase menu are filled when the level is loaded, but can be added to manually during the duration of the game. The contents are updated on the server and can be changed based on the status of buildings during the game. Clients can request the contents of the purchase menu and make purchases which are approved and handled by the server.
+Purchasing holds vital importance in Command & Conquer Mode. It allows a player to upgrade their character class, obtain new weapons, vehicles and items, and replenish their ammo and health counts. The contents are updated on the server and can be changed based on the status of buildings during the game. Clients can request the contents of the purchase menu and make purchases which are approved and handled by the server.
 
 = [TechDoc_Architecture_System_Purchase_Functionality Functionality] =
 
-= Terminology =
-== Purchase Items ==
-Purchasable items are the physical objects a player can purchase from the Purchase Menu. These items have specific attributes tied to them. Purchasable items can be loaded in by one of two ways: 1. Through the !LoadConfigForTeam which pulls them out of an XML file, or 2. Through the !DefineManualItem which adds a single entry into the given section for the given team. Each Purchase Item belongs to a Purchase Section. Each Purchase Section belongs to a team. Only the team that owns the Purchase Section can view its contents and request purchases from it.
-
-Purchase Items have the following attributes assigned to them:
- * Name = Literal name representation of the item.
- * Description = Literal description of the item.
- * Enabled = Boolean flag used to mark if it is enabled (can be purchased) or disabled (cannot be purchased).
- * Hidden = Boolean flag used to mark if it is hidden in the purchase menu.
- * Cost = Base value (in credits) for the purchase item.
- * Type = Purchase Item type, i.e. Soldier, Vehicle, Weapon, Refill.
- * Item = Data bought. Dependant on its type.
- * !ImageEnabled = 2D texture image used to represent the item in the Purchase Menu when the item is enabled.
- * !ImageDisabled = 2D texture image used to represent the item in the Purchase Menu when the item is disabled.
- * Prerequisites = List of buildings that can directly affect the attributes of the item based on the current status of each. 
-
-== Purchase Sections ==
-Sections contain multiple items. Purchase Terminals are assigned a section. Spawn points and EVA devices can also be assigned Purchase Sections, enabling a player to make a purchase when they are spawning and at any point in the game through their EVA device.
-
-== Purchase Terminal ==
-The terminal is a physical item which players can access and use to view the contents of the Purchase Section bound to it, and request purchases from it. Terminals can be destroyed (repaired by an Engineer) or shut down through building events such as loss of power or destruction.
-
-== Purchase Menu ==
-The Purchase Menu is the UI the player interfaces with to make purchases through the system. The Menu displays all visible items in the opened section. Players can click on each item or use hotkeys to request purchases for each item or view the description. Player can also make bundles to quickly purchase more than one item at a time.
-
-= XML Definition =
-The following is a template exert from a team script which defines the purchase sections and items that team can make.
-{{{
-<Purchases>
-  <Section Name="Classes">
-    <Entry Name="Minigunner" Description="A basic Minigunner with a machine gun."
-Cost="200" Hidden="0" Enabled="1" Type="Soldier" Item="SOLDIER_MINIGUNNER"
-ImageEnabled="Textures/PM/Item/MiniGunner.tga"
-ImageDisabled="Textures/PM/Item/Minigunner_Disabled.tga">
-      <Prerequisites>
-        <Prerequisite Building="SoldierFactory" DisableOnDeath="1" DisableOnPower="0"
-CostDeduction="100" />
-      </Prerequisites>
-    </Entry>
-  </Section>
-</Purchases>
-}}}
-
-The *Purchases* tag wraps around all defined Purchase Sections. This tag is the node that is passed in to the !LoadConfigForTeam function.
-
-Defined within are *Section* tags, each of which describes a Purchase Section. The _Name_ attribute is the name given to the Purchase Section and is used to determine which section is used by a Purchase Terminal.
-
-Defined with each Section tag are *Entry* tags, each of which describe a Purchase Item. The attributes defined are used to describe the item. The *Prerequisites* tag is used to define the prerequisites for the Purchase Item.
-
-Each *Prerequisite* tag houses attributes that describe the prerequisite:
- * Building = The Building Class that is this prerequisite.
- * !DisableOnDeath = Set to '1' to disable the purchase entry when this building is destroyed.
- * !DisableOnPower = Set to '1' to disable the purchase entry when this building is powered down.
- * !CostDeduction = Amount of money taken off the cost when this building is functioning with power. If it is destroyed or powered down, and the entry is not disabled, the amount will be added back on to the cost. Given our example, the Minigunner will cost 100 credits as long as the Soldier Factory remains powered. If it loses power, it will go back to 200 credits, the initial cost. If it is destroyed, the Minigunner will no longer be purchasable.
+= Definition =
+See [TechDoc_Architecture_Game_CNCTeams CNC Teams] section for an overview of how Purchase Entries are defined per team.
+See [TechDoc_Architecture_Game_PurchaseTypes Purchase Types] section for an overview of the different Purchase Types.
 
 [TechDoc_Architecture Back]
-
-
 
