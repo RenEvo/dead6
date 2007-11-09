@@ -39,11 +39,19 @@ The following sections will outline the system and game features present in the 
  * [TechDoc_Architecture_Game_CNCTeams CNC Teams (XML/Lua)]
  * [TechDoc_Architecture_Game_CNCBuildingClasses CNC Building Classes (XML/Lua)]
  * [TechDoc_Architecture_Game_HarvesterFlow Harvester Flow]
+ * [TechDoc_Architecture_Game_PurchaseTypes Purchase Types]
+
+=== Buildings ===
+ * [TechDoc_Architecture_Game_Buildings_CNCBuilding CNC Building]
+ * [TechDoc_Architecture_Game_Buildings_VehicleFactory Vehicle Factory]
+ * [TechDoc_Architecture_Game_Buildings_Refinery Refinery]
+ * [TechDoc_Architecture_Game_Buildings_PowerPlant Power Plant]
 
 === Entities ===
  * [TechDoc_Architecture_Game_Entity_BuildingLight Building Light]
  * [TechDoc_Architecture_Game_Entity_BuildingSound Building Sound]
  * [TechDoc_Architecture_Game_Entity_BuildingParticle Building Particle]
+ * [TechDoc_Architecture_Game_Entities_VehSpawnPoint Vehicle Spawn Point]
 
 === Nodes ===
  * [TechDoc_Architecture_Game_Node_General General Nodes]
