@@ -1,6 +1,6 @@
 #summary Game Feature - Purchase Types - Character
 
-[TechDoc_Architecture Back]
+[TechDoc_Architecture_Game_PurchaseTypes Back]
 
 = Overview =
 
@@ -18,4 +18,4 @@ The Character Purchase Type is used to reward the purchasing player with a new c
  * Name - The name of the character class to be given to the player.
 
 
-[TechDoc_Architecture Back]
+[TechDoc_Architecture_Game_PurchaseTypes Back]
