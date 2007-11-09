@@ -550,4 +550,60 @@ Remove the given entity from the entity event listener on the controller
 *Returns*:
 void
 
+
+=== *_ !GetGUID _* ===
+*Purpose*:
+Return building's GUID
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetClass _* ===
+*Purpose*:
+Return building's class ID
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetClassName _* ===
+*Purpose*:
+Return building's class name
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetTeam _* ===
+*Purpose*:
+Return building's team ID
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetTeamName _* ===
+*Purpose*:
+Return building's team name
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
 [TechDoc_Architecture_System_BuildingController Back]
