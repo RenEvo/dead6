@@ -13,7 +13,7 @@ The following are the different Purchase Types used in the Dead6 Core. Contained
  * [TechDoc_Architecture_Game_PurchaseTypes_Character Character]
  * [TechDoc_Architecture_Game_PurchaseTypes_Vehicle Vehicle]
  * [TechDoc_Architecture_Game_PurchaseTypes_Weapon Weapon]
- * [TechDoc_Architecture_Game_PurchaseTypes_Ammo Ammo]
+ * [TechDoc_Architecture_Game_PurchaseTypes_Refill Refill]
 
 
 [TechDoc_Architecture Back]
