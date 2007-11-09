@@ -1,0 +1,11 @@
+#summary Game Feature - Buildings - Power Plant
+
+[TechDoc_Architecture Back]
+
+= Overview =
+
+The Power Plant derives from [TechDoc_Architecture_Game_Buildings_CNCBuilding CNC Building] and has the functionality to enable power for all other buildings belonging to the team while it is alive with power. When it goes underpowered or is destroyed, it also causes all other buildings belonging to the team to go underpowered.
+
+= [TechDoc_Architecture_Game_Buildings_PowerPlant_Functionality Functionality] =
+
+[TechDoc_Architecture Back]
