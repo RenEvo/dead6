@@ -10,9 +10,9 @@ The Refinery derives from [TechDoc_Architecture_Game_Buildings_CNCBuilding CNC B
 
 = Properties =
 The Refinery makes use of the following properties:
- * TickRate_Power - How often the credit tick occurs when powered, in seconds
- * TickRate_NoPower - How often the credit tick occurs when underpowered, in seconds
- * TickValue_Power - How many credits the players get per tick when powered
- * TickValue_NoPower - How many credits the players get per tick when underpowered
+ * !TickRate_Power - How often the credit tick occurs when powered, in seconds
+ * !TickRate_NoPower - How often the credit tick occurs when underpowered, in seconds
+ * !TickValue_Power - How many credits the players get per tick when powered
+ * !TickValue_NoPower - How many credits the players get per tick when underpowered
 
 [TechDoc_Architecture Back]
