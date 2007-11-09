@@ -1,0 +1,21 @@
+#summary Game Feature - Purchase Types - Vehicle
+
+[TechDoc_Architecture_Game_PurchaseTypes Back]
+
+= Overview =
+
+The Vehicle Purchase Type is used to create a vehicle through the team's [TechDoc_Architecture_Game_Entities_VehSpawnPoint Vehicle Spawn Points] which the player can then enter and operate.
+
+
+= [TechDoc_Architecture_Game_PurchaseTypes_Vehicle_Functionality Functionality] =
+
+
+= XML Definition =
+{{{
+<Vehicle Name="us-ltv" />
+}}}
+
+ * Name - The name of the vehicle implementation to create.
+
+
+[TechDoc_Architecture_Game_PurchaseTypes Back]
