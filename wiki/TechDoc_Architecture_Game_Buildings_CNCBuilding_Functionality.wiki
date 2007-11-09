@@ -1,0 +1,7 @@
+#summary Game Feature - Buildings - CNC Building - Functionality
+
+[TechDoc_Architecture_Game_Buildings_CNCBuilding Back]
+
+TODO
+
+[TechDoc_Architecture_Game_Buildings_CNCBuilding Back]
