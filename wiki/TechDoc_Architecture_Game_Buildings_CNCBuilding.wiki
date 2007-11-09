@@ -22,9 +22,9 @@ Automatic state transitions to these types are handled by the CNC Building's imp
 
 Common = <Name>
 
-Server = <Name>_Server
+Server = <Name> <underscore> Server
 
-Client = <Name>_Client
+Client = <Name> <underscore> Client
 
 where <Name> is:
  * !OnBeginState (no Server or Client version) - Transitioned to this state
