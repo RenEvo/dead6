@@ -1,0 +1,7 @@
+#summary Game Feature - Buildings - Power Plant - Functionality
+
+[TechDoc_Architecture_Game_Buildings_PowerPlant Back]
+
+TODO
+
+[TechDoc_Architecture_Game_Buildings_PowerPlant Back]
