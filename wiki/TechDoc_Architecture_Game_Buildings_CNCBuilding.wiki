@@ -39,8 +39,8 @@ where <Name> is:
 
 The following common functions can be used to interface with the State Machine:
  * !SetState(state) - Transition to the _state_ State.
- * !SetStateFunc(state, callback, func) - Set the _callback_ function (i.e. !"OnInit") for the given _state_ State to the given _func_ Function.
- * !CallStateFunc(func, ...) - Call the _func_ callback function (i.e. !"OnInit_Server") for the active state, passing in the variable arguments.
+ * !SetStateFunc(state, callback, func) - Set the _callback_ function (i.e. "!OnInit") for the given _state_ State to the given _func_ Function.
+ * !CallStateFunc(func, ...) - Call the _func_ callback function (i.e. "!OnInit_Server") for the active state, passing in the variable arguments.
 
 
 [TechDoc_Architecture Back]
