@@ -1,6 +1,6 @@
 #summary Game Feature - Purchase Types - Weapon - Functionality
 
-[TechDoc_Architecture_PurchaseTypes_Weapon Back]
+[TechDoc_Architecture_Game_PurchaseTypes_Weapon Back]
 
 = Functionality =
 
@@ -85,4 +85,4 @@ Process the purchase for the given player
 *Returns*:
 void
 
-[TechDoc_Architecture_PurchaseTypes_Weapon Back]
+[TechDoc_Architecture_Game_PurchaseTypes_Weapon Back]
