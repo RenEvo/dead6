@@ -1,0 +1,18 @@
+#summary Game Feature - Buildings - Refinery
+
+[TechDoc_Architecture Back]
+
+= Overview =
+
+The Refinery derives from [TechDoc_Architecture_Game_Buildings_CNCBuilding CNC Building] and has the functionality to reward all players on its team with credits every X seconds while it is alive. The amounts can change when the building loses power.
+
+= [TechDoc_Architecture_Game_Buildings_Refinery_Functionality Functionality] =
+
+= Properties =
+The Refinery makes use of the following properties:
+ * TickRate_Power - How often the credit tick occurs when powered, in seconds
+ * TickRate_NoPower - How often the credit tick occurs when underpowered, in seconds
+ * TickValue_Power - How many credits the players get per tick when powered
+ * TickValue_NoPower - How many credits the players get per tick when underpowered
+
+[TechDoc_Architecture Back]
