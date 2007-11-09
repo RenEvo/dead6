@@ -41,6 +41,9 @@ Set the flag specified
 TRUE on success, FALSE on failure
 
 
+== !SVehSpawn ==
+Below are the methods defined in the !SVehSpawn object.
+
 == !STeamDef ==
 Below are the methods defined in the !STeamDef object.
 
@@ -370,10 +373,10 @@ Using the name is slower than the ID!
 Create a harvester for the team
 
 *Arguments*:
- * _bUseFactory_ - `[In]` TRUE to create the harvester through the vehicle factory (if present)
  * _fDir_ - `[In]` Direction to face if not created through the vehicle factory
  * _nID_ - `[In]` Team ID
  * _ppDef_ - `[Out]` Harvester defintion (optional)
+ * _szFactoryName_ - `[In]` Name of factory to create it at
  * _vPos_ - `[In]` Where to create the harvester at if not though the vehicle factory
 
 *Returns*:
@@ -416,6 +419,17 @@ Remakes the entity for the given harvester
 TRUE on success, FALSE on error
 
 
+=== *_ !RemoveTeamHarvesters _* ===
+*Purpose*:
+Remove all harvesters from the world that belong to the given team
+
+*Arguments*:
+ * _nTeamID_ - `[In]` Team ID
+
+*Returns*:
+void
+
+
 === *_ !GetChannelTeam _* ===
 *Purpose*:
 Get the team that owns the given channel
@@ -437,6 +451,153 @@ Returns how many channels a team has
 
 *Returns*:
 void
+
+
+=== *_ !SetEditorTeam _* ===
+*Purpose*:
+Set which team you are on in the editor
+
+*Arguments*:
+ * _bResetNow_ - `[In]` Reset local player's team now
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !SetTeamCredits _* ===
+*Purpose*:
+Set everyone on the team's credits
+
+*Arguments*:
+ * _nAmount_ - `[In]` Amount to set
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !GiveTeamCredits _* ===
+*Purpose*:
+Give everyone on the team credits
+
+*Arguments*:
+ * _nAmount_ - `[In]` Amount to give
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !TakeTeamCredits _* ===
+*Purpose*:
+Take from everyone on the team's credits
+
+*Arguments*:
+ * _nAmount_ - `[In]` Amount to take
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !AddTeamFlags _* ===
+*Purpose*:
+Add (turn on) flags for given team
+
+*Arguments*:
+ * _nFlags_ - `[In]` Flags to turn on
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !RemoveTeamFlags _* ===
+*Purpose*:
+Remove (turn off) flags for given team
+
+*Arguments*:
+ * _nFlags_ - `[In]` Flags to turn off
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !CheckTeamFlags _* ===
+*Purpose*:
+Check if team has given flags turned on
+
+*Arguments*:
+ * _nFlags_ - `[In]` Flags to check
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+TRUE if flags are on
+
+
+=== *_ !AddVehicleSpawnLocation _* ===
+*Purpose*:
+Add a vehicle spawn location to the team
+
+*Arguments*:
+ * _bCanSpawnHarvester_ - `[In]` TRUE if harvesters can spawn here as well
+ * _nEntityId_ - `[In]` ID of vehicle spawn point entity
+ * _nTeamID_ - `[In]` team ID
+ * _szClass_ - `[In]` Building class that can spawn here
+
+*Returns*:
+void
+
+
+=== *_ !RemoveVehicleSpawnLocation _* ===
+*Purpose*:
+Remove a vehicle spawn location from the team
+
+*Arguments*:
+ * _nEntityId_ - `[In]` ID of vehicle spawn point entity
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !GetVehicleSpawnLocations _* ===
+*Purpose*:
+Get the vehicle spawn locations for the given team
+
+*Arguments*:
+ * _locations_ - `[Out]` Spawn locations
+ * _nTeamID_ - `[In]` team ID
+ * _szClass_ - `[In]` Building class
+
+*Returns*:
+TRUE if locations were returned
+
+
+=== *_ !ValidateSpawnLocation _* ===
+*Purpose*:
+Check to see if the given spawn location is clear to let a vehicle spawn there
+
+*Arguments*:
+ * _nLocationId_ - `[In]` Vehicle spawn ID
+ * _szVehicle_ - `[In]` Name of vehicle you want to spawn
+
+*Returns*:
+weight of spawn or -1 if invalid
+
+
+=== *_ !SpawnTeamVehicle _* ===
+*Purpose*:
+Spawn a vehicle at the given spawn location
+
+*Arguments*:
+ * _nLocationId_ - `[In]` Vehicle spawn ID
+ * _szVehicle_ - `[In]` Vehicle to spawn
+
+*Returns*:
+created vehicle entity or NULL on error
 
 
 == !ScriptBind_TeamManager ==
@@ -475,6 +636,197 @@ void
 void
 
 
+=== *_ !GetTeam _* ===
+*Purpose*:
+Returns ID of team with given name
+
+*Arguments*:
+ * _szName_ - `[In]` Team name
+
+*Returns*:
+void
+
+
+=== *_ !GetTeamName _* ===
+*Purpose*:
+Returns name of given team
+
+*Arguments*:
+ * _nTeamID_ - `[In]` Team ID
+
+*Returns*:
+void
+
+
+=== *_ !SetEditorTeam _* ===
+*Purpose*:
+Set the team to use in the editor game
+
+*Arguments*:
+ * _nTeamID_ - `[In]` Team ID
+
+*Returns*:
+void
+
+
+=== *_ !SetEditorTeamByName _* ===
+*Purpose*:
+Set the team to use in the editor game using the name
+
+*Arguments*:
+ * _szTeam_ - `[In]` Team name
+
+*Returns*:
+void
+
+
+=== *_ !SetTeamCredits _* ===
+*Purpose*:
+Set everyone on the team's credits
+
+*Arguments*:
+ * _nAmount_ - `[In]` Amount to set
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !GiveTeamCredits _* ===
+*Purpose*:
+Give everyone on the team credits
+
+*Arguments*:
+ * _nAmount_ - `[In]` Amount to give
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !TakeTeamCredits _* ===
+*Purpose*:
+Take from everyone on the team's credits
+
+*Arguments*:
+ * _nAmount_ - `[In]` Amount to take
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !RemoveTeamHarvesters _* ===
+*Purpose*:
+Remove all harvesters from the world that belong to the given team
+
+*Arguments*:
+ * _nTeamID_ - `[In]` Team ID
+
+*Returns*:
+void
+
+
+=== *_ !AddTeamFlags _* ===
+*Purpose*:
+Add (turn on) flags for given team
+
+*Arguments*:
+ * _nFlags_ - `[In]` Flags to turn on
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !RemoveTeamFlags _* ===
+*Purpose*:
+Remove (turn off) flags for given team
+
+*Arguments*:
+ * _nFlags_ - `[In]` Flags to turn off
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !CheckTeamFlags _* ===
+*Purpose*:
+Check if team has given flags turned on
+
+*Arguments*:
+ * _nFlags_ - `[In]` Flags to check
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+TRUE if flags are on
+
+
+=== *_ !AddVehicleSpawnLocation _* ===
+*Purpose*:
+Add a vehicle spawn location to the team
+
+*Arguments*:
+ * _bCanSpawnHarvester_ - `[In]` TRUE if harvesters can spawn here as well
+ * _nEntityId_ - `[In]` ID of vehicle spawn point entity
+ * _nTeamID_ - `[In]` team ID
+ * _szClass_ - `[In]` Building class that can spawn here
+
+*Returns*:
+void
+
+
+=== *_ !RemoveVehicleSpawnLocation _* ===
+*Purpose*:
+Remove a vehicle spawn location from the team
+
+*Arguments*:
+ * _nEntityId_ - `[In]` ID of vehicle spawn point entity
+ * _nTeamID_ - `[In]` team ID
+
+*Returns*:
+void
+
+
+=== *_ !GetVehicleSpawnLocations _* ===
+*Purpose*:
+Get the vehicle spawn locations for the given team
+
+*Arguments*:
+ * _nTeamID_ - `[In]` team ID
+ * _szClass_ - `[In]` Building class
+
+*Returns*:
+table of spawn locations
+
+*Note*:
+spawn = { bCanSpawnHarvester, nLocationId, nId }
+
+=== *_ !ValidateSpawnLocation _* ===
+*Purpose*:
+Check to see if the given spawn location is clear to let a vehicle spawn there
+
+*Arguments*:
+ * _nLocationId_ - `[In]` Vehicle spawn ID
+ * _szVehicle_ - `[In]` Name of vehicle you want to spawn
+
+*Returns*:
+nil if location is not valid, otherwise weight of spawn location
+
+
+=== *_ !SpawnTeamVehicle _* ===
+*Purpose*:
+Spawn a vehicle at the given spawn location
+
+*Arguments*:
+ * _nLocationId_ - `[In]` Vehicle spawn ID
+ * _szVehicle_ - `[In]` Name of vehicle you want to spawn
+
+*Returns*:
+created vehicle entity script table or nil on error
+
+
 === *_ !RegisterGlobals _* ===
 *Purpose*:
 Registers any global values to the script system
@@ -497,6 +849,7 @@ void
 void
 
 
+
 = Sub Modules =
 
 == !STeamDef ==
@@ -512,6 +865,7 @@ Member Variables:
  * !PlayerList - List of player IDs who are on the team
  * !DefHarvester - Default Harvester definition inherited by all harvesters created on the team
  * !HarvesterList - List of Harvesters owned by the team
+ * !VehicleSpawnList - List of all valid vehicle spawn points for the team
 
 
 == !STeamHarvesterDef ==
