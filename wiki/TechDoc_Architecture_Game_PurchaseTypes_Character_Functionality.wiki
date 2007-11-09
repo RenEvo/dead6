@@ -1,6 +1,6 @@
 #summary Game Feature - Purchase Types - Character - Functionality
 
-[TechDoc_Architecture_<TAG> Back]
+[TechDoc_Architecture_Game_PurchaseTypes_Character Back]
 
 
 = Functionality =
@@ -87,4 +87,4 @@ Process the purchase for the given player
 void
 
 
-[TechDoc_Architecture_<TAG> Back]
+[TechDoc_Architecture_Game_PurchaseTypes_Character Back]
