@@ -1,0 +1,90 @@
+#summary Game Feature - Purchase Types - Character - Functionality
+
+[TechDoc_Architecture_<TAG> Back]
+
+
+= Functionality =
+
+== !CharacterPurchaseType ==
+Below are the methods defined in the !CharacterPurchaseType module.
+
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetType _* ===
+*Purpose*:
+Returns purchase type
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+=== *_ Create _* ===
+*Purpose*:
+Create and initialize the entry
+
+*Arguments*:
+ * _nTeamID_ - `[In]` Owning team ID
+ * _pData_ - `[In]` XML properties
+ * _pDef_ - `[In]` Definition it belongs to
+
+*Returns*:
+void
+
+
+=== *_ !PreProcess _* ===
+*Purpose*:
+Confirm if player can buy this item
+
+*Arguments*:
+ * _pPlayer_ - `[In]` Player who wants to buy it
+
+*Returns*:
+void
+
+
+=== *_ Process _* ===
+*Purpose*:
+Process the purchase for the given player
+
+*Arguments*:
+ * _pPlayer_ - `[In]` Player who bought it
+
+*Returns*:
+void
+
+
+[TechDoc_Architecture_<TAG> Back]
