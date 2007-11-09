@@ -1,7 +1,7 @@
 #summary Game Feature - Entities - Vehicle Spawn Point - Functionality
 
-[TechDoc_Architecture_Game_Entity_VehSpawnPoint Back]
+[TechDoc_Architecture_Game_Entities_VehSpawnPoint Back]
 
 TODO
 
-[TechDoc_Architecture_Game_Entity_VehSpawnPoint Back]
+[TechDoc_Architecture_Game_Entities_VehSpawnPoint Back]
