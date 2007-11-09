@@ -1,6 +1,6 @@
 #summary Game Feature - Purchase Types - Vehicle - Functionality
 
-[TechDoc_Architecture_Game_PurchaseTypes Back]
+[TechDoc_Architecture_Game_PurchaseTypes_Vehicle Back]
 
 = Functionality =
 
@@ -85,4 +85,4 @@ Process the purchase for the given player
 *Returns*:
 void
 
-[TechDoc_Architecture_Game_PurchaseTypes Back]
+[TechDoc_Architecture_Game_PurchaseTypes_Vehicle Back]
