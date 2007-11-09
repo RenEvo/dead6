@@ -62,4 +62,49 @@ void
 void
 
 
+=== *_ !GetHitTable _* ===
+*Purpose*:
+Returns hit script object
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetExplosionTable _* ===
+*Purpose*:
+Returns explosion script object
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !CreateScriptHitInfo _* ===
+*Purpose*:
+Create a script table that contains the given hit info
+
+*Arguments*:
+ * _hitInfo_ - `[In]` Hit info to build from
+ * _scriptHitInfo_ - `[Out]` Script table containing hit fo
+
+*Returns*:
+void
+
+
+=== *_ !CreateScriptExplosionInfo _* ===
+*Purpose*:
+Create a script table that contains the given explosion info
+
+*Arguments*:
+ * _explosionInfo_ - `[In]` Explosion info to build from
+ * _scriptExplosionInfo_ - `[Out]` Script table containing  explosion info
+
+*Returns*:
+void
+
 [TechDoc_Architecture_System_GameRules Back]
