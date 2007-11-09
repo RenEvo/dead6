@@ -4,6 +4,31 @@
 
 = Functionality =
 
+== !EditorGameListener ==
+Below are the methods defined in the !EditorGameListener interface.
+
+=== *_ !OnEditorGameStart _* ===
+*Purpose*:
+Called when the game has started
+
+*Arguments*:
+ * _pLocalPlayer_ - `[In]` Local player object
+
+*Returns*:
+void
+
+
+=== *_ !OnEditorGameEnd _* ===
+*Purpose*:
+Called when the game has ended
+
+*Arguments*:
+ * _pLocalPlayer_ - `[In]` Local player object
+
+*Returns*:
+void
+
+
 == !D6Game ==
 Below are the methods defined in the !D6Game module.
 
@@ -112,6 +137,28 @@ Returns the D6 GameRules script bind overload
 
 *Arguments*:
 void
+
+*Returns*:
+void
+
+
+=== *_ !AddEditorGameListener _* ===
+*Purpose*:
+Add a listener for the editor game
+
+*Arguments*:
+ * _pListener_ - `[In]` Listening object
+
+*Returns*:
+void
+
+
+=== *_ !RemoveEditorGameListener _* ===
+*Purpose*:
+Remove a listener for the editor game
+
+*Arguments*:
+ * _pListener_ - `[In]` Listening object
 
 *Returns*:
 void
