@@ -61,6 +61,15 @@ Lines 185 - 188:
 	// [/D6]
 }}}
 
+== Game.h ==
+
+Lines 160 - 162:
+{{{
+	// [D6] Made virutal...
+	virtual CGameRules *GetGameRules() const;
+	// [/D6]
+}}}
+
 == !GameDll.cpp ==
 
 Lines 20 - 23:
@@ -479,40 +488,245 @@ Lines 3235 - 3253:
 	// [/D6]
 }}}
 
-Lines 3271 - 3284:
+Lines 3334 - 3577:
 {{{
 		// [D6] Check if system exists
-		/*IEntity *pTarget=m_pEntitySystem->GetEntity(hitInfo.targetId);
-		IEntity *pShooter=m_pEntitySystem->GetEntity(hitInfo.shooterId);
-		IEntity *pWeapon=m_pEntitySystem->GetEntity(hitInfo.weaponId);
-		IEntity *pProjectile=m_pEntitySystem->GetEntity(hitInfo.projectileId);*/
-		IEntity *pTarget = NULL, *pShooter = NULL, *pWeapon = NULL, *pProjectile = NULL;
-		if (NULL != m_pEntitySystem)
-		{
-			pTarget=m_pEntitySystem->GetEntity(hitInfo.targetId);
-			pShooter=m_pEntitySystem->GetEntity(hitInfo.shooterId);
-			pWeapon=m_pEntitySystem->GetEntity(hitInfo.weaponId);
-			pProjectile=m_pEntitySystem->GetEntity(hitInfo.projectileId);
-		}
-		// [/D6]
-}}}
+		IEntity *pShooter=m_pEntitySystem->GetEntity(explosionInfo.shooterId);
+		IEntity *pWeapon=m_pEntitySystem->GetEntity(explosionInfo.weaponId);
+		explosion.SetValue("shooter", pShooter?pShooter->GetScriptTable():(IScriptTable *)0);
+		explosion.SetValue("weapon", pWeapon?pWeapon->GetScriptTable():(IScriptTable *)0);
+		explosion.SetValue("materialId", 0);
+		explosion.SetValue("damage", explosionInfo.damage);
+		explosion.SetValue("min_radius", explosionInfo.minRadius);
+		explosion.SetValue("radius", explosionInfo.radius);
+		explosion.SetValue("pressure", explosionInfo.pressure);
+		explosion.SetValue("hole_size", explosionInfo.hole_size);
+		explosion.SetValue("effect", explosionInfo.pParticleEffect?explosionInfo.pParticleEffect->GetName():"");
+		explosion.SetValue("effectScale", explosionInfo.effect_scale);
+		explosion.SetValue("effectClass", explosionInfo.effect_class.c_str());
+		explosion.SetValue("typeId", explosionInfo.type);
+		const char *type=GetHitType(explosionInfo.type);
+		explosion.SetValue("type", type);
+		explosion.SetValue("angle", explosionInfo.angle);
+		
+		explosion.SetValue("impact", explosionInfo.impact);
+		explosion.SetValue("impact_velocity", explosionInfo.impact_velocity);
+		explosion.SetValue("impact_normal", explosionInfo.impact_normal);
+    explosion.SetValue("impact_targetId", ScriptHandle(explosionInfo.impact_targetId));		
+	}
+  
+  SmartScriptTable temp;
+  if (scriptExplosionInfo->GetValue("AffectedEntities", temp))
+  {
+    temp->Clear();
+	}
+	if (scriptExplosionInfo->GetValue("AffectedEntitiesObstruction", temp))
+	{
+		temp->Clear();
+	}
+}
 
-Lines 3344 - 3353:
-{{{
-		// [D6] Check if system exists
-		/*IEntity *pShooter=m_pEntitySystem->GetEntity(explosionInfo.shooterId);
-		IEntity *pWeapon=m_pEntitySystem->GetEntity(explosionInfo.weaponId);  */
-		IEntity *pShooter = NULL, *pWeapon = NULL;
-		if (NULL != m_pEntitySystem)
-		{
-			pShooter=m_pEntitySystem->GetEntity(explosionInfo.shooterId);
-			pWeapon=m_pEntitySystem->GetEntity(explosionInfo.weaponId);    
-		}
-		// [/D6]
-}}}
+//------------------------------------------------------------------------
 
-Lines 3588 - 3594:
-{{{
+void CGameRules::ShowScores(bool show)
+{
+	CallScript(m_script, "ShowScores", show);
+}
+
+//------------------------------------------------------------------------
+void CGameRules::UpdateAffectedEntitiesSet(TExplosionAffectedEntities &affectedEnts, const pe_explosion *pExplosion)
+{
+	if (pExplosion)
+	{
+		for (int i=0; i<pExplosion->nAffectedEnts; ++i)
+		{ 
+			if (IEntity *pEntity = gEnv->pEntitySystem->GetEntityFromPhysics(pExplosion->pAffectedEnts[i]))
+			{ 
+				if (IScriptTable *pEntityTable = pEntity->GetScriptTable())
+				{
+					IPhysicalEntity* pEnt = pEntity->GetPhysics();
+					if (pEnt)
+					{
+						float affected=gEnv->pPhysicalWorld->IsAffectedByExplosion(pEnt);
+
+						AddOrUpdateAffectedEntity(affectedEnts, pEntity, affected);
+					}
+				}
+			}
+		}
+	}
+}
+
+//------------------------------------------------------------------------
+void CGameRules::AddOrUpdateAffectedEntity(TExplosionAffectedEntities &affectedEnts, IEntity* pEntity, float affected)
+{
+	TExplosionAffectedEntities::iterator it=affectedEnts.find(pEntity);
+	if (it!=affectedEnts.end())
+	{
+		if (it->second<affected)
+			it->second=affected;
+	}
+	else
+		affectedEnts.insert(TExplosionAffectedEntities::value_type(pEntity, affected));
+}
+
+//------------------------------------------------------------------------
+void CGameRules::CommitAffectedEntitiesSet(SmartScriptTable &scriptExplosionInfo, TExplosionAffectedEntities &affectedEnts)
+{
+	CScriptSetGetChain explosion(scriptExplosionInfo);
+
+	SmartScriptTable affected;
+	SmartScriptTable affectedObstruction;
+
+	if (scriptExplosionInfo->GetValue("AffectedEntities", affected) && 
+		scriptExplosionInfo->GetValue("AffectedEntitiesObstruction", affectedObstruction))
+	{
+		if (affectedEnts.empty())
+		{
+			affected->Clear();
+			affectedObstruction->Clear();
+		}
+		else
+		{
+			int k=0;      
+			for (TExplosionAffectedEntities::const_iterator it=affectedEnts.begin(),end=affectedEnts.end(); it!=end; ++it)
+			{
+				float obstruction = 1.0f-it->second;
+				affected->SetAt(++k, it->first->GetScriptTable());
+				affectedObstruction->SetAt(k, obstruction);
+			}
+		}
+	}
+}
+
+//------------------------------------------------------------------------
+void CGameRules::PrepCollision(int src, int trg, const SGameCollision& event, IEntity* pTarget)
+{
+	const EventPhysCollision* pCollision = event.pCollision;
+	CScriptSetGetChain chain(m_collisionTable);
+
+	chain.SetValue("normal", pCollision->n);
+	chain.SetValue("pos", pCollision->pt);
+
+	Vec3 dir(0, 0, 0);
+	if (pCollision->vloc[src].GetLengthSquared() > 1e-6f)
+	{
+		dir = pCollision->vloc[src].GetNormalized();
+		chain.SetValue("dir", dir);
+	}
+	else
+	{
+		chain.SetToNull("dir");
+	}
+
+	chain.SetValue("velocity", pCollision->vloc[src]);
+	pe_status_living sl;
+	if (pCollision->pEntity[src]->GetStatus(&sl) && sl.bSquashed)
+	{
+		chain.SetValue("target_velocity", pCollision->n*(200.0f*(1-src*2)));
+		chain.SetValue("target_mass", pCollision->mass[trg]>0 ? pCollision->mass[trg] : 10000.0f);
+	}
+	else
+	{
+		chain.SetValue("target_velocity", pCollision->vloc[trg]);
+		chain.SetValue("target_mass", pCollision->mass[trg]);
+	}
+	chain.SetValue("backface", pCollision->n.Dot(dir) >= 0);
+	//chain.SetValue("partid", pCollision->partid[src]);
+	//chain.SetValue("backface", pCollision->n.Dot(dir) >= 0);
+	/*float deltaE = 0;
+	if (pCollision->mass[0])
+		deltaE += -pCollision->normImpulse*(pCollision->vloc[0]*pCollision->n + pCollision->normImpulse*0.5f/pCollision->mass[0]);
+	if (pCollision->mass[1])
+		deltaE +=  pCollision->normImpulse*(pCollision->vloc[1]*pCollision->n - pCollision->normImpulse*0.5f/pCollision->mass[1]);
+	chain.SetValue("energy_loss", deltaE);*/
+
+	//IEntity *pTarget = gEnv->pEntitySystem->GetEntityFromPhysics(pCollision->pEntity[trg]);
+
+	//chain.SetValue("target_type", (int)pCollision->pEntity[trg]->GetType());
+
+	if (pTarget)
+	{
+		ScriptHandle sh;
+		sh.n = pTarget->GetId();
+
+		if (pTarget->GetPhysics())
+		{
+			chain.SetValue("target_type", (int)pTarget->GetPhysics()->GetType());
+		}
+
+		chain.SetValue("target_id", sh);
+
+		if (pTarget->GetScriptTable())
+		{
+			chain.SetValue("target", pTarget->GetScriptTable());
+		}
+		else
+		{
+			chain.SetToNull("target");  
+		}
+	}
+	else
+	{
+		chain.SetToNull("target"); 
+		chain.SetToNull("target_id");
+	}
+
+
+	if(pCollision->idmat[trg]==s_barbWireID)
+		chain.SetValue("materialId",pCollision->idmat[trg]); //Pass collision with barbwire to script
+	else
+		chain.SetValue("materialId", pCollision->idmat[src]);
+	//chain.SetValue("target_materialId", pCollision->idmat[trg]);
+
+	//ISurfaceTypeManager *pSurfaceTypeManager = gEnv->p3DEngine->GetMaterialManager()->GetSurfaceTypeManager();
+}
+
+//------------------------------------------------------------------------
+void CGameRules::Restart()
+{
+	if (gEnv->bServer)
+		CallScript(m_script, "RestartGame", gEnv->pSystem->IsDevMode());
+}
+
+//------------------------------------------------------------------------
+void CGameRules::NextLevel()
+{
+  if (!gEnv->bServer)
+    return;
+
+	ILevelRotation *pLevelRotation=m_pGameFramework->GetILevelSystem()->GetLevelRotation();
+	if (!pLevelRotation->GetLength())
+		Restart();
+	else
+		pLevelRotation->ChangeLevel();
+}
+
+//------------------------------------------------------------------------
+void CGameRules::ResetEntities()
+{
+	g_pGame->GetWeaponSystem()->GetTracerManager().Reset();
+
+	ResetFrozen();
+
+	while (!m_queuedExplosions.empty())
+		m_queuedExplosions.pop();
+
+	while (!m_queuedHits.empty())
+		m_queuedHits.pop();
+	m_processingHit=0;
+
+	// remove voice groups too. They'll be recreated when players are put back on their teams after reset.
+ 	TTeamIdVoiceGroupMap::iterator it = m_teamVoiceGroups.begin();
+ 	TTeamIdVoiceGroupMap::iterator next;
+ 	for(; it != m_teamVoiceGroups.end(); it=next)
+ 	{
+ 		next = it; ++next;
+ 
+		m_teamVoiceGroups.erase(it);
+ 	}
+
+	m_respawns.clear();
 	// [D6] No longer needed here
 	/*m_entityteams.clear();
 	m_teamdefaultspawns.clear()
@@ -522,7 +736,7 @@ Lines 3588 - 3594:
 	// [/D6]
 }}}
 
-Lines 3914 - 3928:
+Lines 3897 - 3911:
 {{{
 				// [D6] Use team's player map
 				/*TPlayerTeamIdMap::const_iterator tit=m_playerteams.find(teamId);
@@ -541,7 +755,7 @@ Lines 3914 - 3928:
 				// [/D6]
 }}}
 
-Lines 4038 - 4043:
+Lines 4021 - 4026:
 {{{
 	// [D6] Following containers are no longer part of the GameRules class, migrated to Team Manager
 	//s->AddContainer(m_teams);
@@ -551,7 +765,7 @@ Lines 4038 - 4043:
 	// [/D6]
 }}}
 
-Lines 4057 - 4062:
+Lines 4040 - 4045:
 {{{
 	// [D6] Migrated to Team Manager
 	/*for (TTeamIdMap::iterator iter = m_teams.begin(); iter != m_teams.end(); ++iter)
