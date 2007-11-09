@@ -1,0 +1,11 @@
+#summary Game Feature - Buildings - Vehicle Factory
+
+[TechDoc_Architecture Back]
+
+= Overview =
+
+The Vehicle Factory derives from [TechDoc_Architecture_Game_Buildings_CNCBuilding CNC Building] and has the functionality to enable creating vehicles for its team while it is alive.
+
+= [TechDoc_Architecture_Game_Buildings_VehicleFactory_Functionality Functionality] =
+
+[TechDoc_Architecture Back]
