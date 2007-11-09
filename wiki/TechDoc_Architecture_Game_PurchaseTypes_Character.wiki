@@ -1,0 +1,21 @@
+#summary Game Feature - Purchase Types - Character
+
+[TechDoc_Architecture Back]
+
+= Overview =
+
+The Character Purchase Type is used to reward the purchasing player with a new character class. This class gives the player a new look and special attributes for gameplay performance.
+
+
+= [TechDoc_Architecture_Game_PurchaseTypes_Character_Functionality Functionality] =
+
+
+= XML Definition =
+{{{
+<Character Name="Engineer" />
+}}}
+
+ * Name - The name of the character class to be given to the player.
+
+
+[TechDoc_Architecture Back]
