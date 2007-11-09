@@ -3,75 +3,238 @@
 [TechDoc_Architecture_System_Purchase Back]
 
 = Functionality =
-Below are the methods to be defined in the IPurchaseSystem interface.
 
-=== Reset ===
-Purpose:
-Resets the system by cleaning out any purchase entries held by any teams.
+== !SPurchaseDef ==
+Below are the methods defined in the !SPurchaseDef object.
 
-Arguments:
+=== *_ Constructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
 void
 
-Returns:
+*Returns*:
 void
 
-=== !LoadConfigForTeam ===
-Purpose:
-Loads in the Purchase Sections and Items for the specified team from the passed-in XML section.
 
-Arguments:
- * nTeam - Team ID that owns these purchase items
- * pXMLNode - XML Node that represents the root <Purchases> where sections and items are defined in.
+== !SPurchaseGroup ==
+Below are the methods defined in the !SPurchaseGroup object.
 
-Returns: 
-TRUE if the config was loaded correctly, FALSE otherwise.
+== !PurchaseType ==
+Below are the methods defined in the !PurchaseType interface.
 
-=== !DefineManualItem ===
-Purpose:
-Adds a manual Purchase Item to the given Section for the given team.
- * nTeam - Team ID that owns the Purchase Section.
- * szSection - Name of the Purchase Section that should house the Item.
- * tItem - Purchase Item to add. (See tPurchaseItem sub module)
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetType _* ===
+*Purpose*:
+Returns purchase type
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+=== *_ Create _* ===
+*Purpose*:
+Create and initialize the entry
+
+*Arguments*:
+ * _nTeamID_ - `[In]` Owning team ID
+ * _pData_ - `[In]` XML properties
+ * _pDef_ - `[In]` Definition it belongs to
+
+*Returns*:
+void
+
+
+=== *_ !PreProcess _* ===
+*Purpose*:
+Confirm if player can buy this item
+
+*Arguments*:
+ * _pPlayer_ - `[In]` Player who wants to buy it
+
+*Returns*:
+void
+
+
+=== *_ Process _* ===
+*Purpose*:
+Process the purchase for the given player
+
+*Arguments*:
+ * _pPlayer_ - `[In]` Player who bought it
+
+*Returns*:
+void
+
+
+== !PurchaseSystem ==
+Below are the methods defined in the !PurchaseSystem interface.
+
+=== *_ Destructor _* ===
+*Purpose*:
+Undefined.
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !CreatePurchaseType _* ===
+*Purpose*:
+Create the requested purchase type
+
+*Arguments*:
+ * _nType_ - `[In]` Type requested
+
+*Returns*:
+void
+
+
+=== *_ Initialize _* ===
+*Purpose*:
+Prepare the system
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ Shutdown _* ===
+*Purpose*:
+Clean up
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+
+=== *_ !GetMemoryStatistics _* ===
+*Purpose*:
+Used by memory management
+
+*Arguments*:
+ * _s_ - `[In]` Cry Sizer object
+
+*Returns*:
+void
+
+
+=== *_ Reset _* ===
+*Purpose*:
+Reset the system
+
+*Arguments*:
+void
+
+*Returns*:
+void
+
+*Note*:
+Should be called when a level is being loaded, before XML files are parsed
+
+=== *_ !ResetGame _* ===
+*Purpose*:
+Reset to prepare for a new instance of the game with the same purchase settings
+
+*Arguments*:
+ * _bStart_ - `[In]` TRUE if game is starting, FALSE if game is exiting
+
+*Returns*:
+void
+
+*Note*:
+Called by Editor when re-entering the game
+
+=== *_ !LoadTeamPurchaseSettings _* ===
+*Purpose*:
+Load and prepare a team's puchase settings from their XML file
+
+*Arguments*:
+ * _nTeamID_ - `[In]` Team ID
+ * _pPurchases_ - `[In]` Purchases node that defines the purchase settings for this team
+
+*Returns*:
+TRUE if purchase settings were loaded
+
+
+=== *_ !GetTeamPurchaseGroups _* ===
+*Purpose*:
+Returns all groups belonging to a team
+
+*Arguments*:
+ * _nTeamID_ - `[In]` Team ID
+ * _purchases_ - `[Out]` Team purchases
+
+*Returns*:
+TRUE if purchase groups were returned
+
+
+=== *_ !GetTeamPurchaseGroup _* ===
+*Purpose*:
+Returns a team's specified purchase group
+
+*Arguments*:
+ * _group_ - `[Out]` Team purchase group
+ * _nTeamID_ - `[In]` TeamID
+ * _szGroup_ - `[In]` Name of the group
+
+*Returns*:
+TRUE if purchase group was returned
+
 
 = Sub Modules =
 
-=== !tPurchaseSection ===
-Description: Structure used to describe a Purchase Section.
+==!SPurchaseDef==
 
-Member Variables:
- * m_nTeam - Team ID that owns it
- * m_szName - Section name
- * m_pItemRoot - Root of Purchase Item list.
+Description: Describes a purchase definition, including its  name and cost, as well as its Type listings for fast iteration processing.
 
-=== !tPurchaseItem ===
-Description: Structure used to describe a Purchase Item.
+Variables:
+ * nPurchaseType - Bit-mask for faster processing of what types are defined
+ * PurchaseTypes - List of purchase type objects
+ * nCost - Item's cost
+ * nInflation - Item's inflation cost
+ * szName - Name of item
+ * szDescription - Description of item
+ * szIcon - Texture icon used to represent the item
+ * Prerequisites - List of building prerequisites
 
-Member Variables:
- * m_pNext - Next Purchase Item in the list.
- * m_szName - Name of the Purchase Item.
- * m_szDesc - Description of the Purchase Item.
- * m_nCost - Cost of the item.
- * m_ucFlags - Purchase Item flags. (See PURCHASE_FLAG)
- * m_Item = Item purchased (based on type)
- * m_szImageEnabled - 2D texture used when enabled
- * m_szImageDisabled - 2D texture used when disabled
- * m_Prerequisite - Map of prerequisites (See tPrerequisite)
+==!SPurchaseGroup==
 
-Flags: PURCHASE_FLAG section:
- * PURCHASE_FLAG_ENABLED - Bit used to mark if purchase item is enabled
- * PURCHASE_FLAG_HIDDEN - Bit used to mark if purchase item is hidden.
- * PURCHASE_FLAG_TYPE_SOLDIER - Bit combination used to mark if purchase item is of type Soldier.
- * PURCHASE_FLAG_TYPE_VEHICLE - Bit combination used to mark if purchase item is of type Vehicle.
- * PURCHASE_FLAG_TYPE_WEAPON - Bit combination used to mark if purchase item is of type Weapon.
- * PURCHASE_FLAG_TYPE_REFILL - Bit combination used to mark if purchase item is of type Refill.
+Description: Describes a purchase group with a name and listing of purchase definitions.
 
-=== tPrerequisite ===
-Description: Structure used to describe a prerequisite for a Purchase Item.
-
-Member Variables:
- * m_szClass - Building class name
- * m_bDisableOnDeath - TRUE if the item should be disabled on building death.
- * m_bDisableOnPowerDown - TRUE if the item should be disabled on power down.
- * m_nCostDeduction - Amount of money taken off Item cost if building is functioning.
+Variables:
+ * szName - Name of the group
+ * PurchaseDefs - List of purchase definitions under its banner
 
 [TechDoc_Architecture_System_Purchase Back]
