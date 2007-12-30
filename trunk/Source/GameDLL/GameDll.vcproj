@@ -584,6 +584,10 @@
 				Name="Interfaces"
 				>
 				<File
+					RelativePath=".\IArmorManager.h"
+					>
+				</File>
+				<File
 					RelativePath=".\Dead6\Interfaces\IBaseManager.h"
 					>
 					<FileConfiguration
@@ -635,6 +639,14 @@
 			<Filter
 				Name="Game Files"
 				>
+				<File
+					RelativePath=".\Dead6\CD6ArmorManager.cpp"
+					>
+				</File>
+				<File
+					RelativePath=".\Dead6\CD6ArmorManager.h"
+					>
+				</File>
 				<File
 					RelativePath=".\Dead6\CD6Game.cpp"
 					>

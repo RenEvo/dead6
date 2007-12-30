@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ArmorTypes>
+	<Armor name="Basic">
+		<Warhead name="Bullet" multiplier="0.25"/>
+	</Armor>
+	<Armor name="Blamo">
+		<Warhead name="Bullet" multiplier="0.0"/>
+		<Warhead name="Explosive" multiplier="0.0"/>
+	</Armor>
+</ArmorTypes>
