@@ -13,13 +13,23 @@
 ////////////////////////////////////////////////////
 #ifndef _ARMORMANAGER_H_
 #define _ARMORMANAGER_H_
+#include <vector>
+#include "IXml.h"
+
+////////////////////////////////////////////////////
+// Defines a warhead type
+struct SArmorWarheadDef
+{
+	string szWarheadName;
+	float fMultiplier;
+};
 
 ////////////////////////////////////////////////////
 // Defines an armor type
 struct SArmorDef
 {
-	string szName;
-	float fMultiplier;
+	string szArmorName;
+	std::vector<SArmorWarheadDef> warheads;
 };
 
 class IArmorManager
@@ -35,7 +45,7 @@ public:
 	// In: szFileName - The name of the XML file to load
 	//                  the armor definitions from.
 	////////////////////////////////////////////////////
-	virtual void LoadFromFile(char const* szFileName) = 0;
+	virtual void LoadFromXML(XmlNodeRef& rootNode) = 0;
 
 	////////////////////////////////////////////////////
 	// Reset
@@ -58,6 +68,22 @@ public:
 	//         definition exists.
 	////////////////////////////////////////////////////
 	virtual SArmorDef const* GetArmorDef(char const* szName) = 0;
+
+	////////////////////////////////////////////////////
+	// GetMultiplier
+	//
+	// Purpose: Retrieves the multiplier for a warhead
+	//          from an armor definition.
+	//
+	// In: szArmorName - The name of the armor
+	//     szWarheadName - The name of the warhead to get
+	//					   the multiplier of
+	//
+	// Returns the multiplier of the warhead if it exists
+	//         in the armor definition, or 1.0 if no such
+	//         warhead or armor definition exists
+	////////////////////////////////////////////////////
+	virtual float GetMultiplier(char const* szArmorName, char const* szWarheadName) = 0;
 };
 
 #endif // _ARMORMANAGER_H_
