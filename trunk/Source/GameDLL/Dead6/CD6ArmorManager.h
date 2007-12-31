@@ -31,7 +31,7 @@ public:
 	//
 	// In: szFileName - The name of the XML file to read
 	////////////////////////////////////////////////////
-	virtual void LoadFromFile(char const* szFileName);
+	virtual void LoadFromXML(XmlNodeRef& rootNode);
 
 	////////////////////////////////////////////////////
 	// Reset
@@ -55,6 +55,8 @@ public:
 	//		   exists
 	////////////////////////////////////////////////////
 	virtual SArmorDef const* GetArmorDef(char const* szName);
+
+	virtual float GetMultiplier(char const* szArmorName, char const* szWarheadName);
 };
 
 #endif // _CD6ARMORMANAGER_H_
