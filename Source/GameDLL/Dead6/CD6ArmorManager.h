@@ -19,43 +19,18 @@ class CD6ArmorManager : public IArmorManager
 {
 private:
 	std::vector<SArmorDef> m_ArmorDefs;
+	EntityArmorMap m_EntityArmors;
 
 public:
 	virtual ~CD6ArmorManager() {}
 
-	////////////////////////////////////////////////////
-	// LoadFromFile
-	//
-	// Purpose: Loads all armor definitions from the
-	//          specified XML file.
-	//
-	// In: szFileName - The name of the XML file to read
-	////////////////////////////////////////////////////
 	virtual void LoadFromXML(XmlNodeRef& rootNode);
-
-	////////////////////////////////////////////////////
-	// Reset
-	//
-	// Purpose: Empties the manager of all Armor 
-	//			Definitions.
-	////////////////////////////////////////////////////
 	virtual void Reset();
-
-	////////////////////////////////////////////////////
-	// GetArmorDef
-	//
-	// Purpose: Retrieves the Armor Definition which has
-	//			the specified name.
-	//
-	// In: szName - The name of the Armor Definition to 
-	//				retrieve.
-	//
-	// Returns a pointer to an SArmorDef object with the
-	//		   specified name or NULL if no such definition
-	//		   exists
-	////////////////////////////////////////////////////
+	virtual void GetMemoryStatistics(ICrySizer& s);
+	virtual void RegisterEntityArmor(EntityId entity, SArmorDef const& armor);
+	virtual void UnregisterEntityArmor(EntityId entity);
+	virtual SArmorDef const* GetEntityArmorDef(EntityId entity) const;
 	virtual SArmorDef const* GetArmorDef(char const* szName);
-
 	virtual float GetMultiplier(char const* szArmorName, char const* szWarheadName);
 };
 

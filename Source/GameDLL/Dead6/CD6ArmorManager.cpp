@@ -49,10 +49,41 @@ void CD6ArmorManager::LoadFromXML(XmlNodeRef& rootNode)
 void CD6ArmorManager::Reset()
 {
 	m_ArmorDefs.clear();
+	m_EntityArmors.clear();
+}
+
+void CD6ArmorManager::GetMemoryStatistics(ICrySizer& s)
+{
+	s.AddContainer<std::vector<SArmorDef> >(m_ArmorDefs);
+	s.AddContainer<EntityArmorMap>(m_EntityArmors);
+}
+
+void CD6ArmorManager::RegisterEntityArmor(EntityId entity, SArmorDef const& armor)
+{
+	// Check that the entity doesn't already exist, if so, just replace armor
+	EntityArmorMap::iterator iter = m_EntityArmors.find(entity);
+	if (m_EntityArmors.end() != iter)
+		iter->second = &armor;
+	else
+		m_EntityArmors.insert(std::make_pair(entity, &armor));
+}
+
+void CD6ArmorManager::UnregisterEntityArmor(EntityId entity)
+{
+	EntityArmorMap::iterator iter = m_EntityArmors.find(entity);
+	if (m_EntityArmors.end() != iter)
+		m_EntityArmors.erase(iter);
+}
+
+SArmorDef const* CD6ArmorManager::GetEntityArmorDef(EntityId entity) const
+{
+	EntityArmorMap::const_iterator iter = m_EntityArmors.find(entity);
+	return m_EntityArmors.end() == iter ? NULL : iter->second;
 }
 
 SArmorDef const* CD6ArmorManager::GetArmorDef(char const* szName)
 {
+	// Just perform a linear search
 	std::size_t size = m_ArmorDefs.size();
 	for (std::size_t i = 0; i < size; ++i)
 		if (szName == m_ArmorDefs[i].szArmorName)
