@@ -1,6 +1,8 @@
 #include "StdAfx.h"
 #include "CD6ArmorManager.h"
 
+CD6ArmorManager::CD6ArmorManager() : m_NextArmorId(1)
+{}
 
 void CD6ArmorManager::LoadFromXML(XmlNodeRef& rootNode)
 {
@@ -41,7 +43,7 @@ void CD6ArmorManager::LoadFromXML(XmlNodeRef& rootNode)
 				}
 			}
 
-			m_ArmorDefs.push_back(armorDef);
+			m_ArmorDefs.insert(std::make_pair(m_NextArmorId++, armorDef));
 		}
 	}
 }
@@ -50,22 +52,24 @@ void CD6ArmorManager::Reset()
 {
 	m_ArmorDefs.clear();
 	m_EntityArmors.clear();
+	m_NextArmorId = 1;
 }
 
 void CD6ArmorManager::GetMemoryStatistics(ICrySizer& s)
 {
-	s.AddContainer<std::vector<SArmorDef> >(m_ArmorDefs);
+	s.AddContainer<ArmorMap>(m_ArmorDefs);
 	s.AddContainer<EntityArmorMap>(m_EntityArmors);
+	s.Add(m_NextArmorId);
 }
 
-void CD6ArmorManager::RegisterEntityArmor(EntityId entity, SArmorDef const& armor)
+bool CD6ArmorManager::RegisterEntityArmor(EntityId entity, ArmorId armor)
 {
-	// Check that the entity doesn't already exist, if so, just replace armor
-	EntityArmorMap::iterator iter = m_EntityArmors.find(entity);
-	if (m_EntityArmors.end() != iter)
-		iter->second = &armor;
-	else
-		m_EntityArmors.insert(std::make_pair(entity, &armor));
+	// Ensure the armor exists
+	if (m_ArmorDefs.end() == m_ArmorDefs.find(armor))
+		return false;
+
+	m_EntityArmors.insert(std::make_pair(entity, armor));
+	return true;
 }
 
 void CD6ArmorManager::UnregisterEntityArmor(EntityId entity)
@@ -75,35 +79,47 @@ void CD6ArmorManager::UnregisterEntityArmor(EntityId entity)
 		m_EntityArmors.erase(iter);
 }
 
-SArmorDef const* CD6ArmorManager::GetEntityArmorDef(EntityId entity) const
+ArmorId CD6ArmorManager::GetEntityArmorId(EntityId entity) const
 {
 	EntityArmorMap::const_iterator iter = m_EntityArmors.find(entity);
 	return m_EntityArmors.end() == iter ? NULL : iter->second;
 }
 
-SArmorDef const* CD6ArmorManager::GetArmorDef(char const* szName)
+ArmorId CD6ArmorManager::GetArmorId(char const* szName) const
 {
 	// Just perform a linear search
-	std::size_t size = m_ArmorDefs.size();
-	for (std::size_t i = 0; i < size; ++i)
-		if (szName == m_ArmorDefs[i].szArmorName)
-			return &m_ArmorDefs[i];
+	for (ArmorMap::const_iterator iter = m_ArmorDefs.begin();
+		 iter != m_ArmorDefs.end();
+		 ++iter)
+	{
+		if (iter->second.szArmorName == szName)
+			return iter->first;
+	}
 	return NULL;
 }
 
-float CD6ArmorManager::GetMultiplier(const char *szArmorName, const char *szWarheadName)
+string const* CD6ArmorManager::GetArmorName(ArmorId armor) const
 {
-	SArmorDef const* pArmor = GetArmorDef(szArmorName);
-	if (NULL == pArmor)
+	ArmorMap::const_iterator iter = m_ArmorDefs.find(armor);
+	return m_ArmorDefs.end() == iter ? NULL : &iter->second.szArmorName;
+}
+
+float CD6ArmorManager::GetMultiplier(ArmorId armor, const char *szWarheadName) const
+{
+	// Ensure armor exists
+	ArmorMap::const_iterator iter = m_ArmorDefs.find(armor);
+	if (m_ArmorDefs.end() == iter)
 		return 1.0f;
 
-	for (std::vector<SArmorWarheadDef>::const_iterator iter = pArmor->warheads.begin();
-		 iter != pArmor->warheads.end();
-		 ++iter)
+	// Search for the warhead with the specified name in the warhead list
+	for (std::vector<SArmorWarheadDef>::const_iterator wIter = iter->second.warheads.begin();
+		 wIter != iter->second.warheads.end();
+		 ++wIter)
 	{
-		if (szWarheadName == iter->szWarheadName)
-			return iter->fMultiplier;
+		if (wIter->szWarheadName == szWarheadName)
+			return wIter->fMultiplier;
 	}
-
+	
+	// Warhead not found
 	return 1.0f;
 }

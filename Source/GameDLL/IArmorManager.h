@@ -10,10 +10,6 @@
 //
 // File History:
 //	- 12/30/2007 : File created - Dan
-//
-// TODO:
-//  - Change manager to give out armordef ID's, instead
-//    of pointers.
 ////////////////////////////////////////////////////
 #ifndef _ARMORMANAGER_H_
 #define _ARMORMANAGER_H_
@@ -39,7 +35,9 @@ struct SArmorDef
 	std::vector<SArmorWarheadDef> warheads;
 };
 
-typedef std::map<EntityId, SArmorDef const*> EntityArmorMap;
+typedef unsigned int ArmorId;
+typedef std::map<ArmorId, SArmorDef> ArmorMap;
+typedef std::map<EntityId, ArmorId> EntityArmorMap;
 
 class IArmorManager
 {
@@ -79,9 +77,13 @@ public:
 	// Purpose: Binds an armor type to a specific entity
 	//
 	// In: entity - The ID of the entity to bind
-	//     armor - The armor to bind to the entity
+	//     armor - The armor id to bind to the entity
+	//
+	// Returns true if the armor was successfully bound
+	//         to the entity, false if the armor with 
+	//         the specified ArmorId does not exist.
 	////////////////////////////////////////////////////
-	virtual void RegisterEntityArmor(EntityId entity, SArmorDef const& armor) = 0;
+	virtual bool RegisterEntityArmor(EntityId entity, ArmorId armor) = 0;
 
 	////////////////////////////////////////////////////
 	// UnregisterEntityArmor
@@ -93,9 +95,9 @@ public:
 	virtual void UnregisterEntityArmor(EntityId entity) = 0;
 
 	////////////////////////////////////////////////////
-	// GetEntityArmorDef
+	// GetEntityArmorId
 	//
-	// Purpose: Retrieves the armor type of an entity
+	// Purpose: Retrieves the armor id of an entity
 	//
 	// In: entity - The ID of the entity whose armor to
 	//              retrieve
@@ -104,10 +106,10 @@ public:
 	//         if the entity does not have any armor
 	//         registered
 	////////////////////////////////////////////////////
-	virtual SArmorDef const* GetEntityArmorDef(EntityId entity) const = 0;
+	virtual ArmorId GetEntityArmorId(EntityId entity) const = 0;
 
 	////////////////////////////////////////////////////
-	// GetArmorDef
+	// GetArmorId
 	//
 	// Purpose: Retrieves the Armor Definition which has
 	//          the specified name.
@@ -119,7 +121,23 @@ public:
 	//         specified name, or NULL if no such armor
 	//         definition exists.
 	////////////////////////////////////////////////////
-	virtual SArmorDef const* GetArmorDef(char const* szName) = 0;
+	virtual ArmorId GetArmorId(char const* szName) const = 0;
+
+	////////////////////////////////////////////////////
+	// GetArmorName
+	//
+	// Purpose: Retrieves the name of the armor with the
+	//			specified armor ID. Returns a pointer
+	//			to avoid the cost of copying the string.
+	//
+	// In: armor - The ID of the Armor to find the name 
+	//			   of
+	//
+	// Returns a pointer to the name of the armor, or
+	//         NULL if no armor with the specified ID
+	//		   exists
+	////////////////////////////////////////////////////
+	virtual string const* GetArmorName(ArmorId armor) const = 0;
 
 	////////////////////////////////////////////////////
 	// GetMultiplier
@@ -135,7 +153,7 @@ public:
 	//         in the armor definition, or 1.0 if no such
 	//         warhead or armor definition exists
 	////////////////////////////////////////////////////
-	virtual float GetMultiplier(char const* szArmorName, char const* szWarheadName) = 0;
+	virtual float GetMultiplier(ArmorId armor, char const* szWarheadName) const = 0;
 };
 
 #endif // _ARMORMANAGER_H_
