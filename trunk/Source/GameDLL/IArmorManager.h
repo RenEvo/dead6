@@ -140,7 +140,7 @@ public:
 	virtual string const* GetArmorName(ArmorId armor) const = 0;
 
 	////////////////////////////////////////////////////
-	// GetMultiplier
+	// GetArmorMultiplier
 	//
 	// Purpose: Retrieves the multiplier for a warhead
 	//          from an armor definition.
@@ -153,7 +153,24 @@ public:
 	//         in the armor definition, or 1.0 if no such
 	//         warhead or armor definition exists
 	////////////////////////////////////////////////////
-	virtual float GetMultiplier(ArmorId armor, char const* szWarheadName) const = 0;
+	virtual float GetArmorMultiplier(ArmorId armor, char const* szWarheadName) const = 0;
+
+	////////////////////////////////////////////////////
+	// GetEntityMultiplier
+	//
+	// Purpose:	Gets the multiplier of a warhead for
+	//			an entity.
+	//
+	// In: entity - The ID of the entity to look up the
+	//	   armor for.
+	//
+	// Returns the damage multiplier to use for the
+	//         warhead on the entity. Returns 1.0 if
+	//		   the entity has no armor registered, or
+	//		   if the warhead definition does not exist
+	//		   in the entity's armor type.
+	////////////////////////////////////////////////////
+	virtual float GetEntityMultiplier(EntityId entity, char const* szWarheadName) const = 0;
 };
 
 #endif // _ARMORMANAGER_H_

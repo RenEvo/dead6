@@ -34,7 +34,8 @@ public:
 	virtual ArmorId GetEntityArmorId(EntityId entity) const;
 	virtual ArmorId GetArmorId(char const* szName) const;
 	virtual string const* GetArmorName(ArmorId armor) const ;
-	virtual float GetMultiplier(ArmorId armor, char const* szWarheadName) const;
+	virtual float GetArmorMultiplier(ArmorId armor, char const* szWarheadName) const;
+	virtual float GetEntityMultiplier(EntityId entity, char const* szWarheadName) const;
 };
 
 #endif // _CD6ARMORMANAGER_H_
