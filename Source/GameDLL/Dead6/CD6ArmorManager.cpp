@@ -104,7 +104,7 @@ string const* CD6ArmorManager::GetArmorName(ArmorId armor) const
 	return m_ArmorDefs.end() == iter ? NULL : &iter->second.szArmorName;
 }
 
-float CD6ArmorManager::GetMultiplier(ArmorId armor, const char *szWarheadName) const
+float CD6ArmorManager::GetArmorMultiplier(ArmorId armor, const char *szWarheadName) const
 {
 	// Ensure armor exists
 	ArmorMap::const_iterator iter = m_ArmorDefs.find(armor);
@@ -122,4 +122,14 @@ float CD6ArmorManager::GetMultiplier(ArmorId armor, const char *szWarheadName) c
 	
 	// Warhead not found
 	return 1.0f;
+}
+
+float CD6ArmorManager::GetEntityMultiplier(EntityId entity, char const* szWarheadName) const
+{
+	// Lookup the armor used by the entity
+	EntityArmorMap::const_iterator iter = m_EntityArmors.find(entity);
+	if (m_EntityArmors.end() == iter)
+		return 1.0f;
+
+	return GetArmorMultiplier(iter->second, szWarheadName);
 }
