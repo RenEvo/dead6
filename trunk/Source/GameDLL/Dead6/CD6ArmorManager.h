@@ -18,20 +18,23 @@
 class CD6ArmorManager : public IArmorManager
 {
 private:
-	std::vector<SArmorDef> m_ArmorDefs;
+	ArmorMap m_ArmorDefs;
 	EntityArmorMap m_EntityArmors;
+	ArmorId m_NextArmorId;
 
 public:
+	CD6ArmorManager();
 	virtual ~CD6ArmorManager() {}
 
 	virtual void LoadFromXML(XmlNodeRef& rootNode);
 	virtual void Reset();
 	virtual void GetMemoryStatistics(ICrySizer& s);
-	virtual void RegisterEntityArmor(EntityId entity, SArmorDef const& armor);
+	virtual bool RegisterEntityArmor(EntityId entity, ArmorId armor);
 	virtual void UnregisterEntityArmor(EntityId entity);
-	virtual SArmorDef const* GetEntityArmorDef(EntityId entity) const;
-	virtual SArmorDef const* GetArmorDef(char const* szName);
-	virtual float GetMultiplier(char const* szArmorName, char const* szWarheadName);
+	virtual ArmorId GetEntityArmorId(EntityId entity) const;
+	virtual ArmorId GetArmorId(char const* szName) const;
+	virtual string const* GetArmorName(ArmorId armor) const ;
+	virtual float GetMultiplier(ArmorId armor, char const* szWarheadName) const;
 };
 
 #endif // _CD6ARMORMANAGER_H_
